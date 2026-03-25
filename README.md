@@ -45,12 +45,13 @@ Features single-player (free play + daily challenge), global leaderboards, and r
 
 - [Node.js](https://nodejs.org/) v18+
 - [Git](https://git-scm.com/)
+- [Docker](https://www.docker.com/) (optional, for container-based dev)
 
 ### Getting Started
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/henrik-me/guesswhatisnext.git
 cd guesswhatisnext
 
 # Install dependencies
@@ -66,57 +67,123 @@ For development with auto-reload:
 npm run dev
 ```
 
-### Project Structure
+### Running with Docker (Phase 3)
 
+```bash
+# Build and run in a container (same image used in production)
+docker compose up --build
+# → http://localhost:3000
+
+# Stop
+docker compose down
+```
+
+The container mounts `./data` for SQLite persistence and sets dev environment variables automatically.
+
+### Architecture
+
+**Software Structure:**
 ```
 guesswhatisnext/
-├── public/                     # Client (served by Express)
-│   ├── index.html              # Game shell — all screens
-│   ├── css/style.css           # Styling, responsive, animations
+├── public/                         # Client (served by Express)
+│   ├── index.html                  # Game shell — all screens (SPA)
+│   ├── css/style.css               # Styling, responsive, animations
 │   ├── js/
-│   │   ├── app.js              # Entry point, screen nav, multiplayer UI
-│   │   ├── game.js             # Core game engine (scoring, timer, rounds)
-│   │   ├── puzzles.js          # 22 puzzles (emoji + image)
-│   │   ├── daily.js            # Date-seeded daily challenge logic
-│   │   └── storage.js          # LocalStorage persistence
-│   └── img/                    # SVG image assets for puzzles
-│       ├── shapes/             # Triangle, square, pentagon, hexagon, etc.
-│       └── colors/             # Color circles (red → purple)
+│   │   ├── app.js                  # Entry point, screen nav, multiplayer UI
+│   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
+│   │   ├── puzzles.js              # 22 puzzles (emoji + image)
+│   │   ├── daily.js                # Date-seeded daily challenge logic
+│   │   └── storage.js              # LocalStorage persistence
+│   └── img/                        # SVG image assets for puzzles
+│       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
+│       └── colors/                 # Color circles (red → purple)
 ├── server/
-│   ├── index.js                # Express app + HTTP + WebSocket
-│   ├── puzzleData.js           # Server-side puzzle pool (multiplayer)
+│   ├── index.js                    # Express app + HTTP + WebSocket bootstrap
+│   ├── puzzleData.js               # Server-side puzzle pool (multiplayer)
 │   ├── routes/
-│   │   ├── auth.js             # Register, login, JWT tokens
-│   │   ├── scores.js           # Score submission + leaderboards
-│   │   ├── matches.js          # Room create/join + match history
-│   │   └── puzzles.js          # Puzzle API (placeholder)
-│   ├── ws/matchHandler.js      # WebSocket head-to-head engine
+│   │   ├── auth.js                 # Register, login, JWT tokens
+│   │   ├── scores.js               # Score submission + leaderboards
+│   │   ├── matches.js              # Room create/join + match history
+│   │   └── puzzles.js              # Puzzle API
+│   ├── ws/matchHandler.js          # WebSocket head-to-head match engine
 │   ├── db/
-│   │   ├── schema.sql          # SQLite table definitions
-│   │   └── connection.js       # DB init + query helpers
-│   └── middleware/auth.js      # JWT verification middleware
-├── data/                       # SQLite database (auto-created)
+│   │   ├── schema.sql              # SQLite table definitions
+│   │   └── connection.js           # DB init + query helpers
+│   └── middleware/auth.js          # JWT + API key verification middleware
+├── data/                           # SQLite database (auto-created, git-ignored)
+├── Dockerfile                      # Production container image
+├── docker-compose.yml              # Local container dev environment
+├── .github/workflows/              # CI/CD + health monitor
 ├── package.json
-├── INSTRUCTIONS.md             # Architecture & coding guidelines
-├── CONTEXT.md                  # Project plan & status tracker
-└── README.md                   # This file
+├── INSTRUCTIONS.md                 # Architecture & coding guidelines
+├── CONTEXT.md                      # Project plan & status tracker
+└── README.md                       # This file
 ```
+
+**System Architecture:**
+```
+  Browser (Client)                     Server (Node.js)
+ ┌─────────────────┐               ┌──────────────────────┐
+ │  index.html     │               │  Express (port 3000)  │
+ │  ┌───────────┐  │   HTTP/REST   │  ┌────────────────┐  │
+ │  │  app.js   │──┼──────────────▶│  │ Routes (API)   │  │
+ │  │  game.js  │  │               │  │ /api/auth      │  │
+ │  │  daily.js │  │   WebSocket   │  │ /api/scores    │  │
+ │  │ puzzles.js│  │◀─────────────▶│  │ /api/matches   │  │
+ │  │ storage.js│  │               │  │ /api/health    │  │
+ │  └───────────┘  │               │  └───────┬────────┘  │
+ │  LocalStorage   │               │          │           │
+ └─────────────────┘               │  ┌───────▼────────┐  │
+                                   │  │ SQLite (WAL)   │  │
+                                   │  │ data/game.db   │  │
+                                   │  └────────────────┘  │
+                                   │  ┌────────────────┐  │
+                                   │  │ WebSocket (ws)  │  │
+                                   │  │ matchHandler.js │  │
+                                   │  └────────────────┘  │
+                                   └──────────────────────┘
+```
+
+**Deployment Pipeline (Phase 3):**
+```
+  git push to main
+       │
+  ┌────▼─────┐    ┌──────────────┐    ┌─────────────┐    ┌──────────┐    ┌──────────────┐
+  │ Lint &   │───▶│ Deploy to    │───▶│ Smoke Tests │───▶│ ⏸️ Manual │───▶│ Deploy to    │
+  │ Test     │    │ Staging (F1) │    │ on Staging  │    │ Approval │    │ Prod (CA)    │
+  └──────────┘    └──────────────┘    └─────────────┘    └──────────┘    └──────────────┘
+                        │                                                      │
+                        ▼                                                      ▼
+                  App Service F1                                      Container Apps
+                  ($0/month)                                          (Consumption, $0+)
+                                                                           ▲
+  Health Monitor (GitHub Actions, every 5 min) ────────────────────────────┘
+       │ on failure → GitHub Issue: "service health issue: {error}"
+```
+
+| Environment | Cost | Trigger | Approval |
+|---|---|---|---|
+| Local | Free | `docker compose up` / `npm start` | None |
+| Staging | $0 | Push to `main` | Automatic |
+| Production | $0+ (pay-per-use) | After staging tests pass | Manual (GitHub reviewer) |
 
 ### API Endpoints
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| `GET` | `/api/health` | No | Health check |
-| `POST` | `/api/auth/register` | No | Register (username, password) |
-| `POST` | `/api/auth/login` | No | Login → JWT token |
-| `GET` | `/api/auth/me` | Yes | Current user info |
-| `POST` | `/api/scores` | Yes | Submit a game score |
-| `GET` | `/api/scores/leaderboard` | No | Leaderboard (mode, period, limit) |
-| `GET` | `/api/scores/me` | Yes | User's score history |
-| `POST` | `/api/matches` | Yes | Create a match room |
-| `POST` | `/api/matches/join` | Yes | Join by room code |
-| `GET` | `/api/matches/:id` | Yes | Match status + players |
-| `GET` | `/api/matches/history` | Yes | User's match history |
+| `GET` | `/api/health` | System (API key) | Health check with deep diagnostics |
+| `POST` | `/api/auth/register` | No (rate-limited) | Register (username, password) |
+| `POST` | `/api/auth/login` | No (rate-limited) | Login → JWT token |
+| `GET` | `/api/auth/me` | Yes (JWT) | Current user info |
+| `POST` | `/api/scores` | Yes (JWT) | Submit a game score |
+| `GET` | `/api/scores/leaderboard` | Yes (JWT/API key) | Leaderboard (mode, period, limit) |
+| `GET` | `/api/scores/me` | Yes (JWT) | User's score history |
+| `POST` | `/api/matches` | Yes (JWT) | Create a match room |
+| `POST` | `/api/matches/join` | Yes (JWT) | Join by room code |
+| `GET` | `/api/matches/:id` | Yes (JWT) | Match status + players |
+| `GET` | `/api/matches/history` | Yes (JWT) | User's match history |
+
+> **Auth types:** `JWT` = Bearer token from login; `API key` = `X-API-Key` header (system account); `rate-limited` = IP-based rate limiting
 
 ### WebSocket
 

@@ -6,11 +6,114 @@ This document defines architecture decisions, coding standards, testing strategy
 
 ## 1. Architecture Principles
 
+### Software Architecture
+
+```
+guesswhatisnext/
+├── public/                         # Client (served as static files)
+│   ├── index.html                  # Game shell — all screens (SPA)
+│   ├── css/style.css               # Styling, responsive, animations, themes
+│   ├── js/
+│   │   ├── app.js                  # Entry point, screen nav, multiplayer UI, auth
+│   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
+│   │   ├── puzzles.js              # Client-side puzzle data (22 puzzles)
+│   │   ├── daily.js                # Date-seeded daily challenge logic
+│   │   └── storage.js              # LocalStorage persistence
+│   └── img/                        # SVG image assets for puzzles
+│       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
+│       └── colors/                 # Color circles (red → purple)
+├── server/
+│   ├── index.js                    # Express app + HTTP + WebSocket bootstrap
+│   ├── puzzleData.js               # Server-side puzzle pool (multiplayer)
+│   ├── routes/
+│   │   ├── auth.js                 # Register, login, JWT tokens
+│   │   ├── scores.js               # Score submission + leaderboards
+│   │   ├── matches.js              # Room create/join + match history
+│   │   └── puzzles.js              # Puzzle API
+│   ├── ws/matchHandler.js          # WebSocket head-to-head match engine
+│   ├── db/
+│   │   ├── schema.sql              # SQLite table definitions
+│   │   └── connection.js           # DB init + query helpers
+│   └── middleware/auth.js          # JWT + API key verification middleware
+├── data/                           # SQLite database (auto-created, git-ignored)
+├── Dockerfile                      # Production container image (Phase 3)
+├── docker-compose.yml              # Local container dev environment (Phase 3)
+├── .github/workflows/              # CI/CD + health monitor (Phase 3)
+├── package.json
+├── INSTRUCTIONS.md                 # This file
+├── CONTEXT.md                      # Project plan & status tracker
+└── README.md                       # User & developer documentation
+```
+
+### System Architecture (Current — Phase 2)
+
+```
+  Browser (Client)                     Server (Node.js)
+ ┌─────────────────┐               ┌──────────────────────┐
+ │  index.html     │               │  Express (port 3000)  │
+ │  ┌───────────┐  │   HTTP/REST   │  ┌────────────────┐  │
+ │  │  app.js   │──┼──────────────▶│  │ Routes (API)   │  │
+ │  │  game.js  │  │               │  │ auth, scores,  │  │
+ │  │  daily.js │  │   WebSocket   │  │ matches, puzzles│  │
+ │  │ puzzles.js│  │◀─────────────▶│  └───────┬────────┘  │
+ │  │ storage.js│  │               │          │           │
+ │  └───────────┘  │               │  ┌───────▼────────┐  │
+ │  LocalStorage   │               │  │ SQLite (WAL)   │  │
+ └─────────────────┘               │  │ data/game.db   │  │
+                                   │  └────────────────┘  │
+                                   │  ┌────────────────┐  │
+                                   │  │ WebSocket (ws)  │  │
+                                   │  │ matchHandler.js │  │
+                                   │  └────────────────┘  │
+                                   └──────────────────────┘
+```
+
+### Deployment Architecture (Phase 3)
+
+```
+  Developer                    GitHub                              Azure
+ ┌─────────┐              ┌───────────────┐
+ │ git push│──────────────▶│ GitHub Actions │
+ │ to main │              │               │
+ └─────────┘              │ ┌───────────┐ │
+                          │ │ Lint+Test  │ │
+                          │ └─────┬─────┘ │
+                          │       │       │
+                          │ ┌─────▼─────┐ │        ┌──────────────────┐
+                          │ │ Deploy    │─┼───────▶│ STAGING (F1)     │
+                          │ │ Staging   │ │  zip   │ App Service      │
+                          │ └─────┬─────┘ │        │ $0/month         │
+                          │       │       │        └──────────────────┘
+                          │ ┌─────▼─────┐ │
+                          │ │ Smoke     │ │
+                          │ │ Tests     │ │
+                          │ └─────┬─────┘ │
+                          │       │       │
+                          │ ┌─────▼─────┐ │
+                          │ │ ⏸️ Manual  │ │  (GitHub Environment protection)
+                          │ │ Approval  │ │
+                          │ └─────┬─────┘ │
+                          │       │       │
+                          │ ┌─────▼─────┐ │        ┌──────────────────┐
+                          │ │ Build     │ │  GHCR  │ PRODUCTION       │
+                          │ │ Docker &  │─┼───────▶│ Container Apps   │
+                          │ │ Deploy    │ │  image │ Consumption plan │
+                          │ └───────────┘ │        │ Scale-to-zero    │
+                          │               │        └──────────────────┘
+                          │ ┌───────────┐ │               ▲
+                          │ │ Health    │─┼───────────────┘
+                          │ │ Monitor   │ │  every 5 min
+                          │ │ (cron)    │ │  on failure → GH Issue
+                          │ └───────────┘ │
+                          └───────────────┘
+```
+
 ### Separation of Concerns
 - **Game engine** (`game.js`) handles logic only — no DOM manipulation
 - **App layer** (`app.js`) handles screen navigation and DOM updates
 - **Data layer** (`puzzles.js`) is pure data — exportable objects, no side effects
 - **Storage layer** (`storage.js`) abstracts all persistence behind a clean API
+- **Server routes** handle HTTP API, middleware handles auth, WebSocket handler manages real-time matches
 
 ### Multiplayer-Ready Design (Phase 1 prep)
 These rules apply even during Phase 1 to ensure a smooth Phase 2 transition:
@@ -121,6 +224,12 @@ Since there's no build system, testing is pragmatic:
 - `npm test` runs the full suite
 - Tests must pass before merging any PR
 
+### Phase 3 — Container & Deployment Tests
+- **Container tests:** `docker compose up` → verify health endpoint responds, game loads, WebSocket connects
+- **Staging smoke tests:** Automated in CI/CD after staging deploy — hit key endpoints, verify 200 responses
+- **Approval gate:** Manual approval required before promoting staging → production (GitHub Environment protection rules)
+- **Health monitor:** GitHub Actions cron job every 5 minutes validates production health, creates issues on failure
+
 ---
 
 ## 4. Git Workflow
@@ -170,6 +279,14 @@ Commit after every meaningful, working change. Specifically:
 ### Branch Strategy
 - Phase 1: Work directly on `main` (single developer, rapid iteration)
 - Phase 2: Feature branches (`feat/leaderboard`, `feat/websocket`) with PR merges
+- Phase 3: Feature branches with CI/CD pipeline — push to `main` auto-deploys to staging, manual approval promotes to production
+
+### Deployment Environments
+| Environment | Trigger | Approval | Infrastructure |
+|---|---|---|---|
+| **Local** | `docker compose up` or `npm start` | None | Developer machine |
+| **Staging** | Push to `main` | Automatic | Azure App Service F1 (Free) |
+| **Production** | After staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) |
 
 ---
 

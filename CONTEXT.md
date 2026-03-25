@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ Phase 1 & Phase 2 Complete
+## Project Status: ✅ Phase 1 & Phase 2 Complete — Phase 3 Planned
 
 ---
 
@@ -43,6 +43,63 @@ This file tracks the current state of the project: what's been done, what's next
 | 20 | Multiplayer polish | ✅ Done | 15, 19 | Reconnect, rematch, match history, forfeit |
 
 **Parallelism:** 14 & 16 parallel; 16 & 17 parallel → 18; 15 & 19 → 20
+
+## Phase 3 — Azure, Security, Content & Monitoring
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 21 | Auth hardening | ⬜ Pending | — | System account, API key auth, rate limiting, all endpoints auth'd |
+| 22 | Enhanced health endpoint | ⬜ Pending | 21 | Deep checks (DB, WS, disk, uptime), system-auth only |
+| 23 | Local container dev | ⬜ Pending | — | Dockerfile, docker-compose.yml, .dockerignore, local dev in container |
+| 24 | Azure infrastructure | ⬜ Pending | 23 | F1 staging (zip deploy) + Container Apps Consumption prod (Docker/GHCR) |
+| 25 | CI/CD pipeline | ⬜ Pending | 24 | GH Actions: lint → test → staging (auto) → approval gate → prod |
+| 26 | Health monitor | ⬜ Pending | 22, 25 | GH Actions cron every 5 min, creates issues on failure |
+| 27 | Puzzles to DB | ⬜ Pending | 21 | Puzzles table, seed script, API endpoint, client fetch |
+| 28 | Puzzle expansion | ⬜ Pending | 27 | 60+ new puzzles, 7 new categories |
+| 29 | Achievements | ⬜ Pending | 21 | Achievements table, unlock logic, 10+ badges |
+| 30 | Player profiles | ⬜ Pending | 29 | Profile screen, stats, achievements, match history |
+| 31 | Settings & audio | ⬜ Pending | — | Sound effects, theme, timer duration, settings screen |
+| 32 | Game enhancements | ⬜ Pending | 27 | Difficulty selector, skip, answer animation, confetti |
+
+**Parallelism:** 21, 23, 31 start immediately; 22+27+29 after 21; 24 after 23; 25 after 24; 26 after 22+25
+
+### Deployment Architecture
+
+```
+  Developer pushes to main
+         │
+         ▼
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  GitHub Actions CI/CD Pipeline                                         │
+  │                                                                        │
+  │  [Lint & Test] → [Deploy Staging] → [Smoke Test] → [Approval] → [Prod]│
+  └──────────────────┬──────────────────────────────────┬──────────────────┘
+                     │                                  │
+                     ▼                                  ▼
+          ┌──────────────────┐              ┌───────────────────────┐
+          │  STAGING (F1)    │              │  PRODUCTION           │
+          │  App Service     │              │  Container Apps       │
+          │  $0/month        │              │  Consumption plan     │
+          │  Zip deploy      │              │  Docker from GHCR     │
+          │  60 CPU min/day  │              │  Scale-to-zero ($0+)  │
+          └──────────────────┘              └───────────────────────┘
+                                                     ▲
+  GitHub Actions Health Monitor (every 5 min) ───────┘
+         │ on failure
+         ▼
+  GitHub Issue: "service health issue: {error}"
+```
+
+### Key Design Decisions (Phase 3)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Staging host | App Service F1 (Free) | $0 cost, good enough for testing |
+| Production host | Container Apps (Consumption) | Pay-per-use, scale-to-zero, WebSocket support |
+| Container registry | GitHub Container Registry | Free for private repos, integrated with GH Actions |
+| Staging→Prod gate | GH Environment manual approval | Prevents untested code reaching production |
+| Health monitoring | GitHub Actions cron | No extra infra, creates issues in same repo |
+| System auth | API key (X-API-Key header) | Simple, no JWT expiry concerns for automated clients |
 
 ---
 
