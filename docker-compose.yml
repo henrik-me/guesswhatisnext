@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=development
+      - JWT_SECRET=gwn-dev-secret-change-in-production
+      - SYSTEM_API_KEY=gwn-dev-system-key
+      - PORT=3000
+    restart: unless-stopped
