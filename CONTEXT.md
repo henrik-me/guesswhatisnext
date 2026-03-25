@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: 🟡 Planning Complete — Ready to Build
+## Project Status: ✅ Phase 1 Complete — Ready for Phase 2
 
 ---
 
@@ -22,8 +22,8 @@ This file tracks the current state of the project: what's been done, what's next
 | 6 | Free-play mode | ✅ Done | 4 | Category select, random order, 10 rounds |
 | 7 | Daily challenge | ✅ Done | 4 | Date-seeded, one attempt, Wordle-style share |
 | 8 | LocalStorage | ✅ Done | 6, 7 | High scores, daily state, stats persisted |
-| 9 | Polish | ⬜ Pending | 8 | Animations, transitions, mobile pass |
-| 10 | Image puzzles | ⬜ Pending | 4 | Image assets, rendering in engine |
+| 9 | Polish | ✅ Done | 8 | Animations, keyboard, mobile, reduced-motion |
+| 10 | Image puzzles | ✅ Done | 4 | 12 SVGs, 2 image-type puzzles |
 
 **Parallelism:** 2 & 3 parallel → 4 → 5, 6, 7, 10 parallel → 8 → 9
 
