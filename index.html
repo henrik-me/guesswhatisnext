@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guess What's Next</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- Home Screen -->
+    <section id="screen-home" class="screen active" data-screen="home">
+      <header class="screen-header">
+        <h1 class="game-title">Guess What's Next</h1>
+        <p class="game-subtitle">Can you spot the pattern?</p>
+      </header>
+      <nav class="home-menu">
+        <button class="btn btn-primary" data-action="start-freeplay">🎮 Free Play</button>
+        <button class="btn btn-secondary" data-action="start-daily">📅 Daily Challenge</button>
+      </nav>
+      <div class="home-stats">
+        <p class="high-score">High Score: <span data-bind="high-score">0</span></p>
+      </div>
+    </section>
+
+    <!-- Category Select Screen -->
+    <section id="screen-category" class="screen" data-screen="category">
+      <header class="screen-header">
+        <h2>Choose a Category</h2>
+      </header>
+      <div class="category-grid" data-bind="category-list">
+        <!-- Categories populated by JS -->
+      </div>
+      <button class="btn btn-back" data-action="go-home">← Back</button>
+    </section>
+
+    <!-- Game Screen -->
+    <section id="screen-game" class="screen" data-screen="game">
+      <div class="game-hud">
+        <div class="hud-item">
+          <span class="hud-label">Score</span>
+          <span class="hud-value" data-bind="score">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label">Round</span>
+          <span class="hud-value"><span data-bind="round">1</span>/<span data-bind="total-rounds">10</span></span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label">Streak</span>
+          <span class="hud-value" data-bind="streak">0</span>
+        </div>
+      </div>
+      <div class="timer-bar-container">
+        <div class="timer-bar" data-bind="timer-bar"></div>
+      </div>
+      <div class="sequence-display" data-bind="sequence">
+        <!-- Sequence items rendered by JS -->
+      </div>
+      <p class="prompt-text">What comes next?</p>
+      <div class="options-grid" data-bind="options">
+        <!-- 4 option buttons rendered by JS -->
+      </div>
+    </section>
+
+    <!-- Round Result Screen -->
+    <section id="screen-result" class="screen" data-screen="result">
+      <div class="result-icon" data-bind="result-icon"></div>
+      <h2 class="result-title" data-bind="result-title"></h2>
+      <p class="result-explanation" data-bind="result-explanation"></p>
+      <div class="result-score">
+        <p>+<span data-bind="round-points">0</span> points</p>
+      </div>
+      <button class="btn btn-primary" data-action="next-round">Next Round →</button>
+    </section>
+
+    <!-- Game Over Screen -->
+    <section id="screen-gameover" class="screen" data-screen="gameover">
+      <h2 class="gameover-title">Game Over!</h2>
+      <div class="gameover-stats">
+        <div class="stat">
+          <span class="stat-value" data-bind="final-score">0</span>
+          <span class="stat-label">Final Score</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" data-bind="correct-count">0</span>
+          <span class="stat-label">Correct</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" data-bind="best-streak">0</span>
+          <span class="stat-label">Best Streak</span>
+        </div>
+      </div>
+      <div class="gameover-actions">
+        <button class="btn btn-primary" data-action="play-again">Play Again</button>
+        <button class="btn btn-secondary" data-action="share-result">📋 Share Result</button>
+        <button class="btn btn-back" data-action="go-home">← Home</button>
+      </div>
+    </section>
+
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

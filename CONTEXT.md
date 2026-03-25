@@ -12,33 +12,37 @@ This file tracks the current state of the project: what's been done, what's next
 
 ## Phase 1 — Client-Side Game
 
-| # | Task | Status | Notes |
-|---|---|---|---|
-| 1 | Project setup | ⬜ Pending | File structure, index.html, link CSS/JS |
-| 2 | Puzzle data | ⬜ Pending | 15–20 starter puzzles (emoji + image) |
-| 3 | UI screens & CSS | ⬜ Pending | Home, category select, game, result, game-over |
-| 4 | Game engine | ⬜ Pending | Core loop: puzzle → timer → answer → score → next |
-| 5 | Timer & scoring | ⬜ Pending | Countdown bar, speed bonus, streak multiplier |
-| 6 | Free-play mode | ⬜ Pending | Category select, random order, 10 rounds |
-| 7 | Daily challenge | ⬜ Pending | Date-seeded puzzle, one attempt, share result |
-| 8 | LocalStorage | ⬜ Pending | High scores, daily state, stats |
-| 9 | Polish | ⬜ Pending | Animations, transitions, mobile pass |
-| 10 | Image puzzles | ⬜ Pending | Image assets, rendering in engine |
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 1 | Project setup | ⬜ Pending | — | File structure, index.html, link CSS/JS |
+| 2 | Puzzle data | ⬜ Pending | 1 | 15–20 starter puzzles (emoji + image) |
+| 3 | UI screens & CSS | ⬜ Pending | 1 | Home, category select, game, result, game-over |
+| 4 | Game engine | ⬜ Pending | 2, 3 | Core loop: puzzle → timer → answer → score → next |
+| 5 | Timer & scoring | ⬜ Pending | 4 | Countdown bar, speed bonus, streak multiplier |
+| 6 | Free-play mode | ⬜ Pending | 4 | Category select, random order, 10 rounds |
+| 7 | Daily challenge | ⬜ Pending | 4 | Date-seeded puzzle, one attempt, share result |
+| 8 | LocalStorage | ⬜ Pending | 6, 7 | High scores, daily state, stats |
+| 9 | Polish | ⬜ Pending | 8 | Animations, transitions, mobile pass |
+| 10 | Image puzzles | ⬜ Pending | 4 | Image assets, rendering in engine |
+
+**Parallelism:** 2 & 3 parallel → 4 → 5, 6, 7, 10 parallel → 8 → 9
 
 ## Phase 2 — Backend & Multiplayer
 
-| # | Task | Status | Notes |
-|---|---|---|---|
-| 11 | Backend setup | ⬜ Pending | Node.js + Express + SQLite, move to `public/` |
-| 12 | Database schema | ⬜ Pending | users, scores, matches tables |
-| 13 | Auth system | ⬜ Pending | Register/login, JWT, bcrypt |
-| 14 | Score API | ⬜ Pending | Submit scores, leaderboard queries |
-| 15 | Leaderboard UI | ⬜ Pending | Rankings display, user highlighting |
-| 16 | Matchmaking | ⬜ Pending | Room codes, create/join |
-| 17 | WebSocket server | ⬜ Pending | Real-time room connections |
-| 18 | Head-to-head engine | ⬜ Pending | Synced puzzles, round scoring |
-| 19 | Multiplayer UI | ⬜ Pending | Lobby, live match, opponent view |
-| 20 | Multiplayer polish | ⬜ Pending | Reconnect, forfeit, rematch, history |
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 11 | Backend setup | ⬜ Pending | 10 | Node.js + Express + SQLite, move to `public/` |
+| 12 | Database schema | ⬜ Pending | 11 | users, scores, matches tables |
+| 13 | Auth system | ⬜ Pending | 12 | Register/login, JWT, bcrypt |
+| 14 | Score API | ⬜ Pending | 13 | Submit scores, leaderboard queries |
+| 15 | Leaderboard UI | ⬜ Pending | 14 | Rankings display, user highlighting |
+| 16 | Matchmaking | ⬜ Pending | 13 | Room codes, create/join |
+| 17 | WebSocket server | ⬜ Pending | 11 | Real-time room connections |
+| 18 | Head-to-head engine | ⬜ Pending | 16, 17 | Synced puzzles, round scoring |
+| 19 | Multiplayer UI | ⬜ Pending | 18 | Lobby, live match, opponent view |
+| 20 | Multiplayer polish | ⬜ Pending | 15, 19 | Reconnect, forfeit, rematch, history |
+
+**Parallelism:** 14 & 16 parallel; 16 & 17 parallel → 18; 15 & 19 → 20
 
 ---
 
