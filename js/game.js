@@ -5,6 +5,8 @@
  */
 
 import { filterByCategory } from './puzzles.js';
+import { getDailyPuzzle, getTodayString } from './daily.js';
+import { Storage } from './storage.js';
 
 const CONFIG = {
   ROUND_TIME_MS: 15000,
@@ -96,12 +98,20 @@ function startFreePlay(allPuzzles, category, ui) {
   loadRound(ui);
 }
 
-/** Start a daily challenge (single puzzle). */
+/** Start a daily challenge — single puzzle, one attempt per day. */
 function startDaily(allPuzzles, ui) {
-  // Daily uses the full game loop but is wired differently in step 7
-  // For now, start with a shuffled set like freeplay
-  const queue = shuffle([...allPuzzles]).slice(0, CONFIG.MAX_ROUNDS);
+  const today = getTodayString();
+  const existing = Storage.getDailyState(today);
+
+  if (existing && existing.completed) {
+    ui.showDailyLocked(existing);
+    return;
+  }
+
+  const dailyPuzzle = getDailyPuzzle(allPuzzles, today);
+  const queue = [dailyPuzzle];
   state = createState(queue, 'daily');
+  state.dailyDate = today;
   loadRound(ui);
 }
 
@@ -171,23 +181,52 @@ function endGame(ui) {
   state.finished = true;
   stopTimer();
 
-  ui.showGameOver({
+  const summary = {
     score: state.score,
     correctCount: state.correctCount,
     totalRounds: state.puzzleQueue.length,
     bestStreak: state.bestStreak,
     results: state.results,
     mode: state.mode,
-  });
+  };
+
+  // Save daily challenge completion
+  if (state.mode === 'daily' && state.dailyDate) {
+    Storage.setDailyState(state.dailyDate, {
+      completed: true,
+      score: state.score,
+      correct: state.correctCount > 0,
+      results: state.results,
+    });
+  }
+
+  ui.showGameOver(summary);
 }
 
-/** Placeholder — share game result (implemented in step 7). */
-function shareResult() {
-  if (!state) return;
-  const text = `🧩 Guess What's Next\n` +
+/** Generate shareable result text. */
+function getShareText() {
+  if (!state) return '';
+
+  const results = state.results.map(r => r.correct ? '🟩' : '🟥').join('');
+
+  if (state.mode === 'daily') {
+    const date = state.dailyDate || getTodayString();
+    return `🧩 Guess What's Next — Daily ${date}\n` +
+      `${results}\n` +
+      `Score: ${state.score} ${state.correctCount > 0 ? '✅' : '❌'}`;
+  }
+
+  return `🧩 Guess What's Next\n` +
+    `${results}\n` +
     `Score: ${state.score} | ${state.correctCount}/${state.puzzleQueue.length} correct\n` +
     `Best streak: ${state.bestStreak} 🔥`;
+}
+
+/** Copy share text to clipboard. Returns the text. */
+function shareResult() {
+  const text = getShareText();
   navigator.clipboard?.writeText(text);
+  return text;
 }
 
 export const Game = {

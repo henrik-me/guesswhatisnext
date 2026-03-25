@@ -516,6 +516,101 @@ body::before {
   text-shadow: 0 0 12px var(--color-secondary-glow);
 }
 
+.score-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.5rem;
+  min-width: 220px;
+  font-size: 0.95rem;
+}
+
+.score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.score-row.total {
+  border-top: 1px solid var(--color-surface-border);
+  padding-top: 0.4rem;
+  margin-top: 0.2rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-secondary);
+}
+
+.score-row .label {
+  color: var(--color-text-muted);
+}
+
+.score-row .value {
+  font-weight: 600;
+}
+
+.streak-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: linear-gradient(135deg, #e17055, #d63031);
+  color: white;
+  padding: 0.2rem 0.6rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.streak-display {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.streak-display.on-fire {
+  color: #fdcb6e;
+}
+
+.daily-locked-message {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+}
+
+.daily-locked-message .daily-score {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+  margin: 0.5rem 0;
+}
+
+.share-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-correct);
+  color: var(--color-text);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  z-index: 100;
+  animation: toast-in 0.3s ease, toast-out 0.3s ease 1.7s forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(1rem); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 /* ===========================
    Game Over Screen
    =========================== */

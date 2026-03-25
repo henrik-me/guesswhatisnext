@@ -6,6 +6,7 @@
 import { Game } from './game.js';
 import { puzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
+import { getTodayString } from './daily.js';
 
 const screens = {};
 let currentScreen = null;
@@ -48,7 +49,17 @@ const ui = {
     bindText('score', state.score);
     bindText('round', state.currentRound + 1);
     bindText('total-rounds', state.puzzleQueue.length);
-    bindText('streak', state.streak);
+
+    // Streak display with fire indicator
+    const streakVal = state.streak;
+    const streakEl = document.querySelector('[data-bind="streak"]');
+    if (streakEl) {
+      streakEl.textContent = streakVal;
+      streakEl.classList.toggle('on-fire', streakVal >= 3);
+      if (streakVal >= 3) {
+        streakEl.textContent = `${streakVal} 🔥`;
+      }
+    }
 
     // Sequence display
     const seqContainer = document.querySelector('[data-bind="sequence"]');
@@ -106,7 +117,23 @@ const ui = {
     bindText('result-icon', result.correct ? '✅' : '❌');
     bindText('result-title', result.correct ? 'Correct!' : 'Wrong!');
     bindText('result-explanation', result.explanation);
-    bindText('round-points', result.score.total);
+
+    // Score breakdown
+    const breakdown = document.querySelector('[data-bind="score-breakdown"]');
+    if (result.correct) {
+      let html = `
+        <div class="score-row"><span class="label">Base</span><span class="value">+${result.score.points}</span></div>
+        <div class="score-row"><span class="label">Speed bonus</span><span class="value">+${result.score.speedBonus}</span></div>`;
+      if (result.score.multiplier > 1) {
+        html += `<div class="score-row"><span class="label">Streak ×${result.score.multiplier}</span><span class="value"><span class="streak-badge">🔥 ×${result.score.multiplier}</span></span></div>`;
+      }
+      html += `<div class="score-row total"><span class="label">Total</span><span class="value">+${result.score.total}</span></div>`;
+      breakdown.innerHTML = html;
+    } else {
+      breakdown.innerHTML = `
+        <div class="score-row"><span class="label">No points</span><span class="value">+0</span></div>
+        <div class="score-row"><span class="label">Correct answer</span><span class="value">${result.correctAnswer}</span></div>`;
+    }
 
     // Update the next-round button text if this was the last round
     const state = Game.state;
@@ -130,6 +157,25 @@ const ui = {
       correct: summary.correctCount,
       bestStreak: summary.bestStreak,
     });
+
+    // Show/hide share button based on mode
+    const shareBtn = document.querySelector('[data-action="share-result"]');
+    if (shareBtn) shareBtn.style.display = '';
+
+    showScreen('gameover');
+  },
+
+  /** Show daily challenge locked screen (already played today). */
+  showDailyLocked(dailyState) {
+    const gameover = screens['gameover'];
+    bindText('final-score', dailyState.score);
+    bindText('correct-count', dailyState.correct ? '1/1' : '0/1');
+    bindText('best-streak', dailyState.correct ? '1' : '0');
+
+    const header = gameover.querySelector('.gameover-title');
+    if (header) header.textContent = "Today's Challenge Complete!";
+    const icon = gameover.querySelector('.gameover-icon');
+    if (icon) icon.textContent = '📅';
 
     showScreen('gameover');
   },
@@ -187,6 +233,18 @@ function renderCategories() {
   });
 }
 
+/** Show a temporary toast notification. */
+function showToast(message) {
+  const existing = document.querySelector('.share-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'share-toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2200);
+}
+
 /** Initialize screen references and wire up navigation. */
 function init() {
   document.querySelectorAll('[data-screen]').forEach(el => {
@@ -222,6 +280,7 @@ function init() {
         break;
       case 'share-result':
         Game.shareResult();
+        showToast('Copied to clipboard! 📋');
         break;
     }
   });

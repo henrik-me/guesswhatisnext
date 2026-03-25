@@ -14,10 +14,10 @@ This file tracks the current state of the project: what's been done, what's next
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 1 | Project setup | ⬜ Pending | — | File structure, index.html, link CSS/JS |
-| 2 | Puzzle data | ⬜ Pending | 1 | 15–20 starter puzzles (emoji + image) |
-| 3 | UI screens & CSS | ⬜ Pending | 1 | Home, category select, game, result, game-over |
-| 4 | Game engine | ⬜ Pending | 2, 3 | Core loop: puzzle → timer → answer → score → next |
+| 1 | Project setup | ✅ Done | — | File structure, index.html, link CSS/JS |
+| 2 | Puzzle data | ✅ Done | 1 | 20 puzzles across 5 categories |
+| 3 | UI screens & CSS | ✅ Done | 1 | Accessibility, aria, visual polish |
+| 4 | Game engine | ✅ Done | 2, 3 | Full game loop, scoring, timer, answer handling |
 | 5 | Timer & scoring | ⬜ Pending | 4 | Countdown bar, speed bonus, streak multiplier |
 | 6 | Free-play mode | ⬜ Pending | 4 | Category select, random order, 10 rounds |
 | 7 | Daily challenge | ⬜ Pending | 4 | Date-seeded puzzle, one attempt, share result |
