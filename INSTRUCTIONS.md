@@ -98,8 +98,19 @@ guesswhatisnext/
                           │ │ Build     │ │  GHCR  │ PRODUCTION       │
                           │ │ Docker &  │─┼───────▶│ Container Apps   │
                           │ │ Deploy    │ │  image │ Consumption plan │
-                          │ └───────────┘ │        │ Scale-to-zero    │
-                          │               │        └──────────────────┘
+                          │ └─────┬─────┘ │  (SHA) │ Scale-to-zero    │
+                          │       │       │        └──────────────────┘
+                          │ ┌─────▼─────┐ │               ▲
+                          │ │ Prod      │─┼───────────────┘
+                          │ │ Verify    │ │  health + smoke tests
+                          │ └─────┬─────┘ │
+                          │       │       │
+                          │   ❌ fail?    │
+                          │ ┌─────▼─────┐ │        ┌──────────────────┐
+                          │ │ Rollback  │─┼───────▶│ Redeploy prev    │
+                          │ │ + Issue   │ │        │ SHA-tagged image  │
+                          │ └───────────┘ │        └──────────────────┘
+                          │               │
                           │ ┌───────────┐ │               ▲
                           │ │ Health    │─┼───────────────┘
                           │ │ Monitor   │ │  every 5 min
@@ -282,11 +293,18 @@ Commit after every meaningful, working change. Specifically:
 - Phase 3: Feature branches with CI/CD pipeline — push to `main` auto-deploys to staging, manual approval promotes to production
 
 ### Deployment Environments
-| Environment | Trigger | Approval | Infrastructure |
-|---|---|---|---|
-| **Local** | `docker compose up` or `npm start` | None | Developer machine |
-| **Staging** | Push to `main` | Automatic | Azure App Service F1 (Free) |
-| **Production** | After staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) |
+| Environment | Trigger | Approval | Infrastructure | Rollback |
+|---|---|---|---|---|
+| **Local** | `docker compose up` or `npm start` | None | Developer machine | N/A |
+| **Staging** | Push to `main` | Automatic | Azure App Service F1 (Free) | Redeploy previous zip |
+| **Production** | After staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) | Auto-rollback to previous SHA-tagged image |
+
+### Rollback Policy
+- Docker images are tagged with git SHA (`ghcr.io/henrik-me/guesswhatisnext:<sha>`) — every version is recoverable
+- Post-deploy verification runs health check + smoke tests against production
+- On failure: auto-rollback to previous image tag + GitHub issue created with `deployment-failure` label
+- Manual rollback available via `az containerapp update --image <previous-tag>`
+- **Database migrations must be backward-compatible** (additive only: new columns with defaults, new tables) to ensure rollback safety
 
 ---
 

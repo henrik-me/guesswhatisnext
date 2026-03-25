@@ -148,24 +148,24 @@ guesswhatisnext/
 ```
   git push to main
        │
-  ┌────▼─────┐    ┌──────────────┐    ┌─────────────┐    ┌──────────┐    ┌──────────────┐
-  │ Lint &   │───▶│ Deploy to    │───▶│ Smoke Tests │───▶│ ⏸️ Manual │───▶│ Deploy to    │
-  │ Test     │    │ Staging (F1) │    │ on Staging  │    │ Approval │    │ Prod (CA)    │
-  └──────────┘    └──────────────┘    └─────────────┘    └──────────┘    └──────────────┘
-                        │                                                      │
-                        ▼                                                      ▼
-                  App Service F1                                      Container Apps
-                  ($0/month)                                          (Consumption, $0+)
-                                                                           ▲
-  Health Monitor (GitHub Actions, every 5 min) ────────────────────────────┘
-       │ on failure → GitHub Issue: "service health issue: {error}"
+  ┌────▼─────┐  ┌───────────┐  ┌───────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐
+  │ Lint &   │─▶│ Deploy to │─▶│ Smoke     │─▶│ ⏸️ Manual │─▶│ Deploy to │─▶│ Prod     │
+  │ Test     │  │ Staging   │  │ Tests     │  │ Approval │  │ Prod (CA) │  │ Verify   │
+  └──────────┘  └───────────┘  └───────────┘  └──────────┘  └───────────┘  └────┬─────┘
+                      │                                            │             │
+                      ▼                                            ▼         ❌ fail
+                App Service F1                            Container Apps    ┌────▼─────┐
+                ($0/month)                                (SHA-tagged)      │ Rollback │
+                                                               ▲           │ + Issue  │
+  Health Monitor (every 5 min) ────────────────────────────────┘           └──────────┘
+       │ on failure → GitHub Issue
 ```
 
-| Environment | Cost | Trigger | Approval |
-|---|---|---|---|
-| Local | Free | `docker compose up` / `npm start` | None |
-| Staging | $0 | Push to `main` | Automatic |
-| Production | $0+ (pay-per-use) | After staging tests pass | Manual (GitHub reviewer) |
+| Environment | Cost | Trigger | Approval | Rollback |
+|---|---|---|---|---|
+| Local | Free | `docker compose up` / `npm start` | None | N/A |
+| Staging | $0 | Push to `main` | Automatic | Redeploy previous zip |
+| Production | $0+ (pay-per-use) | After staging tests pass | Manual (GitHub reviewer) | Auto-rollback to previous SHA tag |
 
 ### API Endpoints
 
