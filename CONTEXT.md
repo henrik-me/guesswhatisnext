@@ -51,8 +51,8 @@ This file tracks the current state of the project: what's been done, what's next
 | 21 | Auth hardening | ⬜ Pending | — | System account, API key auth, rate limiting, all endpoints auth'd |
 | 22 | Enhanced health endpoint | ⬜ Pending | 21 | Deep checks (DB, WS, disk, uptime), system-auth only |
 | 23 | Local container dev | ⬜ Pending | — | Dockerfile, docker-compose.yml, .dockerignore, local dev in container |
-| 24 | Azure infrastructure | ⬜ Pending | 23 | F1 staging (zip deploy) + Container Apps Consumption prod (Docker/GHCR) |
-| 25 | CI/CD pipeline | ⬜ Pending | 24 | GH Actions: staging (auto) → approval → prod → verify → rollback on fail |
+| 24 | Azure infrastructure | ⬜ Pending | 23 | Container Apps Environment + gwn-staging + gwn-prod apps, GHCR |
+| 25 | CI/CD pipeline | ⬜ Pending | 24 | Build once → staging → approval → promote to prod → verify → rollback |
 | 26 | Health monitor | ⬜ Pending | 22, 25 | GH Actions cron every 5 min, creates issues on failure |
 | 27 | Puzzles to DB | ⬜ Pending | 21 | Puzzles table, seed script, API endpoint, client fetch |
 | 28 | Puzzle expansion | ⬜ Pending | 27 | 60+ new puzzles, 7 new categories |
@@ -69,24 +69,24 @@ This file tracks the current state of the project: what's been done, what's next
   Developer pushes to main
          │
          ▼
-  ┌─────────────────────────────────────────────────────────────────────────────────────┐
-  │  GitHub Actions CI/CD Pipeline                                                      │
-  │                                                                                     │
-  │  [Lint+Test] → [Staging] → [Smoke] → [Approval] → [Prod] → [Verify] → [Rollback?] │
-  └──────────────────┬───────────────────────────────────┬──────────────────────────────┘
-                     │                                   │
-                     ▼                                   ▼
-          ┌──────────────────┐              ┌───────────────────────┐
-          │  STAGING (F1)    │              │  PRODUCTION           │
-          │  App Service     │              │  Container Apps       │
-          │  $0/month        │              │  Consumption plan     │
-          │  Zip deploy      │              │  Docker from GHCR     │
-          │  60 CPU min/day  │              │  Scale-to-zero ($0+)  │
-          └──────────────────┘              │  SHA-tagged images    │
-                                            │  Auto-rollback on fail│
-                                            └───────────────────────┘
-                                                     ▲
-  GitHub Actions Health Monitor (every 5 min) ───────┘
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+  │  GitHub Actions CI/CD Pipeline                                                               │
+  │                                                                                              │
+  │  [Lint+Test] → [Build Docker] → [Staging] → [Smoke] → [Approval] → [Prod] → [Verify/Roll.] │
+  └──────────────────────────────────┬───────────────────────────────────┬────────────────────────┘
+                                     │                                   │
+                                     ▼                                   ▼
+                          ┌───────────────────────┐       ┌───────────────────────┐
+                          │  STAGING               │       │  PRODUCTION           │
+                          │  gwn-staging            │       │  gwn-prod             │
+                          │  Container Apps        │       │  Container Apps       │
+                          │  Consumption plan      │       │  Consumption plan     │
+                          │  Same Docker image     │       │  Same Docker image    │
+                          │  Scale-to-zero ($0)    │       │  Scale-to-zero ($0+)  │
+                          └───────────────────────┘       │  Auto-rollback on fail│
+                                                          └───────────────────────┘
+                                                                   ▲
+  GitHub Actions Health Monitor (every 5 min) ─────────────────────┘
          │ on failure
          ▼
   GitHub Issue: "service health issue: {error}"
@@ -96,7 +96,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Staging host | App Service F1 (Free) | $0 cost, good enough for testing |
+| Staging host | Container Apps (Consumption) | Environment parity with prod, scale-to-zero, full WebSocket support |
 | Production host | Container Apps (Consumption) | Pay-per-use, scale-to-zero, WebSocket support |
 | Container registry | GitHub Container Registry | Free for private repos, integrated with GH Actions |
 | Staging→Prod gate | GH Environment manual approval | Prevents untested code reaching production |

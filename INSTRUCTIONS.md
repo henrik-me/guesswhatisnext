@@ -79,10 +79,15 @@ guesswhatisnext/
                           │ │ Lint+Test  │ │
                           │ └─────┬─────┘ │
                           │       │       │
-                          │ ┌─────▼─────┐ │        ┌──────────────────┐
-                          │ │ Deploy    │─┼───────▶│ STAGING (F1)     │
-                          │ │ Staging   │ │  zip   │ App Service      │
-                          │ └─────┬─────┘ │        │ $0/month         │
+                          │ ┌─────▼─────┐ │
+                          │ │ Build     │ │  push to GHCR (SHA-tagged)
+                          │ │ Docker    │─┼──────────┐
+                          │ └─────┬─────┘ │          │
+                          │       │       │          │
+                          │ ┌─────▼─────┐ │        ┌─▼────────────────┐
+                          │ │ Deploy    │─┼───────▶│ STAGING           │
+                          │ │ Staging   │ │        │ gwn-staging       │
+                          │ └─────┬─────┘ │        │ Container Apps    │
                           │       │       │        └──────────────────┘
                           │ ┌─────▼─────┐ │
                           │ │ Smoke     │ │
@@ -93,12 +98,11 @@ guesswhatisnext/
                           │ │ ⏸️ Manual  │ │  (GitHub Environment protection)
                           │ │ Approval  │ │
                           │ └─────┬─────┘ │
-                          │       │       │
-                          │ ┌─────▼─────┐ │        ┌──────────────────┐
-                          │ │ Build     │ │  GHCR  │ PRODUCTION       │
-                          │ │ Docker &  │─┼───────▶│ Container Apps   │
-                          │ │ Deploy    │ │  image │ Consumption plan │
-                          │ └─────┬─────┘ │  (SHA) │ Scale-to-zero    │
+                          │       │       │        ┌──────────────────┐
+                          │ ┌─────▼─────┐ │        │ PRODUCTION       │
+                          │ │ Deploy    │─┼───────▶│ gwn-prod         │
+                          │ │ Prod      │ │  same  │ Container Apps   │
+                          │ └─────┬─────┘ │  image │ Scale-to-zero    │
                           │       │       │        └──────────────────┘
                           │ ┌─────▼─────┐ │               ▲
                           │ │ Prod      │─┼───────────────┘
@@ -296,8 +300,8 @@ Commit after every meaningful, working change. Specifically:
 | Environment | Trigger | Approval | Infrastructure | Rollback |
 |---|---|---|---|---|
 | **Local** | `docker compose up` or `npm start` | None | Developer machine | N/A |
-| **Staging** | Push to `main` | Automatic | Azure App Service F1 (Free) | Redeploy previous zip |
-| **Production** | After staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) | Auto-rollback to previous SHA-tagged image |
+| **Staging** | Push to `main` | Automatic | Azure Container Apps (Consumption) — gwn-staging | Redeploy previous SHA-tagged image |
+| **Production** | After staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-prod | Auto-rollback to previous SHA-tagged image |
 
 ### Rollback Policy
 - Docker images are tagged with git SHA (`ghcr.io/henrik-me/guesswhatisnext:<sha>`) — every version is recoverable

@@ -148,23 +148,27 @@ guesswhatisnext/
 ```
   git push to main
        │
-  ┌────▼─────┐  ┌───────────┐  ┌───────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐
-  │ Lint &   │─▶│ Deploy to │─▶│ Smoke     │─▶│ ⏸️ Manual │─▶│ Deploy to │─▶│ Prod     │
-  │ Test     │  │ Staging   │  │ Tests     │  │ Approval │  │ Prod (CA) │  │ Verify   │
-  └──────────┘  └───────────┘  └───────────┘  └──────────┘  └───────────┘  └────┬─────┘
-                      │                                            │             │
-                      ▼                                            ▼         ❌ fail
-                App Service F1                            Container Apps    ┌────▼─────┐
-                ($0/month)                                (SHA-tagged)      │ Rollback │
-                                                               ▲           │ + Issue  │
-  Health Monitor (every 5 min) ────────────────────────────────┘           └──────────┘
+  ┌────▼─────┐  ┌──────────┐  ┌───────────┐  ┌───────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+  │ Lint &   │─▶│ Build    │─▶│ Deploy to │─▶│ Smoke     │─▶│ ⏸️ Manual │─▶│ Deploy to│─▶│ Prod     │
+  │ Test     │  │ Docker   │  │ Staging   │  │ Tests     │  │ Approval │  │ Prod     │  │ Verify   │
+  └──────────┘  └──────────┘  └───────────┘  └───────────┘  └──────────┘  └──────────┘  └────┬─────┘
+                     │              │                                            │             │
+                  push to       same image                                  same image     ❌ fail
+                   GHCR              │                                          │          ┌────▼─────┐
+                (SHA tag)            ▼                                          ▼          │ Rollback │
+                              gwn-staging                                  gwn-prod       │ + Issue  │
+                              Container Apps                               Container Apps └──────────┘
+                                                                               ▲
+  Health Monitor (every 5 min) ────────────────────────────────────────────────┘
        │ on failure → GitHub Issue
 ```
+
+Image is built once → deployed to staging → **same bytes** promoted to prod after approval. No rebuild, no drift.
 
 | Environment | Cost | Trigger | Approval | Rollback |
 |---|---|---|---|---|
 | Local | Free | `docker compose up` / `npm start` | None | N/A |
-| Staging | $0 | Push to `main` | Automatic | Redeploy previous zip |
+| Staging | $0 (scale-to-zero) | Push to `main` | Automatic | Redeploy previous SHA tag |
 | Production | $0+ (pay-per-use) | After staging tests pass | Manual (GitHub reviewer) | Auto-rollback to previous SHA tag |
 
 ### API Endpoints
