@@ -8,7 +8,11 @@
     "dev": "node --watch server/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["game", "puzzle", "sequence"],
+  "keywords": [
+    "game",
+    "puzzle",
+    "sequence"
+  ],
   "author": "",
   "license": "MIT",
   "type": "commonjs",
@@ -16,6 +20,7 @@
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.8.0",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
     "jsonwebtoken": "^9.0.3",
     "ws": "^8.20.0"
   }

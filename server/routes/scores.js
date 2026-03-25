@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { getDb } = require('../db/connection');
-const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -29,7 +29,7 @@ router.post('/', requireAuth, (req, res) => {
 });
 
 /** GET /api/scores/leaderboard?mode=freeplay&period=all|weekly|daily&limit=20 */
-router.get('/leaderboard', optionalAuth, (req, res) => {
+router.get('/leaderboard', requireAuth, (req, res) => {
   const { mode = 'freeplay', period = 'all', limit = 20 } = req.query;
 
   let dateFilter = '';

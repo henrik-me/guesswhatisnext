@@ -7,6 +7,7 @@ const express = require('express');
 const path = require('path');
 const http = require('http');
 const { initDb } = require('./db/connection');
+const { requireAuth, requireSystem } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const scoreRoutes = require('./routes/scores');
 const matchRoutes = require('./routes/matches');
@@ -30,8 +31,8 @@ app.use('/api/scores', scoreRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/puzzles', puzzleRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => {
+// Health check (system access only)
+app.get('/api/health', requireSystem, (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 

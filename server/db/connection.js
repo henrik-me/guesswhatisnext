@@ -31,6 +31,22 @@ function initDb() {
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf-8');
   database.exec(schema);
+
+  // Migration: add role column if missing
+  try {
+    database.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'system', 'admin'))");
+  } catch { /* column already exists */ }
+
+  // Seed system account if it doesn't exist
+  const SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
+  const existing = database.prepare('SELECT id FROM users WHERE username = ?').get('system');
+  if (!existing) {
+    const bcrypt = require('bcryptjs');
+    const hash = bcrypt.hashSync(SYSTEM_API_KEY, 10);
+    database.prepare("INSERT INTO users (username, password_hash, role) VALUES ('system', ?, 'system')").run(hash);
+    console.log('🔑 System account seeded');
+  }
+
   console.log('📦 Database initialized');
 }
 
