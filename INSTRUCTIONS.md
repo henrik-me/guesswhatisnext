@@ -205,6 +205,148 @@ These rules apply even during Phase 1 to ensure a smooth Phase 2 transition:
 
 ## 3. Testing Strategy
 
+### Coverage Targets
+
+| Category | Target | Measured By |
+|---|---|---|
+| **Unit tests** | ≥ 90% line coverage on game logic, scoring, auth, DB helpers | Vitest with `--coverage` |
+| **API / integration tests** | 100% of endpoints with success + error cases | supertest |
+| **WebSocket tests** | All message types (join, answer, roundResult, gameOver, reconnect) | ws client in tests |
+| **E2E tests** | All critical user flows (see list below) | Playwright |
+| **Overall** | ≥ 80% line coverage across the project | `npm run test:coverage` |
+
+Tests **must pass** before any merge to `main`. CI/CD pipeline runs the full suite on every push.
+
+### Test Framework & Tools
+
+```
+test/
+├── unit/
+│   ├── scoring.test.js       # Score calculation, speed bonus, streak multiplier
+│   ├── daily.test.js         # Date-seed determinism, puzzle selection
+│   ├── puzzles.test.js       # Puzzle data validation (schema, uniqueness)
+│   └── auth.test.js          # JWT generation/verification, API key auth, role checks
+├── integration/
+│   ├── auth.api.test.js      # Register, login, rate limiting, token refresh
+│   ├── scores.api.test.js    # Score submission, leaderboard queries, auth enforcement
+│   ├── matches.api.test.js   # Room create/join, match status, history
+│   ├── health.api.test.js    # Health endpoint (system auth required, deep checks)
+│   └── websocket.test.js     # Match flow: join → rounds → answer → result → gameOver
+├── e2e/
+│   ├── singleplayer.spec.js  # Free play + daily challenge full flows
+│   ├── multiplayer.spec.js   # Create room → join → play match → result
+│   ├── leaderboard.spec.js   # Register → play → check leaderboard
+│   └── auth-flow.spec.js     # Register → login → access protected routes
+└── helpers/
+    ├── setup.js              # Test DB initialization, cleanup
+    ├── fixtures.js           # Test users, puzzles, scores
+    └── ws-client.js          # WebSocket test client helper
+```
+
+**Tools:**
+- **Vitest** — Unit + integration test runner (fast, native ESM, built-in coverage)
+- **supertest** — HTTP API testing without starting the server
+- **Playwright** — Browser-based E2E tests (cross-browser, headless)
+- **@vitest/coverage-v8** — Coverage reporting
+
+**npm scripts:**
+```json
+{
+  "test": "vitest run",
+  "test:watch": "vitest",
+  "test:coverage": "vitest run --coverage",
+  "test:e2e": "playwright test",
+  "test:all": "vitest run --coverage && playwright test"
+}
+```
+
+### Unit Tests — What to Cover
+
+**Game engine (`game.js`):**
+- Scoring: correct answer = 100 base points, wrong = 0
+- Speed bonus: linear decay from 100 → 0 over timer duration
+- Streak multiplier: x1 (0-2), x1.5 (3-5), x2 (6+)
+- Streak resets on wrong answer
+- Edge cases: answer at 0ms, answer at timeout, negative values
+
+**Daily challenge (`daily.js`):**
+- Same date always yields same puzzle (deterministic)
+- Different dates yield different puzzles
+- Date boundary behavior (midnight UTC)
+
+**Puzzle validation (`puzzles.js`):**
+- All puzzles have required fields: id, category, difficulty, type, sequence, answer, options, explanation
+- Answer is always in options array
+- Options has exactly 4 items
+- Sequence has 3-6 items
+- No duplicate puzzle IDs
+- Difficulty is 1, 2, or 3
+
+**Auth middleware (`auth.js`):**
+- Valid JWT token → sets req.user with id, username, role
+- Expired JWT → 401
+- Malformed JWT → 401
+- Valid API key → sets req.user as system
+- Invalid API key → 401
+- No auth header → 401
+- requireSystem rejects non-system users with 403
+- optionalAuth continues without user when no token provided
+
+### Integration Tests — API Endpoints
+
+Every endpoint must have tests for:
+1. **Happy path** — correct request returns expected response
+2. **Auth enforcement** — request without auth returns 401
+3. **Validation** — bad input returns 400 with meaningful error
+4. **Edge cases** — empty body, missing fields, boundary values
+
+**Specific coverage:**
+
+| Endpoint | Tests |
+|---|---|
+| `POST /api/auth/register` | Success, duplicate username (409), short password (400), rate limit (429) |
+| `POST /api/auth/login` | Success, wrong password (401), non-existent user (401), rate limit (429) |
+| `GET /api/auth/me` | Valid token, expired token, no token |
+| `POST /api/scores` | Submit score, invalid mode (400), no auth (401) |
+| `GET /api/scores/leaderboard` | All/weekly/daily periods, requires auth, limit capping |
+| `GET /api/scores/me` | User's scores + stats, no auth (401) |
+| `POST /api/matches` | Create room, no auth (401) |
+| `POST /api/matches/join` | Join room, invalid code (404), no auth (401) |
+| `GET /api/matches/:id` | Match status, no auth (401) |
+| `GET /api/matches/history` | Match history, no auth (401) |
+| `GET /api/health` | System API key → deep health JSON, JWT user → 403, no auth → 401 |
+
+**WebSocket tests:**
+- Connect with valid JWT token
+- Reject connection with invalid token
+- Join room flow: join → matched event
+- Full match: both players answer all rounds → gameOver
+- Forfeit: one player disconnects → opponent wins
+- Reconnection: disconnect + reconnect within 30s → resume match
+- Invalid message types → error response
+
+### E2E Tests — Critical User Flows
+
+Run with Playwright against a live server instance (started in test setup):
+
+1. **Free play flow:**
+   - Load home screen → click Free Play → select category → play 10 rounds → see game over → verify score displayed
+
+2. **Daily challenge flow:**
+   - Load home → click Daily Challenge → answer → see result → verify share text → reload → verify locked (can't replay)
+
+3. **Auth flow:**
+   - Register new user → verify logged in → reload page → verify still logged in (token persisted) → log out
+
+4. **Multiplayer flow:**
+   - Register 2 users → User A creates room → User B joins room → both play rounds → match result displayed
+
+5. **Leaderboard flow:**
+   - Register → play free play → submit score → navigate to leaderboard → verify score appears
+
+6. **Keyboard navigation:**
+   - Navigate entire game using only keyboard (Tab, Enter, 1-4 number keys)
+
 ### Phase 1 — Manual + Lightweight Unit Tests
 Since there's no build system, testing is pragmatic:
 
@@ -233,17 +375,26 @@ Since there's no build system, testing is pragmatic:
    - Keyboard navigation works for all interactive elements
 
 ### Phase 2 — Automated Tests
-- Use a test framework (e.g., Vitest or Jest) installed via npm
+- Use Vitest as the test framework (fast, ESM-native, built-in coverage)
 - API endpoint tests with `supertest`
-- WebSocket integration tests
-- `npm test` runs the full suite
+- WebSocket integration tests with `ws` client
+- `npm test` runs the full unit + integration suite
+- `npm run test:coverage` reports line/branch/function coverage
 - Tests must pass before merging any PR
 
 ### Phase 3 — Container & Deployment Tests
 - **Container tests:** `docker compose up` → verify health endpoint responds, game loads, WebSocket connects
 - **Staging smoke tests:** Automated in CI/CD after staging deploy — hit key endpoints, verify 200 responses
+- **Prod verification tests:** After production deploy — health check + smoke tests, auto-rollback on failure
 - **Approval gate:** Manual approval required before promoting staging → production (GitHub Environment protection rules)
 - **Health monitor:** GitHub Actions cron job every 5 minutes validates production health, creates issues on failure
+
+### Test Data Management
+- Tests use an **isolated in-memory SQLite database** (`:memory:`) — never the real `data/game.db`
+- `helpers/setup.js` creates the schema and seeds test data before each test suite
+- `helpers/fixtures.js` exports reusable test users, puzzles, and scores
+- Each test suite cleans up after itself — no cross-test contamination
+- E2E tests use a separate server instance on a random port
 
 ---
 
