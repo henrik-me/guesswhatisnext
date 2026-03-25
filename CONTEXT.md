@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ Phase 1 Complete — Ready for Phase 2
+## Project Status: ✅ Phase 1 & Phase 2 Complete
 
 ---
 
@@ -38,9 +38,9 @@ This file tracks the current state of the project: what's been done, what's next
 | 15 | Leaderboard UI | ⬜ Pending | 14 | Rankings display, user highlighting |
 | 16 | Matchmaking | ✅ Done | 13 | Room codes, create/join endpoints |
 | 17 | WebSocket server | ✅ Done | 11 | Room-based WS connections on /ws |
-| 18 | Head-to-head engine | ⬜ Pending | 16, 17 | Synced puzzles, round scoring |
-| 19 | Multiplayer UI | ⬜ Pending | 18 | Lobby, live match, opponent view |
-| 20 | Multiplayer polish | ⬜ Pending | 15, 19 | Reconnect, forfeit, rematch, history |
+| 18 | Head-to-head engine | ✅ Done | 16, 17 | Server match logic, scoring, puzzle sync |
+| 19 | Multiplayer UI | ✅ Done | 18 | Auth, lobby, live match, result screens |
+| 20 | Multiplayer polish | ✅ Done | 15, 19 | Reconnect, rematch, match history, forfeit |
 
 **Parallelism:** 14 & 16 parallel; 16 & 17 parallel → 18; 15 & 19 → 20
 
