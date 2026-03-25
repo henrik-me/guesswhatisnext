@@ -1,6 +1,6 @@
 /**
  * WebSocket handler for real-time multiplayer matches.
- * Manages rooms, puzzle sync, and round scoring.
+ * Manages rooms, puzzle sync, round scoring, reconnection, and rematch.
  */
 
 const { WebSocketServer } = require('ws');
@@ -12,9 +12,19 @@ const puzzlePool = require('../puzzleData');
 /** Active rooms: Map<roomCode, RoomState> */
 const rooms = new Map();
 
+/** Disconnected players awaiting reconnection: Map<`${userId}:${roomCode}`, DisconnectInfo> */
+const disconnected = new Map();
+
+/** Rematch requests: Map<roomCode, Set<userId>> */
+const rematchRequests = new Map();
+
+/** Maps a finished roomCode to the pair of userIds+usernames for rematch */
+const finishedPairs = new Map();
+
 const ROUND_TIMEOUT_MS = 20000;
 const ROOM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const NEXT_ROUND_DELAY_MS = 3000;
+const RECONNECT_WINDOW_MS = 30000;
 
 /** Select `count` random puzzles from the pool (Fisher-Yates shuffle on a copy). */
 function selectRandomPuzzles(count) {
@@ -110,12 +120,15 @@ function handleMessage(ws, msg) {
     case 'answer':
       handleAnswer(ws, msg);
       break;
+    case 'rematch-request':
+      handleRematchRequest(ws);
+      break;
     default:
       ws.send(JSON.stringify({ type: 'error', message: `Unknown message type: ${msg.type}` }));
   }
 }
 
-/** Handle a player joining a room. */
+/** Handle a player joining a room (or reconnecting). */
 function handleJoin(ws, roomCode) {
   if (!roomCode) {
     ws.send(JSON.stringify({ type: 'error', message: 'Room code required' }));
@@ -124,6 +137,39 @@ function handleJoin(ws, roomCode) {
 
   const code = roomCode.toUpperCase();
   ws.roomCode = code;
+
+  // Check if this is a reconnection to an active match
+  const dcKey = `${ws.user.id}:${code}`;
+  const dcInfo = disconnected.get(dcKey);
+  if (dcInfo && rooms.has(code)) {
+    const room = rooms.get(code);
+    if (room.started) {
+      // Clear the forfeit timer
+      if (dcInfo.forfeitTimer) clearTimeout(dcInfo.forfeitTimer);
+      disconnected.delete(dcKey);
+
+      // Restore player in room
+      room.players.set(ws.user.id, ws);
+
+      // Send reconnect state to the rejoining player
+      ws.send(JSON.stringify({
+        type: 'reconnected',
+        roomCode: code,
+        scores: buildScoresSnapshot(room),
+        currentRound: room.round,
+        totalRounds: room.totalRounds,
+        myScore: room.scores[ws.user.id] || 0,
+      }));
+
+      // Notify the other player
+      broadcastToRoom(code, {
+        type: 'opponent-reconnected',
+        username: ws.user.username,
+      }, ws.user.id);
+
+      return;
+    }
+  }
 
   if (!rooms.has(code)) {
     rooms.set(code, {
@@ -323,7 +369,7 @@ function resolveRound(roomCode) {
   }
 }
 
-/** End the match: determine winner, persist to DB, broadcast results, clean up. */
+/** End the match: determine winner, persist to DB, broadcast results, keep room for rematch. */
 function endMatch(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
@@ -370,7 +416,24 @@ function endMatch(roomCode) {
     // Non-fatal
   }
 
-  cleanupRoom(roomCode);
+  // Store player pair for potential rematch
+  finishedPairs.set(roomCode, userScores.map(({ userId, username }) => ({ userId, username })));
+
+  // Mark match as finished but keep room alive for rematch for 60s
+  room.started = false;
+  if (room.roundTimer) {
+    clearTimeout(room.roundTimer);
+    room.roundTimer = null;
+  }
+
+  setTimeout(() => {
+    // If no rematch happened, clean up
+    if (rooms.has(roomCode) && !rooms.get(roomCode).started) {
+      cleanupRoom(roomCode);
+      rematchRequests.delete(roomCode);
+      finishedPairs.delete(roomCode);
+    }
+  }, 60000);
 }
 
 /** Remove a room and clear any timers. */
@@ -381,66 +444,188 @@ function cleanupRoom(roomCode) {
   rooms.delete(roomCode);
 }
 
-/** Handle a player disconnecting. */
+/** Handle a player disconnecting — start reconnection window if match is active. */
 function handleDisconnect(ws) {
   if (!ws.roomCode) return;
 
   const room = rooms.get(ws.roomCode);
   if (!room) return;
 
+  const roomCode = ws.roomCode;
+
+  // If match is active, give 30s to reconnect before forfeiting
+  if (room.started && room.players.size === 2) {
+    room.players.delete(ws.user.id);
+
+    // Notify remaining player about temporary disconnect
+    broadcastToRoom(roomCode, {
+      type: 'opponent-disconnected',
+      username: ws.user.username,
+    });
+
+    const dcKey = `${ws.user.id}:${roomCode}`;
+    const forfeitTimer = setTimeout(() => {
+      disconnected.delete(dcKey);
+      handleForfeit(roomCode, ws.user.id, ws.user.username);
+    }, RECONNECT_WINDOW_MS);
+
+    disconnected.set(dcKey, {
+      userId: ws.user.id,
+      username: ws.user.username,
+      roomCode,
+      disconnectedAt: Date.now(),
+      forfeitTimer,
+    });
+
+    return;
+  }
+
   room.players.delete(ws.user.id);
 
-  broadcastToRoom(ws.roomCode, {
+  broadcastToRoom(roomCode, {
     type: 'player-left',
     username: ws.user.username,
     playerCount: room.players.size,
   });
 
   if (room.started && room.players.size < 2) {
-    // Forfeit: remaining player wins
+    // Only one player left and no reconnection window (shouldn't normally reach here)
     if (room.players.size === 1) {
-      const [[remainingId, remainingWs]] = [...room.players.entries()];
-      const finalScores = {};
-      finalScores[remainingWs.user.username] = room.scores[remainingId] || 0;
-      finalScores[ws.user.username] = room.scores[ws.user.id] || 0;
-
-      sendTo(remainingWs, {
-        type: 'gameOver',
-        winner: remainingWs.user.username,
-        scores: finalScores,
-        results: [
-          { username: remainingWs.user.username, score: room.scores[remainingId] || 0 },
-          { username: ws.user.username, score: room.scores[ws.user.id] || 0 },
-        ],
-        forfeit: true,
-      });
-
-      // Persist forfeit result
-      try {
-        const db = getDb();
-        const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(ws.roomCode);
-        if (match) {
-          db.prepare(
-            `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`
-          ).run(match.id);
-          const updatePlayer = db.prepare(
-            `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`
-          );
-          updatePlayer.run(room.scores[remainingId] || 0, match.id, remainingId);
-          updatePlayer.run(room.scores[ws.user.id] || 0, match.id, ws.user.id);
-        }
-      } catch {
-        // Non-fatal
-      }
+      handleForfeit(roomCode, ws.user.id, ws.user.username);
+    } else {
+      cleanupRoom(roomCode);
     }
-
-    cleanupRoom(ws.roomCode);
     return;
   }
 
   // Clean up empty rooms
   if (room.players.size === 0) {
-    cleanupRoom(ws.roomCode);
+    cleanupRoom(roomCode);
+  }
+}
+
+/** Handle forfeit — remaining player wins. */
+function handleForfeit(roomCode, forfeitUserId, forfeitUsername) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  if (room.players.size === 1) {
+    const [[remainingId, remainingWs]] = [...room.players.entries()];
+    const finalScores = {};
+    finalScores[remainingWs.user.username] = room.scores[remainingId] || 0;
+    finalScores[forfeitUsername] = room.scores[forfeitUserId] || 0;
+
+    sendTo(remainingWs, {
+      type: 'gameOver',
+      winner: remainingWs.user.username,
+      scores: finalScores,
+      results: [
+        { username: remainingWs.user.username, score: room.scores[remainingId] || 0 },
+        { username: forfeitUsername, score: room.scores[forfeitUserId] || 0 },
+      ],
+      forfeit: true,
+    });
+
+    // Persist forfeit result
+    try {
+      const db = getDb();
+      const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(roomCode);
+      if (match) {
+        db.prepare(
+          `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`
+        ).run(match.id);
+        const updatePlayer = db.prepare(
+          `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`
+        );
+        updatePlayer.run(room.scores[remainingId] || 0, match.id, remainingId);
+        updatePlayer.run(room.scores[forfeitUserId] || 0, match.id, forfeitUserId);
+      }
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  cleanupRoom(roomCode);
+}
+
+/** Build a username-keyed scores snapshot for a room. */
+function buildScoresSnapshot(room) {
+  const snapshot = {};
+  room.players.forEach((ws, userId) => {
+    snapshot[ws.user.username] = room.scores[userId] || 0;
+  });
+  return snapshot;
+}
+
+/** Handle a rematch request from a player. */
+function handleRematchRequest(ws) {
+  const roomCode = ws.roomCode;
+  if (!roomCode) {
+    ws.send(JSON.stringify({ type: 'error', message: 'No room to rematch in' }));
+    return;
+  }
+
+  if (!rematchRequests.has(roomCode)) {
+    rematchRequests.set(roomCode, new Set());
+  }
+
+  const requests = rematchRequests.get(roomCode);
+  requests.add(ws.user.id);
+
+  // Notify the opponent that a rematch was offered
+  broadcastToRoom(roomCode, {
+    type: 'rematch-offered',
+    username: ws.user.username,
+  }, ws.user.id);
+
+  // Check if both players have requested rematch
+  const pair = finishedPairs.get(roomCode);
+  if (pair && requests.size >= 2) {
+    // Both want rematch — create a new room
+    const crypto = require('crypto');
+    let newCode = crypto.randomBytes(3).toString('hex').toUpperCase();
+
+    // Create DB match record
+    try {
+      const db = getDb();
+      while (db.prepare('SELECT 1 FROM matches WHERE room_code = ?').get(newCode)) {
+        newCode = crypto.randomBytes(3).toString('hex').toUpperCase();
+      }
+      const matchId = crypto.randomUUID();
+      db.prepare(
+        `INSERT INTO matches (id, room_code, status, total_rounds, created_by) VALUES (?, ?, 'waiting', ?, ?)`
+      ).run(matchId, newCode, 5, pair[0].userId);
+      for (const p of pair) {
+        db.prepare(
+          `INSERT INTO match_players (match_id, user_id) VALUES (?, ?)`
+        ).run(matchId, p.userId);
+      }
+    } catch {
+      // Non-fatal — proceed with in-memory room
+    }
+
+    // Create the new room
+    rooms.set(newCode, {
+      players: new Map(),
+      round: 0,
+      totalRounds: 5,
+      scores: {},
+      started: false,
+      puzzles: [],
+      answers: {},
+      roundTimer: null,
+      createdAt: Date.now(),
+    });
+
+    // Notify both players
+    broadcastToRoom(roomCode, {
+      type: 'rematch-start',
+      roomCode: newCode,
+    });
+
+    // Clean up old rematch state
+    rematchRequests.delete(roomCode);
+    finishedPairs.delete(roomCode);
   }
 }
 

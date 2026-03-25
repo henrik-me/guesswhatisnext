@@ -74,6 +74,44 @@ router.post('/join', requireAuth, (req, res) => {
   res.json({ matchId: match.id, roomCode, totalRounds: match.total_rounds });
 });
 
+/** GET /api/matches/history — get match history for the current user */
+router.get('/history', requireAuth, (req, res) => {
+  const db = getDb();
+  const limit = Math.min(Number(req.query.limit) || 20, 50);
+
+  const rows = db.prepare(`
+    SELECT m.id, m.room_code, m.status, m.total_rounds, m.created_at, m.finished_at,
+           mp.score AS my_score,
+           opp.score AS opp_score,
+           opp_u.username AS opponent
+    FROM match_players mp
+    JOIN matches m ON mp.match_id = m.id
+    LEFT JOIN match_players opp ON opp.match_id = m.id AND opp.user_id != mp.user_id
+    LEFT JOIN users opp_u ON opp.user_id = opp_u.id
+    WHERE mp.user_id = ? AND m.status = 'finished'
+    ORDER BY m.finished_at DESC
+    LIMIT ?
+  `).all(req.user.id, limit);
+
+  const history = rows.map(row => {
+    let result = 'loss';
+    if (row.my_score > (row.opp_score || 0)) result = 'win';
+    else if (row.my_score === (row.opp_score || 0)) result = 'tie';
+
+    return {
+      matchId: row.id,
+      opponent: row.opponent || 'Unknown',
+      myScore: row.my_score,
+      oppScore: row.opp_score || 0,
+      result,
+      totalRounds: row.total_rounds,
+      date: row.finished_at || row.created_at,
+    };
+  });
+
+  res.json({ history });
+});
+
 /** GET /api/matches/:id — get match status */
 router.get('/:id', requireAuth, (req, res) => {
   const db = getDb();

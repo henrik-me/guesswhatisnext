@@ -372,8 +372,20 @@ function init() {
         showScreen('multiplayer');
         break;
       case 'rematch':
-        resetMatchState();
+        sendRematchRequest();
+        break;
+      case 'show-match-history':
+        showScreen('match-history');
+        fetchMatchHistory();
+        break;
+      case 'back-to-multiplayer':
         showScreen('multiplayer');
+        break;
+      case 'reconnect-go-home':
+        hideReconnectOverlay();
+        disconnectWebSocket();
+        resetMatchState();
+        showScreen('home');
         break;
     }
   });
@@ -547,13 +559,18 @@ function connectWebSocket() {
     });
 
     ws.addEventListener('close', () => {
+      const wasInMatch = currentScreen === 'match' || currentScreen === 'match-result';
       ws = null;
+      if (wasInMatch && matchState.roomCode) {
+        startReconnect();
+      }
     });
   });
 }
 
 /** Disconnect WebSocket cleanly. */
 function disconnectWebSocket() {
+  reconnectState.active = false;
   if (ws) {
     ws.close();
     ws = null;
@@ -587,6 +604,21 @@ function handleWSMessage(msg) {
       break;
     case 'player-left':
       onPlayerLeft(msg);
+      break;
+    case 'reconnected':
+      onReconnected(msg);
+      break;
+    case 'opponent-disconnected':
+      onOpponentDisconnected(msg);
+      break;
+    case 'opponent-reconnected':
+      onOpponentReconnected(msg);
+      break;
+    case 'rematch-offered':
+      onRematchOffered(msg);
+      break;
+    case 'rematch-start':
+      onRematchStart(msg);
       break;
     case 'error':
       showToast(msg.message || 'Server error');
@@ -944,11 +976,23 @@ function onGameOver(msg) {
     </div>`;
   }).join('');
 
+  // Reset rematch UI
+  rematchSent = false;
+  const rematchBtn = document.querySelector('[data-action="rematch"]');
+  if (rematchBtn) {
+    rematchBtn.textContent = '🔄 Rematch';
+    rematchBtn.disabled = false;
+    rematchBtn.style.display = forfeit ? 'none' : '';
+  }
+  const rematchStatus = document.querySelector('[data-bind="rematch-status"]');
+  if (rematchStatus) {
+    rematchStatus.style.display = 'none';
+    rematchStatus.textContent = '';
+  }
+
   showScreen('match-over');
 
-  // Clean up
-  disconnectWebSocket();
-  resetMatchState();
+  // Do NOT disconnect WebSocket — keep it alive for rematch
 }
 
 /** Handle 'player-left' — opponent disconnected. */
@@ -977,6 +1021,249 @@ function resetMatchState() {
     roundStartedAt: null,
     roundTimer: null,
   };
+}
+
+/* ===========================
+   Reconnection Logic
+   =========================== */
+
+let reconnectState = { active: false, attempts: 0 };
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_INTERVAL_MS = 3000;
+
+/** Show the reconnection overlay and begin auto-retrying. */
+function startReconnect() {
+  if (reconnectState.active) return;
+  reconnectState = { active: true, attempts: 0 };
+
+  const overlay = document.getElementById('reconnect-overlay');
+  if (overlay) overlay.style.display = '';
+  bindText('reconnect-message', 'Connection lost — reconnecting...');
+  const homeBtn = document.querySelector('.reconnect-home-btn');
+  if (homeBtn) homeBtn.style.display = 'none';
+  const spinner = document.querySelector('.reconnect-spinner');
+  if (spinner) spinner.style.display = '';
+
+  attemptReconnect();
+}
+
+/** Attempt a single reconnection. */
+function attemptReconnect() {
+  if (!reconnectState.active) return;
+
+  reconnectState.attempts++;
+  const attempt = reconnectState.attempts;
+  bindText('reconnect-message', `Reconnecting... (${attempt}/${MAX_RECONNECT_ATTEMPTS})`);
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${protocol}//${location.host}/ws?token=${encodeURIComponent(authToken)}`;
+  const socket = new WebSocket(url);
+
+  const timeout = setTimeout(() => {
+    socket.close();
+  }, RECONNECT_INTERVAL_MS - 200);
+
+  socket.addEventListener('open', () => {
+    clearTimeout(timeout);
+    ws = socket;
+    reconnectState.active = false;
+
+    // Re-attach message handler
+    ws.addEventListener('message', (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleWSMessage(msg);
+      } catch { /* ignore malformed */ }
+    });
+
+    ws.addEventListener('close', () => {
+      const wasInMatch = currentScreen === 'match' || currentScreen === 'match-result';
+      ws = null;
+      if (wasInMatch && matchState.roomCode) {
+        startReconnect();
+      }
+    });
+
+    // Re-join the room to trigger server-side reconnection
+    ws.send(JSON.stringify({ type: 'join', roomCode: matchState.roomCode }));
+
+    hideReconnectOverlay();
+    showToast('Reconnected!');
+  });
+
+  socket.addEventListener('error', () => {
+    clearTimeout(timeout);
+    socket.close();
+  });
+
+  socket.addEventListener('close', () => {
+    clearTimeout(timeout);
+    if (!reconnectState.active) return;
+
+    if (reconnectState.attempts >= MAX_RECONNECT_ATTEMPTS) {
+      reconnectState.active = false;
+      bindText('reconnect-message', 'Disconnected — could not reconnect');
+      const spinner2 = document.querySelector('.reconnect-spinner');
+      if (spinner2) spinner2.style.display = 'none';
+      const homeBtn2 = document.querySelector('.reconnect-home-btn');
+      if (homeBtn2) homeBtn2.style.display = '';
+    } else {
+      setTimeout(() => attemptReconnect(), RECONNECT_INTERVAL_MS);
+    }
+  });
+}
+
+/** Hide the reconnection overlay. */
+function hideReconnectOverlay() {
+  const overlay = document.getElementById('reconnect-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+/** Handle 'reconnected' — server restored our session. */
+function onReconnected(msg) {
+  matchState.roomCode = msg.roomCode;
+  matchState.myScore = msg.myScore || 0;
+  matchState.currentRound = msg.currentRound || 0;
+  matchState.totalRounds = msg.totalRounds || 5;
+
+  // Update scoreboard
+  bindText('match-you-score', matchState.myScore);
+  bindText('match-round', `${matchState.currentRound + 1}/${matchState.totalRounds}`);
+
+  hideReconnectOverlay();
+}
+
+/** Handle 'opponent-disconnected' — show warning toast. */
+function onOpponentDisconnected(msg) {
+  showToast(`${msg.username} disconnected — waiting for reconnect...`);
+}
+
+/** Handle 'opponent-reconnected' — clear warning. */
+function onOpponentReconnected(msg) {
+  showToast(`${msg.username} reconnected!`);
+}
+
+/* ===========================
+   Rematch Logic
+   =========================== */
+
+let rematchSent = false;
+
+/** Send a rematch request via WebSocket. */
+function sendRematchRequest() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    showToast('Connection lost');
+    return;
+  }
+  if (rematchSent) return;
+
+  rematchSent = true;
+  ws.send(JSON.stringify({ type: 'rematch-request' }));
+
+  const btn = document.querySelector('[data-action="rematch"]');
+  if (btn) {
+    btn.textContent = '⏳ Waiting for opponent...';
+    btn.disabled = true;
+  }
+  const status = document.querySelector('[data-bind="rematch-status"]');
+  if (status) {
+    status.style.display = '';
+    status.textContent = 'Waiting for opponent to accept...';
+  }
+}
+
+/** Handle 'rematch-offered' — opponent wants a rematch. */
+function onRematchOffered(msg) {
+  if (rematchSent) {
+    // We also requested — both want rematch, server should send rematch-start soon
+    const status = document.querySelector('[data-bind="rematch-status"]');
+    if (status) {
+      status.style.display = '';
+      status.textContent = 'Both players accepted — starting new match...';
+    }
+    return;
+  }
+
+  // Show opponent's offer
+  const status = document.querySelector('[data-bind="rematch-status"]');
+  if (status) {
+    status.style.display = '';
+    status.textContent = `${escapeHTML(msg.username)} wants a rematch!`;
+  }
+
+  const btn = document.querySelector('[data-action="rematch"]');
+  if (btn) {
+    btn.textContent = '✅ Accept Rematch';
+    btn.disabled = false;
+  }
+}
+
+/** Handle 'rematch-start' — transition to the new match. */
+function onRematchStart(msg) {
+  rematchSent = false;
+
+  // Reset match state for new match
+  matchState.roomCode = msg.roomCode;
+  matchState.myScore = 0;
+  matchState.oppScore = 0;
+  matchState.currentRound = 0;
+
+  // Re-join the new room
+  ws.send(JSON.stringify({ type: 'join', roomCode: msg.roomCode }));
+
+  bindText('lobby-room-code', msg.roomCode);
+  bindText('lobby-status', 'Starting rematch...');
+  showScreen('lobby');
+}
+
+/* ===========================
+   Match History
+   =========================== */
+
+/** Fetch match history from the server and render it. */
+async function fetchMatchHistory() {
+  const container = document.querySelector('[data-bind="match-history-list"]');
+  if (!container) return;
+  container.innerHTML = '<div class="leaderboard-loading">Loading</div>';
+
+  try {
+    const res = await fetch('/api/matches/history', {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderMatchHistory(data.history || []);
+  } catch {
+    container.innerHTML =
+      '<div class="leaderboard-error">Match history unavailable — is the server running?</div>';
+  }
+}
+
+/** Render match history entries. */
+function renderMatchHistory(history) {
+  const container = document.querySelector('[data-bind="match-history-list"]');
+  if (!container) return;
+
+  if (!history.length) {
+    container.innerHTML = '<div class="leaderboard-empty">No matches yet — play some games! ⚔️</div>';
+    return;
+  }
+
+  container.innerHTML = history.map(entry => {
+    const resultClass = entry.result === 'win' ? 'history-win' : entry.result === 'tie' ? 'history-tie' : 'history-loss';
+    const resultLabel = entry.result === 'win' ? 'Win' : entry.result === 'tie' ? 'Tie' : 'Loss';
+    const resultIcon = entry.result === 'win' ? '🏆' : entry.result === 'tie' ? '🤝' : '😢';
+    const dateStr = entry.date ? new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+    return `<div class="match-history-entry ${resultClass}" role="listitem">
+      <div class="history-result-badge">${resultIcon} ${resultLabel}</div>
+      <div class="history-details">
+        <span class="history-opponent">vs ${escapeHTML(entry.opponent)}</span>
+        <span class="history-score">${entry.myScore} – ${entry.oppScore}</span>
+      </div>
+      <div class="history-date">${dateStr}</div>
+    </div>`;
+  }).join('');
 }
 
 document.addEventListener('DOMContentLoaded', init);

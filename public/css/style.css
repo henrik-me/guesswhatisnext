@@ -1300,6 +1300,165 @@ body::before {
 }
 
 /* ===========================
+   Reconnection Overlay
+   =========================== */
+.reconnect-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 15, 26, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.reconnect-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 2.5rem 2rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 340px;
+  text-align: center;
+}
+
+.reconnect-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid var(--color-surface-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: leaderboardSpin 0.7s linear infinite;
+}
+
+.reconnect-message {
+  color: var(--color-text);
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.reconnect-home-btn {
+  margin-top: 0.5rem;
+}
+
+/* ===========================
+   Match History
+   =========================== */
+.match-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 55vh;
+  padding-right: 0.25rem;
+}
+
+.match-history-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.match-history-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.match-history-list::-webkit-scrollbar-thumb {
+  background-color: var(--color-surface-border);
+  border-radius: 2px;
+}
+
+.match-history-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  transition: border-color var(--transition-speed);
+}
+
+.match-history-entry.history-win {
+  border-left: 3px solid var(--color-correct);
+}
+
+.match-history-entry.history-loss {
+  border-left: 3px solid var(--color-wrong);
+}
+
+.match-history-entry.history-tie {
+  border-left: 3px solid var(--color-timer);
+}
+
+.history-result-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  min-width: 70px;
+  text-align: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 1rem;
+  background-color: var(--color-bg);
+}
+
+.history-win .history-result-badge {
+  color: var(--color-correct);
+}
+
+.history-loss .history-result-badge {
+  color: var(--color-wrong);
+}
+
+.history-tie .history-result-badge {
+  color: var(--color-timer);
+}
+
+.history-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.history-opponent {
+  font-weight: 600;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-score {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-date {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ===========================
+   Rematch Status
+   =========================== */
+.rematch-status {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-style: italic;
+}
+
+/* ===========================
    Responsive — Small Screens
    =========================== */
 @media (max-width: 359px) {
@@ -1437,6 +1596,7 @@ body::before {
   .sequence-item.mystery,
   .leaderboard-loading::after,
   .lobby-spinner,
+  .reconnect-spinner,
   .option-btn,
   .option-btn.correct,
   .option-btn.wrong,

@@ -163,6 +163,7 @@
           <input class="auth-input join-room-input" id="join-room-code" type="text" placeholder="Enter room code" maxlength="6" aria-label="Room code">
           <button class="btn btn-secondary" data-action="join-room" aria-label="Join a room">🚪 Join Room</button>
         </div>
+        <button class="btn btn-secondary" data-action="show-match-history" aria-label="View match history">📜 Match History</button>
       </nav>
       <button class="btn btn-back" data-action="go-home" aria-label="Go back to home screen">← Back</button>
     </section>
@@ -234,10 +235,32 @@
         <!-- Final scores rendered by JS -->
       </div>
       <nav class="gameover-actions" aria-label="Post-match options">
-        <button class="btn btn-primary" data-action="rematch" aria-label="Play again">🔄 Rematch</button>
+        <button class="btn btn-primary" data-action="rematch" aria-label="Request rematch">🔄 Rematch</button>
         <button class="btn btn-back" data-action="go-home" aria-label="Return to home screen">← Home</button>
       </nav>
+      <div class="rematch-status" data-bind="rematch-status" aria-live="polite" style="display:none"></div>
     </section>
+
+    <!-- Match History Screen -->
+    <section id="screen-match-history" class="screen" data-screen="match-history" aria-label="Match History">
+      <header class="screen-header">
+        <h2>📜 Match History</h2>
+        <p class="screen-description">Your recent multiplayer matches</p>
+      </header>
+      <div class="match-history-list" data-bind="match-history-list" role="list" aria-label="Match history">
+        <!-- Match history populated by JS -->
+      </div>
+      <button class="btn btn-back" data-action="back-to-multiplayer" aria-label="Back to multiplayer menu">← Back</button>
+    </section>
+
+    <!-- Reconnection Overlay -->
+    <div id="reconnect-overlay" class="reconnect-overlay" style="display:none" aria-live="assertive">
+      <div class="reconnect-content">
+        <div class="reconnect-spinner" aria-hidden="true"></div>
+        <p class="reconnect-message" data-bind="reconnect-message">Connection lost — reconnecting...</p>
+        <button class="btn btn-back reconnect-home-btn" data-action="reconnect-go-home" style="display:none" aria-label="Return to home screen">← Home</button>
+      </div>
+    </div>
 
   </div>
 
