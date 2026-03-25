@@ -21,9 +21,11 @@
       <nav class="home-menu" aria-label="Game modes">
         <button class="btn btn-primary" data-action="start-freeplay" aria-label="Start Free Play mode">🎮 Free Play</button>
         <button class="btn btn-secondary" data-action="start-daily" aria-label="Start Daily Challenge">📅 Daily Challenge</button>
+        <button class="btn btn-secondary" data-action="start-multiplayer" aria-label="Start Multiplayer">⚔️ Multiplayer</button>
         <button class="btn btn-secondary" data-action="show-leaderboard" aria-label="View Leaderboard">🏆 Leaderboard</button>
       </nav>
       <footer class="home-stats">
+        <p class="home-user" data-bind="home-user-display" style="display:none"></p>
         <p class="high-score">🏆 High Score: <span data-bind="high-score">0</span></p>
       </footer>
     </section>
@@ -121,6 +123,120 @@
         <!-- Leaderboard rows populated by JS -->
       </div>
       <button class="btn btn-back" data-action="go-home" aria-label="Go back to home screen">← Back</button>
+    </section>
+
+    <!-- Auth Screen -->
+    <section id="screen-auth" class="screen" data-screen="auth" aria-label="Login or Register">
+      <header class="screen-header">
+        <div class="title-icon" aria-hidden="true">🔑</div>
+        <h2>Sign In to Play</h2>
+        <p class="screen-description">Log in or create an account for multiplayer</p>
+      </header>
+      <form class="auth-form" id="auth-form" autocomplete="off">
+        <div class="auth-field">
+          <label class="auth-label" for="auth-username">Username</label>
+          <input class="auth-input" id="auth-username" type="text" placeholder="Enter username" minlength="3" maxlength="20" required aria-label="Username">
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="auth-password">Password</label>
+          <input class="auth-input" id="auth-password" type="password" placeholder="Enter password" minlength="6" required aria-label="Password">
+        </div>
+        <div class="auth-error" data-bind="auth-error" role="alert" aria-live="polite"></div>
+        <div class="auth-actions">
+          <button class="btn btn-primary" type="button" data-action="auth-login" aria-label="Log in">Login</button>
+          <button class="btn btn-secondary" type="button" data-action="auth-register" aria-label="Create account">Register</button>
+        </div>
+      </form>
+      <button class="btn btn-back" data-action="go-home" aria-label="Go back to home screen">← Back</button>
+    </section>
+
+    <!-- Multiplayer Menu Screen -->
+    <section id="screen-multiplayer" class="screen" data-screen="multiplayer" aria-label="Multiplayer menu">
+      <header class="screen-header">
+        <div class="title-icon" aria-hidden="true">⚔️</div>
+        <h2>Multiplayer</h2>
+        <p class="screen-description">Challenge another player in real-time</p>
+      </header>
+      <nav class="multiplayer-menu" aria-label="Multiplayer options">
+        <button class="btn btn-primary" data-action="create-room" aria-label="Create a new room">🏠 Create Room</button>
+        <div class="join-room-group">
+          <input class="auth-input join-room-input" id="join-room-code" type="text" placeholder="Enter room code" maxlength="6" aria-label="Room code">
+          <button class="btn btn-secondary" data-action="join-room" aria-label="Join a room">🚪 Join Room</button>
+        </div>
+      </nav>
+      <button class="btn btn-back" data-action="go-home" aria-label="Go back to home screen">← Back</button>
+    </section>
+
+    <!-- Waiting Lobby Screen -->
+    <section id="screen-lobby" class="screen" data-screen="lobby" aria-label="Waiting lobby">
+      <header class="screen-header">
+        <h2>Waiting Room</h2>
+        <p class="screen-description">Share this code with your opponent</p>
+      </header>
+      <div class="lobby-code-container">
+        <span class="lobby-code" data-bind="lobby-room-code" aria-label="Room code"></span>
+        <button class="lobby-copy-btn" data-action="copy-room-code" aria-label="Copy room code">📋</button>
+      </div>
+      <div class="lobby-status">
+        <div class="lobby-spinner" aria-hidden="true"></div>
+        <p class="lobby-waiting-text" data-bind="lobby-status">Waiting for opponent...</p>
+      </div>
+      <div class="lobby-players" data-bind="lobby-players" role="list" aria-label="Players in room">
+        <!-- Player list populated by JS -->
+      </div>
+      <button class="btn btn-back" data-action="leave-lobby" aria-label="Leave the lobby">← Leave</button>
+    </section>
+
+    <!-- Live Match Screen -->
+    <section id="screen-match" class="screen" data-screen="match" aria-label="Multiplayer match">
+      <div class="match-scoreboard" role="status" aria-label="Match scores">
+        <div class="match-player match-player-you">
+          <span class="match-player-name" data-bind="match-you-name">You</span>
+          <span class="match-player-score" data-bind="match-you-score">0</span>
+        </div>
+        <div class="match-vs">
+          <span class="match-round-badge" data-bind="match-round">1/5</span>
+        </div>
+        <div class="match-player match-player-opponent">
+          <span class="match-player-name" data-bind="match-opp-name">Opponent</span>
+          <span class="match-player-score" data-bind="match-opp-score">0</span>
+        </div>
+      </div>
+      <div class="timer-bar-container" role="progressbar" aria-label="Time remaining" aria-valuemin="0" aria-valuemax="100">
+        <div class="timer-bar" data-bind="match-timer-bar"></div>
+      </div>
+      <div class="sequence-display" data-bind="match-sequence" aria-label="Pattern sequence">
+        <!-- Sequence items rendered by JS -->
+      </div>
+      <p class="prompt-text">What comes next?</p>
+      <div class="options-grid" data-bind="match-options" role="group" aria-label="Answer options">
+        <!-- Option buttons rendered by JS -->
+      </div>
+    </section>
+
+    <!-- Match Round Result Overlay -->
+    <section id="screen-match-result" class="screen" data-screen="match-result" aria-label="Round result">
+      <div class="result-icon" data-bind="match-result-icon" aria-hidden="true"></div>
+      <h2 class="result-title" data-bind="match-result-title"></h2>
+      <div class="match-round-scores" data-bind="match-round-scores">
+        <!-- Round scores rendered by JS -->
+      </div>
+      <p class="match-result-info" data-bind="match-result-info">Next round starting...</p>
+    </section>
+
+    <!-- Match Game Over Screen -->
+    <section id="screen-match-over" class="screen" data-screen="match-over" aria-label="Match result">
+      <div class="gameover-header">
+        <div class="gameover-icon" data-bind="match-over-icon" aria-hidden="true">🏆</div>
+        <h2 class="gameover-title" data-bind="match-over-title">Match Over!</h2>
+      </div>
+      <div class="match-final-scores" data-bind="match-final-scores" aria-label="Final scores">
+        <!-- Final scores rendered by JS -->
+      </div>
+      <nav class="gameover-actions" aria-label="Post-match options">
+        <button class="btn btn-primary" data-action="rematch" aria-label="Play again">🔄 Rematch</button>
+        <button class="btn btn-back" data-action="go-home" aria-label="Return to home screen">← Home</button>
+      </nav>
     </section>
 
   </div>
