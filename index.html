@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Guess What's Next — a pattern recognition game. Spot the sequence and pick what comes next!">
+  <meta name="theme-color" content="#0f0f1a">
   <title>Guess What's Next</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -10,74 +12,79 @@
   <div id="app">
 
     <!-- Home Screen -->
-    <section id="screen-home" class="screen active" data-screen="home">
-      <header class="screen-header">
+    <section id="screen-home" class="screen active" data-screen="home" aria-label="Home">
+      <header class="screen-header home-header">
+        <div class="title-icon" aria-hidden="true">🧩</div>
         <h1 class="game-title">Guess What's Next</h1>
         <p class="game-subtitle">Can you spot the pattern?</p>
       </header>
-      <nav class="home-menu">
-        <button class="btn btn-primary" data-action="start-freeplay">🎮 Free Play</button>
-        <button class="btn btn-secondary" data-action="start-daily">📅 Daily Challenge</button>
+      <nav class="home-menu" aria-label="Game modes">
+        <button class="btn btn-primary" data-action="start-freeplay" aria-label="Start Free Play mode">🎮 Free Play</button>
+        <button class="btn btn-secondary" data-action="start-daily" aria-label="Start Daily Challenge">📅 Daily Challenge</button>
       </nav>
-      <div class="home-stats">
-        <p class="high-score">High Score: <span data-bind="high-score">0</span></p>
-      </div>
+      <footer class="home-stats">
+        <p class="high-score">🏆 High Score: <span data-bind="high-score">0</span></p>
+      </footer>
     </section>
 
     <!-- Category Select Screen -->
-    <section id="screen-category" class="screen" data-screen="category">
+    <section id="screen-category" class="screen" data-screen="category" aria-label="Category selection">
       <header class="screen-header">
         <h2>Choose a Category</h2>
+        <p class="screen-description">Pick a topic to test your pattern skills</p>
       </header>
-      <div class="category-grid" data-bind="category-list">
+      <div class="category-grid" data-bind="category-list" role="list" aria-label="Available categories">
         <!-- Categories populated by JS -->
       </div>
-      <button class="btn btn-back" data-action="go-home">← Back</button>
+      <button class="btn btn-back" data-action="go-home" aria-label="Go back to home screen">← Back</button>
     </section>
 
     <!-- Game Screen -->
-    <section id="screen-game" class="screen" data-screen="game">
-      <div class="game-hud">
+    <section id="screen-game" class="screen" data-screen="game" aria-label="Game round">
+      <div class="game-hud" role="status" aria-label="Game status">
         <div class="hud-item">
           <span class="hud-label">Score</span>
-          <span class="hud-value" data-bind="score">0</span>
+          <span class="hud-value" data-bind="score" aria-label="Current score">0</span>
         </div>
         <div class="hud-item">
           <span class="hud-label">Round</span>
-          <span class="hud-value"><span data-bind="round">1</span>/<span data-bind="total-rounds">10</span></span>
+          <span class="hud-value" aria-label="Current round"><span data-bind="round">1</span>/<span data-bind="total-rounds">10</span></span>
         </div>
         <div class="hud-item">
           <span class="hud-label">Streak</span>
-          <span class="hud-value" data-bind="streak">0</span>
+          <span class="hud-value" data-bind="streak" aria-label="Current streak">0</span>
         </div>
       </div>
-      <div class="timer-bar-container">
+      <div class="timer-bar-container" role="progressbar" aria-label="Time remaining" aria-valuemin="0" aria-valuemax="100">
         <div class="timer-bar" data-bind="timer-bar"></div>
       </div>
-      <div class="sequence-display" data-bind="sequence">
+      <div class="sequence-display" data-bind="sequence" aria-label="Pattern sequence">
         <!-- Sequence items rendered by JS -->
       </div>
       <p class="prompt-text">What comes next?</p>
-      <div class="options-grid" data-bind="options">
+      <div class="options-grid" data-bind="options" role="group" aria-label="Answer options">
         <!-- 4 option buttons rendered by JS -->
       </div>
     </section>
 
     <!-- Round Result Screen -->
-    <section id="screen-result" class="screen" data-screen="result">
-      <div class="result-icon" data-bind="result-icon"></div>
+    <section id="screen-result" class="screen" data-screen="result" aria-label="Round result">
+      <div class="result-icon" data-bind="result-icon" aria-hidden="true"></div>
       <h2 class="result-title" data-bind="result-title"></h2>
       <p class="result-explanation" data-bind="result-explanation"></p>
-      <div class="result-score">
+      <div class="result-score" aria-label="Points earned">
         <p>+<span data-bind="round-points">0</span> points</p>
       </div>
-      <button class="btn btn-primary" data-action="next-round">Next Round →</button>
+      <button class="btn btn-primary" data-action="next-round" aria-label="Continue to next round">Next Round →</button>
     </section>
 
     <!-- Game Over Screen -->
-    <section id="screen-gameover" class="screen" data-screen="gameover">
-      <h2 class="gameover-title">Game Over!</h2>
-      <div class="gameover-stats">
+    <section id="screen-gameover" class="screen" data-screen="gameover" aria-label="Game over summary">
+      <div class="gameover-header">
+        <div class="gameover-icon" aria-hidden="true">🎉</div>
+        <h2 class="gameover-title">Game Over!</h2>
+      </div>
+      <div class="gameover-stats" aria-label="Final statistics">
         <div class="stat">
           <span class="stat-value" data-bind="final-score">0</span>
           <span class="stat-label">Final Score</span>
@@ -91,11 +98,11 @@
           <span class="stat-label">Best Streak</span>
         </div>
       </div>
-      <div class="gameover-actions">
-        <button class="btn btn-primary" data-action="play-again">Play Again</button>
-        <button class="btn btn-secondary" data-action="share-result">📋 Share Result</button>
-        <button class="btn btn-back" data-action="go-home">← Home</button>
-      </div>
+      <nav class="gameover-actions" aria-label="Game over options">
+        <button class="btn btn-primary" data-action="play-again" aria-label="Play the game again">🔄 Play Again</button>
+        <button class="btn btn-secondary" data-action="share-result" aria-label="Copy result to clipboard">📋 Share Result</button>
+        <button class="btn btn-back" data-action="go-home" aria-label="Return to home screen">← Home</button>
+      </nav>
     </section>
 
   </div>
