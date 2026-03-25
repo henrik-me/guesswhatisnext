@@ -1,0 +1,97 @@
+/**
+ * Match routes — create/join rooms, match status.
+ */
+
+const express = require('express');
+const crypto = require('crypto');
+const { getDb } = require('../db/connection');
+const { requireAuth } = require('../middleware/auth');
+
+const router = express.Router();
+
+/** Generate a 6-character room code. */
+function generateRoomCode() {
+  return crypto.randomBytes(3).toString('hex').toUpperCase();
+}
+
+/** POST /api/matches — create a new match room */
+router.post('/', requireAuth, (req, res) => {
+  const { totalRounds = 5 } = req.body;
+  const db = getDb();
+
+  const id = crypto.randomUUID();
+  let roomCode = generateRoomCode();
+
+  // Ensure unique room code
+  while (db.prepare('SELECT 1 FROM matches WHERE room_code = ?').get(roomCode)) {
+    roomCode = generateRoomCode();
+  }
+
+  db.prepare(
+    `INSERT INTO matches (id, room_code, status, total_rounds, created_by) VALUES (?, ?, 'waiting', ?, ?)`
+  ).run(id, roomCode, totalRounds, req.user.id);
+
+  db.prepare(
+    `INSERT INTO match_players (match_id, user_id) VALUES (?, ?)`
+  ).run(id, req.user.id);
+
+  res.status(201).json({ matchId: id, roomCode, totalRounds });
+});
+
+/** POST /api/matches/join — join a match by room code */
+router.post('/join', requireAuth, (req, res) => {
+  const { roomCode } = req.body;
+
+  if (!roomCode) {
+    return res.status(400).json({ error: 'Room code required' });
+  }
+
+  const db = getDb();
+  const match = db.prepare(
+    `SELECT id, status, total_rounds FROM matches WHERE room_code = ?`
+  ).get(roomCode.toUpperCase());
+
+  if (!match) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+  if (match.status !== 'waiting') {
+    return res.status(400).json({ error: 'Match already started or finished' });
+  }
+
+  // Check not already joined
+  const existing = db.prepare(
+    `SELECT 1 FROM match_players WHERE match_id = ? AND user_id = ?`
+  ).get(match.id, req.user.id);
+
+  if (existing) {
+    return res.json({ matchId: match.id, roomCode, status: 'already_joined' });
+  }
+
+  db.prepare(
+    `INSERT INTO match_players (match_id, user_id) VALUES (?, ?)`
+  ).run(match.id, req.user.id);
+
+  res.json({ matchId: match.id, roomCode, totalRounds: match.total_rounds });
+});
+
+/** GET /api/matches/:id — get match status */
+router.get('/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const match = db.prepare(
+    `SELECT id, room_code, status, total_rounds, created_at, finished_at FROM matches WHERE id = ?`
+  ).get(req.params.id);
+
+  if (!match) {
+    return res.status(404).json({ error: 'Match not found' });
+  }
+
+  const players = db.prepare(
+    `SELECT u.id, u.username, mp.score, mp.finished_at
+     FROM match_players mp JOIN users u ON mp.user_id = u.id
+     WHERE mp.match_id = ?`
+  ).all(match.id);
+
+  res.json({ ...match, players });
+});
+
+module.exports = router;

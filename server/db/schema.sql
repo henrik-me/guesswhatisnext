@@ -1,0 +1,57 @@
+-- Guess What's Next — Database Schema
+
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS scores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  mode TEXT NOT NULL CHECK(mode IN ('freeplay', 'daily')),
+  score INTEGER NOT NULL DEFAULT 0,
+  correct_count INTEGER NOT NULL DEFAULT 0,
+  total_rounds INTEGER NOT NULL DEFAULT 0,
+  best_streak INTEGER NOT NULL DEFAULT 0,
+  played_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS matches (
+  id TEXT PRIMARY KEY,
+  room_code TEXT UNIQUE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'waiting' CHECK(status IN ('waiting', 'active', 'finished', 'cancelled')),
+  total_rounds INTEGER NOT NULL DEFAULT 5,
+  created_by INTEGER NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  finished_at DATETIME,
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS match_players (
+  match_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  finished_at DATETIME,
+  PRIMARY KEY (match_id, user_id),
+  FOREIGN KEY (match_id) REFERENCES matches(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS match_rounds (
+  match_id TEXT NOT NULL,
+  round_num INTEGER NOT NULL,
+  puzzle_id TEXT NOT NULL,
+  started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (match_id, round_num),
+  FOREIGN KEY (match_id) REFERENCES matches(id)
+);
+
+-- Indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_scores_user ON scores(user_id);
+CREATE INDEX IF NOT EXISTS idx_scores_mode_date ON scores(mode, played_at);
+CREATE INDEX IF NOT EXISTS idx_scores_leaderboard ON scores(mode, score DESC);
+CREATE INDEX IF NOT EXISTS idx_matches_room ON matches(room_code);
+CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
