@@ -213,6 +213,28 @@ export const puzzles = [
     answer: "🦋",
     options: ["🐝", "🐜", "🦋", "🕷️"],
     explanation: "Butterfly metamorphosis: egg 🥚, caterpillar 🐛, cocoon 🫘, then butterfly 🦋."
+  },
+
+  // ─── 🖼️ Image Puzzles ───────────────────────────────────────
+  {
+    id: "shapes-sides",
+    category: "Colors & Patterns",
+    difficulty: 2,
+    type: "image",
+    sequence: ["img/shapes/triangle.svg", "img/shapes/square.svg", "img/shapes/pentagon.svg"],
+    answer: "img/shapes/hexagon.svg",
+    options: ["img/shapes/hexagon.svg", "img/shapes/circle.svg", "img/shapes/star.svg", "img/shapes/triangle.svg"],
+    explanation: "Each shape has one more side: triangle (3) → square (4) → pentagon (5) → hexagon (6)."
+  },
+  {
+    id: "color-spectrum",
+    category: "Colors & Patterns",
+    difficulty: 1,
+    type: "image",
+    sequence: ["img/colors/red.svg", "img/colors/orange.svg", "img/colors/yellow.svg"],
+    answer: "img/colors/green.svg",
+    options: ["img/colors/purple.svg", "img/colors/green.svg", "img/colors/red.svg", "img/colors/blue.svg"],
+    explanation: "Following the color spectrum (rainbow order): red → orange → yellow → green."
   }
 ];
 

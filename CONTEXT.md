@@ -18,10 +18,10 @@ This file tracks the current state of the project: what's been done, what's next
 | 2 | Puzzle data | ✅ Done | 1 | 20 puzzles across 5 categories |
 | 3 | UI screens & CSS | ✅ Done | 1 | Accessibility, aria, visual polish |
 | 4 | Game engine | ✅ Done | 2, 3 | Full game loop, scoring, timer, answer handling |
-| 5 | Timer & scoring | ⬜ Pending | 4 | Countdown bar, speed bonus, streak multiplier |
-| 6 | Free-play mode | ⬜ Pending | 4 | Category select, random order, 10 rounds |
-| 7 | Daily challenge | ⬜ Pending | 4 | Date-seeded puzzle, one attempt, share result |
-| 8 | LocalStorage | ⬜ Pending | 6, 7 | High scores, daily state, stats |
+| 5 | Timer & scoring | ✅ Done | 4 | Score breakdown, speed bonus, streak multiplier |
+| 6 | Free-play mode | ✅ Done | 4 | Category select, random order, 10 rounds |
+| 7 | Daily challenge | ✅ Done | 4 | Date-seeded, one attempt, Wordle-style share |
+| 8 | LocalStorage | ✅ Done | 6, 7 | High scores, daily state, stats persisted |
 | 9 | Polish | ⬜ Pending | 8 | Animations, transitions, mobile pass |
 | 10 | Image puzzles | ⬜ Pending | 4 | Image assets, rendering in engine |
 
