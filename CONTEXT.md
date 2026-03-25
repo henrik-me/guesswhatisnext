@@ -48,9 +48,9 @@ This file tracks the current state of the project: what's been done, what's next
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 21 | Auth hardening | ⬜ Pending | — | System account, API key auth, rate limiting, all endpoints auth'd |
+| 21 | Auth hardening | ✅ Done | — | System account, API key auth, rate limiting, all endpoints auth'd |
 | 22 | Enhanced health endpoint | ⬜ Pending | 21 | Deep checks (DB, WS, disk, uptime), system-auth only |
-| 23 | Local container dev | ⬜ Pending | — | Dockerfile, docker-compose.yml, .dockerignore, local dev in container |
+| 23 | Local container dev | ✅ Done | — | Dockerfile, docker-compose.yml, .dockerignore, local dev in container |
 | 24 | Azure infrastructure | ⬜ Pending | 23 | Container Apps Environment + gwn-staging + gwn-prod apps, GHCR |
 | 25 | CI/CD pipeline | ⬜ Pending | 24 | Build once → staging → approval → promote to prod → verify → rollback |
 | 26 | Health monitor | ⬜ Pending | 22, 25 | GH Actions cron every 5 min, creates issues on failure |
