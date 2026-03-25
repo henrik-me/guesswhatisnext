@@ -342,3 +342,45 @@ When adding new puzzles to `puzzles.js`:
 - Screen reader support: ARIA labels on game state changes
 - Reduced motion: respect `prefers-reduced-motion` media query
 - Emoji sequences: include `aria-label` describing the item for screen readers
+
+---
+
+## 7. Tools & Frameworks Evaluated
+
+This section documents tools and frameworks that were evaluated for the project, including those adopted and those deferred.
+
+### Adopted
+
+| Tool | Purpose | Notes |
+|---|---|---|
+| Express 5 | HTTP server + API routes | v5.2.1 — note `/{*path}` wildcard syntax (not `*`) |
+| better-sqlite3 | SQLite driver | WAL mode, synchronous API, good for single-server |
+| ws | WebSocket server | Lightweight, no socket.io overhead |
+| bcryptjs | Password hashing | Pure JS, 10 rounds |
+| jsonwebtoken | JWT auth tokens | 7-day expiry, secret from env var |
+| Docker | Containerization | Same Dockerfile for local dev, staging, and production |
+| GitHub Container Registry | Image storage | Free, integrated with GitHub Actions |
+| Azure Container Apps | Hosting (staging + prod) | Consumption plan, scale-to-zero, WebSocket support |
+| GitHub Actions | CI/CD + health monitoring | Build, deploy, smoke tests, cron-based health checks |
+
+### Evaluated & Deferred
+
+#### Squad (bradygaster/squad) — Multi-Agent AI Orchestration
+
+**What it is:** An AI development team orchestration framework for GitHub Copilot. Defines specialist agents (Lead, Frontend, Backend, Tester) that persist in the repo as `.squad/` files, accumulate knowledge across sessions, run tasks in parallel, and route work automatically.
+
+**Repository:** https://github.com/bradygaster/squad
+
+**Status:** Alpha (v0.9.1 as of 2026-03-25). APIs and CLI commands may change between releases.
+
+**Why deferred:**
+1. **Project scale** — Single developer with well-defined tasks and clear dependency chains. Squad is designed for larger teams with many parallel workstreams.
+2. **Alpha stability** — Breaking changes expected between releases.
+3. **Documentation overlap** — INSTRUCTIONS.md, CONTEXT.md, and plan.md already serve the purpose of Squad's decision logging and agent knowledge persistence.
+4. **Setup cost vs. benefit** — Configuring agents, routing rules, and casting takes time that doesn't proportionally accelerate a 12-task backlog.
+
+**Revisit when:**
+- Squad reaches beta/stable
+- Project gains multiple active contributors
+- We enter an open-ended feature phase without clear dependency chains
+- Puzzle content expansion (step 28) could benefit from a specialized "Content Creator" agent

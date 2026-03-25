@@ -115,6 +115,35 @@ This file tracks the current state of the project: what's been done, what's next
 | Multiplayer | Both async + real-time | Leaderboards for casual, head-to-head for competitive |
 | Puzzle format | Emoji/text + images | Start with emoji, layer in images |
 | Timing | Timed rounds, speed bonus | Adds excitement and skill differentiation |
+| Staging infra | Container Apps (not F1) | Environment parity with prod, same Dockerfile + deploy method |
+| Production infra | Container Apps (Consumption) | Pay-per-use, scale-to-zero, WebSocket support |
+| Container registry | GitHub Container Registry | Free for private repos, integrated with GH Actions |
+| CI/CD promotion | Build once, promote image | Same image bytes in staging and prod — no rebuild, no drift |
+| Staging→Prod gate | GH Environment manual approval | Prevents untested code reaching production |
+| AI orchestration | Copilot CLI (not Squad) | Squad evaluated but deferred — see below |
+
+## Tools Evaluated
+
+### Squad (bradygaster/squad) — Evaluated 2026-03-25, Deferred
+
+[Squad](https://github.com/bradygaster/squad) is a multi-agent AI orchestration framework for GitHub Copilot. It defines a team of AI agent specialists (Lead, Frontend, Backend, Tester, etc.) that persist in the repo as `.squad/` files, accumulate knowledge across sessions, run in parallel, and route tasks automatically.
+
+**Why not now:**
+- **Alpha software** — APIs and CLI commands may change between releases
+- **Overhead for project size** — Single developer, 12 well-defined remaining tasks with clear dependency chains. Squad is designed for larger teams/projects with many parallel workstreams
+- **Existing documentation overlap** — INSTRUCTIONS.md, CONTEXT.md, and plan.md already serve the role of Squad's `decisions.md` + agent `history.md`
+- **Limited parallelism benefit** — Most of our tasks have dependency chains; few are truly independent
+- **Setup cost** — Defining agents, routing rules, and casting configuration takes time better spent implementing
+
+**Where it could help (future):**
+- Puzzle content expansion — a "Content Creator" agent that learns puzzle schema
+- If the project goes open-source with multiple contributors
+- Long-running maintenance phase with many parallel feature tracks
+
+**Revisit criteria:**
+- Squad reaches beta/stable release
+- Project gains multiple active contributors
+- We enter an open-ended feature development phase without clear dependency chains
 
 ## Active Design Notes
 
