@@ -31,13 +31,13 @@ This file tracks the current state of the project: what's been done, what's next
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 11 | Backend setup | ⬜ Pending | 10 | Node.js + Express + SQLite, move to `public/` |
-| 12 | Database schema | ⬜ Pending | 11 | users, scores, matches tables |
-| 13 | Auth system | ⬜ Pending | 12 | Register/login, JWT, bcrypt |
-| 14 | Score API | ⬜ Pending | 13 | Submit scores, leaderboard queries |
+| 11 | Backend setup | ✅ Done | 10 | Express + SQLite + WS, files moved to public/ |
+| 12 | Database schema | ✅ Done | 11 | users, scores, matches tables with indexes |
+| 13 | Auth system | ✅ Done | 12 | Register/login, JWT, bcrypt, middleware |
+| 14 | Score API | ✅ Done | 13 | Submit scores, leaderboard (all/weekly/daily) |
 | 15 | Leaderboard UI | ⬜ Pending | 14 | Rankings display, user highlighting |
-| 16 | Matchmaking | ⬜ Pending | 13 | Room codes, create/join |
-| 17 | WebSocket server | ⬜ Pending | 11 | Real-time room connections |
+| 16 | Matchmaking | ✅ Done | 13 | Room codes, create/join endpoints |
+| 17 | WebSocket server | ✅ Done | 11 | Room-based WS connections on /ws |
 | 18 | Head-to-head engine | ⬜ Pending | 16, 17 | Synced puzzles, round scoring |
 | 19 | Multiplayer UI | ⬜ Pending | 18 | Lobby, live match, opponent view |
 | 20 | Multiplayer polish | ⬜ Pending | 15, 19 | Reconnect, forfeit, rematch, history |

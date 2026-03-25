@@ -316,10 +316,83 @@ function init() {
         Game.shareResult();
         showToast('Copied to clipboard! 📋');
         break;
+      case 'show-leaderboard':
+        showScreen('leaderboard');
+        setActiveLeaderboardTab('alltime');
+        fetchLeaderboard('alltime');
+        break;
+      case 'leaderboard-tab': {
+        const period = e.target.dataset.period;
+        if (period) {
+          setActiveLeaderboardTab(period);
+          fetchLeaderboard(period);
+        }
+        break;
+      }
     }
   });
 
   showScreen('home');
+}
+
+/** Set the active leaderboard tab visually. */
+function setActiveLeaderboardTab(period) {
+  document.querySelectorAll('.leaderboard-tab').forEach(tab => {
+    const isActive = tab.dataset.period === period;
+    tab.classList.toggle('active', isActive);
+    tab.setAttribute('aria-selected', isActive);
+  });
+}
+
+/** Fetch leaderboard data from the backend API and render it. */
+async function fetchLeaderboard(period) {
+  const container = document.querySelector('[data-bind="leaderboard-table"]');
+  container.innerHTML = '<div class="leaderboard-loading">Loading</div>';
+
+  try {
+    const res = await fetch(`/api/scores/leaderboard?mode=freeplay&period=${period}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderLeaderboard(data);
+  } catch {
+    container.innerHTML =
+      '<div class="leaderboard-error">Leaderboard unavailable — start the server to see rankings</div>';
+  }
+}
+
+/** Render leaderboard rows from API data. */
+function renderLeaderboard(entries) {
+  const container = document.querySelector('[data-bind="leaderboard-table"]');
+
+  if (!entries || entries.length === 0) {
+    container.innerHTML = '<div class="leaderboard-empty">No scores yet — be the first! 🎮</div>';
+    return;
+  }
+
+  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  const currentUser = Storage.getUsername?.() || null;
+
+  container.innerHTML = entries.map((entry, i) => {
+    const rank = entry.rank ?? i + 1;
+    const medal = medals[rank] || '';
+    const rankClass = rank <= 3 ? ` rank-${rank}` : '';
+    const userClass = currentUser && entry.username === currentUser ? ' current-user' : '';
+    const name = escapeHTML(entry.username || 'Anonymous');
+    const score = entry.score ?? 0;
+
+    return `<div class="leaderboard-row${rankClass}${userClass}" role="listitem">
+      ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
+      <span class="leaderboard-name">${name}</span>
+      <span class="leaderboard-score">${score.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+
+/** Escape HTML to prevent XSS when rendering user-supplied text. */
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 document.addEventListener('DOMContentLoaded', init);

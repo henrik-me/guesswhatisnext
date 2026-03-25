@@ -777,6 +777,178 @@ body::before {
 }
 
 /* ===========================
+   Leaderboard Screen
+   =========================== */
+.leaderboard-tabs {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  padding: 0.3rem;
+}
+
+.leaderboard-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: var(--font-main);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-speed),
+    color var(--transition-speed);
+}
+
+.leaderboard-tab:hover {
+  color: var(--color-text);
+  background-color: var(--color-surface-hover);
+}
+
+.leaderboard-tab.active {
+  background: linear-gradient(135deg, var(--color-primary), #7c6cf7);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.leaderboard-tab:focus-visible {
+  outline: 3px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 50vh;
+  padding-right: 0.25rem;
+}
+
+.leaderboard-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.leaderboard-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.leaderboard-list::-webkit-scrollbar-thumb {
+  background-color: var(--color-surface-border);
+  border-radius: 2px;
+}
+
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  transition: border-color var(--transition-speed);
+}
+
+.leaderboard-row.rank-1 {
+  border-color: #f1c40f;
+  background: linear-gradient(135deg, rgba(241, 196, 15, 0.08), var(--color-surface));
+}
+
+.leaderboard-row.rank-2 {
+  border-color: #bdc3c7;
+  background: linear-gradient(135deg, rgba(189, 195, 199, 0.08), var(--color-surface));
+}
+
+.leaderboard-row.rank-3 {
+  border-color: #e67e22;
+  background: linear-gradient(135deg, rgba(230, 126, 34, 0.08), var(--color-surface));
+}
+
+.leaderboard-row.current-user {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 12px var(--color-primary-glow), 0 0 24px rgba(108, 92, 231, 0.1);
+}
+
+.leaderboard-rank {
+  font-size: 1.1rem;
+  font-weight: 700;
+  min-width: 2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.rank-1 .leaderboard-rank { color: #f1c40f; }
+.rank-2 .leaderboard-rank { color: #bdc3c7; }
+.rank-3 .leaderboard-rank { color: #e67e22; }
+
+.leaderboard-medal {
+  font-size: 1.3rem;
+  min-width: 2rem;
+  text-align: center;
+}
+
+.leaderboard-name {
+  flex: 1;
+  font-weight: 500;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard-score {
+  font-weight: 700;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary);
+}
+
+.leaderboard-empty,
+.leaderboard-error {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.leaderboard-error {
+  color: var(--color-timer-warn);
+}
+
+.leaderboard-loading {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+
+.leaderboard-loading::after {
+  content: '';
+  display: inline-block;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid var(--color-surface-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: leaderboardSpin 0.6s linear infinite;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+@keyframes leaderboardSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===========================
    Responsive — Small Screens
    =========================== */
 @media (max-width: 359px) {
@@ -832,6 +1004,20 @@ body::before {
   .stat-value {
     font-size: 1.6rem;
   }
+
+  .leaderboard-tab {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.5rem;
+  }
+
+  .leaderboard-row {
+    padding: 0.6rem 0.75rem;
+    gap: 0.6rem;
+  }
+
+  .leaderboard-score {
+    font-size: 0.95rem;
+  }
 }
 
 /* ===========================
@@ -882,6 +1068,7 @@ body::before {
 
   .sequence-item,
   .sequence-item.mystery,
+  .leaderboard-loading::after,
   .option-btn,
   .option-btn.correct,
   .option-btn.wrong,

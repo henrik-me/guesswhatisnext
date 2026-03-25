@@ -6,9 +6,33 @@
 const { WebSocketServer } = require('ws');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth');
+const { getDb } = require('../db/connection');
+const puzzlePool = require('../puzzleData');
 
 /** Active rooms: Map<roomCode, RoomState> */
 const rooms = new Map();
+
+const ROUND_TIMEOUT_MS = 20000;
+const ROOM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const NEXT_ROUND_DELAY_MS = 3000;
+
+/** Select `count` random puzzles from the pool (Fisher-Yates shuffle on a copy). */
+function selectRandomPuzzles(count) {
+  const pool = [...puzzlePool];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(count, pool.length));
+}
+
+/** Calculate score for an answer. */
+function calculateScore(correct, timeMs) {
+  if (!correct) return 0;
+  const base = 100;
+  const speedBonus = Math.max(0, 100 * (1 - timeMs / 15000));
+  return Math.round(base + speedBonus);
+}
 
 /** Initialize WebSocket server on the existing HTTP server. */
 function initWebSocket(server) {
@@ -57,7 +81,21 @@ function initWebSocket(server) {
     });
   }, 30000);
 
-  wss.on('close', () => clearInterval(heartbeat));
+  // Periodically clean up idle waiting rooms
+  const roomCleanup = setInterval(() => {
+    const now = Date.now();
+    rooms.forEach((room, code) => {
+      if (!room.started && room.createdAt && now - room.createdAt > ROOM_IDLE_TIMEOUT_MS) {
+        broadcastToRoom(code, { type: 'error', message: 'Room timed out waiting for players' });
+        cleanupRoom(code);
+      }
+    });
+  }, 60000);
+
+  wss.on('close', () => {
+    clearInterval(heartbeat);
+    clearInterval(roomCleanup);
+  });
 
   console.log('🔌 WebSocket server ready on /ws');
   return wss;
@@ -94,10 +132,20 @@ function handleJoin(ws, roomCode) {
       totalRounds: 5,
       scores: {},
       started: false,
+      puzzles: [],
+      answers: {},
+      roundTimer: null,
+      createdAt: Date.now(),
     });
   }
 
   const room = rooms.get(code);
+
+  if (room.started) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Match already in progress' }));
+    return;
+  }
+
   room.players.set(ws.user.id, ws);
   room.scores[ws.user.id] = room.scores[ws.user.id] || 0;
 
@@ -114,12 +162,223 @@ function handleJoin(ws, roomCode) {
     username: ws.user.username,
     playerCount: room.players.size,
   }, ws.user.id);
+
+  // Auto-start when 2 players have joined
+  if (room.players.size === 2 && !room.started) {
+    startMatch(code);
+  }
 }
 
-/** Handle a player's answer. Placeholder for step 18 (head-to-head engine). */
+/** Start a match: select puzzles and send the first round. */
+function startMatch(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  room.started = true;
+  room.puzzles = selectRandomPuzzles(room.totalRounds);
+
+  // Build player name list
+  const playerNames = [];
+  room.players.forEach((ws) => playerNames.push(ws.user.username));
+
+  // Update match status in DB
+  try {
+    const db = getDb();
+    db.prepare(`UPDATE matches SET status = 'active' WHERE room_code = ?`).run(roomCode);
+  } catch {
+    // Non-fatal: match can proceed without DB update
+  }
+
+  broadcastToRoom(roomCode, {
+    type: 'match-start',
+    players: playerNames,
+    totalRounds: room.totalRounds,
+  });
+
+  // Start the first round after a brief delay
+  setTimeout(() => sendRound(roomCode), 1000);
+}
+
+/** Send the current round's puzzle to all players. */
+function sendRound(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room || room.round >= room.totalRounds) return;
+
+  const roundNum = room.round;
+  const puzzle = room.puzzles[roundNum];
+
+  room.answers[roundNum] = {};
+
+  // Record round in DB
+  try {
+    const db = getDb();
+    const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(roomCode);
+    if (match) {
+      db.prepare(
+        `INSERT OR IGNORE INTO match_rounds (match_id, round_num, puzzle_id) VALUES (?, ?, ?)`
+      ).run(match.id, roundNum + 1, puzzle.id);
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  // Send puzzle WITHOUT the answer
+  broadcastToRoom(roomCode, {
+    type: 'round',
+    roundNum,
+    puzzle: {
+      sequence: puzzle.sequence,
+      options: puzzle.options,
+      type: puzzle.type,
+    },
+    totalRounds: room.totalRounds,
+  });
+
+  room.roundStartedAt = Date.now();
+
+  // Set timeout for players who don't answer
+  room.roundTimer = setTimeout(() => {
+    resolveRound(roomCode);
+  }, ROUND_TIMEOUT_MS);
+}
+
+/** Handle a player's answer. */
 function handleAnswer(ws, msg) {
-  // Will be fully implemented in step 18
+  const room = rooms.get(ws.roomCode);
+  if (!room || !room.started) {
+    ws.send(JSON.stringify({ type: 'error', message: 'No active match' }));
+    return;
+  }
+
+  const roundNum = room.round;
+  const roundAnswers = room.answers[roundNum];
+  if (!roundAnswers) return;
+
+  // Ignore duplicate answers
+  if (roundAnswers[ws.user.id]) return;
+
+  roundAnswers[ws.user.id] = {
+    answerId: msg.answerId,
+    timeMs: typeof msg.timeMs === 'number' ? msg.timeMs : ROUND_TIMEOUT_MS,
+    userId: ws.user.id,
+    username: ws.user.username,
+  };
+
   ws.send(JSON.stringify({ type: 'answer-received', answerId: msg.answerId }));
+
+  // Check if both players have answered
+  if (Object.keys(roundAnswers).length >= room.players.size) {
+    clearTimeout(room.roundTimer);
+    resolveRound(ws.roomCode);
+  }
+}
+
+/** Resolve the current round: score answers and broadcast results. */
+function resolveRound(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  const roundNum = room.round;
+  const puzzle = room.puzzles[roundNum];
+  const roundAnswers = room.answers[roundNum] || {};
+
+  // Clear timeout if still pending
+  if (room.roundTimer) {
+    clearTimeout(room.roundTimer);
+    room.roundTimer = null;
+  }
+
+  // Build scores for this round
+  const scores = {};
+  room.players.forEach((ws, userId) => {
+    const answer = roundAnswers[userId];
+    const correct = answer ? answer.answerId === puzzle.answer : false;
+    const timeMs = answer ? answer.timeMs : ROUND_TIMEOUT_MS;
+    const points = calculateScore(correct, timeMs);
+
+    room.scores[userId] = (room.scores[userId] || 0) + points;
+
+    const username = ws.user.username;
+    scores[username] = {
+      correct,
+      points,
+      total: room.scores[userId],
+    };
+  });
+
+  broadcastToRoom(roomCode, {
+    type: 'roundResult',
+    roundNum,
+    correctAnswer: puzzle.answer,
+    scores,
+  });
+
+  room.round++;
+
+  // Check if match is over
+  if (room.round >= room.totalRounds) {
+    setTimeout(() => endMatch(roomCode), NEXT_ROUND_DELAY_MS);
+  } else {
+    setTimeout(() => sendRound(roomCode), NEXT_ROUND_DELAY_MS);
+  }
+}
+
+/** End the match: determine winner, persist to DB, broadcast results, clean up. */
+function endMatch(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  // Build final scores keyed by username
+  const finalScores = {};
+  const userScores = [];
+  room.players.forEach((ws, userId) => {
+    const total = room.scores[userId] || 0;
+    finalScores[ws.user.username] = total;
+    userScores.push({ userId, username: ws.user.username, total });
+  });
+
+  // Determine winner
+  userScores.sort((a, b) => b.total - a.total);
+  const winner = userScores[0].total === userScores[1].total
+    ? null
+    : userScores[0].username;
+
+  broadcastToRoom(roomCode, {
+    type: 'gameOver',
+    winner,
+    scores: finalScores,
+    results: userScores.map(({ username, total }) => ({ username, score: total })),
+  });
+
+  // Persist to database
+  try {
+    const db = getDb();
+    const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(roomCode);
+    if (match) {
+      db.prepare(
+        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(match.id);
+
+      const updatePlayer = db.prepare(
+        `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`
+      );
+      for (const { userId, total } of userScores) {
+        updatePlayer.run(total, match.id, userId);
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  cleanupRoom(roomCode);
+}
+
+/** Remove a room and clear any timers. */
+function cleanupRoom(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+  if (room.roundTimer) clearTimeout(room.roundTimer);
+  rooms.delete(roomCode);
 }
 
 /** Handle a player disconnecting. */
@@ -137,9 +396,58 @@ function handleDisconnect(ws) {
     playerCount: room.players.size,
   });
 
+  if (room.started && room.players.size < 2) {
+    // Forfeit: remaining player wins
+    if (room.players.size === 1) {
+      const [[remainingId, remainingWs]] = [...room.players.entries()];
+      const finalScores = {};
+      finalScores[remainingWs.user.username] = room.scores[remainingId] || 0;
+      finalScores[ws.user.username] = room.scores[ws.user.id] || 0;
+
+      sendTo(remainingWs, {
+        type: 'gameOver',
+        winner: remainingWs.user.username,
+        scores: finalScores,
+        results: [
+          { username: remainingWs.user.username, score: room.scores[remainingId] || 0 },
+          { username: ws.user.username, score: room.scores[ws.user.id] || 0 },
+        ],
+        forfeit: true,
+      });
+
+      // Persist forfeit result
+      try {
+        const db = getDb();
+        const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(ws.roomCode);
+        if (match) {
+          db.prepare(
+            `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`
+          ).run(match.id);
+          const updatePlayer = db.prepare(
+            `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`
+          );
+          updatePlayer.run(room.scores[remainingId] || 0, match.id, remainingId);
+          updatePlayer.run(room.scores[ws.user.id] || 0, match.id, ws.user.id);
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    cleanupRoom(ws.roomCode);
+    return;
+  }
+
   // Clean up empty rooms
   if (room.players.size === 0) {
-    rooms.delete(ws.roomCode);
+    cleanupRoom(ws.roomCode);
+  }
+}
+
+/** Send a message to a single WebSocket if open. */
+function sendTo(ws, msg) {
+  if (ws.readyState === 1) {
+    ws.send(JSON.stringify(msg));
   }
 }
 

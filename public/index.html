@@ -21,6 +21,7 @@
       <nav class="home-menu" aria-label="Game modes">
         <button class="btn btn-primary" data-action="start-freeplay" aria-label="Start Free Play mode">🎮 Free Play</button>
         <button class="btn btn-secondary" data-action="start-daily" aria-label="Start Daily Challenge">📅 Daily Challenge</button>
+        <button class="btn btn-secondary" data-action="show-leaderboard" aria-label="View Leaderboard">🏆 Leaderboard</button>
       </nav>
       <footer class="home-stats">
         <p class="high-score">🏆 High Score: <span data-bind="high-score">0</span></p>
@@ -103,6 +104,23 @@
         <button class="btn btn-secondary" data-action="share-result" aria-label="Copy result to clipboard">📋 Share Result</button>
         <button class="btn btn-back" data-action="go-home" aria-label="Return to home screen">← Home</button>
       </nav>
+    </section>
+
+    <!-- Leaderboard Screen -->
+    <section id="screen-leaderboard" class="screen" data-screen="leaderboard" aria-label="Leaderboard">
+      <header class="screen-header">
+        <h2>🏆 Leaderboard</h2>
+        <p class="screen-description">Top players ranked by score</p>
+      </header>
+      <div class="leaderboard-tabs" role="tablist" aria-label="Leaderboard period filter">
+        <button class="leaderboard-tab active" data-action="leaderboard-tab" data-period="alltime" role="tab" aria-selected="true">All Time</button>
+        <button class="leaderboard-tab" data-action="leaderboard-tab" data-period="weekly" role="tab" aria-selected="false">Weekly</button>
+        <button class="leaderboard-tab" data-action="leaderboard-tab" data-period="daily" role="tab" aria-selected="false">Daily</button>
+      </div>
+      <div class="leaderboard-list" data-bind="leaderboard-table" role="list" aria-label="Rankings">
+        <!-- Leaderboard rows populated by JS -->
+      </div>
+      <button class="btn btn-back" data-action="go-home" aria-label="Go back to home screen">← Back</button>
     </section>
 
   </div>
