@@ -50,6 +50,14 @@ const ui = {
     bindText('round', state.currentRound + 1);
     bindText('total-rounds', state.puzzleQueue.length);
 
+    // Score bump animation (skip first round where score is 0)
+    const scoreEl = document.querySelector('[data-bind="score"]');
+    if (scoreEl && state.currentRound > 0) {
+      scoreEl.classList.remove('bump');
+      void scoreEl.offsetWidth;
+      scoreEl.classList.add('bump');
+    }
+
     // Streak display with fire indicator
     const streakVal = state.streak;
     const streakEl = document.querySelector('[data-bind="streak"]');
@@ -61,12 +69,21 @@ const ui = {
       }
     }
 
+    // Reset timer bar for new round
+    const timerBar = document.querySelector('[data-bind="timer-bar"]');
+    if (timerBar) {
+      timerBar.style.width = '100%';
+      timerBar.style.backgroundColor = '';
+      timerBar.classList.remove('warning');
+    }
+
     // Sequence display
     const seqContainer = document.querySelector('[data-bind="sequence"]');
     seqContainer.innerHTML = '';
-    puzzle.sequence.forEach(item => {
+    puzzle.sequence.forEach((item, index) => {
       const el = document.createElement('div');
       el.className = 'sequence-item';
+      el.style.setProperty('--seq-i', index);
       if (puzzle.type === 'image') {
         el.innerHTML = `<img src="${item}" alt="sequence item">`;
       } else {
@@ -79,14 +96,16 @@ const ui = {
     const mystery = document.createElement('div');
     mystery.className = 'sequence-item mystery';
     mystery.textContent = '?';
+    mystery.style.setProperty('--seq-i', puzzle.sequence.length);
     seqContainer.appendChild(mystery);
 
     // Options grid
     const optContainer = document.querySelector('[data-bind="options"]');
     optContainer.innerHTML = '';
-    puzzle.options.forEach(option => {
+    puzzle.options.forEach((option, index) => {
       const btn = document.createElement('button');
       btn.className = 'option-btn';
+      btn.style.setProperty('--opt-i', index);
       if (puzzle.type === 'image') {
         btn.innerHTML = `<img src="${option}" alt="option">`;
       } else {
@@ -102,20 +121,24 @@ const ui = {
     const bar = document.querySelector('[data-bind="timer-bar"]');
     bar.style.width = `${ratio * 100}%`;
 
-    // Change color as time runs low
+    // Change color and pulse as time runs low
     if (ratio < 0.25) {
       bar.style.backgroundColor = 'var(--color-wrong)';
+      bar.classList.add('warning');
     } else if (ratio < 0.5) {
       bar.style.backgroundColor = '#e17055';
+      bar.classList.remove('warning');
     } else {
       bar.style.backgroundColor = '';
+      bar.classList.remove('warning');
     }
   },
 
   /** Show the round result screen. */
   showResult(result) {
-    bindText('result-icon', result.correct ? '✅' : '❌');
-    bindText('result-title', result.correct ? 'Correct!' : 'Wrong!');
+    const isTimeUp = result.answer === null;
+    bindText('result-icon', result.correct ? '✅' : (isTimeUp ? '⏰' : '❌'));
+    bindText('result-title', result.correct ? 'Correct!' : (isTimeUp ? "⏰ Time's Up!" : 'Wrong!'));
     bindText('result-explanation', result.explanation);
 
     // Score breakdown
@@ -253,6 +276,17 @@ function init() {
 
   // Update high score display
   bindText('high-score', Storage.getHighScore());
+
+  // Keyboard support: 1-4 selects options during game
+  document.addEventListener('keydown', (e) => {
+    if (currentScreen !== 'game') return;
+    const index = { '1': 0, '2': 1, '3': 2, '4': 3 }[e.key];
+    if (index === undefined) return;
+    const btns = document.querySelectorAll('.option-btn');
+    if (btns[index] && !btns[index].disabled) {
+      btns[index].click();
+    }
+  });
 
   // Wire up button actions
   document.addEventListener('click', (e) => {
