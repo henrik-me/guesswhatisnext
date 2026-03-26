@@ -496,27 +496,50 @@ Commit after every meaningful, working change. Specifically:
 
 When running multiple AI agents in parallel to implement independent tasks:
 
-**1. Worktree setup (required for parallel work):**
+**1. Worktree slots (fixed folders, reusable across tasks):**
 
-Each agent works in its own git worktree on a separate feature branch. This provides
-complete filesystem isolation — no file conflicts between agents.
+Use **fixed-name worktree slots** (`wt-1` through `wt-4`) to avoid filesystem permission
+re-approval every time a new task starts. The branch name carries the task meaning —
+the folder name is just a stable slot.
 
 ```bash
-# Create worktree directory alongside the main repo
+# One-time setup: create worktree directory alongside the main repo
 mkdir C:\src\gwn-worktrees
 
-# Create a worktree per task, branching from current main
-git worktree add -b feat/<task-name> C:\src\gwn-worktrees\<task-name> main
+# Create fixed slots with task-specific branches
+git worktree add -b feat/puzzle-expansion C:\src\gwn-worktrees\wt-1 main
+git worktree add -b feat/azure-infra      C:\src\gwn-worktrees\wt-2 main
+git worktree add -b feat/mp-game-logic    C:\src\gwn-worktrees\wt-3 main
+git worktree add -b feat/mp-lobby-ui      C:\src\gwn-worktrees\wt-4 main
 
-# Example: 4 parallel tasks
-git worktree add -b feat/puzzle-expansion C:\src\gwn-worktrees\puzzle-expansion main
-git worktree add -b feat/azure-infra C:\src\gwn-worktrees\azure-infra main
-git worktree add -b feat/mp-game-logic C:\src\gwn-worktrees\mp-game-logic main
-git worktree add -b feat/mp-lobby-ui C:\src\gwn-worktrees\mp-lobby-ui main
-
-# Verify
+# Check which slot has which branch
 git worktree list
+# C:/src/guesswhatisnext      main
+# C:/src/gwn-worktrees/wt-1   feat/puzzle-expansion
+# C:/src/gwn-worktrees/wt-2   feat/azure-infra
+# C:/src/gwn-worktrees/wt-3   feat/mp-game-logic
+# C:/src/gwn-worktrees/wt-4   feat/mp-lobby-ui
 ```
+
+**Recycling a slot for a new task:**
+```bash
+cd C:\src\guesswhatisnext
+
+# Remove the old branch from the slot (keeps the folder)
+git worktree remove C:\src\gwn-worktrees\wt-1 --force
+git branch -d feat/old-task
+
+# Reassign the slot to a new branch
+git worktree add -b feat/new-task C:\src\gwn-worktrees\wt-1 main
+```
+
+| Slot | Path | Port | Purpose |
+|---|---|---|---|
+| main | `C:\src\guesswhatisnext` | 3000 | Primary repo, sequential work |
+| wt-1 | `C:\src\gwn-worktrees\wt-1` | 3001 | Parallel agent slot 1 |
+| wt-2 | `C:\src\gwn-worktrees\wt-2` | 3002 | Parallel agent slot 2 |
+| wt-3 | `C:\src\gwn-worktrees\wt-3` | 3003 | Parallel agent slot 3 |
+| wt-4 | `C:\src\gwn-worktrees\wt-4` | 3004 | Parallel agent slot 4 |
 
 **2. Agent environment setup (each worktree):**
 
@@ -524,26 +547,17 @@ Every worktree is a full code checkout but lacks `node_modules/` and `data/`.
 Agents must bootstrap their worktree before working:
 
 ```bash
-cd C:\src\gwn-worktrees\<task-name>
+cd C:\src\gwn-worktrees\wt-X
 
 # Install dependencies
 npm install
 
 # Set unique port (avoid port 3000 conflicts between agents)
-$env:PORT = "<unique-port>"   # e.g., 3001, 3002, 3003, 3004
+$env:PORT = "300X"   # wt-1 → 3001, wt-2 → 3002, etc.
 
 # Database is auto-created on first server start at data/game.db
 # Each worktree gets its own independent database — full isolation
 ```
-
-Port assignments per worktree (convention):
-| Worktree | Port |
-|---|---|
-| main (primary repo) | 3000 |
-| Worktree 1 | 3001 |
-| Worktree 2 | 3002 |
-| Worktree 3 | 3003 |
-| Worktree 4 | 3004 |
 
 **3. Testing in worktrees:**
 
@@ -561,11 +575,19 @@ tests/helper.js
 └── registerUser() → helper to create auth'd test user
 ```
 
-**4. Commit strategy:**
+**4. Commit and push strategy:**
 - Each agent commits to its own feature branch within its worktree
-- After all agents complete, merge each branch to `main` via PR or fast-forward
-- If using PRs: CI runs tests on each branch independently before merge
-- If fast-forwarding: verify each branch passes `npm test` before merging
+- Each agent **pushes its branch to origin**: `git push -u origin feat/<task-name>`
+- After all agents complete, create a **PR per branch** for review/CI
+- CI runs `npm test` on each PR independently
+- Merge PRs to main one at a time, running tests after each merge
+- If branch protection is not yet configured, merge locally and push:
+  ```bash
+  git checkout main
+  git merge feat/<task-name> --no-edit
+  npm test                     # verify merged state
+  git push
+  ```
 
 **5. Merge order and conflict resolution:**
 - Merge zero-conflict branches first (e.g., new-files-only tasks like infra)
@@ -575,13 +597,17 @@ tests/helper.js
   - Resolve conflicts manually if needed (typically additive — HTML sections, CSS rules, route registrations)
 - **Never run in parallel**: tasks that modify the same function body
 
-**6. Worktree cleanup:**
+**6. Worktree slot cleanup (between task batches):**
 ```bash
-# After merging all branches
-git worktree remove C:\src\gwn-worktrees\puzzle-expansion
-git worktree remove C:\src\gwn-worktrees\azure-infra
-# Or remove all at once
-Remove-Item C:\src\gwn-worktrees -Recurse -Force
+# Remove all worktrees but keep the folder structure for reuse
+git worktree remove C:\src\gwn-worktrees\wt-1 --force
+git worktree remove C:\src\gwn-worktrees\wt-2 --force
+# ... etc
+
+# Delete merged branches
+git branch -d feat/puzzle-expansion feat/azure-infra
+
+# Prune stale worktree references
 git worktree prune
 ```
 
@@ -613,6 +639,7 @@ Group tasks to minimize file overlap:
 | Agents compete for port 3000 | Each agent starts server to verify | Assign unique ports per worktree (300X) |
 | Schema migrations conflict | Multiple agents add columns/tables | Review combined schema after all merges |
 | Test file merge conflicts | Multiple agents add test files | Tests are additive — auto-merge usually works |
+| Folder permissions re-prompted | Task-named worktree folders change each time | Use fixed slots (wt-1..wt-4), recycle with new branches |
 
 ### Deployment Environments
 | Environment | Trigger | Approval | Infrastructure | Rollback |
