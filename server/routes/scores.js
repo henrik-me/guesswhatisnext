@@ -21,6 +21,13 @@ router.post('/', requireAuth, (req, res) => {
   }
 
   const db = getDb();
+
+  // Verify user exists in DB (JWT may reference a deleted/old user)
+  const userExists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(req.user.id);
+  if (!userExists) {
+    return res.status(401).json({ error: 'User not found — please log in again' });
+  }
+
   const result = db.prepare(
     `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak)
      VALUES (?, ?, ?, ?, ?, ?)`

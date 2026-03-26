@@ -27,6 +27,12 @@ function getAgent() {
   return agent;
 }
 
+/** Returns the raw http.Server instance (for WS connections etc). */
+function getServer() {
+  if (!server) throw new Error('Call setup() in beforeAll first');
+  return server;
+}
+
 /** Boot an isolated server with a fresh temp DB. */
 async function setup() {
   // Create unique temp directory for this test suite's database
@@ -96,4 +102,4 @@ async function registerUser(username = 'testuser', password = 'testpass123') {
   return { user: res.body.user, token: res.body.token };
 }
 
-module.exports = { getAgent, setup, teardown, registerUser };
+module.exports = { getAgent, getServer, setup, teardown, registerUser };

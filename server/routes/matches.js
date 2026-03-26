@@ -25,6 +25,12 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'maxPlayers must be between 2 and 10' });
   }
 
+  // Verify user exists in DB (JWT may reference a deleted/old user)
+  const userExists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(req.user.id);
+  if (!userExists) {
+    return res.status(401).json({ error: 'User not found — please log in again' });
+  }
+
   const id = crypto.randomUUID();
   let roomCode = generateRoomCode();
 
