@@ -238,29 +238,43 @@ Tests **must pass** before any merge to `main`. CI/CD pipeline runs the full sui
 
 ### Test Framework & Tools
 
+**Current test structure (implemented):**
 ```
-test/
+tests/
+├── helper.js              # Test harness: isolated DB, random port, supertest agent
+├── auth.test.js           # Register, login, token, auth enforcement (10 tests)
+├── health.test.js         # Health endpoint: system auth, deep checks (3 tests)
+├── puzzles.test.js        # Puzzle API: filtering, auth, shape validation (5 tests)
+├── scores.test.js         # Score submission, leaderboard, multiplayer LB (8 tests)
+├── achievements.test.js   # Achievement list, unlock triggers (4 tests)
+└── matches.test.js        # Match create, join, capacity, history (6 tests)
+```
+
+**Planned additions:**
+```
+tests/
 ├── unit/
 │   ├── scoring.test.js       # Score calculation, speed bonus, streak multiplier
 │   ├── daily.test.js         # Date-seed determinism, puzzle selection
-│   ├── puzzles.test.js       # Puzzle data validation (schema, uniqueness)
-│   └── auth.test.js          # JWT generation/verification, API key auth, role checks
-├── integration/
-│   ├── auth.api.test.js      # Register, login, rate limiting, token refresh
-│   ├── scores.api.test.js    # Score submission, leaderboard queries, auth enforcement
-│   ├── matches.api.test.js   # Room create/join, match status, history
-│   ├── health.api.test.js    # Health endpoint (system auth required, deep checks)
+│   └── puzzles.test.js       # Puzzle data validation (schema, uniqueness)
+├── ws/
 │   └── websocket.test.js     # Match flow: join → rounds → answer → result → gameOver
-├── e2e/
-│   ├── singleplayer.spec.js  # Free play + daily challenge full flows
-│   ├── multiplayer.spec.js   # Create room → join → play match → result
-│   ├── leaderboard.spec.js   # Register → play → check leaderboard
-│   └── auth-flow.spec.js     # Register → login → access protected routes
-└── helpers/
-    ├── setup.js              # Test DB initialization, cleanup
-    ├── fixtures.js           # Test users, puzzles, scores
-    └── ws-client.js          # WebSocket test client helper
+└── e2e/
+    ├── singleplayer.spec.js  # Free play + daily challenge full flows
+    ├── multiplayer.spec.js   # Create room → join → play match → result
+    ├── leaderboard.spec.js   # Register → play → check leaderboard
+    └── auth-flow.spec.js     # Register → login → access protected routes
 ```
+
+**Test isolation model:**
+Each test file gets its own:
+- **Temp directory** — created via `fs.mkdtempSync()`, cleaned up in `afterAll`
+- **SQLite database** — via `GWN_DB_PATH` env var pointing to temp dir
+- **Express server** — listening on port 0 (OS-assigned random port)
+- **supertest agent** — bound to that server instance
+
+This means tests can run in parallel with zero cross-contamination, and worktree
+agents can each run `npm test` independently without port or DB conflicts.
 
 **Tools:**
 - **Vitest** — Unit + integration test runner (fast, native ESM, built-in coverage)
@@ -482,41 +496,99 @@ Commit after every meaningful, working change. Specifically:
 
 When running multiple AI agents in parallel to implement independent tasks:
 
-**1. Isolation strategy — use one of:**
-- **Git worktrees** (preferred): Each agent works in its own worktree on a separate branch, avoiding file conflicts entirely. Merge via PRs.
-  ```bash
-  git worktree add ../gwn-step-22 -b feat/health-endpoint
-  git worktree add ../gwn-step-27 -b feat/puzzles-to-db
-  ```
-- **Single worktree** (fallback): All agents share one working directory. Wait for all agents to complete, then review and split into separate commits. Higher conflict risk.
+**1. Worktree setup (required for parallel work):**
 
-**2. Commit strategy (single worktree):**
-- Do NOT let agents commit independently — they will step on each other's changes
-- Wait for all agents to finish
-- Review the combined diff: `git diff --stat`
-- Stage and commit each task's files separately with meaningful commit messages
-- Verify each commit independently (server starts, tests pass) before moving to the next
-- If agents modified the same file, manually review and merge the changes
+Each agent works in its own git worktree on a separate feature branch. This provides
+complete filesystem isolation — no file conflicts between agents.
 
-**3. Verification before committing:**
-- Delete the database (`data/game.db`) to test clean schema creation
-- Start the server — verify no import errors, no missing modules
-- Run integration tests against each new feature
-- Check for import conflicts (two agents adding routes to `server/index.js`)
+```bash
+# Create worktree directory alongside the main repo
+mkdir C:\src\gwn-worktrees
 
-**4. Lessons learned from parallel execution:**
+# Create a worktree per task, branching from current main
+git worktree add -b feat/<task-name> C:\src\gwn-worktrees\<task-name> main
 
-| Issue | Cause | Prevention |
-|---|---|---|
-| Agents commit each other's changes | Shared worktree, agents run `git add -A && git commit` | Use worktrees, or instruct agents not to commit |
-| Health endpoint bundled into achievements commit | Both modified `server/index.js`, achievements committed first | Separate worktrees, or stage files per-task |
-| Agents compete for port 3000 during testing | Each agent starts server to verify | Accept this — agents retry, or assign different ports |
-| Schema migrations conflict | Multiple agents add columns/tables to `schema.sql` | Review combined schema after all agents finish |
-| `server/index.js` route registration conflicts | Multiple agents add `app.use('/api/...', ...)` lines | Designate `index.js` as a merge-coordination file |
+# Example: 4 parallel tasks
+git worktree add -b feat/puzzle-expansion C:\src\gwn-worktrees\puzzle-expansion main
+git worktree add -b feat/azure-infra C:\src\gwn-worktrees\azure-infra main
+git worktree add -b feat/mp-game-logic C:\src\gwn-worktrees\mp-game-logic main
+git worktree add -b feat/mp-lobby-ui C:\src\gwn-worktrees\mp-lobby-ui main
 
-**5. High-conflict files to watch:**
+# Verify
+git worktree list
+```
+
+**2. Agent environment setup (each worktree):**
+
+Every worktree is a full code checkout but lacks `node_modules/` and `data/`.
+Agents must bootstrap their worktree before working:
+
+```bash
+cd C:\src\gwn-worktrees\<task-name>
+
+# Install dependencies
+npm install
+
+# Set unique port (avoid port 3000 conflicts between agents)
+$env:PORT = "<unique-port>"   # e.g., 3001, 3002, 3003, 3004
+
+# Database is auto-created on first server start at data/game.db
+# Each worktree gets its own independent database — full isolation
+```
+
+Port assignments per worktree (convention):
+| Worktree | Port |
+|---|---|
+| main (primary repo) | 3000 |
+| Worktree 1 | 3001 |
+| Worktree 2 | 3002 |
+| Worktree 3 | 3003 |
+| Worktree 4 | 3004 |
+
+**3. Testing in worktrees:**
+
+Each worktree is fully self-contained for testing:
+- **Unit/integration tests**: `npm test` — uses temp DB via `GWN_DB_PATH` env var, random port via `supertest` (port 0). Tests run in complete isolation with no shared state.
+- **Manual verification**: `$env:PORT=300X; node server/index.js` — each worktree uses its own port and database.
+- **DB isolation**: The test helper (`tests/helper.js`) creates a temp directory per test suite with its own SQLite database. No cross-test or cross-worktree contamination.
+
+Test helper details:
+```
+tests/helper.js
+├── setup()     → creates temp dir, sets GWN_DB_PATH, boots server on port 0
+├── teardown()  → closes DB, stops server, removes temp dir
+├── getAgent()  → returns supertest agent bound to test server
+└── registerUser() → helper to create auth'd test user
+```
+
+**4. Commit strategy:**
+- Each agent commits to its own feature branch within its worktree
+- After all agents complete, merge each branch to `main` via PR or fast-forward
+- If using PRs: CI runs tests on each branch independently before merge
+- If fast-forwarding: verify each branch passes `npm test` before merging
+
+**5. Merge order and conflict resolution:**
+- Merge zero-conflict branches first (e.g., new-files-only tasks like infra)
+- For branches that touch shared files (`index.html`, `app.js`, `style.css`):
+  - Merge one at a time
+  - After each merge, run `npm test` to verify
+  - Resolve conflicts manually if needed (typically additive — HTML sections, CSS rules, route registrations)
+- **Never run in parallel**: tasks that modify the same function body
+
+**6. Worktree cleanup:**
+```bash
+# After merging all branches
+git worktree remove C:\src\gwn-worktrees\puzzle-expansion
+git worktree remove C:\src\gwn-worktrees\azure-infra
+# Or remove all at once
+Remove-Item C:\src\gwn-worktrees -Recurse -Force
+git worktree prune
+```
+
+**7. High-conflict files to watch:**
 These files are modified by almost every feature — expect merge work:
 - `server/index.js` — route registration, middleware setup
+- `server/app.js` — app factory, route wiring
 - `server/db/schema.sql` — table definitions
 - `server/db/connection.js` — migrations, seeding
 - `public/index.html` — new screens, buttons
@@ -524,12 +596,23 @@ These files are modified by almost every feature — expect merge work:
 - `public/css/style.css` — new component styles
 - `server/ws/matchHandler.js` — multiplayer logic
 
-**6. Ideal parallel grouping:**
+**8. Ideal parallel grouping:**
 Group tasks to minimize file overlap:
 - ✅ Backend-only tasks (different route files) can safely parallelize
+- ✅ Tasks creating only new files (infra, new routes) are always safe
 - ⚠️ Tasks that both add HTML screens will conflict in `index.html`
 - ⚠️ Tasks that both modify `matchHandler.js` should be sequential
 - ❌ Never parallelize two tasks that both rewrite the same function
+
+**9. Lessons learned from parallel execution:**
+
+| Issue | Cause | Prevention |
+|---|---|---|
+| Agents commit each other's changes | Shared worktree, agents run `git add -A` | Use worktrees — each has its own filesystem |
+| Health endpoint bundled into wrong commit | Both modified `server/index.js` | Separate worktrees eliminate this entirely |
+| Agents compete for port 3000 | Each agent starts server to verify | Assign unique ports per worktree (300X) |
+| Schema migrations conflict | Multiple agents add columns/tables | Review combined schema after all merges |
+| Test file merge conflicts | Multiple agents add test files | Tests are additive — auto-merge usually works |
 
 ### Deployment Environments
 | Environment | Trigger | Approval | Infrastructure | Rollback |

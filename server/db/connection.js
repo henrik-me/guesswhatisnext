@@ -7,7 +7,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'game.db');
+const DB_PATH = process.env.GWN_DB_PATH || path.join(__dirname, '..', '..', 'data', 'game.db');
 let db = null;
 
 /** Get the database instance (lazy init). */

@@ -6,7 +6,11 @@ package-lock.json
 # Database
 data/*.db
 data/*.sqlite
+data/*.db-shm
+data/*.db-wal
 *.db
+*.db-shm
+*.db-wal
 
 # OS files
 .DS_Store
