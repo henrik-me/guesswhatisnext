@@ -1457,6 +1457,116 @@ body::before {
   border-left: 3px solid var(--color-wrong);
 }
 
+/* ===========================
+   Achievements
+   =========================== */
+
+.achievements-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: var(--max-width);
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 520px) {
+  .achievements-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.achievements-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: 2rem 0;
+}
+
+.achievement-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  transition: box-shadow var(--transition-speed), opacity var(--transition-speed);
+}
+
+.achievement-card.unlocked {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 12px var(--color-primary-glow);
+}
+
+.achievement-card.locked {
+  opacity: 0.5;
+  filter: grayscale(0.7);
+}
+
+.achievement-icon {
+  font-size: 1.75rem;
+  flex-shrink: 0;
+}
+
+.achievement-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.achievement-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.achievement-desc {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.achievement-check,
+.achievement-lock {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Achievement unlock toast */
+.achievement-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-primary);
+  box-shadow: 0 0 20px var(--color-primary-glow), var(--shadow-md);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  z-index: 9999;
+  animation: achievementSlideIn 0.4s ease, achievementFadeOut 0.5s 3s ease forwards;
+  white-space: nowrap;
+}
+
+.achievement-toast-icon {
+  font-size: 1.2rem;
+  margin-right: 0.25rem;
+}
+
+@keyframes achievementSlideIn {
+  from { transform: translateX(-50%) translateY(1rem); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+@keyframes achievementFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
 .match-history-entry.history-tie {
   border-left: 3px solid var(--color-timer);
 }
@@ -1637,6 +1747,68 @@ body::before {
     gap: 2rem;
     padding: 2rem 1.5rem;
   }
+}
+
+/* ===========================
+   Light Theme
+   =========================== */
+[data-theme="light"] {
+  --color-bg: #f5f5f5;
+  --color-bg-pattern: #ebebeb;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f0f0f0;
+  --color-surface-border: #e0e0e0;
+  --color-text: #1a1a2e;
+  --color-text-muted: #666;
+  --color-primary: #6c5ce7;
+  --color-primary-glow: rgba(108, 92, 231, 0.2);
+  --color-secondary: #00cec9;
+  --color-secondary-glow: rgba(0, 206, 201, 0.15);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* ===========================
+   Settings Screen
+   =========================== */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.settings-item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+.settings-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.settings-toggle {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.settings-select {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  font-family: var(--font-main);
+  cursor: pointer;
 }
 
 /* ===========================

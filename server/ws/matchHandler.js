@@ -7,7 +7,7 @@ const { WebSocketServer } = require('ws');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth');
 const { getDb } = require('../db/connection');
-const puzzlePool = require('../puzzleData');
+const { checkAndUnlockAchievements } = require('../achievements');
 
 /** Active rooms: Map<roomCode, RoomState> */
 const rooms = new Map();
@@ -26,14 +26,15 @@ const ROOM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const NEXT_ROUND_DELAY_MS = 3000;
 const RECONNECT_WINDOW_MS = 30000;
 
-/** Select `count` random puzzles from the pool (Fisher-Yates shuffle on a copy). */
+/** Select `count` random puzzles from the database. */
 function selectRandomPuzzles(count) {
-  const pool = [...puzzlePool];
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  return pool.slice(0, Math.min(count, pool.length));
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM puzzles WHERE active = 1 ORDER BY RANDOM() LIMIT ?').all(count);
+  return rows.map(row => ({
+    ...row,
+    sequence: JSON.parse(row.sequence),
+    options: JSON.parse(row.options),
+  }));
 }
 
 /** Calculate score for an answer. */
@@ -120,6 +121,9 @@ function handleMessage(ws, msg) {
     case 'answer':
       handleAnswer(ws, msg);
       break;
+    case 'start-match':
+      handleStartMatch(ws);
+      break;
     case 'rematch-request':
       handleRematchRequest(ws);
       break;
@@ -174,6 +178,9 @@ function handleJoin(ws, roomCode) {
   if (!rooms.has(code)) {
     rooms.set(code, {
       players: new Map(),
+      hostId: null,
+      maxPlayers: 2,
+      droppedPlayers: new Map(),
       round: 0,
       totalRounds: 5,
       scores: {},
@@ -187,8 +194,27 @@ function handleJoin(ws, roomCode) {
 
   const room = rooms.get(code);
 
+  // Load match info from DB to get max_players and host
+  try {
+    const db = getDb();
+    const match = db.prepare('SELECT max_players, host_user_id, total_rounds FROM matches WHERE room_code = ?').get(code);
+    if (match) {
+      room.maxPlayers = match.max_players || 2;
+      room.hostId = match.host_user_id;
+      room.totalRounds = match.total_rounds || 5;
+    }
+  } catch {
+    // Non-fatal: use defaults
+  }
+
   if (room.started) {
     ws.send(JSON.stringify({ type: 'error', message: 'Match already in progress' }));
+    return;
+  }
+
+  // Cap joins at maxPlayers
+  if (room.players.size >= room.maxPlayers && !room.players.has(ws.user.id)) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Room is full' }));
     return;
   }
 
@@ -209,10 +235,55 @@ function handleJoin(ws, roomCode) {
     playerCount: room.players.size,
   }, ws.user.id);
 
-  // Auto-start when 2 players have joined
-  if (room.players.size === 2 && !room.started) {
-    startMatch(code);
+  // Broadcast lobby-state to ALL players in the room
+  broadcastLobbyState(code);
+}
+
+/** Broadcast lobby state to all players in a room. */
+function broadcastLobbyState(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+
+  const players = [...room.players.entries()].map(([userId, ws]) => ({
+    username: ws.user.username,
+    isHost: userId === room.hostId,
+  }));
+
+  const hostWs = room.players.get(room.hostId);
+
+  broadcastToRoom(roomCode, {
+    type: 'lobby-state',
+    players,
+    maxPlayers: room.maxPlayers,
+    hostUsername: hostWs ? hostWs.user.username : null,
+  });
+}
+
+/** Handle host requesting match start. */
+function handleStartMatch(ws) {
+  const roomCode = ws.roomCode;
+  if (!roomCode) {
+    return sendTo(ws, { type: 'error', message: 'Not in a room' });
   }
+
+  const room = rooms.get(roomCode);
+  if (!room) {
+    return sendTo(ws, { type: 'error', message: 'Room not found' });
+  }
+
+  if (ws.user.id !== room.hostId) {
+    return sendTo(ws, { type: 'error', message: 'Only the host can start the match' });
+  }
+
+  if (room.players.size < 2) {
+    return sendTo(ws, { type: 'error', message: 'Need at least 2 players to start' });
+  }
+
+  if (room.started) {
+    return sendTo(ws, { type: 'error', message: 'Match already started' });
+  }
+
+  startMatch(roomCode);
 }
 
 /** Start a match: select puzzles and send the first round. */
@@ -416,6 +487,31 @@ function endMatch(roomCode) {
     // Non-fatal
   }
 
+  // Check achievements for each player
+  try {
+    for (const { userId, total } of userScores) {
+      const isWin = winner && userScores[0].userId === userId;
+      const context = {
+        score: total,
+        correctCount: 0,
+        totalRounds: room.totalRounds,
+        bestStreak: 0,
+        mode: 'multiplayer',
+        isWin: !!isWin,
+        fastestAnswerMs: null,
+      };
+      const unlocked = checkAndUnlockAchievements(userId, context);
+      if (unlocked.length > 0) {
+        const ws = room.players.get(userId);
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'achievements-unlocked', achievements: unlocked }));
+        }
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
   // Store player pair for potential rematch
   finishedPairs.set(roomCode, userScores.map(({ userId, username }) => ({ userId, username })));
 
@@ -482,11 +578,30 @@ function handleDisconnect(ws) {
 
   room.players.delete(ws.user.id);
 
+  // Host transfer in lobby (match not started)
+  if (!room.started && ws.user.id === room.hostId && room.players.size > 0) {
+    const [[newHostId]] = [...room.players.entries()];
+    room.hostId = newHostId;
+
+    // Update host in DB
+    try {
+      const db = getDb();
+      db.prepare('UPDATE matches SET host_user_id = ? WHERE room_code = ?').run(newHostId, roomCode);
+    } catch {
+      // Non-fatal
+    }
+  }
+
   broadcastToRoom(roomCode, {
     type: 'player-left',
     username: ws.user.username,
     playerCount: room.players.size,
   });
+
+  // Broadcast updated lobby state if still in lobby
+  if (!room.started && room.players.size > 0) {
+    broadcastLobbyState(roomCode);
+  }
 
   if (room.started && room.players.size < 2) {
     // Only one player left and no reconnection window (shouldn't normally reach here)
@@ -607,6 +722,9 @@ function handleRematchRequest(ws) {
     // Create the new room
     rooms.set(newCode, {
       players: new Map(),
+      hostId: pair[0].userId,
+      maxPlayers: 2,
+      droppedPlayers: new Map(),
       round: 0,
       totalRounds: 5,
       scores: {},

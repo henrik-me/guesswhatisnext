@@ -5,6 +5,7 @@
 const express = require('express');
 const { getDb } = require('../db/connection');
 const { requireAuth } = require('../middleware/auth');
+const { checkAndUnlockAchievements } = require('../achievements');
 
 const router = express.Router();
 
@@ -25,7 +26,19 @@ router.post('/', requireAuth, (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(req.user.id, mode, score, correctCount || 0, totalRounds || 0, bestStreak || 0);
 
-  res.status(201).json({ id: result.lastInsertRowid });
+  // Check achievements
+  const context = {
+    score: score || 0,
+    correctCount: correctCount || 0,
+    totalRounds: totalRounds || 0,
+    bestStreak: bestStreak || 0,
+    mode,
+    isWin: false,
+    fastestAnswerMs: req.body.fastestAnswerMs || null,
+  };
+  const newAchievements = checkAndUnlockAchievements(req.user.id, context);
+
+  res.status(201).json({ id: result.lastInsertRowid, newAchievements });
 });
 
 /** GET /api/scores/leaderboard?mode=freeplay&period=all|weekly|daily&limit=20 */

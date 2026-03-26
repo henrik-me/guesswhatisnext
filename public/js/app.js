@@ -4,11 +4,34 @@
  */
 
 import { Game } from './game.js';
-import { puzzles, getCategories } from './puzzles.js';
+import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { getTodayString } from './daily.js';
+import { GameAudio } from './audio.js';
 
 const screens = {};
+
+/** Puzzle data — starts with local fallback, updated from server when available. */
+let activePuzzles = localPuzzles;
+
+/** Fetch puzzles from the server API; falls back to local data on failure. */
+async function fetchPuzzlesFromServer() {
+  const token = localStorage.getItem('gwn_auth_token');
+  if (!token) return; // no auth — keep local puzzles
+
+  try {
+    const resp = await fetch('/api/puzzles', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0) {
+      activePuzzles = data;
+    }
+  } catch {
+    // Server unreachable — keep local puzzles as fallback
+  }
+}
 let currentScreen = null;
 
 /** Show a screen by name, hiding all others. */
@@ -134,6 +157,19 @@ const ui = {
     }
   },
 
+  /** Called every ~50ms when timer is in the last 3 seconds. */
+  onTimerTick: (() => {
+    let lastTickSecond = null;
+    return function (remainingMs) {
+      const sec = Math.ceil(remainingMs / 1000);
+      if (sec !== lastTickSecond && sec <= 3) {
+        lastTickSecond = sec;
+        GameAudio.playTick();
+      }
+      if (remainingMs > 3000) lastTickSecond = null;
+    };
+  })(),
+
   /** Show the round result screen. */
   showResult(result) {
     const isTimeUp = result.answer === null;
@@ -183,7 +219,11 @@ const ui = {
 
     // Submit score to server if logged in
     if (authToken) {
-      submitScore(summary.score, summary.mode || 'freeplay').catch(() => {});
+      submitScore(summary).then(data => {
+        if (data && data.newAchievements && data.newAchievements.length > 0) {
+          showAchievementToasts(data.newAchievements);
+        }
+      }).catch(() => {});
     }
 
     // Show/hide share button based on mode
@@ -217,15 +257,23 @@ function handleOptionClick(answer, btnEl) {
 
   // Highlight correct/wrong
   const puzzle = Game.state.currentPuzzle;
+  const isCorrect = answer === puzzle.answer;
   allBtns.forEach(b => {
     const btnAnswer = b.textContent || b.querySelector('img')?.src;
-    if (b === btnEl && answer !== puzzle.answer) {
+    if (b === btnEl && !isCorrect) {
       b.classList.add('wrong');
     }
     if ((b.textContent === puzzle.answer) || (b.querySelector('img')?.src === puzzle.answer)) {
       b.classList.add('correct');
     }
   });
+
+  // Play sound feedback
+  if (isCorrect) {
+    GameAudio.playCorrect();
+  } else {
+    GameAudio.playWrong();
+  }
 
   // Brief delay to show feedback, then submit
   setTimeout(() => {
@@ -236,7 +284,7 @@ function handleOptionClick(answer, btnEl) {
 /** Render category selection buttons. */
 function renderCategories() {
   const container = document.querySelector('[data-bind="category-list"]');
-  const categories = getCategories(puzzles);
+  const categories = getCategories(activePuzzles);
 
   container.innerHTML = '';
 
@@ -245,7 +293,7 @@ function renderCategories() {
   randomBtn.className = 'category-btn';
   randomBtn.textContent = '🎲 Random';
   randomBtn.addEventListener('click', () => {
-    Game.startFreePlay(puzzles, null, ui);
+    Game.startFreePlay(activePuzzles, null, ui);
   });
   container.appendChild(randomBtn);
 
@@ -255,7 +303,7 @@ function renderCategories() {
     btn.className = 'category-btn';
     btn.textContent = cat;
     btn.addEventListener('click', () => {
-      Game.startFreePlay(puzzles, cat, ui);
+      Game.startFreePlay(activePuzzles, cat, ui);
     });
     container.appendChild(btn);
   });
@@ -285,6 +333,9 @@ function init() {
   // Update auth display on home screen
   updateHomeAuthDisplay();
 
+  // Fetch puzzles from server (non-blocking, falls back to local data)
+  fetchPuzzlesFromServer();
+
   // Keyboard support: 1-4 selects options during game or match
   document.addEventListener('keydown', (e) => {
     if (currentScreen !== 'game' && currentScreen !== 'match') return;
@@ -310,7 +361,7 @@ function init() {
         renderCategories();
         break;
       case 'start-daily':
-        Game.startDaily(puzzles, ui);
+        Game.startDaily(localPuzzles, ui);
         break;
       case 'go-home':
         disconnectWebSocket();
@@ -336,6 +387,14 @@ function init() {
         setActiveLeaderboardMode('freeplay');
         setActiveLeaderboardTab('alltime');
         fetchLeaderboard('alltime');
+        break;
+      case 'show-achievements':
+        if (isLoggedIn()) {
+          showScreen('achievements');
+          fetchAchievements();
+        } else {
+          showScreen('auth');
+        }
         break;
       case 'leaderboard-mode': {
         const mode = e.target.dataset.mode;
@@ -405,10 +464,60 @@ function init() {
         resetMatchState();
         showScreen('home');
         break;
+      case 'show-settings':
+        loadSettingsUI();
+        showScreen('settings');
+        break;
     }
   });
 
+  // Settings change listeners
+  document.querySelectorAll('[data-setting]').forEach(el => {
+    el.addEventListener('change', () => {
+      const key = el.dataset.setting;
+      let value;
+      if (el.type === 'checkbox') {
+        value = el.checked;
+      } else if (key === 'timer') {
+        value = parseInt(el.value, 10);
+      } else {
+        value = el.value;
+      }
+      Storage.saveSetting(key, value);
+      if (key === 'theme') applyTheme(value);
+    });
+  });
+
+  // Apply saved settings on load
+  applySettings();
+
   showScreen('home');
+}
+
+/** Apply the theme to the root element. */
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.documentElement.dataset.theme = 'light';
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+}
+
+/** Apply all saved settings on load. */
+function applySettings() {
+  const settings = Storage.getSettings();
+  applyTheme(settings.theme);
+}
+
+/** Load current settings values into the settings form. */
+function loadSettingsUI() {
+  const settings = Storage.getSettings();
+  const soundEl = document.getElementById('setting-sound');
+  const themeEl = document.getElementById('setting-theme');
+  const timerEl = document.getElementById('setting-timer');
+  if (soundEl) soundEl.checked = settings.sound;
+  if (themeEl) themeEl.value = settings.theme;
+  if (timerEl) timerEl.value = String(settings.timer);
 }
 
 let leaderboardMode = 'freeplay';
@@ -462,14 +571,24 @@ async function fetchLeaderboard(period) {
 }
 
 /** Submit a score to the server. */
-async function submitScore(score, mode = 'freeplay') {
+async function submitScore(summary) {
+  const fastestAnswerMs = (summary.results || [])
+    .filter(r => r.correct)
+    .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
   const res = await fetch('/api/scores', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${authToken}`,
     },
-    body: JSON.stringify({ score, mode }),
+    body: JSON.stringify({
+      score: summary.score,
+      mode: summary.mode || 'freeplay',
+      correctCount: summary.correctCount || 0,
+      totalRounds: summary.totalRounds || 0,
+      bestStreak: summary.bestStreak || 0,
+      fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
+    }),
   });
   if (!res.ok) throw new Error(`Score submit failed: ${res.status}`);
   return res.json();
@@ -540,6 +659,64 @@ function escapeHTML(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+/* ===========================
+   Achievements Module
+   =========================== */
+
+/** Fetch and render all achievements. */
+async function fetchAchievements() {
+  const container = document.querySelector('[data-bind="achievements-grid"]');
+  if (!container) return;
+  container.innerHTML = '<div class="achievements-loading">Loading achievements...</div>';
+
+  try {
+    const res = await fetch('/api/achievements', {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderAchievements(data.achievements);
+  } catch {
+    container.innerHTML = '<div class="achievements-loading">Could not load achievements</div>';
+  }
+}
+
+/** Render the achievements grid. */
+function renderAchievements(achievements) {
+  const container = document.querySelector('[data-bind="achievements-grid"]');
+  if (!container) return;
+
+  if (!achievements || achievements.length === 0) {
+    container.innerHTML = '<div class="achievements-loading">No achievements yet — keep playing!</div>';
+    return;
+  }
+
+  container.innerHTML = achievements.map(a => {
+    const state = a.unlocked ? 'unlocked' : 'locked';
+    return `<div class="achievement-card ${state}">
+      <span class="achievement-icon">${a.icon}</span>
+      <div class="achievement-info">
+        <span class="achievement-name">${escapeHTML(a.name)}</span>
+        <span class="achievement-desc">${escapeHTML(a.description)}</span>
+      </div>
+      ${a.unlocked ? '<span class="achievement-check">✅</span>' : '<span class="achievement-lock">🔒</span>'}
+    </div>`;
+  }).join('');
+}
+
+/** Show toast notifications for newly unlocked achievements. */
+function showAchievementToasts(achievements) {
+  achievements.forEach((a, i) => {
+    setTimeout(() => {
+      const toast = document.createElement('div');
+      toast.className = 'achievement-toast';
+      toast.innerHTML = `<span class="achievement-toast-icon">${a.icon}</span> <strong>${escapeHTML(a.name)}</strong> unlocked!`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3500);
+    }, i * 1200);
+  });
 }
 
 /* ===========================
@@ -709,6 +886,11 @@ function handleWSMessage(msg) {
     case 'rematch-start':
       onRematchStart(msg);
       break;
+    case 'achievements-unlocked':
+      if (msg.achievements && msg.achievements.length > 0) {
+        showAchievementToasts(msg.achievements);
+      }
+      break;
     case 'error':
       showToast(msg.message || 'Server error');
       break;
@@ -855,6 +1037,7 @@ function onMatchStart(msg) {
   bindText('match-round', `1/${matchState.totalRounds}`);
 
   showScreen('match');
+  GameAudio.playMatchStart();
 }
 
 /** Handle 'round' — render the puzzle in the match screen. */

@@ -37,6 +37,15 @@ function initDb() {
     database.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user', 'system', 'admin'))");
   } catch { /* column already exists */ }
 
+  // Migration: add max_players and host_user_id columns if missing
+  try {
+    database.prepare("SELECT max_players FROM matches LIMIT 0").get();
+  } catch {
+    database.exec("ALTER TABLE matches ADD COLUMN max_players INTEGER NOT NULL DEFAULT 2");
+    database.exec("ALTER TABLE matches ADD COLUMN host_user_id INTEGER REFERENCES users(id)");
+    database.exec("UPDATE matches SET host_user_id = created_by WHERE host_user_id IS NULL");
+  }
+
   // Seed system account if it doesn't exist
   const SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
   const existing = database.prepare('SELECT id FROM users WHERE username = ?').get('system');
@@ -45,6 +54,17 @@ function initDb() {
     const hash = bcrypt.hashSync(SYSTEM_API_KEY, 10);
     database.prepare("INSERT INTO users (username, password_hash, role) VALUES ('system', ?, 'system')").run(hash);
     console.log('🔑 System account seeded');
+  }
+
+  // Seed achievement definitions
+  const { seedAchievements } = require('../achievements');
+  seedAchievements();
+
+  // Seed puzzles if table is empty
+  const puzzleCount = database.prepare('SELECT COUNT(*) AS cnt FROM puzzles').get();
+  if (puzzleCount.cnt === 0) {
+    const { seedPuzzles } = require('./seed-puzzles');
+    seedPuzzles();
   }
 
   console.log('📦 Database initialized');

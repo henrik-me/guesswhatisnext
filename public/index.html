@@ -23,6 +23,8 @@
         <button class="btn btn-secondary" data-action="start-daily" aria-label="Start Daily Challenge">📅 Daily Challenge</button>
         <button class="btn btn-secondary" data-action="start-multiplayer" aria-label="Start Multiplayer">⚔️ Multiplayer</button>
         <button class="btn btn-secondary" data-action="show-leaderboard" aria-label="View Leaderboard">🏆 Leaderboard</button>
+        <button class="btn btn-secondary" data-action="show-achievements" aria-label="View Achievements">🏅 Achievements</button>
+        <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
       <footer class="home-stats">
         <p class="home-user" data-bind="home-user-display" style="display:none"></p>
@@ -255,6 +257,54 @@
         <!-- Match history populated by JS -->
       </div>
       <button class="btn btn-back" data-action="back-to-multiplayer" aria-label="Back to multiplayer menu">← Back</button>
+    </section>
+
+    <!-- Achievements Screen -->
+    <section id="screen-achievements" class="screen" data-screen="achievements" aria-label="Achievements">
+      <header class="screen-header">
+        <h2>🏅 Achievements</h2>
+        <p class="screen-description">Unlock badges by playing!</p>
+      </header>
+      <div class="achievements-grid" data-bind="achievements-grid">
+        <!-- Populated by JS -->
+      </div>
+      <button class="btn btn-back" data-action="go-home">← Back</button>
+    </section>
+
+    <!-- Settings Screen -->
+    <section id="screen-settings" class="screen" data-screen="settings" aria-label="Settings">
+      <header class="screen-header">
+        <h2>⚙️ Settings</h2>
+        <p class="screen-description">Customize your experience</p>
+      </header>
+      <div class="settings-list">
+        <div class="settings-item">
+          <label class="settings-label">
+            <span>🔊 Sound Effects</span>
+            <input type="checkbox" id="setting-sound" class="settings-toggle" data-setting="sound" checked>
+          </label>
+        </div>
+        <div class="settings-item">
+          <label class="settings-label">
+            <span>🎨 Theme</span>
+            <select id="setting-theme" class="settings-select" data-setting="theme">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </label>
+        </div>
+        <div class="settings-item">
+          <label class="settings-label">
+            <span>⏱️ Timer Duration</span>
+            <select id="setting-timer" class="settings-select" data-setting="timer">
+              <option value="10">10 seconds</option>
+              <option value="15" selected>15 seconds</option>
+              <option value="20">20 seconds</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <button class="btn btn-back" data-action="go-home" aria-label="Go back">← Back</button>
     </section>
 
     <!-- Reconnection Overlay -->
