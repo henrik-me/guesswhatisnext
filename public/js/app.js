@@ -181,6 +181,11 @@ const ui = {
       bestStreak: summary.bestStreak,
     });
 
+    // Submit score to server if logged in
+    if (authToken) {
+      submitScore(summary.score, summary.mode || 'freeplay').catch(() => {});
+    }
+
     // Show/hide share button based on mode
     const shareBtn = document.querySelector('[data-action="share-result"]');
     if (shareBtn) shareBtn.style.display = '';
@@ -408,14 +413,35 @@ async function fetchLeaderboard(period) {
   container.innerHTML = '<div class="leaderboard-loading">Loading</div>';
 
   try {
-    const res = await fetch(`/api/scores/leaderboard?mode=freeplay&period=${period}`);
+    const headers = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    const res = await fetch(`/api/scores/leaderboard?mode=freeplay&period=${period}`, { headers });
+    if (res.status === 401) {
+      container.innerHTML =
+        '<div class="leaderboard-error">Log in to view the leaderboard 🔒</div>';
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    renderLeaderboard(data);
+    renderLeaderboard(data.leaderboard);
   } catch {
     container.innerHTML =
       '<div class="leaderboard-error">Leaderboard unavailable — start the server to see rankings</div>';
   }
+}
+
+/** Submit a score to the server. */
+async function submitScore(score, mode = 'freeplay') {
+  const res = await fetch('/api/scores', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+    },
+    body: JSON.stringify({ score, mode }),
+  });
+  if (!res.ok) throw new Error(`Score submit failed: ${res.status}`);
+  return res.json();
 }
 
 /** Render leaderboard rows from API data. */
