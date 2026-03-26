@@ -16,8 +16,14 @@ function generateRoomCode() {
 
 /** POST /api/matches — create a new match room */
 router.post('/', requireAuth, (req, res) => {
-  const { totalRounds = 5 } = req.body;
+  const { totalRounds = 5, maxPlayers = 2 } = req.body;
   const db = getDb();
+
+  // Validate maxPlayers
+  const mp = Number(maxPlayers);
+  if (!Number.isInteger(mp) || mp < 2 || mp > 10) {
+    return res.status(400).json({ error: 'maxPlayers must be between 2 and 10' });
+  }
 
   const id = crypto.randomUUID();
   let roomCode = generateRoomCode();
@@ -28,14 +34,14 @@ router.post('/', requireAuth, (req, res) => {
   }
 
   db.prepare(
-    `INSERT INTO matches (id, room_code, status, total_rounds, created_by) VALUES (?, ?, 'waiting', ?, ?)`
-  ).run(id, roomCode, totalRounds, req.user.id);
+    `INSERT INTO matches (id, room_code, status, total_rounds, max_players, created_by, host_user_id) VALUES (?, ?, 'waiting', ?, ?, ?, ?)`
+  ).run(id, roomCode, totalRounds, mp, req.user.id, req.user.id);
 
   db.prepare(
     `INSERT INTO match_players (match_id, user_id) VALUES (?, ?)`
   ).run(id, req.user.id);
 
-  res.status(201).json({ matchId: id, roomCode, totalRounds });
+  res.status(201).json({ matchId: id, roomCode, totalRounds, maxPlayers: mp });
 });
 
 /** POST /api/matches/join — join a match by room code */
@@ -48,7 +54,7 @@ router.post('/join', requireAuth, (req, res) => {
 
   const db = getDb();
   const match = db.prepare(
-    `SELECT id, status, total_rounds FROM matches WHERE room_code = ?`
+    `SELECT id, status, total_rounds, max_players FROM matches WHERE room_code = ?`
   ).get(roomCode.toUpperCase());
 
   if (!match) {
@@ -56,6 +62,13 @@ router.post('/join', requireAuth, (req, res) => {
   }
   if (match.status !== 'waiting') {
     return res.status(400).json({ error: 'Match already started or finished' });
+  }
+
+  // Check room capacity
+  const playerCount = db.prepare('SELECT COUNT(*) as count FROM match_players WHERE match_id = ?').get(match.id);
+  const maxPlayers = match.max_players || 2;
+  if (playerCount.count >= maxPlayers) {
+    return res.status(400).json({ error: 'Room is full' });
   }
 
   // Check not already joined
