@@ -58,14 +58,14 @@ module.exports = [
     explanation: "Simple counting: each number increases by one."
   },
   {
-    id: "powers-of-two",
+    id: "even-numbers",
     category: "Math & Numbers",
-    difficulty: 2,
+    difficulty: 1,
     type: "emoji",
-    sequence: ["1️⃣", "2️⃣", "4️⃣", "8️⃣"],
+    sequence: ["2️⃣", "4️⃣", "6️⃣", "8️⃣"],
     answer: "🔟",
-    options: ["9️⃣", "🔟", "6️⃣", "5️⃣"],
-    explanation: "Powers of two: 1, 2, 4, 8, 16. The next keycap number emoji is 🔟 (representing 16 in the doubling pattern)."
+    options: ["9️⃣", "🔟", "3️⃣", "5️⃣"],
+    explanation: "Even numbers: 2, 4, 6, 8, 10. Each number increases by 2."
   },
   {
     id: "fibonacci-dots",
