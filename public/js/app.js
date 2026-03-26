@@ -1028,9 +1028,7 @@ function onJoined(msg) {
   if (!matchState.players.includes(authUsername)) {
     matchState.players.push(authUsername);
   }
-  bindText('lobby-status',
-    msg.playerCount >= 2 ? 'Starting match...' : 'Waiting for opponent...'
-  );
+  // Render local player list as a placeholder until lobby-state arrives
   renderLobbyPlayers();
 }
 
@@ -1039,7 +1037,7 @@ function onPlayerJoined(msg) {
   if (!matchState.players.includes(msg.username)) {
     matchState.players.push(msg.username);
   }
-  bindText('lobby-status', msg.playerCount >= 2 ? 'Starting match...' : 'Waiting for opponent...');
+  // lobby-state follows immediately with authoritative data
   renderLobbyPlayers();
 }
 
