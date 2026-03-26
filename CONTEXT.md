@@ -8,6 +8,22 @@ This file tracks the current state of the project: what's been done, what's next
 
 ## Project Status: ✅ Phase 1 & Phase 2 Complete — Phase 3 In Progress — Phase 4 Planned
 
+### Development Workflow
+
+Parallel work uses **fixed worktree slots** (`wt-1` through `wt-4`) with task-specific branch names.
+Each agent pushes its branch to origin and merges to main remotely. The main agent pulls after each merge.
+
+| Slot | Path | Port | Status |
+|---|---|---|---|
+| main | `C:\src\guesswhatisnext` | 3000 | Orchestration, sequential work |
+| wt-1 | `C:\src\gwn-worktrees\wt-1` | 3001 | Available |
+| wt-2 | `C:\src\gwn-worktrees\wt-2` | 3002 | Available |
+| wt-3 | `C:\src\gwn-worktrees\wt-3` | 3003 | Available |
+| wt-4 | `C:\src\gwn-worktrees\wt-4` | 3004 | Available |
+
+**Current workflow (pre-branch-protection):** Agent pushes branch → merges to main on remote → pushes main.
+**Future workflow (post-branch-protection):** Agent pushes branch → creates PR → CI + review → merge via GH UI.
+
 ---
 
 ## Phase 1 — Client-Side Game

@@ -95,6 +95,35 @@ docker compose down
 
 The container mounts `./data` for SQLite persistence and sets dev environment variables automatically.
 
+### Testing
+
+```bash
+# Run all tests (36 smoke tests across 6 suites)
+npm test
+
+# Watch mode (re-run on changes)
+npm run test:watch
+
+# With coverage report
+npm run test:coverage
+```
+
+Tests are fully isolated — each suite gets its own temp database and random port. Safe to run in parallel across worktrees.
+
+### Parallel Development (Worktrees)
+
+For parallel work, the project uses **fixed git worktree slots** with task-specific branches:
+
+```bash
+# Worktrees live in C:\src\gwn-worktrees\wt-1 through wt-4
+git worktree list    # see which branch is in which slot
+```
+
+Each worktree agent pushes its branch and merges to main remotely. See [INSTRUCTIONS.md](INSTRUCTIONS.md) for full workflow details.
+
+**Current workflow:** Push branch → merge to main → push main.
+**Future (with branch protection):** Push branch → create PR → CI + review → merge.
+
 ### Architecture
 
 **Software Structure:**

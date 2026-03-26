@@ -575,19 +575,48 @@ tests/helper.js
 └── registerUser() → helper to create auth'd test user
 ```
 
-**4. Commit and push strategy:**
-- Each agent commits to its own feature branch within its worktree
-- Each agent **pushes its branch to origin**: `git push -u origin feat/<task-name>`
-- After all agents complete, create a **PR per branch** for review/CI
-- CI runs `npm test` on each PR independently
-- Merge PRs to main one at a time, running tests after each merge
-- If branch protection is not yet configured, merge locally and push:
-  ```bash
-  git checkout main
-  git merge feat/<task-name> --no-edit
-  npm test                     # verify merged state
-  git push
-  ```
+**4. Commit, push, and merge strategy:**
+
+Each worktree agent handles its own lifecycle end-to-end:
+
+```
+Agent in wt-X:
+  1. Work on feat/<task-name> branch
+  2. Run npm test → all pass
+  3. git add -A && git commit
+  4. git push -u origin feat/<task-name>
+  5. Merge to main on remote:
+     git fetch origin main
+     git checkout main
+     git merge feat/<task-name> --no-edit
+     npm test                     # verify merged state
+     git push origin main
+  6. If merge conflicts: resolve locally, re-run npm test, then push
+```
+
+The **main orchestrating agent** pulls after each worktree agent reports completion:
+```
+Main agent (after notification that wt-X pushed):
+  cd C:\src\guesswhatisnext
+  git pull                       # get latest main with merged changes
+```
+
+**Merge ordering:** First-done merges first. Each subsequent agent may need to
+rebase or merge main into their branch before pushing:
+```
+Agent in wt-Y (if main has moved since branch creation):
+  git fetch origin main
+  git merge origin/main --no-edit    # or: git rebase origin/main
+  npm test                           # verify no conflicts broke anything
+  git push origin main
+```
+
+**Future (when branch protection is enabled):**
+- Agents push their branch but do NOT merge to main directly
+- Instead, create a PR: `gh pr create --base main --head feat/<task-name>`
+- CI runs tests on the PR automatically
+- PR requires review approval + passing status checks before merge
+- Main agent or reviewer merges PRs one at a time via GitHub UI or `gh pr merge`
 
 **5. Merge order and conflict resolution:**
 - Merge zero-conflict branches first (e.g., new-files-only tasks like infra)
