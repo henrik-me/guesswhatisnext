@@ -9,7 +9,6 @@ import { getDailyPuzzle, getTodayString } from './daily.js';
 import { Storage } from './storage.js';
 
 const CONFIG = {
-  ROUND_TIME_MS: 15000,
   MAX_ROUNDS: 10,
   BASE_POINTS: 100,
   MAX_SPEED_BONUS: 100,
@@ -19,6 +18,12 @@ const CONFIG = {
     { min: 0, multiplier: 1.0 },
   ],
 };
+
+/** Get the round time in ms based on user settings (free-play only). */
+function getRoundTimeMs() {
+  const seconds = Storage.getSettings().timer || 15;
+  return seconds * 1000;
+}
 
 let state = null;
 let timerInterval = null;
@@ -57,7 +62,8 @@ function calculateScore(correct, timeMs, streak) {
   }
 
   const points = CONFIG.BASE_POINTS;
-  const timeRatio = Math.max(0, 1 - timeMs / CONFIG.ROUND_TIME_MS);
+  const roundTimeMs = getRoundTimeMs();
+  const timeRatio = Math.max(0, 1 - timeMs / roundTimeMs);
   const speedBonus = Math.round(CONFIG.MAX_SPEED_BONUS * timeRatio);
   const { multiplier } = CONFIG.STREAK_THRESHOLDS.find(t => streak >= t.min);
   const total = Math.round((points + speedBonus) * multiplier);
@@ -69,13 +75,20 @@ function calculateScore(correct, timeMs, streak) {
 function startTimer(ui) {
   stopTimer();
   roundStartTime = Date.now();
+  const roundTimeMs = getRoundTimeMs();
 
   timerInterval = setInterval(() => {
     const elapsed = Date.now() - roundStartTime;
-    const ratio = Math.max(0, 1 - elapsed / CONFIG.ROUND_TIME_MS);
+    const ratio = Math.max(0, 1 - elapsed / roundTimeMs);
     ui.updateTimer(ratio);
 
-    if (elapsed >= CONFIG.ROUND_TIME_MS) {
+    // Notify UI for tick sounds in the last 3 seconds
+    const remaining = roundTimeMs - elapsed;
+    if (remaining > 0 && remaining <= 3000 && ui.onTimerTick) {
+      ui.onTimerTick(remaining);
+    }
+
+    if (elapsed >= roundTimeMs) {
       stopTimer();
       submitAnswer(null, ui);
     }

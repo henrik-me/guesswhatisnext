@@ -7,6 +7,7 @@ const KEYS = {
   HIGH_SCORE: 'gwn_high_score',
   DAILY_STATE: 'gwn_daily_state',
   STATS: 'gwn_stats',
+  SETTINGS: 'gwn_settings',
 };
 
 /** Safely read from localStorage. */
@@ -72,5 +73,19 @@ export const Storage = {
     stats.totalCorrect += gameResult.correct;
     stats.bestStreak = Math.max(stats.bestStreak, gameResult.bestStreak);
     write(KEYS.STATS, stats);
+  },
+
+  /** Get user settings with defaults. */
+  getSettings() {
+    const defaults = { sound: true, theme: 'dark', timer: 15 };
+    const saved = read(KEYS.SETTINGS);
+    return saved ? { ...defaults, ...saved } : defaults;
+  },
+
+  /** Save an individual setting. */
+  saveSetting(key, value) {
+    const settings = this.getSettings();
+    settings[key] = value;
+    write(KEYS.SETTINGS, settings);
   },
 };
