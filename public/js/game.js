@@ -103,11 +103,16 @@ function stopTimer() {
   }
 }
 
-/** Start a free-play game with optional category filter. */
-function startFreePlay(allPuzzles, category, ui) {
-  const filtered = filterByCategory(allPuzzles, category);
+/** Start a free-play game with optional category and difficulty filter. */
+function startFreePlay(allPuzzles, category, ui, difficulty) {
+  let filtered = filterByCategory(allPuzzles, category);
+  if (difficulty && difficulty !== 'all') {
+    const level = Number(difficulty);
+    filtered = filtered.filter(p => p.difficulty === level);
+  }
   const queue = shuffle(filtered).slice(0, CONFIG.MAX_ROUNDS);
   state = createState(queue, 'freeplay');
+  state.skipCount = 0;
   loadRound(ui);
 }
 
@@ -189,6 +194,27 @@ function nextRound(ui) {
   loadRound(ui);
 }
 
+/** Skip the current round (free-play only). Counts as incorrect. */
+function skipRound(ui) {
+  if (!state || state.finished || state.mode !== 'freeplay') return;
+  stopTimer();
+
+  state.streak = 0;
+  state.skipCount = (state.skipCount || 0) + 1;
+
+  state.results.push({
+    puzzleId: state.currentPuzzle.id,
+    answer: null,
+    correct: false,
+    timeMs: Date.now() - roundStartTime,
+    score: { points: 0, speedBonus: 0, multiplier: 1, total: 0 },
+    skipped: true,
+  });
+
+  state.currentRound += 1;
+  loadRound(ui);
+}
+
 /** End the game and show summary. */
 function endGame(ui) {
   state.finished = true;
@@ -201,6 +227,7 @@ function endGame(ui) {
     bestStreak: state.bestStreak,
     results: state.results,
     mode: state.mode,
+    skipCount: state.skipCount || 0,
   };
 
   // Save daily challenge completion
@@ -247,6 +274,7 @@ export const Game = {
   startFreePlay,
   startDaily,
   nextRound,
+  skipRound,
   submitAnswer,
   shareResult,
   get state() { return state; },

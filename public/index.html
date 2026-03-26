@@ -41,6 +41,13 @@
         <h2>Choose a Category</h2>
         <p class="screen-description">Pick a topic to test your pattern skills</p>
       </header>
+      <div class="difficulty-selector" role="group" aria-label="Difficulty selection">
+        <span class="difficulty-label">Difficulty:</span>
+        <button class="difficulty-btn active" data-difficulty="all">All</button>
+        <button class="difficulty-btn" data-difficulty="1">Easy</button>
+        <button class="difficulty-btn" data-difficulty="2">Medium</button>
+        <button class="difficulty-btn" data-difficulty="3">Hard</button>
+      </div>
       <div class="category-grid" data-bind="category-list" role="list" aria-label="Available categories">
         <!-- Categories populated by JS -->
       </div>
@@ -73,6 +80,7 @@
       <div class="options-grid" data-bind="options" role="group" aria-label="Answer options">
         <!-- 4 option buttons rendered by JS -->
       </div>
+      <button class="btn btn-skip" id="btn-skip" data-action="skip-round" aria-label="Skip this round" style="display:none">Skip →</button>
     </section>
 
     <!-- Round Result Screen -->
@@ -104,6 +112,10 @@
         <div class="stat">
           <span class="stat-value" data-bind="best-streak">0</span>
           <span class="stat-label">Best Streak</span>
+        </div>
+        <div class="stat stat-skipped" data-bind="skip-stat-container" style="display:none">
+          <span class="stat-value" data-bind="skip-count">0</span>
+          <span class="stat-label">Skipped</span>
         </div>
       </div>
       <nav class="gameover-actions" aria-label="Game over options">

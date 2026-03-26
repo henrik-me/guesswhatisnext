@@ -11,6 +11,9 @@ import { GameAudio } from './audio.js';
 
 const screens = {};
 
+/** Currently selected difficulty for free-play. */
+let selectedDifficulty = 'all';
+
 /** Puzzle data — starts with local fallback, updated from server when available. */
 let activePuzzles = localPuzzles;
 
@@ -72,6 +75,12 @@ const ui = {
     bindText('score', state.score);
     bindText('round', state.currentRound + 1);
     bindText('total-rounds', state.puzzleQueue.length);
+
+    // Show/hide skip button (free-play only)
+    const skipBtn = document.getElementById('btn-skip');
+    if (skipBtn) {
+      skipBtn.style.display = state.mode === 'freeplay' ? '' : 'none';
+    }
 
     // Score bump animation (skip first round where score is 0)
     const scoreEl = document.querySelector('[data-bind="score"]');
@@ -209,6 +218,17 @@ const ui = {
     bindText('correct-count', `${summary.correctCount}/${summary.totalRounds}`);
     bindText('best-streak', summary.bestStreak);
 
+    // Show skip count if any skips occurred
+    const skipStatContainer = document.querySelector('[data-bind="skip-stat-container"]');
+    if (skipStatContainer) {
+      if (summary.skipCount > 0) {
+        bindText('skip-count', summary.skipCount);
+        skipStatContainer.style.display = '';
+      } else {
+        skipStatContainer.style.display = 'none';
+      }
+    }
+
     // Persist high score and stats
     Storage.setHighScore(summary.score);
     Storage.updateStats({
@@ -231,6 +251,14 @@ const ui = {
     if (shareBtn) shareBtn.style.display = '';
 
     showScreen('gameover');
+
+    // Confetti celebration for perfect score
+    if (summary.correctCount === summary.totalRounds && summary.totalRounds > 0) {
+      showConfetti();
+      if (typeof GameAudio !== 'undefined' && GameAudio.playAchievement) {
+        GameAudio.playAchievement();
+      }
+    }
   },
 
   /** Show daily challenge locked screen (already played today). */
@@ -288,12 +316,22 @@ function renderCategories() {
 
   container.innerHTML = '';
 
+  // Wire difficulty buttons
+  const diffBtns = document.querySelectorAll('.difficulty-btn');
+  diffBtns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.difficulty === selectedDifficulty);
+    btn.onclick = () => {
+      selectedDifficulty = btn.dataset.difficulty;
+      diffBtns.forEach(b => b.classList.toggle('active', b === btn));
+    };
+  });
+
   // "Random" option
   const randomBtn = document.createElement('button');
   randomBtn.className = 'category-btn';
   randomBtn.textContent = '🎲 Random';
   randomBtn.addEventListener('click', () => {
-    Game.startFreePlay(activePuzzles, null, ui);
+    Game.startFreePlay(activePuzzles, null, ui, selectedDifficulty);
   });
   container.appendChild(randomBtn);
 
@@ -303,7 +341,7 @@ function renderCategories() {
     btn.className = 'category-btn';
     btn.textContent = cat;
     btn.addEventListener('click', () => {
-      Game.startFreePlay(activePuzzles, cat, ui);
+      Game.startFreePlay(activePuzzles, cat, ui, selectedDifficulty);
     });
     container.appendChild(btn);
   });
@@ -319,6 +357,27 @@ function showToast(message) {
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2200);
+}
+
+/** Show confetti celebration for perfect scores. */
+function showConfetti() {
+  const container = document.createElement('div');
+  container.className = 'confetti-container';
+  document.body.appendChild(container);
+
+  const colors = ['#6c5ce7', '#00cec9', '#00b894', '#fdcb6e', '#e17055', '#d63031', '#fd79a8'];
+  for (let i = 0; i < 30; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.animationDelay = `${Math.random() * 1}s`;
+    piece.style.animationDuration = `${1.5 + Math.random() * 1.5}s`;
+    if (Math.random() > 0.5) piece.style.borderRadius = '50%';
+    container.appendChild(piece);
+  }
+
+  setTimeout(() => container.remove(), 3000);
 }
 
 /** Initialize screen references and wire up navigation. */
@@ -380,6 +439,9 @@ function init() {
       case 'share-result':
         Game.shareResult();
         showToast('Copied to clipboard! 📋');
+        break;
+      case 'skip-round':
+        Game.skipRound(ui);
         break;
       case 'show-leaderboard':
         showScreen('leaderboard');
