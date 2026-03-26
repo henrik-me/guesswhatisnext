@@ -789,6 +789,46 @@ body::before {
   padding: 0.3rem;
 }
 
+.leaderboard-mode-tabs {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.leaderboard-mode-tab {
+  flex: 1;
+  background: none;
+  border: 2px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: var(--font-main);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-speed),
+    color var(--transition-speed),
+    background-color var(--transition-speed);
+}
+
+.leaderboard-mode-tab:hover {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+}
+
+.leaderboard-mode-tab.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background-color: rgba(108, 92, 231, 0.08);
+}
+
+.leaderboard-mode-tab:focus-visible {
+  outline: 3px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
 .leaderboard-tab {
   flex: 1;
   background: none;
@@ -909,6 +949,30 @@ body::before {
   font-size: 1.1rem;
   font-variant-numeric: tabular-nums;
   color: var(--color-secondary);
+  white-space: nowrap;
+}
+
+.leaderboard-stats {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.leaderboard-wins {
+  font-weight: 700;
+  color: var(--color-correct);
+}
+
+.leaderboard-winrate {
+  color: var(--color-text-muted);
+}
+
+.leaderboard-matches {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
 }
 
 .leaderboard-empty,

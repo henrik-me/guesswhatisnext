@@ -332,9 +332,22 @@ function init() {
         break;
       case 'show-leaderboard':
         showScreen('leaderboard');
+        leaderboardMode = 'freeplay';
+        setActiveLeaderboardMode('freeplay');
         setActiveLeaderboardTab('alltime');
         fetchLeaderboard('alltime');
         break;
+      case 'leaderboard-mode': {
+        const mode = e.target.dataset.mode;
+        if (mode) {
+          leaderboardMode = mode;
+          setActiveLeaderboardMode(mode);
+          // Show/hide period tabs for multiplayer (they apply to both)
+          setActiveLeaderboardTab('alltime');
+          fetchLeaderboard('alltime');
+        }
+        break;
+      }
       case 'leaderboard-tab': {
         const period = e.target.dataset.period;
         if (period) {
@@ -398,6 +411,17 @@ function init() {
   showScreen('home');
 }
 
+let leaderboardMode = 'freeplay';
+
+/** Set the active leaderboard mode tab visually. */
+function setActiveLeaderboardMode(mode) {
+  document.querySelectorAll('.leaderboard-mode-tab').forEach(tab => {
+    const isActive = tab.dataset.mode === mode;
+    tab.classList.toggle('active', isActive);
+    tab.setAttribute('aria-selected', isActive);
+  });
+}
+
 /** Set the active leaderboard tab visually. */
 function setActiveLeaderboardTab(period) {
   document.querySelectorAll('.leaderboard-tab').forEach(tab => {
@@ -415,7 +439,10 @@ async function fetchLeaderboard(period) {
   try {
     const headers = {};
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-    const res = await fetch(`/api/scores/leaderboard?mode=freeplay&period=${period}`, { headers });
+    const url = leaderboardMode === 'multiplayer'
+      ? `/api/scores/leaderboard/multiplayer?period=${period}`
+      : `/api/scores/leaderboard?mode=freeplay&period=${period}`;
+    const res = await fetch(url, { headers });
     if (res.status === 401) {
       container.innerHTML =
         '<div class="leaderboard-error">Log in to view the leaderboard 🔒</div>';
@@ -423,7 +450,11 @@ async function fetchLeaderboard(period) {
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    renderLeaderboard(data.leaderboard);
+    if (leaderboardMode === 'multiplayer') {
+      renderMultiplayerLeaderboard(data.leaderboard);
+    } else {
+      renderLeaderboard(data.leaderboard);
+    }
   } catch {
     container.innerHTML =
       '<div class="leaderboard-error">Leaderboard unavailable — start the server to see rankings</div>';
@@ -468,6 +499,38 @@ function renderLeaderboard(entries) {
       ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
       <span class="leaderboard-name">${name}</span>
       <span class="leaderboard-score">${score.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+
+/** Render multiplayer leaderboard with wins, W/L, avg score. */
+function renderMultiplayerLeaderboard(entries) {
+  const container = document.querySelector('[data-bind="leaderboard-table"]');
+
+  if (!entries || entries.length === 0) {
+    container.innerHTML = '<div class="leaderboard-empty">No multiplayer matches yet — challenge someone! ⚔️</div>';
+    return;
+  }
+
+  const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+  const currentUser = Storage.getUsername?.() || null;
+
+  container.innerHTML = entries.map((entry, i) => {
+    const rank = entry.rank ?? i + 1;
+    const medal = medals[rank] || '';
+    const rankClass = rank <= 3 ? ` rank-${rank}` : '';
+    const userClass = currentUser && entry.username === currentUser ? ' current-user' : '';
+    const name = escapeHTML(entry.username || 'Anonymous');
+
+    return `<div class="leaderboard-row${rankClass}${userClass}" role="listitem">
+      ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
+      <span class="leaderboard-name">${name}</span>
+      <span class="leaderboard-stats">
+        <span class="leaderboard-wins">${entry.wins}W</span>
+        <span class="leaderboard-winrate">${entry.winRate}%</span>
+        <span class="leaderboard-matches">${entry.matchesPlayed} played</span>
+      </span>
+      <span class="leaderboard-score">${(entry.avgScore ?? 0).toLocaleString()} avg</span>
     </div>`;
   }).join('');
 }

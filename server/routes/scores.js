@@ -65,6 +65,49 @@ router.get('/leaderboard', requireAuth, (req, res) => {
   res.json({ leaderboard, mode, period });
 });
 
+/** GET /api/scores/leaderboard/multiplayer?period=all|weekly|daily&limit=20 */
+router.get('/leaderboard/multiplayer', requireAuth, (req, res) => {
+  const { period = 'all', limit = 20 } = req.query;
+
+  let dateFilter = '';
+  if (period === 'daily') {
+    dateFilter = "AND date(m.finished_at) = date('now')";
+  } else if (period === 'weekly') {
+    dateFilter = "AND m.finished_at >= datetime('now', '-7 days')";
+  }
+
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT u.id as user_id, u.username,
+           COUNT(DISTINCT mp.match_id) as matches_played,
+           SUM(mp.score) as total_score,
+           ROUND(AVG(mp.score), 0) as avg_score,
+           SUM(CASE WHEN mp.score = (
+             SELECT MAX(mp2.score) FROM match_players mp2 WHERE mp2.match_id = mp.match_id
+           ) THEN 1 ELSE 0 END) as wins
+    FROM match_players mp
+    JOIN users u ON mp.user_id = u.id
+    JOIN matches m ON mp.match_id = m.id
+    WHERE m.status = 'finished' ${dateFilter}
+    GROUP BY u.id
+    ORDER BY wins DESC, total_score DESC
+    LIMIT ?
+  `).all(Math.min(Number(limit), 100));
+
+  const leaderboard = rows.map((row, i) => ({
+    rank: i + 1,
+    username: row.username,
+    wins: row.wins,
+    matchesPlayed: row.matches_played,
+    winRate: row.matches_played > 0 ? Math.round((row.wins / row.matches_played) * 100) : 0,
+    totalScore: row.total_score,
+    avgScore: row.avg_score,
+    isCurrentUser: req.user?.id === row.user_id,
+  }));
+
+  res.json({ leaderboard, mode: 'multiplayer', period });
+});
+
 /** GET /api/scores/me — get current user's scores */
 router.get('/me', requireAuth, (req, res) => {
   const db = getDb();

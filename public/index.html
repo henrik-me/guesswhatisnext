@@ -114,7 +114,11 @@
         <h2>🏆 Leaderboard</h2>
         <p class="screen-description">Top players ranked by score</p>
       </header>
-      <div class="leaderboard-tabs" role="tablist" aria-label="Leaderboard period filter">
+      <div class="leaderboard-mode-tabs" role="tablist" aria-label="Leaderboard mode">
+        <button class="leaderboard-mode-tab active" data-action="leaderboard-mode" data-mode="freeplay" role="tab" aria-selected="true">🎮 Free Play</button>
+        <button class="leaderboard-mode-tab" data-action="leaderboard-mode" data-mode="multiplayer" role="tab" aria-selected="false">⚔️ Multiplayer</button>
+      </div>
+      <div class="leaderboard-tabs" role="tablist" aria-label="Leaderboard period filter" data-bind="leaderboard-period-tabs">
         <button class="leaderboard-tab active" data-action="leaderboard-tab" data-period="alltime" role="tab" aria-selected="true">All Time</button>
         <button class="leaderboard-tab" data-action="leaderboard-tab" data-period="weekly" role="tab" aria-selected="false">Weekly</button>
         <button class="leaderboard-tab" data-action="leaderboard-tab" data-period="daily" role="tab" aria-selected="false">Daily</button>
