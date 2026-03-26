@@ -68,4 +68,11 @@ describe('GET /api/puzzles', () => {
     const res = await getAgent().get('/api/puzzles');
     expect(res.status).toBe(401);
   });
+
+  test('has at least 20 puzzles seeded', async () => {
+    const res = await getAgent()
+      .get('/api/puzzles')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.body.length).toBeGreaterThanOrEqual(20);
+  });
 });
