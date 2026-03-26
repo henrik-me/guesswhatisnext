@@ -1104,6 +1104,48 @@ body::before {
   max-width: 300px;
 }
 
+/* Room config controls */
+.room-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 300px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+.room-config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.room-config-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.room-config-select {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  font-family: var(--font-main);
+  cursor: pointer;
+  min-width: 4rem;
+  text-align: center;
+}
+
+.room-config-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-glow);
+}
+
 /* ===========================
    Waiting Lobby
    =========================== */
@@ -1146,6 +1188,14 @@ body::before {
   outline-offset: 2px;
 }
 
+.lobby-player-count {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+  text-shadow: 0 0 8px var(--color-secondary-glow);
+  letter-spacing: 0.04em;
+}
+
 .lobby-status {
   display: flex;
   align-items: center;
@@ -1183,6 +1233,13 @@ body::before {
 
 .lobby-player-icon {
   font-size: 1.2rem;
+}
+
+.lobby-player-number {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  min-width: 1.5rem;
 }
 
 .lobby-player-name {

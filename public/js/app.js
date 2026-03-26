@@ -950,7 +950,10 @@ async function createRoom() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ totalRounds: 5 }),
+      body: JSON.stringify({
+        totalRounds: Number(document.getElementById('room-rounds')?.value) || 5,
+        maxPlayers: Number(document.getElementById('room-max-players')?.value) || 2,
+      }),
     });
     const data = await res.json();
     if (handle401(res)) return;
@@ -962,12 +965,14 @@ async function createRoom() {
     matchState.roomCode = data.roomCode;
     matchState.myName = authUsername;
     matchState.players = [authUsername];
+    matchState.maxPlayers = data.maxPlayers || 2;
 
     // Join via WebSocket
     ws.send(JSON.stringify({ type: 'join', roomCode: data.roomCode }));
 
     // Show lobby
     bindText('lobby-room-code', data.roomCode);
+    bindText('lobby-player-count', `Players: 1/${matchState.maxPlayers}`);
     bindText('lobby-status', 'Waiting for opponent...');
     renderLobbyPlayers();
     showScreen('lobby');
@@ -1044,9 +1049,13 @@ function onPlayerJoined(msg) {
 /** Handle 'lobby-state' — authoritative player list from server. */
 function onLobbyState(msg) {
   matchState.lobbyPlayers = msg.players || [];
+  matchState.maxPlayers = msg.maxPlayers || matchState.maxPlayers || 2;
   matchState.isHost = msg.players.some(p => p.username === authUsername && p.isHost);
 
   const count = matchState.lobbyPlayers.length;
+  const max = matchState.maxPlayers;
+  bindText('lobby-player-count', `Players: ${count}/${max}`);
+
   if (matchState.isHost) {
     bindText('lobby-status', count >= 2 ? 'Ready to start!' : 'Waiting for players...');
   } else {
@@ -1066,9 +1075,10 @@ function renderLobbyPlayers() {
     ? matchState.lobbyPlayers
     : matchState.players.map(name => ({ username: name, isHost: false }));
 
-  container.innerHTML = players.map(p => {
+  container.innerHTML = players.map((p, i) => {
     const isYou = p.username === authUsername;
     return `<div class="lobby-player-row" role="listitem">
+      <span class="lobby-player-number">${i + 1}.</span>
       <span class="lobby-player-icon">${p.isHost ? '👑' : '⚔️'}</span>
       <span class="lobby-player-name">${escapeHTML(p.username)}</span>
       ${p.isHost ? '<span class="lobby-player-tag host-tag">Host</span>' : ''}

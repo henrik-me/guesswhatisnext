@@ -167,6 +167,30 @@
         <p class="screen-description">Challenge another player in real-time</p>
       </header>
       <nav class="multiplayer-menu" aria-label="Multiplayer options">
+        <div class="room-config" aria-label="Room settings">
+          <div class="room-config-row">
+            <label class="room-config-label" for="room-max-players">👥 Max Players</label>
+            <select class="room-config-select" id="room-max-players" aria-label="Maximum players">
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+            </select>
+          </div>
+          <div class="room-config-row">
+            <label class="room-config-label" for="room-rounds">🔄 Rounds</label>
+            <select class="room-config-select" id="room-rounds" aria-label="Number of rounds">
+              <option value="3">3</option>
+              <option value="5" selected>5</option>
+              <option value="10">10</option>
+            </select>
+          </div>
+        </div>
         <button class="btn btn-primary" data-action="create-room" aria-label="Create a new room">🏠 Create Room</button>
         <div class="join-room-group">
           <input class="auth-input join-room-input" id="join-room-code" type="text" placeholder="Enter room code" maxlength="6" aria-label="Room code">
@@ -187,6 +211,7 @@
         <span class="lobby-code" data-bind="lobby-room-code" aria-label="Room code"></span>
         <button class="lobby-copy-btn" data-action="copy-room-code" aria-label="Copy room code">📋</button>
       </div>
+      <div class="lobby-player-count" data-bind="lobby-player-count" aria-label="Player count"></div>
       <div class="lobby-status">
         <div class="lobby-spinner" aria-hidden="true"></div>
         <p class="lobby-waiting-text" data-bind="lobby-status">Waiting for opponent...</p>
