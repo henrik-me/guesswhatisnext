@@ -466,9 +466,70 @@ Commit after every meaningful, working change. Specifically:
 - **Do not** commit broken/half-done work to `main`
 
 ### Branch Strategy
-- Phase 1: Work directly on `main` (single developer, rapid iteration)
-- Phase 2: Feature branches (`feat/leaderboard`, `feat/websocket`) with PR merges
-- Phase 3: Feature branches with CI/CD pipeline — push to `main` auto-deploys to staging, manual approval promotes to production
+- Phase 1–2: Work directly on `main` (single developer, rapid iteration)
+- Phase 3+: All changes via **pull requests** to `main` — no direct commits to main
+  - Feature branches: `feat/<step-id>` (e.g., `feat/puzzle-expansion`, `feat/mp-game-logic`)
+  - CI runs lint + tests on every PR
+  - At least 1 approval required before merge
+  - Push to `main` auto-deploys to staging, manual approval promotes to production
+- Branch protection rules on `main`:
+  - Require PR with review before merging
+  - Require status checks to pass (lint, test, build)
+  - No force pushes
+  - No direct commits
+
+### Parallel Agent Workflow
+
+When running multiple AI agents in parallel to implement independent tasks:
+
+**1. Isolation strategy — use one of:**
+- **Git worktrees** (preferred): Each agent works in its own worktree on a separate branch, avoiding file conflicts entirely. Merge via PRs.
+  ```bash
+  git worktree add ../gwn-step-22 -b feat/health-endpoint
+  git worktree add ../gwn-step-27 -b feat/puzzles-to-db
+  ```
+- **Single worktree** (fallback): All agents share one working directory. Wait for all agents to complete, then review and split into separate commits. Higher conflict risk.
+
+**2. Commit strategy (single worktree):**
+- Do NOT let agents commit independently — they will step on each other's changes
+- Wait for all agents to finish
+- Review the combined diff: `git diff --stat`
+- Stage and commit each task's files separately with meaningful commit messages
+- Verify each commit independently (server starts, tests pass) before moving to the next
+- If agents modified the same file, manually review and merge the changes
+
+**3. Verification before committing:**
+- Delete the database (`data/game.db`) to test clean schema creation
+- Start the server — verify no import errors, no missing modules
+- Run integration tests against each new feature
+- Check for import conflicts (two agents adding routes to `server/index.js`)
+
+**4. Lessons learned from parallel execution:**
+
+| Issue | Cause | Prevention |
+|---|---|---|
+| Agents commit each other's changes | Shared worktree, agents run `git add -A && git commit` | Use worktrees, or instruct agents not to commit |
+| Health endpoint bundled into achievements commit | Both modified `server/index.js`, achievements committed first | Separate worktrees, or stage files per-task |
+| Agents compete for port 3000 during testing | Each agent starts server to verify | Accept this — agents retry, or assign different ports |
+| Schema migrations conflict | Multiple agents add columns/tables to `schema.sql` | Review combined schema after all agents finish |
+| `server/index.js` route registration conflicts | Multiple agents add `app.use('/api/...', ...)` lines | Designate `index.js` as a merge-coordination file |
+
+**5. High-conflict files to watch:**
+These files are modified by almost every feature — expect merge work:
+- `server/index.js` — route registration, middleware setup
+- `server/db/schema.sql` — table definitions
+- `server/db/connection.js` — migrations, seeding
+- `public/index.html` — new screens, buttons
+- `public/js/app.js` — event handlers, screen navigation
+- `public/css/style.css` — new component styles
+- `server/ws/matchHandler.js` — multiplayer logic
+
+**6. Ideal parallel grouping:**
+Group tasks to minimize file overlap:
+- ✅ Backend-only tasks (different route files) can safely parallelize
+- ⚠️ Tasks that both add HTML screens will conflict in `index.html`
+- ⚠️ Tasks that both modify `matchHandler.js` should be sequential
+- ❌ Never parallelize two tasks that both rewrite the same function
 
 ### Deployment Environments
 | Environment | Trigger | Approval | Infrastructure | Rollback |
