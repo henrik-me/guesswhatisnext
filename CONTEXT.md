@@ -44,16 +44,13 @@ This file tracks the current state of the project: what's been done, what's next
 
 **Parallelism:** 14 & 16 parallel; 16 & 17 parallel → 18; 15 & 19 → 20
 
-## Phase 3 — Azure, Security, Content & Monitoring
+## Phase 3 — Security & Game Features
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
 | 21 | Auth hardening | ✅ Done | — | System account, API key auth, rate limiting, all endpoints auth'd |
 | 22 | Enhanced health endpoint | ⬜ Pending | 21 | Deep checks (DB, WS, disk, uptime), system-auth only |
 | 23 | Local container dev | ✅ Done | — | Dockerfile, docker-compose.yml, .dockerignore, local dev in container |
-| 24 | Azure infrastructure | ⬜ Pending | 23 | Container Apps Environment + gwn-staging + gwn-prod apps, GHCR |
-| 25 | CI/CD pipeline | ⬜ Pending | 24 | Build once → staging → approval → promote to prod → verify → rollback |
-| 26 | Health monitor | ⬜ Pending | 22, 25 | GH Actions cron every 5 min, creates issues on failure |
 | 27 | Puzzles to DB | ⬜ Pending | 21 | Puzzles table, seed script, API endpoint, client fetch |
 | 28 | Puzzle expansion | ⬜ Pending | 27 | 60+ new puzzles, 7 new categories |
 | 29 | Achievements | ⬜ Pending | 21 | Achievements table, unlock logic, 10+ badges |
@@ -61,9 +58,19 @@ This file tracks the current state of the project: what's been done, what's next
 | 31 | Settings & audio | ⬜ Pending | — | Sound effects, theme, timer duration, settings screen |
 | 32 | Game enhancements | ⬜ Pending | 27 | Difficulty selector, skip, answer animation, confetti |
 
-**Parallelism:** 21, 23, 31 start immediately; 22+27+29 after 21; 24 after 23; 25 after 24; 26 after 22+25
+**Parallelism:** 22, 27, 29, 31 can all start now (no unfinished deps). 28+32 after 27. 30 after 29.
 
-## Phase 4 — Multi-Player Expansion (2→10 Players)
+## Phase 4 — Infrastructure & Deployment
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 24 | Azure infrastructure | ⬜ Pending | 23 | Container Apps Environment + gwn-staging + gwn-prod apps, GHCR |
+| 25 | CI/CD pipeline | ⬜ Pending | 24 | Build once → staging → approval → promote to prod → verify → rollback |
+| 26 | Health monitor | ⬜ Pending | 22, 25 | GH Actions cron every 5 min, creates issues on failure |
+
+**Parallelism:** Phase 4 runs independently from Phases 3 & 5. Step 26 bridges Phases 3 & 4 (needs health endpoint from Phase 3 + CI/CD from Phase 4).
+
+## Phase 5 — Multi-Player Expansion (2→10 Players)
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
@@ -75,7 +82,7 @@ This file tracks the current state of the project: what's been done, what's next
 | 38 | N-player rematch | ⬜ Pending | 37 | Host "New Match" flow, ready-up for non-hosts, auto-join lobby |
 | 39 | Testing & polish | ⬜ Pending | 36, 37, 38 | N-player server tests, lobby/match UI tests, animations |
 
-**Parallelism:** 34 & 35 parallel after 33; 36 after both; 37+38 sequential; 39 after all
+**Parallelism:** 34 & 35 parallel after 33; 36 after both; 37+38 sequential; 39 after all. Phase 5 can run in parallel with Phases 3 & 4.
 
 ### Deployment Architecture
 
@@ -106,7 +113,13 @@ This file tracks the current state of the project: what's been done, what's next
   GitHub Issue: "service health issue: {error}"
 ```
 
-### Key Design Decisions (Phase 3)
+### Key Design Decisions (Phase 3 — Security & Game Features)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| System auth | API key (X-API-Key header) | Simple, no JWT expiry concerns for automated clients |
+
+### Key Design Decisions (Phase 4 — Infrastructure & Deployment)
 
 | Decision | Choice | Rationale |
 |---|---|---|
@@ -115,9 +128,8 @@ This file tracks the current state of the project: what's been done, what's next
 | Container registry | GitHub Container Registry | Free for private repos, integrated with GH Actions |
 | Staging→Prod gate | GH Environment manual approval | Prevents untested code reaching production |
 | Health monitoring | GitHub Actions cron | No extra infra, creates issues in same repo |
-| System auth | API key (X-API-Key header) | Simple, no JWT expiry concerns for automated clients |
 
-### Key Design Decisions (Phase 4 — Multi-Player Expansion)
+### Key Design Decisions (Phase 5 — Multi-Player Expansion)
 
 | Decision | Choice | Rationale |
 |---|---|---|
