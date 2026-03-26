@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ Phase 1 & Phase 2 Complete — Phase 3 Planned
+## Project Status: ✅ Phase 1 & Phase 2 Complete — Phase 3 In Progress — Phase 4 Planned
 
 ---
 
@@ -63,6 +63,20 @@ This file tracks the current state of the project: what's been done, what's next
 
 **Parallelism:** 21, 23, 31 start immediately; 22+27+29 after 21; 24 after 23; 25 after 24; 26 after 22+25
 
+## Phase 4 — Multi-Player Expansion (2→10 Players)
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 33 | Room & lobby protocol | ⬜ Pending | — | Schema (max_players, host_user_id), lobby-state broadcasts, host start-match, join validation |
+| 34 | N-player game logic | ⬜ Pending | 33 | Rewrite endMatch for rankings, disconnect→drop, match continues with ≥2 players |
+| 35 | Lobby UI for N players | ⬜ Pending | 33 | Host controls (max players, rounds, start button), player roster, waiting for host |
+| 36 | N-player match UI | ⬜ Pending | 34, 35 | Dynamic scoreboard, N-player round results, placement-based match-over |
+| 37 | Reconnection & edge cases | ⬜ Pending | 34, 36 | Full state restore, host transfer, full-room rejection, last-player-standing |
+| 38 | N-player rematch | ⬜ Pending | 37 | Host "New Match" flow, ready-up for non-hosts, auto-join lobby |
+| 39 | Testing & polish | ⬜ Pending | 36, 37, 38 | N-player server tests, lobby/match UI tests, animations |
+
+**Parallelism:** 34 & 35 parallel after 33; 36 after both; 37+38 sequential; 39 after all
+
 ### Deployment Architecture
 
 ```
@@ -103,6 +117,18 @@ This file tracks the current state of the project: what's been done, what's next
 | Health monitoring | GitHub Actions cron | No extra infra, creates issues in same repo |
 | System auth | API key (X-API-Key header) | Simple, no JWT expiry concerns for automated clients |
 
+### Key Design Decisions (Phase 4 — Multi-Player Expansion)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Max players per room | 2–10 (host configurable) | Flexible; 2 preserves current behavior, 10 caps complexity |
+| Room host model | Creator is host, controls start | Clean UX; host decides when enough players have joined |
+| Host disconnect (lobby) | Auto-transfer to next player | Prevents room death from host leaving |
+| Player disconnect (active) | 30s reconnect → drop (score frozen) | Match continues for remaining players (≥2) |
+| Winner logic | Full ranking with tie handling | Placements (1st/2nd/3rd…) instead of binary win/lose |
+| Spectator mode | Deferred | Not needed for initial N-player support; add later |
+| Rematch flow | Host "New Match" → auto-join lobby | Simpler than N-player ready-up counting |
+
 ---
 
 ## Key Decisions Made
@@ -113,6 +139,9 @@ This file tracks the current state of the project: what's been done, what's next
 | Backend stack | Node.js + Express | Same language as frontend, easy WebSocket support |
 | Database | SQLite → PostgreSQL | Start simple, migrate when scaling |
 | Multiplayer | Both async + real-time | Leaderboards for casual, head-to-head for competitive |
+| Multi-player rooms | 2–10 players, host-controlled | Host creates room, configures settings, starts when ready |
+| Multi-player disconnect | Drop after 30s, match continues | Avoids ending match for all when one player leaves |
+| Multi-player rankings | Full placement with ties | More meaningful than binary win/lose for N players |
 | Puzzle format | Emoji/text + images | Start with emoji, layer in images |
 | Timing | Timed rounds, speed bonus | Adds excitement and skill differentiation |
 | Staging infra | Container Apps (not F1) | Environment parity with prod, same Dockerfile + deploy method |

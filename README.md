@@ -2,7 +2,7 @@
 
 A browser-based puzzle game where you're shown a sequence of items — emoji, text, or images — that follow a pattern, and you must guess what comes next!
 
-Features single-player (free play + daily challenge), global leaderboards, and real-time head-to-head multiplayer.
+Features single-player (free play + daily challenge), global leaderboards, and real-time multiplayer (2–10 players).
 
 ## How to Play
 
@@ -17,10 +17,13 @@ Features single-player (free play + daily challenge), global leaderboards, and r
 
 ### Multiplayer
 1. Click **⚔️ Multiplayer** and log in (or register)
-2. **Create Room** — get a room code to share with a friend
+2. **Create Room** — get a room code to share with friends (2–10 players)
 3. **Join Room** — enter a friend's room code
-4. Play head-to-head: same puzzles, best of 5 rounds
-5. After the match: view results, request a rematch, or check match history
+4. As host: configure max players and rounds, click **Start Game** when ready
+5. All players answer the same puzzles simultaneously
+6. After the match: view full rankings, request a rematch, or check match history
+
+> **Note:** The host (room creator) controls when the game starts. Non-hosts see a "Waiting for host" message.
 
 ### Scoring
 
@@ -34,7 +37,9 @@ Features single-player (free play + daily challenge), global leaderboards, and r
 
 ### Leaderboard
 - View global rankings from the **🏆 Leaderboard** on the home screen
+- Switch between **🎮 Free Play** and **⚔️ Multiplayer** leaderboards
 - Filter by: All Time, Weekly, or Daily
+- Multiplayer leaderboard shows wins, win rate, and average score
 - Requires an account (register via Multiplayer)
 
 ---
@@ -182,8 +187,8 @@ Image is built once → deployed to staging → **same bytes** promoted to prod 
 | `POST` | `/api/scores` | Yes (JWT) | Submit a game score |
 | `GET` | `/api/scores/leaderboard` | Yes (JWT/API key) | Leaderboard (mode, period, limit) |
 | `GET` | `/api/scores/me` | Yes (JWT) | User's score history |
-| `POST` | `/api/matches` | Yes (JWT) | Create a match room |
-| `POST` | `/api/matches/join` | Yes (JWT) | Join by room code |
+| `POST` | `/api/matches` | Yes (JWT) | Create a match room (accepts maxPlayers, totalRounds) |
+| `POST` | `/api/matches/join` | Yes (JWT) | Join by room code (validates capacity) |
 | `GET` | `/api/matches/:id` | Yes (JWT) | Match status + players |
 | `GET` | `/api/matches/history` | Yes (JWT) | User's match history |
 
@@ -192,6 +197,19 @@ Image is built once → deployed to staging → **same bytes** promoted to prod 
 ### WebSocket
 
 Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
+
+**Key WS message types:**
+| Direction | Type | Description |
+|---|---|---|
+| Client→Server | `join` | Join a room by code |
+| Client→Server | `start-match` | Host starts the game (Phase 4) |
+| Client→Server | `answer` | Submit answer with timing |
+| Server→Client | `lobby-state` | Player roster update (Phase 4) |
+| Server→Client | `round` | New round puzzle |
+| Server→Client | `roundResult` | Round scores for all players |
+| Server→Client | `gameOver` | Final rankings with placements |
+| Server→Client | `player-disconnected` | Player left, reconnect window |
+| Server→Client | `player-dropped` | Player eliminated (timeout) |
 
 ### Useful Commands
 

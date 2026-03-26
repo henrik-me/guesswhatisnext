@@ -30,7 +30,7 @@ guesswhatisnext/
 │   │   ├── scores.js               # Score submission + leaderboards
 │   │   ├── matches.js              # Room create/join + match history
 │   │   └── puzzles.js              # Puzzle API
-│   ├── ws/matchHandler.js          # WebSocket head-to-head match engine
+│   ├── ws/matchHandler.js          # WebSocket match engine (2–10 players)
 │   ├── db/
 │   │   ├── schema.sql              # SQLite table definitions
 │   │   └── connection.js           # DB init + query helpers
@@ -129,6 +129,25 @@ guesswhatisnext/
 - **Data layer** (`puzzles.js`) is pure data — exportable objects, no side effects
 - **Storage layer** (`storage.js`) abstracts all persistence behind a clean API
 - **Server routes** handle HTTP API, middleware handles auth, WebSocket handler manages real-time matches
+
+### Multiplayer Architecture (Phase 4)
+
+The multiplayer system supports 2–10 players per room with a host-controlled lobby:
+
+1. **Room lifecycle:** CREATED → LOBBY (players joining) → ACTIVE (game running) → FINISHED
+2. **Host model:** Room creator is host; configures max players (2–10) and rounds (3/5/7/10); clicks Start when ready
+3. **Host transfer:** If host disconnects in lobby, next player becomes host automatically
+4. **During gameplay:** All players answer the same puzzles simultaneously; round resolves when all answer or timer expires
+5. **Disconnect handling:** 30s reconnect window → player "dropped" (score frozen, match continues if ≥2 players remain)
+6. **Rankings:** Full placement with tie handling (not just winner/loser) — 🥇🥈🥉 for top 3
+7. **Scoreboard:** Dynamic N-player scoreboard during match; dropped players shown dimmed
+
+**Key WS messages (Phase 4 additions):**
+- `lobby-state` — Full roster broadcast on every join/leave
+- `start-match` — Host-initiated game start
+- `player-disconnected` / `player-reconnected` — Replaces singular "opponent" messages
+- `player-dropped` — Player eliminated after reconnect timeout
+- `gameOver.results[].placement` — Full ranking for all players
 
 ### Multiplayer-Ready Design (Phase 1 prep)
 These rules apply even during Phase 1 to ensure a smooth Phase 2 transition:
@@ -321,8 +340,12 @@ Every endpoint must have tests for:
 - Reject connection with invalid token
 - Join room flow: join → matched event
 - Full match: both players answer all rounds → gameOver
-- Forfeit: one player disconnects → opponent wins
-- Reconnection: disconnect + reconnect within 30s → resume match
+- N-player match: 4 players join → host starts → all answer → full rankings
+- Forfeit: one player disconnects → dropped after 30s → match continues with remaining
+- Last player standing: all but one disconnect → match ends, last player wins
+- Reconnection: disconnect + reconnect within 30s → resume match with full state restore
+- Host transfer: host disconnects in lobby → next player becomes host
+- Full room: join when room at max_players → error response
 - Invalid message types → error response
 
 ### E2E Tests — Critical User Flows
@@ -339,7 +362,7 @@ Run with Playwright against a live server instance (started in test setup):
    - Register new user → verify logged in → reload page → verify still logged in (token persisted) → log out
 
 4. **Multiplayer flow:**
-   - Register 2 users → User A creates room → User B joins room → both play rounds → match result displayed
+   - Register 2+ users → User A creates room (configures max players, rounds) → Users B-D join → Host starts → all play rounds → full rankings displayed with placements
 
 5. **Leaderboard flow:**
    - Register → play free play → submit score → navigate to leaderboard → verify score appears
