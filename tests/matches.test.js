@@ -43,6 +43,14 @@ describe('POST /api/matches', () => {
 
     expect(res.status).toBe(401);
   });
+
+  test('rejects maxPlayers out of range', async () => {
+    const res = await getAgent()
+      .post('/api/matches')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ maxPlayers: 15 });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('POST /api/matches/join', () => {
