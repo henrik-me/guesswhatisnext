@@ -154,6 +154,7 @@ function handleJoin(ws, roomCode) {
 
       // Restore player in room
       room.players.set(ws.user.id, ws);
+      room.droppedPlayers.delete(ws.user.id);
 
       // Send reconnect state to the rejoining player
       ws.send(JSON.stringify({
@@ -383,7 +384,7 @@ function handleAnswer(ws, msg) {
 
   ws.send(JSON.stringify({ type: 'answer-received', answerId: msg.answerId }));
 
-  // Check if both players have answered
+  // Check if all active players have answered
   if (Object.keys(roundAnswers).length >= room.players.size) {
     clearTimeout(room.roundTimer);
     resolveRound(ws.roomCode);
@@ -440,31 +441,63 @@ function resolveRound(roomCode) {
   }
 }
 
+/** Assign ranks to a sorted-descending array of score entries, handling ties. */
+function assignRanks(sortedEntries) {
+  let currentRank = 1;
+  for (let i = 0; i < sortedEntries.length; i++) {
+    if (i > 0 && sortedEntries[i].total === sortedEntries[i - 1].total) {
+      sortedEntries[i].rank = sortedEntries[i - 1].rank;
+    } else {
+      sortedEntries[i].rank = currentRank;
+    }
+    currentRank++;
+  }
+  return sortedEntries;
+}
+
 /** End the match: determine winner, persist to DB, broadcast results, keep room for rematch. */
 function endMatch(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
-  // Build final scores keyed by username
-  const finalScores = {};
+  // Collect scores for all players (active + dropped)
   const userScores = [];
   room.players.forEach((ws, userId) => {
-    const total = room.scores[userId] || 0;
-    finalScores[ws.user.username] = total;
-    userScores.push({ userId, username: ws.user.username, total });
+    userScores.push({ userId, username: ws.user.username, total: room.scores[userId] || 0 });
+  });
+  room.droppedPlayers.forEach(({ username }, userId) => {
+    if (!userScores.find(e => e.userId === userId)) {
+      userScores.push({ userId, username, total: 0 });
+    }
   });
 
-  // Determine winner
+  // Sort descending by score and assign ranks with tie handling
   userScores.sort((a, b) => b.total - a.total);
-  const winner = userScores[0].total === userScores[1].total
-    ? null
-    : userScores[0].username;
+  assignRanks(userScores);
 
-  broadcastToRoom(roomCode, {
-    type: 'gameOver',
-    winner,
-    scores: finalScores,
-    results: userScores.map(({ username, total }) => ({ username, score: total })),
+  // Winner is rank-1 player (null if tie for 1st)
+  const rank1Players = userScores.filter(e => e.rank === 1);
+  const winner = rank1Players.length === 1 ? rank1Players[0].username : null;
+  const totalPlayers = userScores.length;
+
+  // Build per-player gameOver with personalised isYou / yourRank
+  room.players.forEach((ws, userId) => {
+    const entry = userScores.find(e => e.userId === userId);
+    sendTo(ws, {
+      type: 'gameOver',
+      winner,
+      totalPlayers,
+      rankings: userScores.map(e => ({
+        username: e.username,
+        score: e.total,
+        rank: e.rank,
+        isYou: e.userId === userId,
+      })),
+      yourRank: entry ? entry.rank : totalPlayers,
+      // Legacy fields for backward compatibility with 2-player clients
+      scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
+      results: userScores.map(e => ({ username: e.username, score: e.total })),
+    });
   });
 
   // Persist to database
@@ -487,17 +520,17 @@ function endMatch(roomCode) {
     // Non-fatal
   }
 
-  // Check achievements for each player
+  // Check achievements for all players
   try {
-    for (const { userId, total } of userScores) {
-      const isWin = winner && userScores[0].userId === userId;
+    for (const { userId, total, rank } of userScores) {
+      const isWin = rank === 1 && rank1Players.length === 1;
       const context = {
         score: total,
         correctCount: 0,
         totalRounds: room.totalRounds,
         bestStreak: 0,
         mode: 'multiplayer',
-        isWin: !!isWin,
+        isWin,
         fastestAnswerMs: null,
       };
       const unlocked = checkAndUnlockAchievements(userId, context);
@@ -512,7 +545,7 @@ function endMatch(roomCode) {
     // Non-fatal
   }
 
-  // Store player pair for potential rematch
+  // Store player list for potential rematch
   finishedPairs.set(roomCode, userScores.map(({ userId, username }) => ({ userId, username })));
 
   // Mark match as finished but keep room alive for rematch for 60s
@@ -549,11 +582,30 @@ function handleDisconnect(ws) {
 
   const roomCode = ws.roomCode;
 
-  // If match is active, give 30s to reconnect before forfeiting
-  if (room.started && room.players.size === 2) {
+  // If match is active, track as dropped and give reconnect window
+  if (room.started) {
     room.players.delete(ws.user.id);
+    room.droppedPlayers.set(ws.user.id, { username: ws.user.username });
 
-    // Notify remaining player about temporary disconnect
+    // If only 1 player remains, end immediately — that player wins
+    if (room.players.size <= 1) {
+      // Cancel any pending reconnect timers for previously dropped players
+      disconnected.forEach((info, key) => {
+        if (key.endsWith(`:${roomCode}`) && info.forfeitTimer) {
+          clearTimeout(info.forfeitTimer);
+          disconnected.delete(key);
+        }
+      });
+
+      if (room.players.size === 1) {
+        handleForfeit(roomCode, ws.user.id, ws.user.username);
+      } else {
+        cleanupRoom(roomCode);
+      }
+      return;
+    }
+
+    // More than 1 player still active — notify and give reconnect window
     broadcastToRoom(roomCode, {
       type: 'opponent-disconnected',
       username: ws.user.username,
@@ -562,7 +614,16 @@ function handleDisconnect(ws) {
     const dcKey = `${ws.user.id}:${roomCode}`;
     const forfeitTimer = setTimeout(() => {
       disconnected.delete(dcKey);
-      handleForfeit(roomCode, ws.user.id, ws.user.username);
+      // Player didn't reconnect — they stay as dropped.
+      // Check if we still have enough players
+      const currentRoom = rooms.get(roomCode);
+      if (currentRoom && currentRoom.started && currentRoom.players.size <= 1) {
+        if (currentRoom.players.size === 1) {
+          handleForfeit(roomCode, ws.user.id, ws.user.username);
+        } else {
+          cleanupRoom(roomCode);
+        }
+      }
     }, RECONNECT_WINDOW_MS);
 
     disconnected.set(dcKey, {
@@ -603,61 +664,83 @@ function handleDisconnect(ws) {
     broadcastLobbyState(roomCode);
   }
 
-  if (room.started && room.players.size < 2) {
-    // Only one player left and no reconnection window (shouldn't normally reach here)
-    if (room.players.size === 1) {
-      handleForfeit(roomCode, ws.user.id, ws.user.username);
-    } else {
-      cleanupRoom(roomCode);
-    }
-    return;
-  }
-
   // Clean up empty rooms
   if (room.players.size === 0) {
     cleanupRoom(roomCode);
   }
 }
 
-/** Handle forfeit — remaining player wins. */
+/** Handle forfeit — remaining player wins (last player standing). */
 function handleForfeit(roomCode, forfeitUserId, forfeitUsername) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
-  if (room.players.size === 1) {
-    const [[remainingId, remainingWs]] = [...room.players.entries()];
-    const finalScores = {};
-    finalScores[remainingWs.user.username] = room.scores[remainingId] || 0;
-    finalScores[forfeitUsername] = room.scores[forfeitUserId] || 0;
+  // Clear round timer if active
+  if (room.roundTimer) {
+    clearTimeout(room.roundTimer);
+    room.roundTimer = null;
+  }
 
-    sendTo(remainingWs, {
+  // Collect all players (active + dropped)
+  const userScores = [];
+  room.players.forEach((ws, userId) => {
+    userScores.push({ userId, username: ws.user.username, total: room.scores[userId] || 0 });
+  });
+  room.droppedPlayers.forEach(({ username }, userId) => {
+    if (!userScores.find(e => e.userId === userId)) {
+      userScores.push({ userId, username, total: 0 });
+    }
+  });
+
+  // Sort and assign ranks
+  userScores.sort((a, b) => b.total - a.total);
+  assignRanks(userScores);
+
+  const totalPlayers = userScores.length;
+  // The last remaining active player wins
+  let winnerUsername = null;
+  if (room.players.size === 1) {
+    const [[, remainingWs]] = [...room.players.entries()];
+    winnerUsername = remainingWs.user.username;
+  }
+
+  // Send personalised gameOver to each remaining connected player
+  room.players.forEach((ws, userId) => {
+    const entry = userScores.find(e => e.userId === userId);
+    sendTo(ws, {
       type: 'gameOver',
-      winner: remainingWs.user.username,
-      scores: finalScores,
-      results: [
-        { username: remainingWs.user.username, score: room.scores[remainingId] || 0 },
-        { username: forfeitUsername, score: room.scores[forfeitUserId] || 0 },
-      ],
+      winner: winnerUsername,
+      totalPlayers,
+      rankings: userScores.map(e => ({
+        username: e.username,
+        score: e.total,
+        rank: e.rank,
+        isYou: e.userId === userId,
+      })),
+      yourRank: entry ? entry.rank : totalPlayers,
+      scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
+      results: userScores.map(e => ({ username: e.username, score: e.total })),
       forfeit: true,
     });
+  });
 
-    // Persist forfeit result
-    try {
-      const db = getDb();
-      const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(roomCode);
-      if (match) {
-        db.prepare(
-          `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`
-        ).run(match.id);
-        const updatePlayer = db.prepare(
-          `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`
-        );
-        updatePlayer.run(room.scores[remainingId] || 0, match.id, remainingId);
-        updatePlayer.run(room.scores[forfeitUserId] || 0, match.id, forfeitUserId);
+  // Persist forfeit result
+  try {
+    const db = getDb();
+    const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(roomCode);
+    if (match) {
+      db.prepare(
+        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(match.id);
+      const updatePlayer = db.prepare(
+        `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`
+      );
+      for (const { userId, total } of userScores) {
+        updatePlayer.run(total, match.id, userId);
       }
-    } catch {
-      // Non-fatal
     }
+  } catch {
+    // Non-fatal
   }
 
   cleanupRoom(roomCode);
