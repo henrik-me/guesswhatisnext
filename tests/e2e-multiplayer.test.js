@@ -146,31 +146,94 @@ describe('Multiplayer E2E', () => {
     ws.close();
   });
 
-  test('WebSocket join room and receive lobby state', async () => {
+  test('lobby-state shows players, host, and host can start match', async () => {
     const agent = getAgent();
 
-    // Create room via API
+    // Host creates room via API
     const createRes = await agent
       .post('/api/matches')
       .set('Authorization', `Bearer ${hostToken}`)
       .send({ totalRounds: 3 });
     const { roomCode } = createRes.body;
 
-    // Host connects via WS (connectWS already waits for 'connected')
+    // Host connects via WS and joins
     const hostWs = await connectWS(hostToken);
 
-    // Host joins room
+    // Start listening for lobby-state BEFORE sending join (avoids race)
+    const hostLobby1Promise = waitForMessage(hostWs, 'lobby-state');
     hostWs.send(JSON.stringify({ type: 'join', roomCode }));
     const joinMsg = await waitForMessage(hostWs, 'joined');
     expect(joinMsg.roomCode).toBe(roomCode);
 
-    // Joiner connects and joins
-    const joinerWs = await connectWS(joinerToken);
-    joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
+    // Host receives lobby-state showing themselves as host
+    const hostLobby1 = await hostLobby1Promise;
+    expect(hostLobby1.players).toHaveLength(1);
+    expect(hostLobby1.players[0].username).toBe('mp_host');
+    expect(hostLobby1.players[0].isHost).toBe(true);
+    expect(hostLobby1.hostUsername).toBe('mp_host');
 
-    // Both should receive lobby-state or player-joined
-    const joinerJoin = await waitForMessage(joinerWs, 'joined');
-    expect(joinerJoin.roomCode).toBe(roomCode);
+    // Joiner connects and joins — listen for lobby-state before sending
+    const joinerWs = await connectWS(joinerToken);
+    const joinerLobbyPromise = waitForMessage(joinerWs, 'lobby-state');
+    const hostLobby2Promise = waitForMessage(hostWs, 'lobby-state');
+    joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(joinerWs, 'joined');
+
+    // Both should receive updated lobby-state with 2 players
+    const joinerLobby = await joinerLobbyPromise;
+    expect(joinerLobby.players).toHaveLength(2);
+    const hostInList = joinerLobby.players.find(p => p.username === 'mp_host');
+    const joinerInList = joinerLobby.players.find(p => p.username === 'mp_joiner');
+    expect(hostInList.isHost).toBe(true);
+    expect(joinerInList.isHost).toBe(false);
+    expect(joinerLobby.hostUsername).toBe('mp_host');
+
+    // Host also gets the updated lobby-state
+    const hostLobby2 = await hostLobby2Promise;
+    expect(hostLobby2.players).toHaveLength(2);
+
+    // Host sends start-match
+    const hostStartPromise = waitForMessage(hostWs, 'match-start');
+    const joinerStartPromise = waitForMessage(joinerWs, 'match-start');
+    hostWs.send(JSON.stringify({ type: 'start-match' }));
+
+    // Both receive match-start
+    const hostStart = await hostStartPromise;
+    expect(hostStart.players).toContain('mp_host');
+    expect(hostStart.players).toContain('mp_joiner');
+    expect(hostStart.totalRounds).toBe(3);
+
+    const joinerStart = await joinerStartPromise;
+    expect(joinerStart.players).toContain('mp_host');
+    expect(joinerStart.players).toContain('mp_joiner');
+
+    hostWs.close();
+    joinerWs.close();
+  });
+
+  test('non-host cannot start match', async () => {
+    const agent = getAgent();
+
+    const createRes = await agent
+      .post('/api/matches')
+      .set('Authorization', `Bearer ${hostToken}`)
+      .send({ totalRounds: 3 });
+    const { roomCode } = createRes.body;
+
+    // Both join
+    const hostWs = await connectWS(hostToken);
+    hostWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(hostWs, 'joined');
+
+    const joinerWs = await connectWS(joinerToken);
+    const joinerErrPromise = waitForMessage(joinerWs, 'error');
+    joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(joinerWs, 'joined');
+
+    // Joiner tries to start — should get error
+    joinerWs.send(JSON.stringify({ type: 'start-match' }));
+    const err = await joinerErrPromise;
+    expect(err.message).toMatch(/host/i);
 
     hostWs.close();
     joinerWs.close();

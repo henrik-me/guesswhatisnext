@@ -428,6 +428,9 @@ function init() {
       case 'auth-register':
         authAction('register');
         break;
+      case 'logout':
+        logout();
+        break;
       case 'create-room':
         createRoom();
         break;
@@ -447,6 +450,11 @@ function init() {
         disconnectWebSocket();
         resetMatchState();
         showScreen('multiplayer');
+        break;
+      case 'start-match':
+        if (ws && matchState.isHost) {
+          ws.send(JSON.stringify({ type: 'start-match' }));
+        }
         break;
       case 'rematch':
         sendRematchRequest();
@@ -552,6 +560,7 @@ async function fetchLeaderboard(period) {
       ? `/api/scores/leaderboard/multiplayer?period=${period}`
       : `/api/scores/leaderboard?mode=freeplay&period=${period}`;
     const res = await fetch(url, { headers });
+    if (handle401(res)) return;
     if (res.status === 401) {
       container.innerHTML =
         '<div class="leaderboard-error">Log in to view the leaderboard 🔒</div>';
@@ -590,6 +599,7 @@ async function submitScore(summary) {
       fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
     }),
   });
+  if (handle401(res)) return null;
   if (!res.ok) throw new Error(`Score submit failed: ${res.status}`);
   return res.json();
 }
@@ -675,6 +685,7 @@ async function fetchAchievements() {
     const res = await fetch('/api/achievements', {
       headers: { 'Authorization': `Bearer ${authToken}` },
     });
+    if (handle401(res)) return;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     renderAchievements(data.achievements);
@@ -729,6 +740,8 @@ let authUsername = localStorage.getItem('gwn_auth_username');
 let matchState = {
   roomCode: null,
   players: [],
+  lobbyPlayers: [],
+  isHost: false,
   myName: null,
   opponentName: null,
   myScore: 0,
@@ -746,14 +759,35 @@ function isLoggedIn() {
 
 /** Update home screen to reflect auth state. */
 function updateHomeAuthDisplay() {
-  const el = document.querySelector('[data-bind="home-user-display"]');
-  if (!el) return;
+  const row = document.querySelector('[data-bind="home-user-display"]');
+  const label = document.querySelector('[data-bind="home-user-label"]');
+  if (!row) return;
   if (isLoggedIn() && authUsername) {
-    el.textContent = `👤 Logged in as ${authUsername}`;
-    el.style.display = '';
+    if (label) label.textContent = `👤 Logged in as ${authUsername}`;
+    row.style.display = '';
   } else {
-    el.style.display = 'none';
+    row.style.display = 'none';
   }
+}
+
+/** Log out: clear credentials, close WS, and return to home. */
+function logout() {
+  authToken = null;
+  authUsername = null;
+  localStorage.removeItem('gwn_auth_token');
+  localStorage.removeItem('gwn_auth_username');
+  if (ws) { disconnectWebSocket(); }
+  updateHomeAuthDisplay();
+  showScreen('home');
+}
+
+/** Handle a 401 response — prompt user to re-login. Returns true if 401 was handled. */
+function handle401(res) {
+  if (res.status !== 401) return false;
+  logout();
+  showToast('Session expired — please log in again');
+  showScreen('auth');
+  return true;
 }
 
 /** Perform login or register. */
@@ -854,6 +888,9 @@ function handleWSMessage(msg) {
     case 'player-joined':
       onPlayerJoined(msg);
       break;
+    case 'lobby-state':
+      onLobbyState(msg);
+      break;
     case 'match-start':
       onMatchStart(msg);
       break;
@@ -916,6 +953,7 @@ async function createRoom() {
       body: JSON.stringify({ totalRounds: 5 }),
     });
     const data = await res.json();
+    if (handle401(res)) return;
     if (!res.ok) {
       showToast(data.error || 'Failed to create room');
       return;
@@ -963,6 +1001,7 @@ async function joinRoom(code) {
       body: JSON.stringify({ roomCode }),
     });
     const data = await res.json();
+    if (handle401(res)) return;
     if (!res.ok) {
       showToast(data.error || 'Failed to join room');
       return;
@@ -1004,19 +1043,47 @@ function onPlayerJoined(msg) {
   renderLobbyPlayers();
 }
 
-/** Render the lobby player list. */
+/** Handle 'lobby-state' — authoritative player list from server. */
+function onLobbyState(msg) {
+  matchState.lobbyPlayers = msg.players || [];
+  matchState.isHost = msg.players.some(p => p.username === authUsername && p.isHost);
+
+  const count = matchState.lobbyPlayers.length;
+  if (matchState.isHost) {
+    bindText('lobby-status', count >= 2 ? 'Ready to start!' : 'Waiting for players...');
+  } else {
+    bindText('lobby-status', count >= 2 ? 'Waiting for host to start...' : 'Waiting for players...');
+  }
+
+  renderLobbyPlayers();
+  updateStartButton();
+}
+
+/** Render the lobby player list from server-authoritative data. */
 function renderLobbyPlayers() {
   const container = document.querySelector('[data-bind="lobby-players"]');
   if (!container) return;
 
-  container.innerHTML = matchState.players.map((name, i) => {
-    const isYou = name === authUsername;
+  const players = matchState.lobbyPlayers.length > 0
+    ? matchState.lobbyPlayers
+    : matchState.players.map(name => ({ username: name, isHost: false }));
+
+  container.innerHTML = players.map(p => {
+    const isYou = p.username === authUsername;
     return `<div class="lobby-player-row" role="listitem">
-      <span class="lobby-player-icon">${i === 0 ? '👑' : '⚔️'}</span>
-      <span class="lobby-player-name">${escapeHTML(name)}</span>
+      <span class="lobby-player-icon">${p.isHost ? '👑' : '⚔️'}</span>
+      <span class="lobby-player-name">${escapeHTML(p.username)}</span>
+      ${p.isHost ? '<span class="lobby-player-tag host-tag">Host</span>' : ''}
       ${isYou ? '<span class="lobby-player-tag">You</span>' : ''}
     </div>`;
   }).join('');
+}
+
+/** Show/hide the start button based on host status and player count. */
+function updateStartButton() {
+  const btn = document.querySelector('[data-action="start-match"]');
+  if (!btn) return;
+  btn.style.display = (matchState.isHost && matchState.lobbyPlayers.length >= 2) ? '' : 'none';
 }
 
 /** Handle 'match-start' — transition to match screen. */
@@ -1284,6 +1351,8 @@ function resetMatchState() {
   matchState = {
     roomCode: null,
     players: [],
+    lobbyPlayers: [],
+    isHost: false,
     myName: null,
     opponentName: null,
     myScore: 0,
@@ -1502,6 +1571,7 @@ async function fetchMatchHistory() {
     const res = await fetch('/api/matches/history', {
       headers: { 'Authorization': `Bearer ${authToken}` },
     });
+    if (handle401(res)) return;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     renderMatchHistory(data.history || []);

@@ -27,7 +27,10 @@
         <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
       <footer class="home-stats">
-        <p class="home-user" data-bind="home-user-display" style="display:none"></p>
+        <div class="home-user-row" data-bind="home-user-display" style="display:none">
+          <p class="home-user" data-bind="home-user-label"></p>
+          <button class="btn btn-logout" data-action="logout">Logout</button>
+        </div>
         <p class="high-score">🏆 High Score: <span data-bind="high-score">0</span></p>
       </footer>
     </section>
@@ -191,6 +194,7 @@
       <div class="lobby-players" data-bind="lobby-players" role="list" aria-label="Players in room">
         <!-- Player list populated by JS -->
       </div>
+      <button class="btn btn-primary btn-start-match" data-action="start-match" style="display:none" aria-label="Start the match">🎮 Start Match</button>
       <button class="btn btn-back" data-action="leave-lobby" aria-label="Leave the lobby">← Leave</button>
     </section>
 
