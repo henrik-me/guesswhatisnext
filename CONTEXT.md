@@ -49,32 +49,32 @@ This file tracks the current state of the project: what's been done, what's next
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
 | 21 | Auth hardening | ✅ Done | — | System account, API key auth, rate limiting, all endpoints auth'd |
-| 22 | Enhanced health endpoint | ⬜ Pending | 21 | Deep checks (DB, WS, disk, uptime), system-auth only |
+| 22 | Enhanced health endpoint | ✅ Done | 21 | Deep checks (DB, WS, disk, uptime), version, environment |
 | 23 | Local container dev | ✅ Done | — | Dockerfile, docker-compose.yml, .dockerignore, local dev in container |
-| 27 | Puzzles to DB | ⬜ Pending | 21 | Puzzles table, seed script, API endpoint, client fetch |
+| 27 | Puzzles to DB | ✅ Done | 21 | Puzzles table, auto-seed 22 puzzles, API with filters, client fetch with fallback |
 | 28 | Puzzle expansion | ⬜ Pending | 27 | 60+ new puzzles, 7 new categories |
-| 29 | Achievements | ⬜ Pending | 21 | Achievements table, unlock logic, 10+ badges |
+| 29 | Achievements | ✅ Done | 21 | 12 achievements, unlock logic, API, frontend grid, toast notifications |
 | 30 | Player profiles | ⬜ Pending | 29 | Profile screen, stats, achievements, match history |
-| 31 | Settings & audio | ⬜ Pending | — | Sound effects, theme, timer duration, settings screen |
+| 31 | Settings & audio | ✅ Done | — | Web Audio API sounds, light/dark theme, timer duration, settings screen |
 | 32 | Game enhancements | ⬜ Pending | 27 | Difficulty selector, skip, answer animation, confetti |
 
-**Parallelism:** 22, 27, 29, 31 can all start now (no unfinished deps). 28+32 after 27. 30 after 29.
+**Parallelism:** 28, 30, 32 can all start now. All Phase 3 work is local.
 
 ## Phase 4 — Infrastructure & Deployment
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
 | 24 | Azure infrastructure | ⬜ Pending | 23 | Container Apps Environment + gwn-staging + gwn-prod apps, GHCR |
-| 25 | CI/CD pipeline | ⬜ Pending | 24 | Build once → staging → approval → promote to prod → verify → rollback |
+| 25 | CI/CD pipeline | ⬜ Pending | 24 | Build, deploy, approval gate, rollback + branch protection on main |
 | 26 | Health monitor | ⬜ Pending | 22, 25 | GH Actions cron every 5 min, creates issues on failure |
 
-**Parallelism:** Phase 4 runs independently from Phases 3 & 5. Step 26 bridges Phases 3 & 4 (needs health endpoint from Phase 3 + CI/CD from Phase 4).
+**Parallelism:** 24 can start now. Phase 4 runs independently from Phases 3 & 5. Step 26 bridges Phases 3 & 4 (needs health endpoint ✅ + CI/CD).
 
 ## Phase 5 — Multi-Player Expansion (2→10 Players)
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 33 | Room & lobby protocol | ⬜ Pending | — | Schema (max_players, host_user_id), lobby-state broadcasts, host start-match, join validation |
+| 33 | Room & lobby protocol | ✅ Done | — | maxPlayers (2-10), host start-match, lobby-state, host transfer |
 | 34 | N-player game logic | ⬜ Pending | 33 | Rewrite endMatch for rankings, disconnect→drop, match continues with ≥2 players |
 | 35 | Lobby UI for N players | ⬜ Pending | 33 | Host controls (max players, rounds, start button), player roster, waiting for host |
 | 36 | N-player match UI | ⬜ Pending | 34, 35 | Dynamic scoreboard, N-player round results, placement-based match-over |
@@ -82,7 +82,7 @@ This file tracks the current state of the project: what's been done, what's next
 | 38 | N-player rematch | ⬜ Pending | 37 | Host "New Match" flow, ready-up for non-hosts, auto-join lobby |
 | 39 | Testing & polish | ⬜ Pending | 36, 37, 38 | N-player server tests, lobby/match UI tests, animations |
 
-**Parallelism:** 34 & 35 parallel after 33; 36 after both; 37+38 sequential; 39 after all. Phase 5 can run in parallel with Phases 3 & 4.
+**Parallelism:** 34 & 35 can start now. 36 after both. Phase 5 runs in parallel with Phases 3 & 4.
 
 ### Deployment Architecture
 

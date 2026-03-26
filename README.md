@@ -42,6 +42,16 @@ Features single-player (free play + daily challenge), global leaderboards, and r
 - Multiplayer leaderboard shows wins, win rate, and average score
 - Requires an account (register via Multiplayer)
 
+### Achievements
+- Unlock **🏅 12 badges** by playing: scoring milestones, streaks, daily challenges, multiplayer wins, speed
+- View all achievements from the home screen — locked badges shown grayed out
+- Toast notification when you unlock a new achievement
+
+### Settings
+- **🔊 Sound effects** — toggle on/off (synthesized via Web Audio API, no external files)
+- **🎨 Theme** — Dark (default) or Light mode
+- **⏱️ Timer duration** — 10s, 15s, or 20s for free play rounds
+
 ---
 
 ## Developer Guide
