@@ -1,0 +1,164 @@
+# Azure Infrastructure
+
+Deployment infrastructure for GuessWhatIsNext using Azure Container Apps.
+
+## Architecture
+
+```
+GitHub Actions CI/CD
+  ├── Build → GHCR (ghcr.io/henrik-me/guesswhatisnext)
+  ├── Deploy Staging → Azure Container Apps (gwn-staging)
+  ├── Smoke Tests → Health + API verification
+  └── Deploy Production → Azure Container Apps (gwn-production)
+
+Azure Resources
+  ├── Resource Group: gwn-rg
+  ├── Container Apps Environment: gwn-env
+  ├── Container App: gwn-staging  (0-2 replicas, 0.25 CPU, 0.5 GiB)
+  ├── Container App: gwn-production (1-5 replicas, 0.5 CPU, 1 GiB)
+  └── Storage Account: gwnstorage* (Azure Files for SQLite persistence)
+```
+
+## Prerequisites
+
+1. **Azure CLI** — [Install](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
+2. **Azure subscription** with permissions to create resources
+3. **GitHub repository** with Actions enabled
+
+### Azure CLI Setup
+
+```bash
+# Log in to Azure
+az login
+
+# Set your subscription (if you have multiple)
+az account set --subscription "<subscription-id>"
+
+# Register required providers
+az provider register --namespace Microsoft.App
+az provider register --namespace Microsoft.OperationalInsights
+az provider register --namespace Microsoft.Storage
+```
+
+## Initial Deployment
+
+```bash
+# Set required environment variables
+export JWT_SECRET="<generate-a-strong-secret>"
+export SYSTEM_API_KEY="<generate-a-strong-key>"
+
+# Optionally specify image tag (defaults to 'latest')
+export IMAGE_TAG="latest"
+
+# Run the deployment script
+chmod +x infra/deploy.sh
+./infra/deploy.sh
+```
+
+The script is idempotent — safe to re-run at any time.
+
+## GitHub Configuration
+
+### 1. Create a Service Principal for GitHub Actions
+
+```bash
+# Create service principal with Contributor role on the resource group
+az ad sp create-for-rbac \
+  --name "gwn-github-actions" \
+  --role contributor \
+  --scopes /subscriptions/<subscription-id>/resourceGroups/gwn-rg \
+  --sdk-auth
+```
+
+Copy the JSON output — this becomes the `AZURE_CREDENTIALS` secret.
+
+### 2. GitHub Repository Secrets
+
+Navigate to **Settings → Secrets and variables → Actions** and add:
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CREDENTIALS` | Service principal JSON from step above |
+| `JWT_SECRET` | Secret key for JWT token signing |
+| `SYSTEM_API_KEY` | API key for health check and admin endpoints |
+
+### 3. GitHub Environments
+
+Create two environments under **Settings → Environments**:
+
+#### `staging`
+- Add variable: `STAGING_URL` = `https://<staging-fqdn>` (from deploy script output)
+
+#### `production`
+- Add variable: `PRODUCTION_URL` = `https://<production-fqdn>` (from deploy script output)
+- Enable **Required reviewers** — add team members who must approve production deployments
+- Optionally add a **wait timer** (e.g., 5 minutes)
+
+### 4. GHCR Authentication
+
+GitHub Actions uses `GITHUB_TOKEN` automatically for GHCR. Ensure the package
+visibility is set correctly:
+
+```bash
+# If needed, grant the repository access to the container package
+# Settings → Packages → guesswhatisnext → Manage Actions access
+```
+
+## CI/CD Pipeline
+
+The pipeline (`.github/workflows/ci-cd.yml`) runs on every push to `main`:
+
+```
+lint → test → build & push image → deploy staging → smoke test
+  → manual approval → deploy production → verify → auto-rollback (on failure)
+```
+
+### Auto-Rollback
+
+If production verification fails after deployment:
+1. The previous container image is automatically redeployed
+2. A GitHub issue is created with the `deployment-failure` label
+3. The workflow run logs contain full details
+
+### Docker Image Tags
+
+Images are tagged with the short git SHA: `ghcr.io/henrik-me/guesswhatisnext:<sha>`
+
+## Health Monitoring
+
+The health monitor (`.github/workflows/health-monitor.yml`) runs every 5 minutes:
+
+- Calls `GET /api/health` with the system API key
+- On failure: creates or updates a GitHub issue with label `service-health`
+- Deduplicates alerts by checking for existing open issues
+
+## Persistent Storage
+
+SQLite database files are stored on an Azure Files share mounted at `/app/data`.
+This ensures data persists across container restarts and deployments.
+
+> **Note:** Azure Files has higher latency than local disk. For high-traffic
+> production use, consider migrating to Azure SQL or Cosmos DB.
+
+## Cost Estimates
+
+With Container Apps consumption plan (pay-per-use):
+- **Staging** (0 min replicas): ~$0 when idle
+- **Production** (1 min replica): ~$15-30/month at low traffic
+- **Storage**: ~$1/month for Azure Files
+
+## Troubleshooting
+
+```bash
+# View container app logs
+az containerapp logs show --name gwn-production --resource-group gwn-rg --follow
+
+# Check app status
+az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.runningStatus"
+
+# Restart an app
+az containerapp revision restart --name gwn-production --resource-group gwn-rg --revision <revision-name>
+
+# List revisions
+az containerapp revision list --name gwn-production --resource-group gwn-rg -o table
+```
