@@ -131,7 +131,19 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
 | 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 are independent. Phase 9 can start anytime.
+**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 are independent. Phase 9 can start anytime. Phase 10 can start independently.
+
+## Phase 10 — CI/CD Pipeline Rework
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 51 | Simplify Dockerfile | ⬜ Pending | — | Switch from multi-stage node:22-alpine to single-stage node:22-slim; better-sqlite3 has prebuilds, no build tools needed |
+| 52 | Slim down PR CI checks | ⬜ Pending | 51 | Remove Docker build step from ci.yml; keep only parallel lint + test for fast PR feedback |
+| 53 | Hourly staging cron workflow | ⬜ Pending | 52 | New workflow: runs every 1h, checks if main has new commits since last run, fast-forwards release/staging branch to main HEAD |
+| 54 | Ephemeral CI staging validation | ⬜ Pending | 53 | Cron workflow builds Docker image, runs container in GitHub Actions, executes smoke tests against localhost, tears down |
+| 55 | Azure staging with approval gate | ⬜ Pending | 54 | After ephemeral validation passes, manual approval step promotes to persistent Azure Container Apps staging |
+
+**Parallelism:** Tasks 51–55 are sequential. Phase 10 is independent of Phases 6–9.
 
 ### Deployment Architecture
 
@@ -189,6 +201,17 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | Winner logic | Full ranking with tie handling | Placements (1st/2nd/3rd…) instead of binary win/lose |
 | Spectator mode | Deferred | Not needed for initial N-player support; add later |
 | Rematch flow | Host "New Match" → auto-join lobby | Simpler than N-player ready-up counting |
+
+### Key Design Decisions (Phase 10 — CI/CD Pipeline Rework)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Docker base image | node:22-slim (single-stage) | better-sqlite3 ships prebuilt binaries; no python3/make/g++ needed. Simpler Dockerfile at cost of ~200MB vs ~100MB image |
+| PR CI checks | Lint + test only (no Docker build) | Docker build is slow, hits Docker Hub rate limits, and isn't needed for PR validation |
+| Staging branch strategy | Fast-forward release/staging to main HEAD | Simpler than cherry-picking; no history divergence; staging always matches main |
+| Staging trigger | Hourly cron with "new commits?" check | Decouples staging deploy from every push; batches changes; reduces CI costs |
+| Ephemeral staging | Docker container in GitHub Actions | $0 infra cost; sufficient for automated smoke tests (health, auth, scores) |
+| Azure staging | Behind manual approval after ephemeral passes | Persistent environment for manual QA; only promoted after automated validation |
 
 ---
 
