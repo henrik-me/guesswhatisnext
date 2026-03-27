@@ -251,14 +251,15 @@ tests/
 ├── puzzles.test.js           # Puzzle API: filtering, auth, shape validation (6 tests)
 ├── scores.test.js            # Score submission, leaderboard, multiplayer LB (8 tests)
 ├── achievements.test.js      # Achievement list, unlock triggers (4 tests)
-├── matches.test.js           # Match create, join, capacity, history (7 tests)
+├── matches.test.js           # Match create, join, capacity, history, get by ID (9 tests)
 ├── e2e-singleplayer.test.js  # Free play + daily challenge full flows (4 tests)
-├── e2e-multiplayer.test.js   # Room create → join → play → result (9 tests)
+├── e2e-multiplayer.test.js   # Room create → join → play → result → rematch (10 tests)
 ├── nplayer.test.js           # 3-player match, disconnect, ties (4 tests)
-└── reconnection.test.js      # Reconnect, host transfer, notifications (4 tests)
+├── reconnection.test.js      # Reconnect, host transfer, notifications (4 tests)
+└── rematch.test.js           # Rematch ready-up, host start, partial rematch (4 tests)
 ```
 
-**Total: 59 tests across 10 suites — all passing.**
+**Total: 66 tests across 11 suites — all passing.**
 
 **Test isolation model:**
 Each test file gets its own:

@@ -109,7 +109,7 @@ The container mounts `./data` for SQLite persistence and sets dev environment va
 ### Testing
 
 ```bash
-# Run all tests (59 tests across 10 suites)
+# Run all tests (66 tests across 11 suites)
 npm test
 
 # Watch mode (re-run on changes)
@@ -263,6 +263,7 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 | Client→Server | `start-match` | Host starts the match |
 | Client→Server | `answer` | Submit answer with timing |
 | Client→Server | `rematch-request` | Request a rematch after game ends |
+| Client→Server | `rematch-start-confirm` | Host confirms rematch start |
 | Server→Client | `connected` | Connection confirmed |
 | Server→Client | `lobby-state` | Full player roster + host info |
 | Server→Client | `match-start` | Match is starting |
@@ -275,8 +276,8 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 | Server→Client | `host-transferred` | New host assigned |
 | Server→Client | `player-forfeited` | Player forfeited (disconnect timeout) |
 | Server→Client | `achievements-unlocked` | New achievements earned |
-| Server→Client | `rematch-offered` | Rematch available |
-| Server→Client | `rematch-start` | Rematch is starting |
+| Server→Client | `rematch-ready` | Player ready for rematch (broadcast) |
+| Server→Client | `rematch-start` | Rematch is starting (new room) |
 
 ### Useful Commands
 

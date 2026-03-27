@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ Phases 1–4 Complete — Phase 5 In Progress (37/39 steps)
+## Project Status: ✅ All 39 Steps Complete
 
 ### Development Workflow
 
@@ -95,10 +95,10 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 35 | Lobby UI for N players | ✅ Done | 33 | Host controls (max players, rounds), player roster, start button |
 | 36 | N-player match UI | ✅ Done | 34, 35 | Dynamic scoreboard, medals, N-player round results |
 | 37 | Reconnection & edge cases | ✅ Done | 34, 36 | Reconnect state restore, host transfer, toast notifications |
-| 38 | N-player rematch | ⬜ Pending | 37 | Host New Match, ready-up, auto-join |
-| 39 | Testing & polish | ⬜ Pending | 38 | Final integration tests, UI polish, doc updates |
+| 38 | N-player rematch | ✅ Done | 37 | N-player rematch with host control, ready-up flow, 4 tests |
+| 39 | Testing & polish | ✅ Done | 38 | Integration tests, CSS cleanup, doc updates |
 
-**Parallelism:** Steps 33–37 complete. Step 38 ready to start. Step 39 depends on 38.
+**Parallelism:** All Phase 5 work complete.
 
 ### Deployment Architecture
 

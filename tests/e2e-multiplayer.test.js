@@ -259,4 +259,97 @@ describe('Multiplayer E2E', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.history)).toBe(true);
   });
+
+  test('full lifecycle: create → join → play all rounds → gameOver → rematch', async () => {
+    const agent = getAgent();
+    const totalRounds = 3;
+
+    // 1. Host creates room
+    const createRes = await agent
+      .post('/api/matches')
+      .set('Authorization', `Bearer ${hostToken}`)
+      .send({ totalRounds, maxPlayers: 2 });
+    expect(createRes.status).toBe(201);
+    const { roomCode } = createRes.body;
+
+    // 2. Joiner joins via API
+    const joinRes = await agent
+      .post('/api/matches/join')
+      .set('Authorization', `Bearer ${joinerToken}`)
+      .send({ roomCode });
+    expect(joinRes.status).toBe(200);
+
+    // 3. Both connect via WebSocket
+    const hostWs = await connectWS(hostToken);
+    const joinerWs = await connectWS(joinerToken);
+
+    // 4. Both join the room
+    const hostLobbyPromise = waitForMessage(hostWs, 'lobby-state');
+    hostWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(hostWs, 'joined');
+    await hostLobbyPromise;
+
+    const joinerLobbyPromise = waitForMessage(joinerWs, 'lobby-state');
+    const hostLobby2Promise = waitForMessage(hostWs, 'lobby-state');
+    joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(joinerWs, 'joined');
+    await joinerLobbyPromise;
+    await hostLobby2Promise;
+
+    // 5. Host starts match
+    const hostStartPromise = waitForMessage(hostWs, 'match-start');
+    const joinerStartPromise = waitForMessage(joinerWs, 'match-start');
+    hostWs.send(JSON.stringify({ type: 'start-match' }));
+    const hostStart = await hostStartPromise;
+    await joinerStartPromise;
+    expect(hostStart.totalRounds).toBe(totalRounds);
+
+    // 6. Play through all rounds
+    for (let round = 0; round < totalRounds; round++) {
+      const hostRoundPromise = waitForMessage(hostWs, 'round');
+      const joinerRoundPromise = waitForMessage(joinerWs, 'round');
+      await Promise.all([hostRoundPromise, joinerRoundPromise]);
+
+      const hostResultPromise = waitForMessage(hostWs, 'roundResult');
+      const joinerResultPromise = waitForMessage(joinerWs, 'roundResult');
+      hostWs.send(JSON.stringify({ type: 'answer', answerId: 999, timeMs: 1000 }));
+      joinerWs.send(JSON.stringify({ type: 'answer', answerId: 999, timeMs: 1000 }));
+      await Promise.all([hostResultPromise, joinerResultPromise]);
+    }
+
+    // 7. Both receive gameOver
+    const hostGameOver = await waitForMessage(hostWs, 'gameOver');
+    const joinerGameOver = await waitForMessage(joinerWs, 'gameOver');
+    expect(hostGameOver.rankings).toBeDefined();
+    expect(joinerGameOver.rankings).toBeDefined();
+
+    // 8. Rematch flow: both ready up
+    const hostReadyPromise = waitForMessage(hostWs, 'rematch-ready');
+    const joinerReadyPromise = waitForMessage(joinerWs, 'rematch-ready');
+    hostWs.send(JSON.stringify({ type: 'rematch-request' }));
+    await Promise.all([hostReadyPromise, joinerReadyPromise]);
+
+    const hostReady2Promise = waitForMessage(hostWs, 'rematch-ready');
+    const joinerReady2Promise = waitForMessage(joinerWs, 'rematch-ready');
+    joinerWs.send(JSON.stringify({ type: 'rematch-request' }));
+    const hostReady2 = await hostReady2Promise;
+    await joinerReady2Promise;
+    expect(hostReady2.readyPlayers).toHaveLength(2);
+
+    // 9. Host starts rematch
+    const hostRematchPromise = waitForMessage(hostWs, 'rematch-start');
+    const joinerRematchPromise = waitForMessage(joinerWs, 'rematch-start');
+    hostWs.send(JSON.stringify({ type: 'rematch-start-confirm' }));
+    const hostRematch = await hostRematchPromise;
+    const joinerRematch = await joinerRematchPromise;
+
+    // 10. Verify rematch-start has new room code
+    expect(hostRematch.roomCode).toBeTruthy();
+    expect(hostRematch.roomCode).toMatch(/^[0-9A-F]{6}$/);
+    expect(hostRematch.roomCode).not.toBe(roomCode);
+    expect(joinerRematch.roomCode).toBe(hostRematch.roomCode);
+
+    hostWs.close();
+    joinerWs.close();
+  });
 });

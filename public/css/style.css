@@ -587,13 +587,6 @@ body::before {
   padding: 1rem 1.25rem;
 }
 
-.result-score {
-  font-size: 1.5rem;
-  color: var(--color-secondary);
-  font-weight: 700;
-  text-shadow: 0 0 12px var(--color-secondary-glow);
-}
-
 .score-breakdown {
   display: flex;
   flex-direction: column;
@@ -639,29 +632,6 @@ body::before {
   border-radius: 1rem;
   font-size: 0.8rem;
   font-weight: 700;
-}
-
-.streak-display {
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.streak-display.on-fire {
-  color: #fdcb6e;
-}
-
-.daily-locked-message {
-  text-align: center;
-  padding: 2rem;
-  color: var(--color-text-muted);
-  font-size: 1.1rem;
-}
-
-.daily-locked-message .daily-score {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--color-secondary);
-  margin: 0.5rem 0;
 }
 
 .share-toast {
