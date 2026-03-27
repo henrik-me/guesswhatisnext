@@ -77,7 +77,14 @@ router.post('/login', loginLimiter, (req, res) => {
 
 /** GET /api/auth/me — get current user from token */
 router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user });
+  const db = getDb();
+  const row = db.prepare('SELECT created_at FROM users WHERE id = ?').get(req.user.id);
+  res.json({
+    user: {
+      ...req.user,
+      created_at: row?.created_at || null,
+    },
+  });
 });
 
 module.exports = router;

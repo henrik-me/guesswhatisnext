@@ -538,6 +538,14 @@ function init() {
         loadSettingsUI();
         showScreen('settings');
         break;
+      case 'show-profile':
+        if (isLoggedIn()) {
+          showScreen('profile');
+          fetchProfile();
+        } else {
+          showScreen('auth');
+        }
+        break;
     }
   });
 
@@ -1625,6 +1633,165 @@ function onRematchStart(msg) {
   bindText('lobby-room-code', msg.roomCode);
   bindText('lobby-status', 'Starting rematch...');
   showScreen('lobby');
+}
+
+/* ===========================
+   Player Profile
+   =========================== */
+
+/** Fetch all profile data in parallel and render the profile screen. */
+async function fetchProfile() {
+  const container = document.querySelector('[data-bind="profile-content"]');
+  if (!container) return;
+  container.innerHTML = '<div class="profile-loading">Loading profile...</div>';
+
+  try {
+    const headers = { 'Authorization': `Bearer ${authToken}` };
+    const [meRes, scoresRes, achievementsRes, historyRes] = await Promise.all([
+      fetch('/api/auth/me', { headers }),
+      fetch('/api/scores/me', { headers }),
+      fetch('/api/achievements', { headers }),
+      fetch('/api/matches/history', { headers }),
+    ]);
+
+    if (handle401(meRes)) return;
+    if (handle401(scoresRes)) return;
+    if (handle401(achievementsRes)) return;
+    if (handle401(historyRes)) return;
+
+    if (!meRes.ok) throw new Error(`me: ${meRes.status}`);
+    if (!scoresRes.ok) throw new Error(`scores: ${scoresRes.status}`);
+    if (!achievementsRes.ok) throw new Error(`achievements: ${achievementsRes.status}`);
+    if (!historyRes.ok) throw new Error(`history: ${historyRes.status}`);
+
+    const [meData, scoresData, achievementsData, historyData] = await Promise.all([
+      meRes.json(), scoresRes.json(), achievementsRes.json(), historyRes.json(),
+    ]);
+
+    renderProfile(meData, scoresData, achievementsData, historyData);
+  } catch {
+    container.innerHTML = '<div class="profile-loading">Could not load profile</div>';
+  }
+}
+
+/** Render all profile sections from the fetched data. */
+function renderProfile(meData, scoresData, achievementsData, historyData) {
+  const container = document.querySelector('[data-bind="profile-content"]');
+  if (!container) return;
+
+  const user = meData.user || {};
+  const stats = scoresData.stats || [];
+  const scores = scoresData.scores || [];
+  const achievements = (achievementsData.achievements || []).filter(a => a.unlocked);
+  const history = historyData.history || [];
+
+  // Player info
+  const memberSince = user.created_at
+    ? new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    : '';
+
+  // Stats summary
+  const totalGames = stats.reduce((sum, s) => sum + (s.games_played || 0), 0) + history.length;
+  const bestScore = stats.reduce((max, s) => Math.max(max, s.high_score || 0), 0);
+  const bestStreak = stats.reduce((max, s) => Math.max(max, s.best_streak || 0), 0);
+  const matchWins = history.filter(h => h.result === 'win').length;
+  const winRate = history.length > 0 ? Math.round((matchWins / history.length) * 100) : 0;
+
+  // Recent achievements (last 5, sorted by unlock date)
+  const recentAchievements = [...achievements]
+    .sort((a, b) => new Date(b.unlockedAt || 0) - new Date(a.unlockedAt || 0))
+    .slice(0, 5);
+
+  // Recent matches (last 5)
+  const recentMatches = history.slice(0, 5);
+
+  let html = '';
+
+  // Player Info section
+  html += `<div class="profile-section">
+    <div class="profile-info-row">
+      <span class="profile-username">${escapeHTML(user.username || authUsername || 'Player')}</span>
+      ${memberSince ? `<span class="profile-member-since">Member since ${memberSince}</span>` : ''}
+    </div>
+  </div>`;
+
+  // Stats section
+  html += `<div class="profile-section">
+    <div class="profile-section-header">
+      <span class="profile-section-title">📊 Stats Summary</span>
+    </div>
+    <div class="profile-stats-grid">
+      <div class="profile-stat">
+        <span class="profile-stat-value">${totalGames}</span>
+        <span class="profile-stat-label">Games Played</span>
+      </div>
+      <div class="profile-stat">
+        <span class="profile-stat-value">${bestScore.toLocaleString()}</span>
+        <span class="profile-stat-label">Best Score</span>
+      </div>
+      <div class="profile-stat">
+        <span class="profile-stat-value">${winRate}%</span>
+        <span class="profile-stat-label">Win Rate</span>
+      </div>
+      <div class="profile-stat">
+        <span class="profile-stat-value">${bestStreak}</span>
+        <span class="profile-stat-label">Best Streak</span>
+      </div>
+    </div>
+  </div>`;
+
+  // Recent Achievements section
+  html += `<div class="profile-section">
+    <div class="profile-section-header">
+      <span class="profile-section-title">🏅 Recent Achievements</span>
+      <button class="profile-view-all" data-action="show-achievements">View All →</button>
+    </div>`;
+  if (recentAchievements.length > 0) {
+    html += recentAchievements.map(a => {
+      const dateStr = a.unlockedAt
+        ? new Date(a.unlockedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : '';
+      return `<div class="profile-achievement-row">
+        <span class="profile-achievement-icon">${a.icon}</span>
+        <div class="profile-achievement-info">
+          <span class="profile-achievement-name">${escapeHTML(a.name)}</span>
+          ${dateStr ? `<span class="profile-achievement-date">${dateStr}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    html += '<div class="profile-empty">No achievements yet — keep playing!</div>';
+  }
+  html += '</div>';
+
+  // Recent Match History section
+  html += `<div class="profile-section">
+    <div class="profile-section-header">
+      <span class="profile-section-title">⚔️ Recent Matches</span>
+      <button class="profile-view-all" data-action="show-match-history">View All →</button>
+    </div>`;
+  if (recentMatches.length > 0) {
+    html += recentMatches.map(entry => {
+      const resultLabel = entry.result === 'win' ? 'Win' : entry.result === 'tie' ? 'Tie' : 'Loss';
+      const resultClass = entry.result === 'win' ? 'win' : entry.result === 'tie' ? 'tie' : 'loss';
+      const dateStr = entry.date
+        ? new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : '';
+      return `<div class="profile-match-row">
+        <span class="profile-match-result ${resultClass}">${resultLabel}</span>
+        <div class="profile-match-info">
+          <span class="profile-match-opponent">vs ${escapeHTML(entry.opponent)}</span>
+          <span class="profile-match-score">${entry.myScore} – ${entry.oppScore}</span>
+        </div>
+        ${dateStr ? `<span class="profile-match-date">${dateStr}</span>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    html += '<div class="profile-empty">No matches yet — challenge someone!</div>';
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
 }
 
 /* ===========================
