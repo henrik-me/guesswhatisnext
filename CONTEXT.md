@@ -2,11 +2,11 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-03-25
+> **Last updated:** 2026-03-27
 
 ---
 
-## Project Status: ✅ Phase 1 & Phase 2 Complete — Phase 3 In Progress — Phase 4 Planned
+## Project Status: ✅ Phases 1–4 Complete — Phase 5 In Progress (37/39 steps)
 
 ### Development Workflow
 
@@ -51,7 +51,7 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 12 | Database schema | ✅ Done | 11 | users, scores, matches tables with indexes |
 | 13 | Auth system | ✅ Done | 12 | Register/login, JWT, bcrypt, middleware |
 | 14 | Score API | ✅ Done | 13 | Submit scores, leaderboard (all/weekly/daily) |
-| 15 | Leaderboard UI | ⬜ Pending | 14 | Rankings display, user highlighting |
+| 15 | Leaderboard UI | ✅ Done | 14 | Rankings display integrated into leaderboard screen |
 | 16 | Matchmaking | ✅ Done | 13 | Room codes, create/join endpoints |
 | 17 | WebSocket server | ✅ Done | 11 | Room-based WS connections on /ws |
 | 18 | Head-to-head engine | ✅ Done | 16, 17 | Server match logic, scoring, puzzle sync |
@@ -68,37 +68,37 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 22 | Enhanced health endpoint | ✅ Done | 21 | Deep checks (DB, WS, disk, uptime), version, environment |
 | 23 | Local container dev | ✅ Done | — | Dockerfile, docker-compose.yml, .dockerignore, local dev in container |
 | 27 | Puzzles to DB | ✅ Done | 21 | Puzzles table, auto-seed 22 puzzles, API with filters, client fetch with fallback |
-| 28 | Puzzle expansion | ⬜ Pending | 27 | 60+ new puzzles, 7 new categories |
+| 28 | Puzzle expansion | ✅ Done | 27 | 85 puzzles across 12 categories (was 22 across 5) |
 | 29 | Achievements | ✅ Done | 21 | 12 achievements, unlock logic, API, frontend grid, toast notifications |
-| 30 | Player profiles | ⬜ Pending | 29 | Profile screen, stats, achievements, match history |
+| 30 | Player profiles | ✅ Done | 29 | Unified profile screen with stats, achievements, match history |
 | 31 | Settings & audio | ✅ Done | — | Web Audio API sounds, light/dark theme, timer duration, settings screen |
-| 32 | Game enhancements | ⬜ Pending | 27 | Difficulty selector, skip, answer animation, confetti |
+| 32 | Game enhancements | ✅ Done | 27 | Difficulty selector, skip button, confetti celebration |
 
-**Parallelism:** 28, 30, 32 can all start now. All Phase 3 work is local.
+**Parallelism:** All Phase 3 work complete.
 
 ## Phase 4 — Infrastructure & Deployment
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 24 | Azure infrastructure | ⬜ Pending | 23 | Container Apps Environment + gwn-staging + gwn-prod apps, GHCR |
-| 25 | CI/CD pipeline | ⬜ Pending | 24 | Build, deploy, approval gate, rollback + branch protection on main |
-| 26 | Health monitor | ⬜ Pending | 22, 25 | GH Actions cron every 5 min, creates issues on failure |
+| 24 | Azure infrastructure | ✅ Done | 23 | CI/CD pipeline, GHCR, staging + prod Container Apps |
+| 25 | CI/CD pipeline | ✅ Done | 24 | ESLint, CODEOWNERS, PR template, path filters |
+| 26 | Health monitor | ✅ Done | 22, 25 | Retry logic, deep checks, local health-check scripts |
 
-**Parallelism:** 24 can start now. Phase 4 runs independently from Phases 3 & 5. Step 26 bridges Phases 3 & 4 (needs health endpoint ✅ + CI/CD).
+**Parallelism:** All Phase 4 work complete.
 
 ## Phase 5 — Multi-Player Expansion (2→10 Players)
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
 | 33 | Room & lobby protocol | ✅ Done | — | maxPlayers (2-10), host start-match, lobby-state, host transfer |
-| 34 | N-player game logic | ⬜ Pending | 33 | Rewrite endMatch for rankings, disconnect→drop, match continues with ≥2 players |
-| 35 | Lobby UI for N players | ⬜ Pending | 33 | Host controls (max players, rounds, start button), player roster, waiting for host |
-| 36 | N-player match UI | ⬜ Pending | 34, 35 | Dynamic scoreboard, N-player round results, placement-based match-over |
-| 37 | Reconnection & edge cases | ⬜ Pending | 34, 36 | Full state restore, host transfer, full-room rejection, last-player-standing |
-| 38 | N-player rematch | ⬜ Pending | 37 | Host "New Match" flow, ready-up for non-hosts, auto-join lobby |
-| 39 | Testing & polish | ⬜ Pending | 36, 37, 38 | N-player server tests, lobby/match UI tests, animations |
+| 34 | N-player game logic | ✅ Done | 33 | Rankings, disconnect handling, last-player-standing, ties |
+| 35 | Lobby UI for N players | ✅ Done | 33 | Host controls (max players, rounds), player roster, start button |
+| 36 | N-player match UI | ✅ Done | 34, 35 | Dynamic scoreboard, medals, N-player round results |
+| 37 | Reconnection & edge cases | ✅ Done | 34, 36 | Reconnect state restore, host transfer, toast notifications |
+| 38 | N-player rematch | ⬜ Pending | 37 | Host New Match, ready-up, auto-join |
+| 39 | Testing & polish | ⬜ Pending | 38 | Final integration tests, UI polish, doc updates |
 
-**Parallelism:** 34 & 35 can start now. 36 after both. Phase 5 runs in parallel with Phases 3 & 4.
+**Parallelism:** Steps 33–37 complete. Step 38 ready to start. Step 39 depends on 38.
 
 ### Deployment Architecture
 
@@ -206,11 +206,11 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 
 These should be kept in mind throughout Phase 1 development:
 
-- [ ] Game engine accepts puzzles as arguments (not hardcoded imports)
-- [ ] Score/result objects are plain JSON-serializable
-- [ ] Answer submission uses callbacks (not direct DOM writes)
-- [ ] Screen navigation supports adding new screens without refactoring
-- [ ] No global mutable state — single state object pattern
+- [x] Game engine accepts puzzles as arguments (not hardcoded imports)
+- [x] Score/result objects are plain JSON-serializable
+- [x] Answer submission uses callbacks (not direct DOM writes)
+- [x] Screen navigation supports adding new screens without refactoring
+- [x] No global mutable state — single state object pattern
 
 ---
 

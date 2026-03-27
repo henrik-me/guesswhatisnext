@@ -11,14 +11,15 @@ This document defines architecture decisions, coding standards, testing strategy
 ```
 guesswhatisnext/
 ├── public/                         # Client (served as static files)
-│   ├── index.html                  # Game shell — all screens (SPA)
+│   ├── index.html                  # Game shell — 16 screens (SPA)
 │   ├── css/style.css               # Styling, responsive, animations, themes
 │   ├── js/
-│   │   ├── app.js                  # Entry point, screen nav, multiplayer UI, auth
+│   │   ├── app.js                  # Entry point, screen nav, auth, multiplayer UI
 │   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
-│   │   ├── puzzles.js              # Client-side puzzle data (22 puzzles)
+│   │   ├── puzzles.js              # Client-side puzzle data (85 puzzles, 12 categories)
 │   │   ├── daily.js                # Date-seeded daily challenge logic
-│   │   └── storage.js              # LocalStorage persistence
+│   │   ├── storage.js              # LocalStorage persistence
+│   │   └── audio.js                # Web Audio API sound effects
 │   └── img/                        # SVG image assets for puzzles
 │       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
 │       └── colors/                 # Color circles (red → purple)
@@ -38,7 +39,10 @@ guesswhatisnext/
 ├── data/                           # SQLite database (auto-created, git-ignored)
 ├── Dockerfile                      # Production container image (Phase 3)
 ├── docker-compose.yml              # Local container dev environment (Phase 3)
-├── .github/workflows/              # CI/CD + health monitor (Phase 3)
+├── .github/workflows/              # ci-cd.yml + health-monitor.yml
+├── scripts/                        # Local health-check scripts (sh + ps1)
+├── infra/                          # Azure deployment (deploy.sh + README)
+├── eslint.config.mjs              # ESLint flat config
 ├── package.json
 ├── INSTRUCTIONS.md                 # This file
 ├── CONTEXT.md                      # Project plan & status tracker
@@ -241,30 +245,20 @@ Tests **must pass** before any merge to `main`. CI/CD pipeline runs the full sui
 **Current test structure (implemented):**
 ```
 tests/
-├── helper.js              # Test harness: isolated DB, random port, supertest agent
-├── auth.test.js           # Register, login, token, auth enforcement (10 tests)
-├── health.test.js         # Health endpoint: system auth, deep checks (3 tests)
-├── puzzles.test.js        # Puzzle API: filtering, auth, shape validation (5 tests)
-├── scores.test.js         # Score submission, leaderboard, multiplayer LB (8 tests)
-├── achievements.test.js   # Achievement list, unlock triggers (4 tests)
-└── matches.test.js        # Match create, join, capacity, history (6 tests)
+├── helper.js                 # Test utilities: setup/teardown, getAgent, connectWS
+├── auth.test.js              # Register, login, token, auth enforcement (10 tests)
+├── health.test.js            # Health endpoint: system auth, deep checks (3 tests)
+├── puzzles.test.js           # Puzzle API: filtering, auth, shape validation (6 tests)
+├── scores.test.js            # Score submission, leaderboard, multiplayer LB (8 tests)
+├── achievements.test.js      # Achievement list, unlock triggers (4 tests)
+├── matches.test.js           # Match create, join, capacity, history (7 tests)
+├── e2e-singleplayer.test.js  # Free play + daily challenge full flows (4 tests)
+├── e2e-multiplayer.test.js   # Room create → join → play → result (9 tests)
+├── nplayer.test.js           # 3-player match, disconnect, ties (4 tests)
+└── reconnection.test.js      # Reconnect, host transfer, notifications (4 tests)
 ```
 
-**Planned additions:**
-```
-tests/
-├── unit/
-│   ├── scoring.test.js       # Score calculation, speed bonus, streak multiplier
-│   ├── daily.test.js         # Date-seed determinism, puzzle selection
-│   └── puzzles.test.js       # Puzzle data validation (schema, uniqueness)
-├── ws/
-│   └── websocket.test.js     # Match flow: join → rounds → answer → result → gameOver
-└── e2e/
-    ├── singleplayer.spec.js  # Free play + daily challenge full flows
-    ├── multiplayer.spec.js   # Create room → join → play match → result
-    ├── leaderboard.spec.js   # Register → play → check leaderboard
-    └── auth-flow.spec.js     # Register → login → access protected routes
-```
+**Total: 59 tests across 10 suites — all passing.**
 
 **Test isolation model:**
 Each test file gets its own:
@@ -289,7 +283,8 @@ agents can each run `npm test` independently without port or DB conflicts.
   "test:watch": "vitest",
   "test:coverage": "vitest run --coverage",
   "test:e2e": "playwright test",
-  "test:all": "vitest run --coverage && playwright test"
+  "test:all": "vitest run --coverage && playwright test",
+  "lint": "eslint . --max-warnings 50"
 }
 ```
 
@@ -384,32 +379,9 @@ Run with Playwright against a live server instance (started in test setup):
 6. **Keyboard navigation:**
    - Navigate entire game using only keyboard (Tab, Enter, 1-4 number keys)
 
-### Phase 1 — Manual + Lightweight Unit Tests
-Since there's no build system, testing is pragmatic:
+### Test Runner
 
-1. **Unit tests for pure logic** — Create a `test/` folder with simple test files that import game engine functions and assert expected outputs. Run in the browser via a `test/index.html` page.
-   ```
-   test/
-   ├── index.html          # Test runner page
-   ├── test-scoring.js     # Score calculation tests
-   ├── test-daily.js       # Date-seed determinism tests
-   └── test-puzzles.js     # Puzzle data validation
-   ```
-
-2. **What to test:**
-   - Scoring: correct/wrong answers, speed bonus at various times, streak multipliers
-   - Daily challenge: same date always yields same puzzle, different dates yield different puzzles
-   - Puzzle validation: all puzzles have required fields, answer is in options, no duplicates
-   - Timer: countdown starts, pauses, resets correctly
-
-3. **Manual testing checklist:**
-   - All screens navigate correctly
-   - Timer visual matches actual countdown
-   - Score displays update in real-time
-   - LocalStorage persists across page reload
-   - Daily challenge locks after one attempt
-   - Works on mobile viewport (Chrome DevTools responsive mode)
-   - Keyboard navigation works for all interactive elements
+Tests use Vitest with supertest for API and ws for WebSocket testing. Run with `npm test`. Each suite gets an isolated temp database and random port. Tests are safe to run in parallel across worktrees.
 
 ### Phase 2 — Automated Tests
 - Use Vitest as the test framework (fast, ESM-native, built-in coverage)
@@ -427,9 +399,8 @@ Since there's no build system, testing is pragmatic:
 - **Health monitor:** GitHub Actions cron job every 5 minutes validates production health, creates issues on failure
 
 ### Test Data Management
-- Tests use an **isolated in-memory SQLite database** (`:memory:`) — never the real `data/game.db`
-- `helpers/setup.js` creates the schema and seeds test data before each test suite
-- `helpers/fixtures.js` exports reusable test users, puzzles, and scores
+- Tests use an **isolated temp-directory SQLite database** via `GWN_DB_PATH` — never the real `data/game.db`
+- `tests/helper.js` creates the schema and seeds test data before each test suite
 - Each test suite cleans up after itself — no cross-test contamination
 - E2E tests use a separate server instance on a random port
 
@@ -736,6 +707,7 @@ This section documents tools and frameworks that were evaluated for the project,
 | GitHub Container Registry | Image storage | Free, integrated with GitHub Actions |
 | Azure Container Apps | Hosting (staging + prod) | Consumption plan, scale-to-zero, WebSocket support |
 | GitHub Actions | CI/CD + health monitoring | Build, deploy, smoke tests, cron-based health checks |
+| ESLint | Linting | Flat config (`eslint.config.mjs`), `@eslint/js` recommended + custom rules |
 
 ### Evaluated & Deferred
 

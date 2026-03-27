@@ -52,6 +52,17 @@ Features single-player (free play + daily challenge), global leaderboards, and r
 - **🎨 Theme** — Dark (default) or Light mode
 - **⏱️ Timer duration** — 10s, 15s, or 20s for free play rounds
 
+### Player Profile
+- View your **👤 Profile** from the home screen
+- See stats: games played, best score, best streak, match wins
+- Recent achievements and match history at a glance
+- Quick links to full achievements and match history screens
+
+### Game Enhancements
+- **Difficulty selector** — Easy, Medium, Hard, or All in free play
+- **⏭️ Skip button** — skip a puzzle (counts as wrong answer)
+- **🎊 Confetti celebration** on perfect games
+
 ---
 
 ## Developer Guide
@@ -82,7 +93,7 @@ For development with auto-reload:
 npm run dev
 ```
 
-### Running with Docker (Phase 3)
+### Running with Docker
 
 ```bash
 # Build and run in a container (same image used in production)
@@ -98,7 +109,7 @@ The container mounts `./data` for SQLite persistence and sets dev environment va
 ### Testing
 
 ```bash
-# Run all tests (36 smoke tests across 6 suites)
+# Run all tests (59 tests across 10 suites)
 npm test
 
 # Watch mode (re-run on changes)
@@ -106,6 +117,9 @@ npm run test:watch
 
 # With coverage report
 npm run test:coverage
+
+# Lint
+npm run lint
 ```
 
 Tests are fully isolated — each suite gets its own temp database and random port. Safe to run in parallel across worktrees.
@@ -135,9 +149,10 @@ guesswhatisnext/
 │   ├── js/
 │   │   ├── app.js                  # Entry point, screen nav, multiplayer UI
 │   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
-│   │   ├── puzzles.js              # 22 puzzles (emoji + image)
+│   │   ├── puzzles.js              # 85 puzzles across 12 categories
 │   │   ├── daily.js                # Date-seeded daily challenge logic
-│   │   └── storage.js              # LocalStorage persistence
+│   │   ├── storage.js              # LocalStorage persistence
+│   │   └── audio.js                # Web Audio API sound effects
 │   └── img/                        # SVG image assets for puzzles
 │       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
 │       └── colors/                 # Color circles (red → purple)
@@ -188,7 +203,7 @@ guesswhatisnext/
                                    └──────────────────────┘
 ```
 
-**Deployment Pipeline (Phase 3):**
+**Deployment Pipeline:**
 ```
   git push to main
        │
@@ -230,6 +245,10 @@ Image is built once → deployed to staging → **same bytes** promoted to prod 
 | `POST` | `/api/matches/join` | Yes (JWT) | Join by room code (validates capacity) |
 | `GET` | `/api/matches/:id` | Yes (JWT) | Match status + players |
 | `GET` | `/api/matches/history` | Yes (JWT) | User's match history |
+| `GET` | `/api/scores/leaderboard/multiplayer` | Yes (JWT/API key) | Multiplayer leaderboard (wins, win rate) |
+| `GET` | `/api/puzzles` | Yes (JWT) | Get puzzles (supports category, difficulty filters) |
+| `GET` | `/api/achievements` | Yes (JWT) | All achievement definitions |
+| `GET` | `/api/achievements/me` | Yes (JWT) | User's unlocked achievements |
 
 > **Auth types:** `JWT` = Bearer token from login; `API key` = `X-API-Key` header (system account); `rate-limited` = IP-based rate limiting
 
@@ -241,14 +260,23 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 | Direction | Type | Description |
 |---|---|---|
 | Client→Server | `join` | Join a room by code |
-| Client→Server | `start-match` | Host starts the game (Phase 4) |
+| Client→Server | `start-match` | Host starts the match |
 | Client→Server | `answer` | Submit answer with timing |
-| Server→Client | `lobby-state` | Player roster update (Phase 4) |
+| Client→Server | `rematch-request` | Request a rematch after game ends |
+| Server→Client | `connected` | Connection confirmed |
+| Server→Client | `lobby-state` | Full player roster + host info |
+| Server→Client | `match-start` | Match is starting |
 | Server→Client | `round` | New round puzzle |
 | Server→Client | `roundResult` | Round scores for all players |
 | Server→Client | `gameOver` | Final rankings with placements |
 | Server→Client | `player-disconnected` | Player left, reconnect window |
 | Server→Client | `player-dropped` | Player eliminated (timeout) |
+| Server→Client | `player-reconnected` | Player reconnected to match |
+| Server→Client | `host-transferred` | New host assigned |
+| Server→Client | `player-forfeited` | Player forfeited (disconnect timeout) |
+| Server→Client | `achievements-unlocked` | New achievements earned |
+| Server→Client | `rematch-offered` | Rematch available |
+| Server→Client | `rematch-start` | Rematch is starting |
 
 ### Useful Commands
 
@@ -257,6 +285,7 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 | `npm start` | Start the server on port 3000 |
 | `npm run dev` | Start with auto-reload (--watch) |
 | `npm test` | Run tests |
+| `npm run lint` | Run ESLint (0 warnings target) |
 
 ---
 
