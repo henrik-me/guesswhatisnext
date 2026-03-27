@@ -931,7 +931,7 @@ function connectWebSocket() {
     });
 
     ws.addEventListener('close', () => {
-      const wasInMatch = currentScreen === 'match' || currentScreen === 'match-result';
+      const wasInMatch = currentScreen === 'match' || currentScreen === 'match-result' || currentScreen === 'match-over';
       ws = null;
       if (wasInMatch && matchState.roomCode) {
         startReconnect();
@@ -1470,6 +1470,20 @@ function onGameOver(msg) {
   // Track host status from server
   const gameOverIsHost = msg.isHost || false;
   matchState.isHost = gameOverIsHost;
+  console.log('[rematch] gameOver received — isHost:', gameOverIsHost, 'hostUsername:', msg.hostUsername);
+
+  // Show host indicator
+  const hostIndicator = document.querySelector('[data-bind="rematch-host-indicator"]');
+  if (hostIndicator) {
+    hostIndicator.style.display = '';
+    if (gameOverIsHost) {
+      hostIndicator.textContent = '👑 You are the host — start a rematch when ready';
+      hostIndicator.className = 'rematch-host-indicator host-you';
+    } else {
+      hostIndicator.textContent = `⏳ ${escapeHTML(msg.hostUsername || 'Host')} controls the rematch`;
+      hostIndicator.className = 'rematch-host-indicator host-other';
+    }
+  }
 
   // Reset rematch UI
   rematchSent = false;
@@ -1583,7 +1597,7 @@ function attemptReconnect() {
     });
 
     ws.addEventListener('close', () => {
-      const wasInMatch = currentScreen === 'match' || currentScreen === 'match-result';
+      const wasInMatch = currentScreen === 'match' || currentScreen === 'match-result' || currentScreen === 'match-over';
       ws = null;
       if (wasInMatch && matchState.roomCode) {
         startReconnect();
@@ -1699,13 +1713,15 @@ let rematchSent = false;
 /** Send a rematch request (ready up) via WebSocket. */
 function sendRematchRequest() {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    showToast('Connection lost');
+    showToast('Connection lost — cannot send rematch request');
+    console.log('[rematch] sendRematchRequest FAILED — ws null or not open');
     return;
   }
   if (rematchSent) return;
 
   rematchSent = true;
   ws.send(JSON.stringify({ type: 'rematch-request' }));
+  console.log('[rematch] Sent rematch-request, isHost:', matchState.isHost);
 
   const btn = document.querySelector('[data-action="rematch"]');
   if (btn) {
@@ -1729,6 +1745,8 @@ function onRematchReady(msg) {
   const readyPlayers = msg.readyPlayers || [];
   const totalPlayers = msg.totalPlayers || 0;
 
+  console.log('[rematch] rematch-ready received — ready:', readyPlayers.length, '/', totalPlayers, 'isHost:', matchState.isHost, 'hostUsername:', msg.hostUsername);
+
   const container = document.querySelector('[data-bind="rematch-players"]');
   if (container) {
     container.style.display = '';
@@ -1742,27 +1760,41 @@ function onRematchReady(msg) {
   const status = document.querySelector('[data-bind="rematch-status"]');
   if (status) {
     status.style.display = '';
-    status.textContent = `${readyPlayers.length} of ${totalPlayers} players ready`;
+    if (matchState.isHost) {
+      status.textContent = readyPlayers.length >= 2
+        ? 'All ready — click Start Rematch!'
+        : `${readyPlayers.length} of ${totalPlayers} players ready`;
+    } else {
+      status.textContent = readyPlayers.length >= 2
+        ? 'Waiting for host to start...'
+        : `${readyPlayers.length} of ${totalPlayers} players ready`;
+    }
   }
 
   // Show start button to host when ≥2 ready
-  if (matchState.isHost && readyPlayers.length >= 2) {
-    const startBtn = document.querySelector('[data-action="start-rematch"]');
-    if (startBtn) {
+  const startBtn = document.querySelector('[data-action="start-rematch"]');
+  if (startBtn) {
+    if (matchState.isHost && readyPlayers.length >= 2) {
       startBtn.style.display = '';
       startBtn.disabled = false;
+      console.log('[rematch] Showing Start Rematch button for host');
+    } else {
+      startBtn.style.display = 'none';
     }
   }
 
   // Update host status if host transferred
-  if (msg.hostUsername && msg.hostUsername === authUsername) {
+  if (msg.hostUsername && msg.hostUsername === authUsername && !matchState.isHost) {
     matchState.isHost = true;
-    if (readyPlayers.length >= 2) {
-      const startBtn = document.querySelector('[data-action="start-rematch"]');
-      if (startBtn) {
-        startBtn.style.display = '';
-        startBtn.disabled = false;
-      }
+    console.log('[rematch] Host transferred to me');
+    const hostIndicator = document.querySelector('[data-bind="rematch-host-indicator"]');
+    if (hostIndicator) {
+      hostIndicator.textContent = '👑 You are now the host';
+      hostIndicator.className = 'rematch-host-indicator host-you';
+    }
+    if (startBtn && readyPlayers.length >= 2) {
+      startBtn.style.display = '';
+      startBtn.disabled = false;
     }
   }
 }

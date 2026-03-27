@@ -1763,6 +1763,27 @@ body::before {
   font-style: italic;
 }
 
+.rematch-host-indicator {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+  margin: 0.5rem auto;
+  max-width: 400px;
+}
+
+.rematch-host-indicator.host-you {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.3);
+}
+
+.rematch-host-indicator.host-other {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--color-text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
 .rematch-players {
   width: 100%;
   max-width: 400px;
