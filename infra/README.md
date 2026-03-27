@@ -162,3 +162,44 @@ az containerapp revision restart --name gwn-production --resource-group gwn-rg -
 # List revisions
 az containerapp revision list --name gwn-production --resource-group gwn-rg -o table
 ```
+
+## GitHub Repository Settings
+
+For the CI/CD pipeline and health monitoring to work, the following must be
+configured in the GitHub repository settings.
+
+### Required Secrets
+
+Navigate to **Settings → Secrets and variables → Actions → Secrets** and add:
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CREDENTIALS` | Service principal JSON for Azure deployments (see "Create a Service Principal" above) |
+| `JWT_SECRET` | Secret key used for signing JWT authentication tokens |
+| `SYSTEM_API_KEY` | API key for health-check and admin endpoints |
+| `PROD_URL` | Production application URL (e.g. `https://gwn-production.<region>.azurecontainerapps.io`) |
+| `STAGING_URL` | Staging application URL (e.g. `https://gwn-staging.<region>.azurecontainerapps.io`) |
+
+### Environments
+
+Create two environments under **Settings → Environments**:
+
+- **staging** — used by staging deployment and smoke tests
+- **production** — used by production deployment, verification, and health monitor
+  - Enable **Required reviewers** for manual approval before production deploys
+  - Optionally add a **wait timer** (e.g. 5 minutes)
+
+### Branch Protection Rules
+
+Navigate to **Settings → Branches → Add rule** for the `main` branch:
+
+| Setting | Value |
+|---------|-------|
+| Branch name pattern | `main` |
+| Require a pull request before merging | ✅ |
+| Require approvals | 1 |
+| Require status checks to pass | ✅ — select **Lint** and **Test** |
+| Require branches to be up to date | ✅ |
+| Include administrators | ✅ (recommended) |
+
+This ensures every change to `main` passes CI and is reviewed before merging.
