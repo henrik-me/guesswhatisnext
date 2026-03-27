@@ -46,8 +46,6 @@ jobs:
         run: npm test
         env:
           NODE_ENV: test
-          JWT_SECRET: ci-test-secret
-          SYSTEM_API_KEY: ci-test-system-key
 
   build:
     name: Build Docker Image
