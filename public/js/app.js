@@ -733,6 +733,13 @@ function escapeHTML(str) {
   return div.innerHTML;
 }
 
+/** Return ordinal string for a number (1st, 2nd, 3rd, …). */
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 /* ===========================
    Achievements Module
    =========================== */
@@ -805,9 +812,7 @@ let matchState = {
   lobbyPlayers: [],
   isHost: false,
   myName: null,
-  opponentName: null,
-  myScore: 0,
-  oppScore: 0,
+  scores: {},
   totalRounds: 5,
   currentRound: 0,
   roundStartedAt: null,
@@ -1161,20 +1166,34 @@ function onMatchStart(msg) {
   matchState.players = msg.players || [];
   matchState.totalRounds = msg.totalRounds || 5;
   matchState.currentRound = 0;
-  matchState.myScore = 0;
-  matchState.oppScore = 0;
 
-  // Figure out opponent name
-  matchState.opponentName = matchState.players.find(n => n !== authUsername) || 'Opponent';
+  // Initialize scores for all players
+  matchState.scores = {};
+  matchState.players.forEach(name => { matchState.scores[name] = 0; });
 
-  bindText('match-you-name', authUsername);
-  bindText('match-opp-name', matchState.opponentName);
-  bindText('match-you-score', '0');
-  bindText('match-opp-score', '0');
-  bindText('match-round', `1/${matchState.totalRounds}`);
+  bindText('match-round', `Round 1/${matchState.totalRounds}`);
+  renderMatchScoreboard();
 
   showScreen('match');
   GameAudio.playMatchStart();
+}
+
+/** Render the dynamic scoreboard sorted by score. */
+function renderMatchScoreboard() {
+  const container = document.querySelector('[data-bind="match-scoreboard"]');
+  if (!container) return;
+
+  const sorted = Object.entries(matchState.scores)
+    .sort((a, b) => b[1] - a[1]);
+
+  container.innerHTML = sorted.map(([name, score], i) => {
+    const isYou = name === authUsername;
+    return `<div class="match-sb-row${isYou ? ' is-you' : ''}">
+      <span class="match-sb-rank">#${i + 1}</span>
+      <span class="match-sb-name">${escapeHTML(name)}${isYou ? ' (you)' : ''}</span>
+      <span class="match-sb-score">${score}</span>
+    </div>`;
+  }).join('');
 }
 
 /** Handle 'round' — render the puzzle in the match screen. */
@@ -1182,7 +1201,7 @@ function onRound(msg) {
   matchState.currentRound = msg.roundNum;
   matchState.roundStartedAt = Date.now();
 
-  bindText('match-round', `${msg.roundNum + 1}/${msg.totalRounds}`);
+  bindText('match-round', `Round ${msg.roundNum + 1}/${msg.totalRounds}`);
 
   // Reset timer
   const timerBar = document.querySelector('[data-bind="match-timer-bar"]');
@@ -1299,27 +1318,29 @@ function onRoundResult(msg) {
   }
 
   const scores = msg.scores;
+
+  // Update all players' scores from server data
+  for (const [name, data] of Object.entries(scores)) {
+    if (data && typeof data.total === 'number') {
+      matchState.scores[name] = data.total;
+    }
+  }
+  renderMatchScoreboard();
+
   const myResult = scores[authUsername];
-  const oppResult = scores[matchState.opponentName];
-
-  if (myResult) matchState.myScore = myResult.total;
-  if (oppResult) matchState.oppScore = oppResult.total;
-
-  bindText('match-you-score', matchState.myScore);
-  bindText('match-opp-score', matchState.oppScore);
-
   const myCorrect = myResult ? myResult.correct : false;
   bindText('match-result-icon', myCorrect ? '✅' : '❌');
   bindText('match-result-title', myCorrect ? 'Correct!' : 'Wrong!');
 
-  // Render both players' results
+  // Render all players' results sorted by total score
   const container = document.querySelector('[data-bind="match-round-scores"]');
+  const entries = Object.entries(scores).sort((a, b) => (b[1].total || 0) - (a[1].total || 0));
   let html = '';
 
-  for (const [name, data] of Object.entries(scores)) {
+  for (const [name, data] of entries) {
     const icon = data.correct ? '✅' : '❌';
     const isYou = name === authUsername;
-    html += `<div class="match-score-row">
+    html += `<div class="match-score-row${isYou ? ' is-you' : ''}">
       <span class="player-name">${escapeHTML(name)}${isYou ? ' (you)' : ''}</span>
       <span class="player-result">
         <span class="player-answer-icon">${icon}</span>
@@ -1350,40 +1371,82 @@ function onGameOver(msg) {
   const scores = msg.scores || {};
   const winner = msg.winner;
   const forfeit = msg.forfeit || false;
+  const rankings = msg.rankings;
 
-  // Determine outcome for current player
+  // Use rankings if available (N-player), fallback to legacy 2-player fields
   let outcomeIcon, outcomeTitle;
-  if (!winner) {
-    outcomeIcon = '🤝';
-    outcomeTitle = "It's a Tie!";
-  } else if (winner === authUsername) {
-    outcomeIcon = '🏆';
-    outcomeTitle = forfeit ? 'You Win! (Opponent left)' : 'You Win!';
+  if (rankings && rankings.length) {
+    const myEntry = rankings.find(r => r.isYou);
+    const myRank = myEntry ? myEntry.rank : null;
+    const totalPlayers = msg.totalPlayers || rankings.length;
+
+    if (myRank === 1) {
+      outcomeIcon = '🏆';
+      outcomeTitle = forfeit ? 'You Win! (Opponent left)' : 'You Win!';
+    } else if (msg.isDraw && myRank === 1) {
+      outcomeIcon = '🤝';
+      outcomeTitle = "It's a Tie!";
+    } else {
+      outcomeIcon = myRank <= 3 ? '🎉' : '😢';
+      outcomeTitle = myRank === 1 ? 'You Win!' : `${ordinal(myRank)} Place`;
+    }
+
+    // Show placement
+    const placementEl = document.querySelector('[data-bind="match-placement"]');
+    if (placementEl) {
+      placementEl.textContent = `Your placement: ${ordinal(myRank)} of ${totalPlayers} player${totalPlayers === 1 ? '' : 's'}`;
+      placementEl.style.display = '';
+    }
+
+    // Render rankings table
+    const container = document.querySelector('[data-bind="match-final-scores"]');
+    container.innerHTML = rankings.map(entry => {
+      const isYou = entry.isYou;
+      const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : '';
+      const rankClass = entry.rank <= 3 ? ` rank-${entry.rank}` : '';
+      return `<div class="match-final-row${isYou ? ' is-you' : ''}${rankClass}" role="listitem">
+        <span class="final-player-icon">${medal}</span>
+        <span class="final-player-rank">${ordinal(entry.rank)}</span>
+        <span class="final-player-name">${escapeHTML(entry.username)}${isYou ? ' (you)' : ''}</span>
+        <span class="final-player-score">${entry.score}</span>
+      </div>`;
+    }).join('');
   } else {
-    outcomeIcon = '😢';
-    outcomeTitle = 'You Lose!';
+    // Legacy 2-player fallback
+    if (!winner) {
+      outcomeIcon = '🤝';
+      outcomeTitle = "It's a Tie!";
+    } else if (winner === authUsername) {
+      outcomeIcon = '🏆';
+      outcomeTitle = forfeit ? 'You Win! (Opponent left)' : 'You Win!';
+    } else {
+      outcomeIcon = '😢';
+      outcomeTitle = 'You Lose!';
+    }
+
+    const placementEl = document.querySelector('[data-bind="match-placement"]');
+    if (placementEl) placementEl.style.display = 'none';
+
+    const results = msg.results || Object.entries(scores).map(([username, score]) => ({ username, score }));
+    results.sort((a, b) => b.score - a.score);
+
+    const container = document.querySelector('[data-bind="match-final-scores"]');
+    container.innerHTML = results.map((entry, i) => {
+      const isWinner = winner && entry.username === winner;
+      const isYou = entry.username === authUsername;
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+      return `<div class="match-final-row${isYou ? ' is-you' : ''}${isWinner ? ' rank-1' : ''}" role="listitem">
+        <span class="final-player-icon">${medal}</span>
+        <span class="final-player-name">${escapeHTML(entry.username)}${isYou ? ' (you)' : ''}</span>
+        <span class="final-player-score">${entry.score}</span>
+      </div>`;
+    }).join('');
   }
 
   const iconEl = document.querySelector('[data-bind="match-over-icon"]');
   if (iconEl) iconEl.textContent = outcomeIcon;
   const titleEl = document.querySelector('[data-bind="match-over-title"]');
   if (titleEl) titleEl.textContent = outcomeTitle;
-
-  // Render final scores
-  const results = msg.results || Object.entries(scores).map(([username, score]) => ({ username, score }));
-  results.sort((a, b) => b.score - a.score);
-
-  const container = document.querySelector('[data-bind="match-final-scores"]');
-  container.innerHTML = results.map((entry, i) => {
-    const isWinner = winner && entry.username === winner;
-    const isYou = entry.username === authUsername;
-    const icon = isWinner ? '🏆' : (i === 0 ? '🥇' : '🥈');
-    return `<div class="match-final-row${isWinner ? ' winner' : ''}" role="listitem">
-      <span class="final-player-icon">${icon}</span>
-      <span class="final-player-name">${escapeHTML(entry.username)}${isYou ? ' (you)' : ''}</span>
-      <span class="final-player-score">${entry.score}</span>
-    </div>`;
-  }).join('');
 
   // Reset rematch UI
   rematchSent = false;
@@ -1424,9 +1487,7 @@ function resetMatchState() {
     lobbyPlayers: [],
     isHost: false,
     myName: null,
-    opponentName: null,
-    myScore: 0,
-    oppScore: 0,
+    scores: {},
     totalRounds: 5,
     currentRound: 0,
     roundStartedAt: null,
@@ -1533,13 +1594,17 @@ function hideReconnectOverlay() {
 /** Handle 'reconnected' — server restored our session. */
 function onReconnected(msg) {
   matchState.roomCode = msg.roomCode;
-  matchState.myScore = msg.myScore || 0;
   matchState.currentRound = msg.currentRound || 0;
   matchState.totalRounds = msg.totalRounds || 5;
 
-  // Update scoreboard
-  bindText('match-you-score', matchState.myScore);
-  bindText('match-round', `${matchState.currentRound + 1}/${matchState.totalRounds}`);
+  // Restore scores if provided
+  if (msg.scores) {
+    matchState.scores = msg.scores;
+  } else if (typeof msg.myScore === 'number') {
+    matchState.scores[authUsername] = msg.myScore;
+  }
+  renderMatchScoreboard();
+  bindText('match-round', `Round ${matchState.currentRound + 1}/${matchState.totalRounds}`);
 
   hideReconnectOverlay();
 }
@@ -1615,8 +1680,7 @@ function onRematchStart(msg) {
 
   // Reset match state for new match
   matchState.roomCode = msg.roomCode;
-  matchState.myScore = 0;
-  matchState.oppScore = 0;
+  matchState.scores = {};
   matchState.currentRound = 0;
 
   // Re-join the new room

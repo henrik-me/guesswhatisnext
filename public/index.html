@@ -237,18 +237,11 @@
 
     <!-- Live Match Screen -->
     <section id="screen-match" class="screen" data-screen="match" aria-label="Multiplayer match">
-      <div class="match-scoreboard" role="status" aria-label="Match scores">
-        <div class="match-player match-player-you">
-          <span class="match-player-name" data-bind="match-you-name">You</span>
-          <span class="match-player-score" data-bind="match-you-score">0</span>
-        </div>
-        <div class="match-vs">
-          <span class="match-round-badge" data-bind="match-round">1/5</span>
-        </div>
-        <div class="match-player match-player-opponent">
-          <span class="match-player-name" data-bind="match-opp-name">Opponent</span>
-          <span class="match-player-score" data-bind="match-opp-score">0</span>
-        </div>
+      <div class="match-hud-bar">
+        <span class="match-round-badge" data-bind="match-round">Round 1/5</span>
+      </div>
+      <div class="match-scoreboard" role="status" aria-label="Match scores" data-bind="match-scoreboard">
+        <!-- Dynamic scoreboard rows rendered by JS -->
       </div>
       <div class="timer-bar-container" role="progressbar" aria-label="Time remaining" aria-valuemin="0" aria-valuemax="100">
         <div class="timer-bar" data-bind="match-timer-bar"></div>
@@ -278,8 +271,9 @@
         <div class="gameover-icon" data-bind="match-over-icon" aria-hidden="true">🏆</div>
         <h2 class="gameover-title" data-bind="match-over-title">Match Over!</h2>
       </div>
+      <p class="match-placement" data-bind="match-placement" aria-label="Your placement"></p>
       <div class="match-final-scores" data-bind="match-final-scores" aria-label="Final scores">
-        <!-- Final scores rendered by JS -->
+        <!-- Final rankings rendered by JS -->
       </div>
       <nav class="gameover-actions" aria-label="Post-match options">
         <button class="btn btn-primary" data-action="rematch" aria-label="Request rematch">🔄 Rematch</button>
