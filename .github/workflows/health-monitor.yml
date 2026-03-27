@@ -20,7 +20,7 @@ jobs:
           set +e
           RESPONSE=$(curl -s -w '\n%{http_code}' --max-time 10 \
             -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
-            "${{ vars.PRODUCTION_URL }}/api/health")
+            "${{ secrets.PROD_URL }}/api/health")
           CURL_EXIT=$?
           set -e
 
@@ -66,7 +66,7 @@ jobs:
               ``,
               `**Error:** ${error}`,
               `**Detected at:** ${now}`,
-              `**Production URL:** ${{ vars.PRODUCTION_URL }}`,
+              `**Production URL:** ${{ secrets.PROD_URL }}`,
               `**Workflow run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             ].join('\n');
 

@@ -3,6 +3,16 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
 
 concurrency:
   group: ci-cd-${{ github.ref }}
@@ -31,12 +41,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Check for lint script
-        id: has-lint
-        run: |
-          if npm run --silent lint --if-present 2>/dev/null; then
-            echo "Lint passed or no lint script configured"
-          fi
+      - name: Run linter
+        run: npm run lint
 
   test:
     name: Test
@@ -53,7 +59,7 @@ jobs:
       - run: npm ci
 
       - name: Run tests
-        run: npx vitest run
+        run: npm test
         env:
           NODE_ENV: test
           JWT_SECRET: ci-test-secret
