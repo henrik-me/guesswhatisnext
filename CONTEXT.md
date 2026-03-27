@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ All 39 Steps Complete
+## Project Status: ✅ Phases 1–5 Complete (39/39) — Phases 6–9 Planned
 
 ### Development Workflow
 
@@ -99,6 +99,39 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 39 | Testing & polish | ✅ Done | 38 | Integration tests, CSS cleanup, doc updates |
 
 **Parallelism:** All Phase 5 work complete.
+
+## Phase 6 — Production Hardening
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 40 | Remove debug logging | ⬜ Pending | — | Strip console.log('[rematch]') from client code |
+| 41 | Environment variables | ⬜ Pending | — | JWT secret, API key, DB path → env vars with startup validation |
+| 42 | HTTPS & secure cookies | ⬜ Pending | 41 | TLS enforcement, WSS, secure headers |
+
+## Phase 7 — Quality & Testing
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 43 | Browser E2E tests | ⬜ Pending | 40 | Playwright tests for full UI flows |
+| 44 | Load testing | ⬜ Pending | 41 | k6/Artillery for concurrent WS + API stress |
+
+## Phase 8 — User Experience
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 45 | Mobile PWA | ⬜ Pending | — | manifest.json, service worker, offline fallback |
+| 46 | Share links | ⬜ Pending | — | Deep link ?room=CODE, copy-link button |
+| 47 | Multiplayer sound effects | ⬜ Pending | — | Opponent answered, countdown, win/loss fanfare |
+| 48 | Spectator mode | ⬜ Pending | 42 | Read-only WS, spectator count in lobby |
+
+## Phase 9 — Content & Growth
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
+| 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
+
+**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 are independent. Phase 9 can start anytime.
 
 ### Deployment Architecture
 
