@@ -1,12 +1,20 @@
 # syntax=docker/dockerfile:1
-FROM node:18-alpine AS base
+FROM node:18-alpine AS build
 WORKDIR /app
+
+# Install build tools for native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++
 
 # Install dependencies
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy application code
+# --- Production stage (no build tools) ---
+FROM node:18-alpine
+WORKDIR /app
+
+COPY --from=build /app/node_modules ./node_modules
+COPY package*.json ./
 COPY server/ ./server/
 COPY public/ ./public/
 
