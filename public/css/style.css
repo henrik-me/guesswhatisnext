@@ -1793,6 +1793,41 @@ body::before {
   font-style: italic;
 }
 
+.rematch-players {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0.5rem;
+}
+
+.rematch-players-title {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.rematch-player-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.rematch-player-row .ready-icon {
+  color: #4ade80;
+}
+
+.btn-start-rematch {
+  margin-top: 0.25rem;
+  font-size: 1.1rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
 /* ===========================
    Difficulty Selector
    =========================== */

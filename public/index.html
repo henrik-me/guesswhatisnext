@@ -277,9 +277,11 @@
         <!-- Final rankings rendered by JS -->
       </div>
       <nav class="gameover-actions" aria-label="Post-match options">
-        <button class="btn btn-primary" data-action="rematch" aria-label="Request rematch">🔄 Rematch</button>
+        <button class="btn btn-primary" data-action="rematch" aria-label="Ready for rematch">🔄 Rematch</button>
+        <button class="btn btn-primary btn-start-rematch" data-action="start-rematch" aria-label="Start rematch" style="display:none">🚀 Start Rematch</button>
         <button class="btn btn-back" data-action="go-home" aria-label="Return to home screen">← Home</button>
       </nav>
+      <div class="rematch-players" data-bind="rematch-players" aria-label="Ready players" style="display:none"></div>
       <div class="rematch-status" data-bind="rematch-status" aria-live="polite" style="display:none"></div>
     </section>
 

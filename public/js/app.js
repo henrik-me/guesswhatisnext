@@ -514,6 +514,9 @@ function init() {
       case 'rematch':
         sendRematchRequest();
         break;
+      case 'start-rematch':
+        sendRematchStartConfirm();
+        break;
       case 'show-match-history':
         showScreen('match-history');
         fetchMatchHistory();
@@ -997,6 +1000,9 @@ function handleWSMessage(msg) {
     case 'rematch-offered':
       onRematchOffered(msg);
       break;
+    case 'rematch-ready':
+      onRematchReady(msg);
+      break;
     case 'rematch-start':
       onRematchStart(msg);
       break;
@@ -1461,13 +1467,27 @@ function onGameOver(msg) {
   const titleEl = document.querySelector('[data-bind="match-over-title"]');
   if (titleEl) titleEl.textContent = outcomeTitle;
 
+  // Track host status from server
+  const gameOverIsHost = msg.isHost || false;
+  matchState.isHost = gameOverIsHost;
+
   // Reset rematch UI
   rematchSent = false;
   const rematchBtn = document.querySelector('[data-action="rematch"]');
   if (rematchBtn) {
-    rematchBtn.textContent = '🔄 Rematch';
+    rematchBtn.textContent = gameOverIsHost ? '🔄 New Match' : '✅ Ready for Rematch';
     rematchBtn.disabled = false;
     rematchBtn.style.display = forfeit ? 'none' : '';
+  }
+  const startRematchBtn = document.querySelector('[data-action="start-rematch"]');
+  if (startRematchBtn) {
+    startRematchBtn.style.display = 'none';
+    startRematchBtn.disabled = true;
+  }
+  const rematchPlayersDiv = document.querySelector('[data-bind="rematch-players"]');
+  if (rematchPlayersDiv) {
+    rematchPlayersDiv.style.display = 'none';
+    rematchPlayersDiv.innerHTML = '';
   }
   const rematchStatus = document.querySelector('[data-bind="rematch-status"]');
   if (rematchStatus) {
@@ -1667,6 +1687,7 @@ function onPlayerForfeited(msg) {
 /** Handle 'host-transferred' — new host assigned. */
 function onHostTransferred(msg) {
   showToast(`👑 ${msg.newHost} is now the host`);
+  matchState.isHost = (msg.newHost === authUsername);
 }
 
 /* ===========================
@@ -1675,7 +1696,7 @@ function onHostTransferred(msg) {
 
 let rematchSent = false;
 
-/** Send a rematch request via WebSocket. */
+/** Send a rematch request (ready up) via WebSocket. */
 function sendRematchRequest() {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     showToast('Connection lost');
@@ -1688,40 +1709,71 @@ function sendRematchRequest() {
 
   const btn = document.querySelector('[data-action="rematch"]');
   if (btn) {
-    btn.textContent = '⏳ Waiting for opponent...';
+    btn.textContent = '✅ Ready!';
     btn.disabled = true;
   }
   const status = document.querySelector('[data-bind="rematch-status"]');
   if (status) {
     status.style.display = '';
-    status.textContent = 'Waiting for opponent to accept...';
+    status.textContent = 'Waiting for other players...';
   }
 }
 
-/** Handle 'rematch-offered' — opponent wants a rematch. */
-function onRematchOffered(msg) {
-  if (rematchSent) {
-    // We also requested — both want rematch, server should send rematch-start soon
-    const status = document.querySelector('[data-bind="rematch-status"]');
-    if (status) {
-      status.style.display = '';
-      status.textContent = 'Both players accepted — starting new match...';
-    }
-    return;
+/** Handle 'rematch-offered' — legacy/backward compat; treat as rematch-ready signal. */
+function onRematchOffered(_msg) {
+  // Handled by rematch-ready in the N-player flow; no-op
+}
+
+/** Handle 'rematch-ready' — update ready player list on match-over screen. */
+function onRematchReady(msg) {
+  const readyPlayers = msg.readyPlayers || [];
+  const totalPlayers = msg.totalPlayers || 0;
+
+  const container = document.querySelector('[data-bind="rematch-players"]');
+  if (container) {
+    container.style.display = '';
+    container.innerHTML =
+      `<div class="rematch-players-title">Ready (${readyPlayers.length}/${totalPlayers})</div>` +
+      readyPlayers.map(name =>
+        `<div class="rematch-player-row"><span class="ready-icon">✅</span> ${escapeHTML(name)}</div>`
+      ).join('');
   }
 
-  // Show opponent's offer
   const status = document.querySelector('[data-bind="rematch-status"]');
   if (status) {
     status.style.display = '';
-    status.textContent = `${escapeHTML(msg.username)} wants a rematch!`;
+    status.textContent = `${readyPlayers.length} of ${totalPlayers} players ready`;
   }
 
-  const btn = document.querySelector('[data-action="rematch"]');
-  if (btn) {
-    btn.textContent = '✅ Accept Rematch';
-    btn.disabled = false;
+  // Show start button to host when ≥2 ready
+  if (matchState.isHost && readyPlayers.length >= 2) {
+    const startBtn = document.querySelector('[data-action="start-rematch"]');
+    if (startBtn) {
+      startBtn.style.display = '';
+      startBtn.disabled = false;
+    }
   }
+
+  // Update host status if host transferred
+  if (msg.hostUsername && msg.hostUsername === authUsername) {
+    matchState.isHost = true;
+    if (readyPlayers.length >= 2) {
+      const startBtn = document.querySelector('[data-action="start-rematch"]');
+      if (startBtn) {
+        startBtn.style.display = '';
+        startBtn.disabled = false;
+      }
+    }
+  }
+}
+
+/** Send rematch-start-confirm (host only). */
+function sendRematchStartConfirm() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    showToast('Connection lost');
+    return;
+  }
+  ws.send(JSON.stringify({ type: 'rematch-start-confirm' }));
 }
 
 /** Handle 'rematch-start' — transition to the new match. */
