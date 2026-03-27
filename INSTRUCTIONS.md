@@ -654,9 +654,13 @@ Group tasks to minimize file overlap:
 
 **PR checks (ci.yml):** Lint and test run in parallel on every pull request. No Docker build — fast feedback.
 
-**Staging pipeline (staging-deploy.yml — planned):** Runs hourly via cron. Checks if `main` has new commits since last run. If yes: fast-forwards `release/staging` branch to main HEAD, builds Docker image, runs ephemeral smoke tests in GitHub Actions, then (with manual approval) deploys to Azure staging.
+**Staging pipeline (staging-deploy.yml — planned):** Runs hourly via cron. Checks if `main` has new commits since last run. If yes: fast-forwards `release/staging` branch to main HEAD, builds Docker image, pushes to GHCR, runs ephemeral smoke tests in GitHub Actions container. With manual approval, deploys to Azure staging.
 
-**Production pipeline (ci-cd.yml):** Triggered by push to `main`. Runs lint → test → build & push to GHCR → deploy staging → smoke test → manual approval → deploy production → verify → auto-rollback on failure.
+**Production pipeline (prod-deploy.yml — planned):** Manually triggered (`workflow_dispatch`) from `release/staging` branch. Can only run when the staging environment is green. Deploys the same image already validated in staging to production. Verifies health, auto-rolls back on failure.
+
+**Push to `main`:** Does **not** trigger any deployment. All deployments flow through the staging pipeline first.
+
+**Legacy pipeline (ci-cd.yml):** Will be gutted — deploy/staging/production jobs removed. Push-to-main no longer deploys anywhere.
 
 ### Rollback Policy
 - Docker images are tagged with git SHA (`ghcr.io/henrik-me/guesswhatisnext:<sha>`) — every version is recoverable

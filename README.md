@@ -215,36 +215,32 @@ guesswhatisnext/
   Hourly cron (staging-deploy.yml — planned)
        │
   ┌────▼──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌───────────┐
-  │ New commits   │─▶│ Build    │─▶│ Ephemeral │─▶│ ⏸️ Manual │─▶│ Deploy to │
-  │ on main?      │  │ Docker   │  │ Staging   │  │ Approval │  │ Azure     │
-  │ (ff release/) │  │          │  │ (in CI)   │  │          │  │ Staging   │
+  │ New commits   │─▶│ Build &  │─▶│ Ephemeral │─▶│ ⏸️ Manual │─▶│ Deploy to │
+  │ on main?      │  │ Push to  │  │ Staging   │  │ Approval │  │ Azure     │
+  │ (ff release/) │  │ GHCR     │  │ (in CI)   │  │          │  │ Staging   │
   └───────────────┘  └──────────┘  └───────────┘  └──────────┘  └───────────┘
 
-  Push to main (ci-cd.yml)
-       │
-  ┌────▼─────┐  ┌──────────┐  ┌───────────┐  ┌───────────┐  ┌──────────┐  ┌──────────┐
-  │ Lint &   │─▶│ Build &  │─▶│ Deploy to │─▶│ Smoke     │─▶│ ⏸️ Manual │─▶│ Prod     │
-  │ Test     │  │ Push     │  │ Staging   │  │ Tests     │  │ Approval │  │ Verify   │
-  └──────────┘  └──────────┘  └───────────┘  └───────────┘  └──────────┘  └────┬─────┘
-                     │              │                                            │
-                  push to       same image                                  ❌ fail
-                   GHCR              │                                     ┌────▼─────┐
-                (SHA tag)            ▼                                     │ Rollback │
-                              gwn-staging                                  │ + Issue  │
-                              Container Apps                               └──────────┘
+  Manual trigger (prod-deploy.yml — planned)
+       │  (requires staging green)
+  ┌────▼─────┐  ┌──────────┐
+  │ Deploy   │─▶│ Verify   │─▶ ❌ fail → Auto-rollback + GitHub Issue
+  │ to Prod  │  │ Health   │─▶ ✅ pass → Done
+  │(same img)│  │          │
+  └──────────┘  └──────────┘
 
-  Health Monitor (every 5 min) ───────────────────────────────────────────▶ gwn-prod
+  Health Monitor (every 5 min) ───────────────────────────────────▶ gwn-prod
        │ on failure → GitHub Issue
 ```
 
-Image is built once → deployed to staging → **same bytes** promoted to prod after approval. No rebuild, no drift.
+> **Note:** Push to `main` does **not** trigger deployment. All code reaches production
+> through the staging pipeline: hourly cron → staging validation → manual prod deploy.
 
 | Environment | Cost | Trigger | Approval | Rollback |
 |---|---|---|---|---|
 | Local | Free | `docker compose up` / `npm start` | None | N/A |
 | Ephemeral staging | $0 (GitHub Actions) | Hourly cron (if new commits) | Automatic | N/A (ephemeral) |
 | Azure staging | $0 (scale-to-zero) | After ephemeral validation | Manual | Redeploy previous SHA tag |
-| Production | $0+ (pay-per-use) | After staging tests pass | Manual (GitHub reviewer) | Auto-rollback to previous SHA tag |
+| Production | $0+ (pay-per-use) | Manual trigger (staging must be green) | Manual | Auto-rollback to previous SHA tag |
 
 ### API Endpoints
 
