@@ -821,6 +821,7 @@ let matchState = {
   isHost: false,
   myName: null,
   scores: {},
+  disconnectedPlayers: new Set(),
   totalRounds: 5,
   currentRound: 0,
   roundStartedAt: null,
@@ -987,10 +988,18 @@ function handleWSMessage(msg) {
       onReconnected(msg);
       break;
     case 'opponent-disconnected':
-      onOpponentDisconnected(msg);
+    case 'player-disconnected':
+      onPlayerDisconnected(msg);
       break;
     case 'opponent-reconnected':
-      onOpponentReconnected(msg);
+    case 'player-reconnected':
+      onPlayerReconnected(msg);
+      break;
+    case 'player-forfeited':
+      onPlayerForfeited(msg);
+      break;
+    case 'host-transferred':
+      onHostTransferred(msg);
       break;
     case 'rematch-offered':
       onRematchOffered(msg);
@@ -1196,9 +1205,12 @@ function renderMatchScoreboard() {
 
   container.innerHTML = sorted.map(([name, score], i) => {
     const isYou = name === authUsername;
-    return `<div class="match-sb-row${isYou ? ' is-you' : ''}">
+    const isDc = matchState.disconnectedPlayers.has(name);
+    const dcClass = isDc ? ' disconnected' : '';
+    const dcIcon = isDc ? ' <span class="sb-dc-icon" title="Disconnected">🔌</span>' : '';
+    return `<div class="match-sb-row${isYou ? ' is-you' : ''}${dcClass}">
       <span class="match-sb-rank">#${i + 1}</span>
-      <span class="match-sb-name">${escapeHTML(name)}${isYou ? ' (you)' : ''}</span>
+      <span class="match-sb-name">${escapeHTML(name)}${isYou ? ' (you)' : ''}${dcIcon}</span>
       <span class="match-sb-score">${score}</span>
     </div>`;
   }).join('');
@@ -1496,6 +1508,7 @@ function resetMatchState() {
     isHost: false,
     myName: null,
     scores: {},
+    disconnectedPlayers: new Set(),
     totalRounds: 5,
     currentRound: 0,
     roundStartedAt: null,
@@ -1605,26 +1618,62 @@ function onReconnected(msg) {
   matchState.currentRound = msg.currentRound || 0;
   matchState.totalRounds = msg.totalRounds || 5;
 
-  // Restore scores if provided
-  if (msg.scores) {
+  // Restore scores from players array or legacy scores
+  if (msg.players && msg.players.length) {
+    matchState.scores = {};
+    matchState.disconnectedPlayers = new Set();
+    matchState.players = [];
+    for (const p of msg.players) {
+      matchState.scores[p.username] = p.score;
+      matchState.players.push(p.username);
+      if (!p.connected) {
+        matchState.disconnectedPlayers.add(p.username);
+      }
+    }
+  } else if (msg.scores) {
     matchState.scores = msg.scores;
   } else if (typeof msg.myScore === 'number') {
     matchState.scores[authUsername] = msg.myScore;
   }
+
+  if (msg.droppedPlayers && msg.droppedPlayers.length) {
+    for (const name of msg.droppedPlayers) {
+      matchState.disconnectedPlayers.add(name);
+    }
+  }
+
   renderMatchScoreboard();
   bindText('match-round', `Round ${matchState.currentRound + 1}/${matchState.totalRounds}`);
 
   hideReconnectOverlay();
 }
 
-/** Handle 'opponent-disconnected' — show warning toast. */
-function onOpponentDisconnected(msg) {
-  showToast(`${msg.username} disconnected — waiting for reconnect...`);
+/** Handle 'player-disconnected' — show toast and update scoreboard. */
+function onPlayerDisconnected(msg) {
+  matchState.disconnectedPlayers.add(msg.username);
+  renderMatchScoreboard();
+  showToast(`🔌 ${msg.username} disconnected — ${msg.remainingCount || '?'} player${(msg.remainingCount || 0) !== 1 ? 's' : ''} remaining`);
 }
 
-/** Handle 'opponent-reconnected' — clear warning. */
-function onOpponentReconnected(msg) {
-  showToast(`${msg.username} reconnected!`);
+/** Handle 'player-reconnected' — show toast and update scoreboard. */
+function onPlayerReconnected(msg) {
+  matchState.disconnectedPlayers.delete(msg.username);
+  renderMatchScoreboard();
+  showToast(`✅ ${msg.username} reconnected!`);
+}
+
+/** Handle 'player-forfeited' — player's reconnect timer expired. */
+function onPlayerForfeited(msg) {
+  matchState.disconnectedPlayers.delete(msg.username);
+  delete matchState.scores[msg.username];
+  matchState.players = matchState.players.filter(n => n !== msg.username);
+  renderMatchScoreboard();
+  showToast(`❌ ${msg.username} forfeited (disconnect timeout)`);
+}
+
+/** Handle 'host-transferred' — new host assigned. */
+function onHostTransferred(msg) {
+  showToast(`👑 ${msg.newHost} is now the host`);
 }
 
 /* ===========================
