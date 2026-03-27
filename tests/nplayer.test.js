@@ -57,23 +57,7 @@ function waitForMessage(ws, type, timeoutMs = 10000) {
   });
 }
 
-/** Collect all messages of a given type until timeout. */
-function collectMessages(ws, type, timeoutMs = 2000) {
-  return new Promise((resolve) => {
-    const msgs = [];
-    const timeout = setTimeout(() => {
-      ws.removeListener('message', handler);
-      resolve(msgs);
-    }, timeoutMs);
-    const handler = (data) => {
-      const msg = JSON.parse(data.toString());
-      if (msg.type === type) {
-        msgs.push(msg);
-      }
-    };
-    ws.on('message', handler);
-  });
-}
+
 
 async function createRoom(hostToken, maxPlayers, totalRounds = 3) {
   const res = await getAgent()
@@ -143,8 +127,8 @@ describe('N-Player Match Logic', () => {
       p3Ws.send(JSON.stringify({ type: 'answer', answerId: p3Round.puzzle.options[2], timeMs: 4000 }));
 
       const hostResult = await hostResultP;
-      const p2Result = await p2ResultP;
-      const p3Result = await p3ResultP;
+      await p2ResultP;
+      await p3ResultP;
 
       // roundResult scores should have all 3 player entries
       expect(Object.keys(hostResult.scores)).toHaveLength(3);
@@ -260,7 +244,7 @@ describe('N-Player Match Logic', () => {
 
     // gameOver for the 2 remaining players
     const hostGameOver = await waitForMessage(hostWs, 'gameOver');
-    const p2GameOver = await waitForMessage(p2Ws, 'gameOver');
+    await waitForMessage(p2Ws, 'gameOver');
 
     // Dropped player should appear in rankings
     expect(hostGameOver.totalPlayers).toBe(3);
@@ -341,9 +325,9 @@ describe('N-Player Match Logic', () => {
     await p3StartP;
 
     // Single round — all players give wrong answer → all get 0 → all tied
-    const hostRound = await waitForMessage(hostWs, 'round');
-    const p2Round = await waitForMessage(p2Ws, 'round');
-    const p3Round = await waitForMessage(p3Ws, 'round');
+    await waitForMessage(hostWs, 'round');
+    await waitForMessage(p2Ws, 'round');
+    await waitForMessage(p3Ws, 'round');
 
     // Send deliberately wrong answers (use an answer that's definitely not correct)
     const wrongAnswer = 'DEFINITELY_WRONG_ANSWER';

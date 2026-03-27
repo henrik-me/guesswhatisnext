@@ -54,7 +54,7 @@ function initWebSocket(server) {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const token = url.searchParams.get('token');
 
-    let user = null;
+    let user;
     try {
       user = jwt.verify(token, JWT_SECRET);
     } catch {
@@ -710,7 +710,7 @@ function handleDisconnect(ws) {
 }
 
 /** Handle forfeit — remaining player wins (last player standing). */
-function handleForfeit(roomCode, forfeitUserId, forfeitUsername) {
+function handleForfeit(roomCode, _forfeitUserId, _forfeitUsername) {
   const room = rooms.get(roomCode);
   if (!room) return;
 

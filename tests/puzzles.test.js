@@ -4,7 +4,6 @@
 
 const { getAgent, setup, teardown, registerUser } = require('./helper');
 
-const SYSTEM_KEY = 'gwn-dev-system-key';
 let userToken;
 
 beforeAll(async () => {

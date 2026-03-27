@@ -6,7 +6,6 @@
 import { Game } from './game.js';
 import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
-import { getTodayString } from './daily.js';
 import { GameAudio } from './audio.js';
 
 const screens = {};
@@ -53,12 +52,7 @@ function bindText(key, value) {
   });
 }
 
-/** Update the innerHTML of a data-bind element. */
-function bindHTML(key, html) {
-  document.querySelectorAll(`[data-bind="${key}"]`).forEach(el => {
-    el.innerHTML = html;
-  });
-}
+
 
 /**
  * UI callbacks object passed to the game engine.
@@ -287,7 +281,6 @@ function handleOptionClick(answer, btnEl) {
   const puzzle = Game.state.currentPuzzle;
   const isCorrect = answer === puzzle.answer;
   allBtns.forEach(b => {
-    const btnAnswer = b.textContent || b.querySelector('img')?.src;
     if (b === btnEl && !isCorrect) {
       b.classList.add('wrong');
     }
@@ -1400,12 +1393,12 @@ function onGameOver(msg) {
     const myRank = myEntry ? myEntry.rank : null;
     const totalPlayers = msg.totalPlayers || rankings.length;
 
-    if (myRank === 1) {
-      outcomeIcon = '🏆';
-      outcomeTitle = forfeit ? 'You Win! (Opponent left)' : 'You Win!';
-    } else if (msg.isDraw && myRank === 1) {
+    if (myRank === 1 && msg.isDraw) {
       outcomeIcon = '🤝';
       outcomeTitle = "It's a Tie!";
+    } else if (myRank === 1) {
+      outcomeIcon = '🏆';
+      outcomeTitle = forfeit ? 'You Win! (Opponent left)' : 'You Win!';
     } else {
       outcomeIcon = myRank <= 3 ? '🎉' : '😢';
       outcomeTitle = myRank === 1 ? 'You Win!' : `${ordinal(myRank)} Place`;
@@ -1794,8 +1787,7 @@ function renderProfile(meData, scoresData, achievementsData, historyData) {
 
   const user = meData.user || {};
   const stats = scoresData.stats || [];
-  const scores = scoresData.scores || [];
-  const achievements = (achievementsData.achievements || []).filter(a => a.unlocked);
+  const achievements= (achievementsData.achievements || []).filter(a => a.unlocked);
   const history = historyData.history || [];
 
   // Player info

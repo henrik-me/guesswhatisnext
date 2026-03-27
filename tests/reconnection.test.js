@@ -71,7 +71,7 @@ async function joinRoom(ws, roomCode) {
   return joinPromise;
 }
 
-async function startMatchAndGetRound(hostWs, playerSockets, roomCode) {
+async function startMatchAndGetRound(hostWs, playerSockets, _roomCode) {
   const startPromises = playerSockets.map(ws => waitForMessage(ws, 'match-start'));
   hostWs.send(JSON.stringify({ type: 'start-match' }));
   await Promise.all(startPromises);

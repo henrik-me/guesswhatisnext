@@ -19,7 +19,7 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
-      'no-unused-vars': 'warn',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'no-undef': 'off',
       'no-useless-assignment': 'warn',
     },
@@ -41,7 +41,7 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
-      'no-unused-vars': 'warn',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       'no-undef': 'off',
       'no-dupe-else-if': 'warn',
     },
@@ -61,8 +61,7 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
-      'no-unused-vars': 'warn',
-      'no-undef': 'off',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],      'no-undef': 'off',
     },
   },
 ];
