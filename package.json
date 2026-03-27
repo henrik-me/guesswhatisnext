@@ -9,7 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "echo 'No linter configured yet'"
+    "lint": "eslint . --max-warnings 50"
   },
   "keywords": [
     "game",
@@ -28,6 +28,8 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
     "supertest": "^7.2.2",
     "vitest": "^4.1.2"
   }
