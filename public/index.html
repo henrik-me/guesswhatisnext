@@ -29,6 +29,7 @@
       <footer class="home-stats">
         <div class="home-user-row" data-bind="home-user-display" style="display:none">
           <p class="home-user" data-bind="home-user-label"></p>
+          <button class="btn btn-profile" data-action="show-profile" aria-label="View Profile">👤 Profile</button>
           <button class="btn btn-logout" data-action="logout">Logout</button>
         </div>
         <p class="high-score">🏆 High Score: <span data-bind="high-score">0</span></p>
@@ -302,6 +303,17 @@
       </header>
       <div class="achievements-grid" data-bind="achievements-grid">
         <!-- Populated by JS -->
+      </div>
+      <button class="btn btn-back" data-action="go-home">← Back</button>
+    </section>
+
+    <!-- Player Profile Screen -->
+    <section id="screen-profile" class="screen" data-screen="profile" aria-label="Player Profile">
+      <header class="screen-header">
+        <h2>👤 Player Profile</h2>
+      </header>
+      <div class="profile-content" data-bind="profile-content">
+        <div class="profile-loading">Loading profile...</div>
       </div>
       <button class="btn btn-back" data-action="go-home">← Back</button>
     </section>
