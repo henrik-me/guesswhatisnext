@@ -131,7 +131,19 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
 | 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 are independent. Phase 9 can start anytime.
+**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 are independent. Phase 9 can start anytime. Phase 10 can start independently.
+
+## Phase 10 — CI/CD Pipeline Rework
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 51 | Simplify Dockerfile | ⬜ Pending | — | Switch from multi-stage node:22-alpine to single-stage node:22-slim; better-sqlite3 has prebuilds, no build tools needed |
+| 52 | Slim down PR CI checks | ⬜ Pending | 51 | Remove Docker build step from ci.yml; keep only parallel lint + test for fast PR feedback |
+| 53 | Remove push-to-main deploy pipeline | ⬜ Pending | 52 | Gut ci-cd.yml: remove all deploy/staging/production/rollback jobs. Push to main no longer triggers any deployment |
+| 54 | Hourly staging cron workflow | ⬜ Pending | 53 | New staging-deploy.yml: runs every 1h, checks if main has new commits since last run, fast-forwards release/staging branch to main HEAD, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, then (with manual approval) deploys to Azure staging |
+| 55 | Manual production deploy workflow | ⬜ Pending | 54 | New prod-deploy.yml: workflow_dispatch triggered manually from release/staging branch. Requires staging environment to be green. Deploys same image to production, verifies, auto-rollback on failure |
+
+**Parallelism:** Tasks 51–55 are sequential. Phase 10 is independent of Phases 6–9.
 
 ### Deployment Architecture
 
@@ -139,27 +151,52 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
   Developer pushes to main
          │
          ▼
-  ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
-  │  GitHub Actions CI/CD Pipeline                                                               │
-  │                                                                                              │
-  │  [Lint+Test] → [Build Docker] → [Staging] → [Smoke] → [Approval] → [Prod] → [Verify/Roll.] │
-  └──────────────────────────────────┬───────────────────────────────────┬────────────────────────┘
-                                     │                                   │
-                                     ▼                                   ▼
-                          ┌───────────────────────┐       ┌───────────────────────┐
-                          │  STAGING               │       │  PRODUCTION           │
-                          │  gwn-staging            │       │  gwn-prod             │
-                          │  Container Apps        │       │  Container Apps       │
-                          │  Consumption plan      │       │  Consumption plan     │
-                          │  Same Docker image     │       │  Same Docker image    │
-                          │  Scale-to-zero ($0)    │       │  Scale-to-zero ($0+)  │
-                          └───────────────────────┘       │  Auto-rollback on fail│
-                                                          └───────────────────────┘
-                                                                   ▲
-  GitHub Actions Health Monitor (every 5 min) ─────────────────────┘
-         │ on failure
+  ┌──────────────────────────────────────────────────────────────┐
+  │  PR checks (ci.yml)                                         │
+  │  [Lint] + [Test]  (parallel)                                │
+  └──────────────────────────────────────────────────────────────┘
+
+  Hourly cron (staging-deploy.yml — planned)
+         │
          ▼
-  GitHub Issue: "service health issue: {error}"
+  ┌──────────────────────────────────────────────────────────────────────────────────┐
+  │  Staging Pipeline                                                                │
+  │                                                                                  │
+  │  [New commits?] → [ff release/staging] → [Build+Push] → [Ephemeral smoke tests] │
+  │                                            to GHCR        (container in CI)      │
+  │                                                                    │             │
+  │                                                             [⏸️ Approval]         │
+  │                                                                    │             │
+  │                                                          [Deploy Azure staging]  │
+  └──────────────────────────────────────────────────────────────┬─────────────────  ┘
+                                                                 │
+                                                                 ▼
+                                                      ┌───────────────────────┐
+                                                      │  STAGING              │
+                                                      │  gwn-staging          │
+                                                      │  Container Apps       │
+                                                      │  Scale-to-zero ($0)   │
+                                                      └───────────────────────┘
+
+  Manual trigger (prod-deploy.yml — planned)
+         │  (requires staging green)
+         ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Production Pipeline                                                │
+  │                                                                     │
+  │  [Deploy same image to prod] → [Verify] → [Auto-rollback on fail]  │
+  └──────────────────────────────────────────┬──────────────────────────┘
+                                             │
+                                             ▼
+                                  ┌───────────────────────┐
+                                  │  PRODUCTION           │
+                                  │  gwn-prod             │
+                                  │  Container Apps       │
+                                  │  Auto-rollback on fail│
+                                  └───────────────────────┘
+                                             ▲
+  GitHub Actions Health Monitor (every 5 min)┘
+         │ on failure → GitHub Issue
 ```
 
 ### Key Design Decisions (Phase 3 — Security & Game Features)
@@ -189,6 +226,20 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | Winner logic | Full ranking with tie handling | Placements (1st/2nd/3rd…) instead of binary win/lose |
 | Spectator mode | Deferred | Not needed for initial N-player support; add later |
 | Rematch flow | Host "New Match" → auto-join lobby | Simpler than N-player ready-up counting |
+
+### Key Design Decisions (Phase 10 — CI/CD Pipeline Rework)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Docker base image | node:22-slim (single-stage) | better-sqlite3 ships prebuilt binaries; no python3/make/g++ needed. Simpler Dockerfile at cost of ~200MB vs ~100MB image |
+| PR CI checks | Lint + test only (no Docker build) | Docker build is slow, hits Docker Hub rate limits, and isn't needed for PR validation |
+| Push to main | No deployment triggered | Push to main only validates via PR checks; deployment is decoupled and goes through staging first |
+| Staging branch strategy | Fast-forward release/staging to main HEAD | Simpler than cherry-picking; no history divergence; staging always matches main |
+| Staging trigger | Hourly cron with "new commits?" check | Decouples staging deploy from every push; batches changes; reduces CI costs |
+| Ephemeral staging | Docker container in GitHub Actions | $0 infra cost; sufficient for automated smoke tests (health, auth, scores) |
+| Azure staging | Behind manual approval after ephemeral passes | Persistent environment for manual QA; only promoted after automated validation |
+| Production deploy | Manual workflow_dispatch from release/staging | Production only deploys code that has been validated in staging; never directly from main |
+| Production gate | Requires staging environment green | Cannot trigger prod deploy unless the latest staging deployment succeeded |
 
 ---
 

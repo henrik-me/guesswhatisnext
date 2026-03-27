@@ -646,8 +646,21 @@ Group tasks to minimize file overlap:
 | Environment | Trigger | Approval | Infrastructure | Rollback |
 |---|---|---|---|---|
 | **Local** | `docker compose up` or `npm start` | None | Developer machine | N/A |
-| **Staging** | Push to `main` | Automatic | Azure Container Apps (Consumption) — gwn-staging | Redeploy previous SHA-tagged image |
-| **Production** | After staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-prod | Auto-rollback to previous SHA-tagged image |
+| **Ephemeral staging** | Hourly cron (if main has new commits) | Automatic | GitHub Actions (container in workflow) | N/A (ephemeral) |
+| **Azure staging** | After ephemeral validation passes | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-staging | Redeploy previous SHA-tagged image |
+| **Production** | After Azure staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-prod | Auto-rollback to previous SHA-tagged image |
+
+### CI/CD Pipeline Overview
+
+**PR checks (ci.yml):** Lint and test run in parallel on every pull request. No Docker build — fast feedback.
+
+**Staging pipeline (staging-deploy.yml — planned):** Runs hourly via cron. Checks if `main` has new commits since last run. If yes: fast-forwards `release/staging` branch to main HEAD, builds Docker image, pushes to GHCR, runs ephemeral smoke tests in GitHub Actions container. With manual approval, deploys to Azure staging.
+
+**Production pipeline (prod-deploy.yml — planned):** Manually triggered (`workflow_dispatch`) from `release/staging` branch. Can only run when the staging environment is green. Deploys the same image already validated in staging to production. Verifies health, auto-rolls back on failure.
+
+**Push to `main`:** Does **not** trigger any deployment. All deployments flow through the staging pipeline first.
+
+**Legacy pipeline (ci-cd.yml):** Will be gutted — deploy/staging/production jobs removed. Push-to-main no longer deploys anywhere.
 
 ### Rollback Policy
 - Docker images are tagged with git SHA (`ghcr.io/henrik-me/guesswhatisnext:<sha>`) — every version is recoverable
