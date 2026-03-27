@@ -156,20 +156,34 @@ function handleJoin(ws, roomCode) {
       room.players.set(ws.user.id, ws);
       room.droppedPlayers.delete(ws.user.id);
 
+      // Build full player state for reconnecting player
+      const players = [];
+      room.players.forEach((pws, uid) => {
+        players.push({ username: pws.user.username, score: room.scores[uid] || 0, connected: true });
+      });
+      room.droppedPlayers.forEach(({ username }, uid) => {
+        players.push({ username, score: room.scores[uid] || 0, connected: false });
+      });
+      const droppedPlayers = [];
+      room.droppedPlayers.forEach(({ username }) => droppedPlayers.push(username));
+
       // Send reconnect state to the rejoining player
       ws.send(JSON.stringify({
         type: 'reconnected',
         roomCode: code,
         scores: buildScoresSnapshot(room),
+        players,
+        droppedPlayers,
         currentRound: room.round,
         totalRounds: room.totalRounds,
         myScore: room.scores[ws.user.id] || 0,
       }));
 
-      // Notify the other player
+      // Notify ALL remaining players
       broadcastToRoom(code, {
-        type: 'opponent-reconnected',
+        type: 'player-reconnected',
         username: ws.user.username,
+        remainingCount: room.players.size,
       }, ws.user.id);
 
       return;
@@ -607,16 +621,41 @@ function handleDisconnect(ws) {
 
     // More than 1 player still active — notify and give reconnect window
     broadcastToRoom(roomCode, {
-      type: 'opponent-disconnected',
+      type: 'player-disconnected',
       username: ws.user.username,
+      remainingCount: room.players.size,
     });
 
     const dcKey = `${ws.user.id}:${roomCode}`;
     const forfeitTimer = setTimeout(() => {
       disconnected.delete(dcKey);
       // Player didn't reconnect — they stay as dropped.
-      // Check if we still have enough players
+
+      // Host transfer if the disconnected player was host
       const currentRoom = rooms.get(roomCode);
+      if (currentRoom && currentRoom.started && ws.user.id === currentRoom.hostId && currentRoom.players.size > 0) {
+        const [[newHostId]] = [...currentRoom.players.entries()];
+        currentRoom.hostId = newHostId;
+        try {
+          const db = getDb();
+          db.prepare('UPDATE matches SET host_user_id = ? WHERE room_code = ?').run(newHostId, roomCode);
+        } catch { /* non-fatal */ }
+        broadcastToRoom(roomCode, {
+          type: 'host-transferred',
+          newHost: currentRoom.players.get(newHostId).user.username,
+        });
+      }
+
+      // Notify remaining players that the player has been removed
+      if (currentRoom && currentRoom.started) {
+        broadcastToRoom(roomCode, {
+          type: 'player-forfeited',
+          username: ws.user.username,
+          remainingCount: currentRoom.players.size,
+        });
+      }
+
+      // Check if we still have enough players
       if (currentRoom && currentRoom.started && currentRoom.players.size <= 1) {
         if (currentRoom.players.size === 1) {
           handleForfeit(roomCode, ws.user.id, ws.user.username);

@@ -239,7 +239,7 @@ describe('N-Player Match Logic', () => {
     await p3Result0P;
 
     // Player 3 disconnects before round 2
-    const hostDisconnectP = waitForMessage(hostWs, 'opponent-disconnected');
+    const hostDisconnectP = waitForMessage(hostWs, 'player-disconnected');
     p3Ws.close();
     const disconnectMsg = await hostDisconnectP;
     expect(disconnectMsg.username).toBe('np_p3');
@@ -300,7 +300,7 @@ describe('N-Player Match Logic', () => {
 
     // Player 2 disconnects first
     p2Ws.close();
-    await waitForMessage(hostWs, 'opponent-disconnected');
+    await waitForMessage(hostWs, 'player-disconnected');
 
     // Player 3 disconnects — host is last one standing
     const hostGameOverP = waitForMessage(hostWs, 'gameOver');

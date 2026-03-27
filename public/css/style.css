@@ -1312,6 +1312,19 @@ body::before {
   font-weight: 700;
 }
 
+.match-sb-row.disconnected {
+  opacity: 0.45;
+}
+
+.match-sb-row.disconnected .match-sb-name {
+  text-decoration: line-through;
+}
+
+.sb-dc-icon {
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+}
+
 .match-sb-rank {
   min-width: 1.4rem;
   text-align: center;
