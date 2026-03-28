@@ -89,6 +89,10 @@ $StorageKey = az storage account keys list `
     --account-name $StorageAccount `
     --query "[0].value" `
     -o tsv
+if ($LASTEXITCODE -ne 0 -or -not $StorageKey) {
+    Write-Error "Error: Failed to retrieve storage account key for storage account '$StorageAccount'."
+    exit 1
+}
 
 # Create separate file shares for staging and production
 foreach ($Share in @($ShareNameStaging, $ShareNameProduction)) {
@@ -178,8 +182,9 @@ $stagingYamlFile = [System.IO.Path]::GetTempFileName() + ".yaml"
 $stagingYaml | Set-Content -Path $stagingYamlFile -Encoding UTF8
 try {
     az containerapp update --name gwn-staging --resource-group $ResourceGroup --yaml $stagingYamlFile --output none 2>$null
-} catch {
-    Write-Host "  Volume mount may need manual config via Azure Portal."
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Staging volume mount failed (exit code $LASTEXITCODE). May need manual config via Azure Portal."
+    }
 } finally {
     Remove-Item -Path $stagingYamlFile -ErrorAction SilentlyContinue
 }
@@ -241,8 +246,9 @@ $prodYamlFile = [System.IO.Path]::GetTempFileName() + ".yaml"
 $prodYaml | Set-Content -Path $prodYamlFile -Encoding UTF8
 try {
     az containerapp update --name gwn-production --resource-group $ResourceGroup --yaml $prodYamlFile --output none 2>$null
-} catch {
-    Write-Host "  Volume mount may need manual config via Azure Portal."
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Production volume mount failed (exit code $LASTEXITCODE). May need manual config via Azure Portal."
+    }
 } finally {
     Remove-Item -Path $prodYamlFile -ErrorAction SilentlyContinue
 }

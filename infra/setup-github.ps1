@@ -13,6 +13,23 @@ $ErrorActionPreference = "Stop"
 $Repo = "henrik-me/guesswhatisnext"
 $ResourceGroup = "gwn-rg"
 
+# Helper: run an external command and fail fast on non-zero exit
+function Invoke-CliOrFail {
+    param([string]$Description)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "$Description failed (exit code $LASTEXITCODE)."
+        exit 1
+    }
+}
+
+# Helper: generate a cryptographically secure random string (Base64)
+function New-SecureSecret {
+    param([int]$ByteLength)
+    $bytes = New-Object 'System.Byte[]' $ByteLength
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    return [Convert]::ToBase64String($bytes)
+}
+
 Write-Host "=== GitHub CI/CD Setup for $Repo ===" -ForegroundColor Cyan
 Write-Host ""
 
@@ -38,6 +55,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $SpJson | gh secret set AZURE_CREDENTIALS --repo $Repo
+Invoke-CliOrFail "Setting AZURE_CREDENTIALS secret"
 Write-Host "  ✓ AZURE_CREDENTIALS set as GitHub secret" -ForegroundColor Green
 
 # ─── 2. Set app secrets in GitHub ─────────────────────────────────────────────
@@ -47,28 +65,32 @@ Write-Host "→ Step 2: App secrets" -ForegroundColor Yellow
 
 if ($env:JWT_SECRET) {
     $env:JWT_SECRET | gh secret set JWT_SECRET --repo $Repo
+    Invoke-CliOrFail "Setting JWT_SECRET secret"
     Write-Host "  ✓ JWT_SECRET set from environment variable" -ForegroundColor Green
 } else {
     $existing = gh secret list --repo $Repo 2>$null | Select-String "JWT_SECRET"
     if ($existing) {
         Write-Host "  ✓ JWT_SECRET already exists, skipping"
     } else {
-        $jwt = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 48 | ForEach-Object {[char]$_})
+        $jwt = New-SecureSecret -ByteLength 48
         $jwt | gh secret set JWT_SECRET --repo $Repo
+        Invoke-CliOrFail "Setting JWT_SECRET secret"
         Write-Host "  ✓ JWT_SECRET generated and set" -ForegroundColor Green
     }
 }
 
 if ($env:SYSTEM_API_KEY) {
     $env:SYSTEM_API_KEY | gh secret set SYSTEM_API_KEY --repo $Repo
+    Invoke-CliOrFail "Setting SYSTEM_API_KEY secret"
     Write-Host "  ✓ SYSTEM_API_KEY set from environment variable" -ForegroundColor Green
 } else {
     $existing = gh secret list --repo $Repo 2>$null | Select-String "SYSTEM_API_KEY"
     if ($existing) {
         Write-Host "  ✓ SYSTEM_API_KEY already exists, skipping"
     } else {
-        $apikey = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+        $apikey = New-SecureSecret -ByteLength 32
         $apikey | gh secret set SYSTEM_API_KEY --repo $Repo
+        Invoke-CliOrFail "Setting SYSTEM_API_KEY secret"
         Write-Host "  ✓ SYSTEM_API_KEY generated and set" -ForegroundColor Green
     }
 }
@@ -100,14 +122,14 @@ if (-not $StagingFqdn -or -not $ProdFqdn) {
     Write-Host "  Staging:    $StagingUrl"
     Write-Host "  Production: $ProdUrl"
 
-    # Set as repo-level variables
-    try {
-        $StagingUrl | gh variable set STAGING_URL --repo $Repo 2>$null
-        $ProdUrl | gh variable set PROD_URL --repo $Repo 2>$null
-        Write-Host "  ✓ URLs set as GitHub variables" -ForegroundColor Green
-    } catch {
-        Write-Host "  ⚠ Could not set URL variables (may need environment-level config)" -ForegroundColor Red
-    }
+    # STAGING_URL as variable (staging-deploy.yml reads vars.STAGING_URL)
+    # PROD_URL as secret (health-monitor.yml reads secrets.PROD_URL)
+    $StagingUrl | gh variable set STAGING_URL --repo $Repo 2>$null
+    Invoke-CliOrFail "Setting STAGING_URL variable"
+    $ProdUrl | gh secret set PROD_URL --repo $Repo 2>$null
+    Invoke-CliOrFail "Setting PROD_URL secret"
+    Write-Host "  ✓ STAGING_URL set as GitHub variable" -ForegroundColor Green
+    Write-Host "  ✓ PROD_URL set as GitHub secret" -ForegroundColor Green
 }
 
 # ─── 4. Summary ──────────────────────────────────────────────────────────────
@@ -119,10 +141,10 @@ Write-Host "GitHub Secrets (set automatically):"
 Write-Host "  ✓ AZURE_CREDENTIALS — service principal for Azure deployments"
 Write-Host "  ✓ JWT_SECRET"
 Write-Host "  ✓ SYSTEM_API_KEY"
+if ($ProdFqdn) { Write-Host "  ✓ PROD_URL = $ProdUrl" }
 Write-Host ""
 Write-Host "GitHub Variables:"
 if ($StagingFqdn) { Write-Host "  ✓ STAGING_URL = $StagingUrl" }
-if ($ProdFqdn) { Write-Host "  ✓ PROD_URL = $ProdUrl" }
 Write-Host ""
 Write-Host "The staging deploy workflow will now deploy to Azure automatically"
 Write-Host "on every merge to main. Trigger it manually with:"

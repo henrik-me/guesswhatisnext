@@ -50,9 +50,14 @@ az provider register --namespace Microsoft.Storage
 # 1. Login
 az login
 
-# 2. Set required environment variables
-$env:JWT_SECRET = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 48 | ForEach-Object {[char]$_})
-$env:SYSTEM_API_KEY = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+# 2. Set required environment variables (using cryptographically secure RNG)
+function New-SecureSecret([int]$ByteLength) {
+    $bytes = New-Object 'System.Byte[]' $ByteLength
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    return [Convert]::ToBase64String($bytes)
+}
+$env:JWT_SECRET = New-SecureSecret 48
+$env:SYSTEM_API_KEY = New-SecureSecret 32
 
 # 3. Provision Azure resources
 .\infra\deploy.ps1
