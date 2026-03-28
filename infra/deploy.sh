@@ -53,6 +53,14 @@ else
 fi
 
 # ─── Azure Storage for SQLite persistence ────────────────────────────────────
+# Each environment gets its own file share so staging data never touches production.
+# The app uses CREATE TABLE IF NOT EXISTS and only seeds when tables are empty,
+# so deployments never overwrite existing data. Schema changes are additive
+# (ALTER TABLE ADD COLUMN) and applied on startup.
+#
+# MIGRATION NOTE: If upgrading from the old shared gwn-data share, copy data first:
+#   azcopy copy "https://<account>.file.core.windows.net/gwn-data/*" \
+#               "https://<account>.file.core.windows.net/gwn-data-production/" --recursive
 
 echo "→ Setting up persistent storage..."
 
