@@ -101,7 +101,11 @@ foreach ($Share in @($ShareNameStaging, $ShareNameProduction)) {
         --name $Share `
         --account-name $StorageAccount `
         --account-key $StorageKey `
-        --output none 2>$null
+        --output none
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to create file share '$Share'."
+        exit 1
+    }
 }
 
 # Register storage mounts in Container Apps environment (one per share)
@@ -113,7 +117,10 @@ az containerapp env storage set `
     --azure-file-account-key $StorageKey `
     --azure-file-share-name $ShareNameStaging `
     --access-mode ReadWrite `
-    --output none 2>$null
+    --output none
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Failed to register staging storage mount (exit code $LASTEXITCODE)."
+}
 
 az containerapp env storage set `
     --name $Environment `
@@ -123,7 +130,10 @@ az containerapp env storage set `
     --azure-file-account-key $StorageKey `
     --azure-file-share-name $ShareNameProduction `
     --access-mode ReadWrite `
-    --output none 2>$null
+    --output none
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Failed to register production storage mount (exit code $LASTEXITCODE)."
+}
 
 # ─── Deploy Staging ──────────────────────────────────────────────────────────
 

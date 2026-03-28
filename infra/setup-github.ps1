@@ -68,7 +68,7 @@ if ($env:JWT_SECRET) {
     Invoke-CliOrFail "Setting JWT_SECRET secret"
     Write-Host "  ✓ JWT_SECRET set from environment variable" -ForegroundColor Green
 } else {
-    $existing = gh secret list --repo $Repo 2>$null | Select-String "JWT_SECRET"
+    $existing = gh secret list --repo $Repo --json name --jq '.[].name' 2>$null | Where-Object { $_ -eq "JWT_SECRET" }
     if ($existing) {
         Write-Host "  ✓ JWT_SECRET already exists, skipping"
     } else {
@@ -84,7 +84,7 @@ if ($env:SYSTEM_API_KEY) {
     Invoke-CliOrFail "Setting SYSTEM_API_KEY secret"
     Write-Host "  ✓ SYSTEM_API_KEY set from environment variable" -ForegroundColor Green
 } else {
-    $existing = gh secret list --repo $Repo 2>$null | Select-String "SYSTEM_API_KEY"
+    $existing = gh secret list --repo $Repo --json name --jq '.[].name' 2>$null | Where-Object { $_ -eq "SYSTEM_API_KEY" }
     if ($existing) {
         Write-Host "  ✓ SYSTEM_API_KEY already exists, skipping"
     } else {
@@ -124,9 +124,9 @@ if (-not $StagingFqdn -or -not $ProdFqdn) {
 
     # STAGING_URL as variable (staging-deploy.yml reads vars.STAGING_URL)
     # PROD_URL as secret (health-monitor.yml reads secrets.PROD_URL)
-    $StagingUrl | gh variable set STAGING_URL --repo $Repo 2>$null
+    $StagingUrl | gh variable set STAGING_URL --repo $Repo
     Invoke-CliOrFail "Setting STAGING_URL variable"
-    $ProdUrl | gh secret set PROD_URL --repo $Repo 2>$null
+    $ProdUrl | gh secret set PROD_URL --repo $Repo
     Invoke-CliOrFail "Setting PROD_URL secret"
     Write-Host "  ✓ STAGING_URL set as GitHub variable" -ForegroundColor Green
     Write-Host "  ✓ PROD_URL set as GitHub secret" -ForegroundColor Green
