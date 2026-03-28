@@ -163,7 +163,7 @@ fi
 
 # Add volume mount to staging — preserve the currently deployed image
 STAGING_CURRENT_IMAGE=$(az containerapp show --name gwn-staging --resource-group "$RESOURCE_GROUP" \
-  --query "properties.template.containers[0].image" -o tsv 2>/dev/null)
+  --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
 STAGING_CURRENT_IMAGE="${STAGING_CURRENT_IMAGE:-$PLACEHOLDER_IMAGE}"
 az containerapp update \
   --name gwn-staging \
@@ -220,7 +220,7 @@ fi
 
 # Add volume mount to production — preserve the currently deployed image
 PROD_CURRENT_IMAGE=$(az containerapp show --name gwn-production --resource-group "$RESOURCE_GROUP" \
-  --query "properties.template.containers[0].image" -o tsv 2>/dev/null)
+  --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
 PROD_CURRENT_IMAGE="${PROD_CURRENT_IMAGE:-$PLACEHOLDER_IMAGE}"
 az containerapp update \
   --name gwn-production \
