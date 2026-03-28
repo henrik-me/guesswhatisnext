@@ -14,6 +14,10 @@ $ShareNameProduction = "gwn-data-production"
 $Registry = "ghcr.io"
 $ImageName = "ghcr.io/henrik-me/guesswhatisnext"
 $ImageTag = if ($env:IMAGE_TAG) { $env:IMAGE_TAG } else { "latest" }
+# For initial provisioning, use a public placeholder image since GHCR is private.
+# Staging auto-deploys the real GHCR image on merge to main via CI/CD;
+# production deployment is manual or via a separate workflow.
+$PlaceholderImage = "mcr.microsoft.com/k8se/quickstart:latest"
 
 # Validate required environment variables
 foreach ($var in @("JWT_SECRET", "SYSTEM_API_KEY")) {
@@ -144,7 +148,7 @@ if (-not $stagingExists) {
         --name gwn-staging `
         --resource-group $ResourceGroup `
         --environment $Environment `
-        --image "${ImageName}:${ImageTag}" `
+        --image $PlaceholderImage `
         --target-port 3000 `
         --ingress external `
         --min-replicas 0 `
@@ -173,7 +177,9 @@ if (-not $stagingExists) {
     Write-Host "  Staging app updated."
 }
 
-# Volume mount for staging (via YAML)
+# Volume mount for staging (via YAML) — preserve the currently deployed image
+$stagingCurrentImage = az containerapp show --name gwn-staging --resource-group $ResourceGroup --query "properties.template.containers[0].image" -o tsv 2>$null
+if (-not $stagingCurrentImage) { $stagingCurrentImage = $PlaceholderImage }
 $stagingYaml = @"
 properties:
   template:
@@ -183,7 +189,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-staging
-        image: ${ImageName}:${ImageTag}
+        image: ${stagingCurrentImage}
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data
@@ -208,7 +214,7 @@ if (-not $prodExists) {
         --name gwn-production `
         --resource-group $ResourceGroup `
         --environment $Environment `
-        --image "${ImageName}:${ImageTag}" `
+        --image $PlaceholderImage `
         --target-port 3000 `
         --ingress external `
         --min-replicas 1 `
@@ -237,7 +243,9 @@ if (-not $prodExists) {
     Write-Host "  Production app updated."
 }
 
-# Volume mount for production (via YAML)
+# Volume mount for production (via YAML) — preserve the currently deployed image
+$prodCurrentImage = az containerapp show --name gwn-production --resource-group $ResourceGroup --query "properties.template.containers[0].image" -o tsv 2>$null
+if (-not $prodCurrentImage) { $prodCurrentImage = $PlaceholderImage }
 $prodYaml = @"
 properties:
   template:
@@ -247,7 +255,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-production
-        image: ${ImageName}:${ImageTag}
+        image: ${prodCurrentImage}
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data

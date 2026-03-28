@@ -16,6 +16,10 @@ SHARE_NAME_PRODUCTION="gwn-data-production"
 REGISTRY="ghcr.io"
 IMAGE_NAME="ghcr.io/henrik-me/guesswhatisnext"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
+# For initial provisioning, use a public placeholder since GHCR is private.
+# Staging auto-deploys the real GHCR image on merge to main via CI/CD;
+# production deployment is manual or via a separate workflow.
+PLACEHOLDER_IMAGE="mcr.microsoft.com/k8se/quickstart:latest"
 
 # Validate required environment variables
 for var in JWT_SECRET SYSTEM_API_KEY; do
@@ -130,7 +134,7 @@ if ! az containerapp show --name gwn-staging --resource-group "$RESOURCE_GROUP" 
     --name gwn-staging \
     --resource-group "$RESOURCE_GROUP" \
     --environment "$ENVIRONMENT" \
-    --image "$IMAGE_NAME:$IMAGE_TAG" \
+    --image "$PLACEHOLDER_IMAGE" \
     --target-port 3000 \
     --ingress external \
     --min-replicas 0 \
@@ -157,7 +161,10 @@ else
   echo "  Staging app updated."
 fi
 
-# Add volume mount to staging
+# Add volume mount to staging — preserve the currently deployed image
+STAGING_CURRENT_IMAGE=$(az containerapp show --name gwn-staging --resource-group "$RESOURCE_GROUP" \
+  --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
+STAGING_CURRENT_IMAGE="${STAGING_CURRENT_IMAGE:-$PLACEHOLDER_IMAGE}"
 az containerapp update \
   --name gwn-staging \
   --resource-group "$RESOURCE_GROUP" \
@@ -170,7 +177,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-staging
-        image: $IMAGE_NAME:$IMAGE_TAG
+        image: $STAGING_CURRENT_IMAGE
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data
@@ -184,7 +191,7 @@ if ! az containerapp show --name gwn-production --resource-group "$RESOURCE_GROU
     --name gwn-production \
     --resource-group "$RESOURCE_GROUP" \
     --environment "$ENVIRONMENT" \
-    --image "$IMAGE_NAME:$IMAGE_TAG" \
+    --image "$PLACEHOLDER_IMAGE" \
     --target-port 3000 \
     --ingress external \
     --min-replicas 1 \
@@ -211,7 +218,10 @@ else
   echo "  Production app updated."
 fi
 
-# Add volume mount to production
+# Add volume mount to production — preserve the currently deployed image
+PROD_CURRENT_IMAGE=$(az containerapp show --name gwn-production --resource-group "$RESOURCE_GROUP" \
+  --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
+PROD_CURRENT_IMAGE="${PROD_CURRENT_IMAGE:-$PLACEHOLDER_IMAGE}"
 az containerapp update \
   --name gwn-production \
   --resource-group "$RESOURCE_GROUP" \
@@ -224,7 +234,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-production
-        image: $IMAGE_NAME:$IMAGE_TAG
+        image: $PROD_CURRENT_IMAGE
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data
