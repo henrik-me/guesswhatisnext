@@ -70,7 +70,7 @@ jobs:
           JWT_SECRET: ephemeral-smoke-test-secret
           SYSTEM_API_KEY: ephemeral-smoke-test-key
         options: >-
-          --health-cmd "curl -sf http://localhost:3000/api/health -H 'X-API-Key: ephemeral-smoke-test-key' || exit 1"
+          --health-cmd "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/api/health', {headers: {'X-API-Key': 'ephemeral-smoke-test-key'}}, (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1));\""
           --health-interval 5s
           --health-timeout 10s
           --health-retries 10
