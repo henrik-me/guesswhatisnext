@@ -4,7 +4,7 @@
 
 const { getAgent, setup, teardown } = require('./helper');
 
-const SYSTEM_KEY = 'gwn-dev-system-key';
+const SYSTEM_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
 
 beforeAll(setup);
 afterAll(teardown);

@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-FROM node:18-alpine AS base
+FROM node:22-slim
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
+# Install production dependencies (better-sqlite3 has prebuilt binaries)
+COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # Copy application code
