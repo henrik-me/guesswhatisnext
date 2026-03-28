@@ -15,7 +15,8 @@ $Registry = "ghcr.io"
 $ImageName = "ghcr.io/henrik-me/guesswhatisnext"
 $ImageTag = if ($env:IMAGE_TAG) { $env:IMAGE_TAG } else { "latest" }
 # For initial provisioning, use a public placeholder image since GHCR is private.
-# The CI/CD pipeline will deploy the real image on first merge to main.
+# Staging auto-deploys the real GHCR image on merge to main via CI/CD;
+# production deployment is manual or via a separate workflow.
 $PlaceholderImage = "mcr.microsoft.com/k8se/quickstart:latest"
 
 # Validate required environment variables
@@ -186,7 +187,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-staging
-        image: ${ImageName}:${ImageTag}
+        image: ${PlaceholderImage}
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data
@@ -250,7 +251,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-production
-        image: ${ImageName}:${ImageTag}
+        image: ${PlaceholderImage}
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data
