@@ -140,7 +140,7 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 51 | Simplify Dockerfile | ✅ Done | — | Single-stage node:22-slim; better-sqlite3 has prebuilds, no build tools needed |
 | 52 | Slim down PR CI checks | ✅ Done | 51 | New ci.yml with parallel lint + test only; no Docker build in PR checks |
 | 53 | Remove push-to-main deploy pipeline | ✅ Done | 52 | ci-cd.yml gutted to disabled placeholder; push to main no longer triggers any deployment |
-| 54 | Hourly staging cron workflow | ⬜ Pending | 53 | New staging-deploy.yml: runs every 1h, checks if main has new commits since last run, fast-forwards release/staging branch to main HEAD, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, then (with manual approval) deploys to Azure staging |
+| 54 | Staging deploy on merge | ✅ Done | 53 | New staging-deploy.yml: triggers on push to main, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, fast-forwards release/staging, then (with manual approval) deploys to Azure staging |
 | 55 | Manual production deploy workflow | ⬜ Pending | 54 | New prod-deploy.yml: workflow_dispatch triggered manually from release/staging branch. Requires staging environment to be green. Deploys same image to production, verifies, auto-rollback on failure |
 
 **Parallelism:** Tasks 51–55 are sequential. Phase 10 is independent of Phases 6–9.
@@ -156,19 +156,18 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
   │  [Lint] + [Test]  (parallel)                                │
   └──────────────────────────────────────────────────────────────┘
 
-  Hourly cron (staging-deploy.yml — planned)
-         │
+  On merge to main (staging-deploy.yml)
+         │  (concurrency: cancel superseded)
          ▼
   ┌──────────────────────────────────────────────────────────────────────────────────┐
   │  Staging Pipeline                                                                │
   │                                                                                  │
-  │  [New commits?] → [ff release/staging] → [Build+Push] → [Ephemeral smoke tests] │
-  │                                            to GHCR        (container in CI)      │
-  │                                                                    │             │
-  │                                                             [⏸️ Approval]         │
-  │                                                                    │             │
-  │                                                          [Deploy Azure staging]  │
-  └──────────────────────────────────────────────────────────────┬─────────────────  ┘
+  │  [Build+Push to GHCR] → [Ephemeral smoke tests] → [ff release/staging]          │
+  │                           (container in CI)              │                       │
+  │                                                   [⏸️ Approval]                  │
+  │                                                          │                       │
+  │                                                [Deploy Azure staging → Verify]   │
+  └──────────────────────────────────────────────────────────────┬───────────────────┘
                                                                  │
                                                                  ▼
                                                       ┌───────────────────────┐
@@ -235,7 +234,7 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | PR CI checks | Lint + test only (no Docker build) | Docker build is slow, hits Docker Hub rate limits, and isn't needed for PR validation |
 | Push to main | No deployment triggered | Push to main only validates via PR checks; deployment is decoupled and goes through staging first |
 | Staging branch strategy | Fast-forward release/staging to main HEAD | Simpler than cherry-picking; no history divergence; staging always matches main |
-| Staging trigger | Hourly cron with "new commits?" check | Decouples staging deploy from every push; batches changes; reduces CI costs |
+| Staging trigger | On merge to main (with concurrency cancel) | Immediate feedback; concurrency group cancels superseded runs for rapid merges |
 | Ephemeral staging | Docker container in GitHub Actions | $0 infra cost; sufficient for automated smoke tests (health, auth, scores) |
 | Azure staging | Behind manual approval after ephemeral passes | Persistent environment for manual QA; only promoted after automated validation |
 | Production deploy | Manual workflow_dispatch from release/staging | Production only deploys code that has been validated in staging; never directly from main |
