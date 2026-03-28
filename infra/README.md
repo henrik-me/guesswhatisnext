@@ -44,16 +44,38 @@ az provider register --namespace Microsoft.Storage
 
 ## Initial Deployment
 
-```bash
-# 1. Set required environment variables
-export JWT_SECRET="<generate-a-strong-secret>"
-export SYSTEM_API_KEY="<generate-a-strong-key>"
+### PowerShell (Windows)
 
-# 2. Provision Azure resources
+```powershell
+# 1. Login
+az login
+
+# 2. Set required environment variables
+$env:JWT_SECRET = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 48 | ForEach-Object {[char]$_})
+$env:SYSTEM_API_KEY = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+
+# 3. Provision Azure resources
+.\infra\deploy.ps1
+
+# 4. Configure GitHub secrets and variables
+.\infra\setup-github.ps1
+```
+
+### Bash (macOS / Linux / WSL)
+
+```bash
+# 1. Login
+az login
+
+# 2. Set required environment variables
+export JWT_SECRET="$(openssl rand -base64 36)"
+export SYSTEM_API_KEY="$(openssl rand -base64 24)"
+
+# 3. Provision Azure resources
 chmod +x infra/deploy.sh
 ./infra/deploy.sh
 
-# 3. Configure GitHub secrets and variables
+# 4. Configure GitHub secrets and variables
 chmod +x infra/setup-github.sh
 ./infra/setup-github.sh
 ```
