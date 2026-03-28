@@ -111,7 +111,7 @@ jobs:
             -X POST "http://localhost:3000/api/scores" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ env.TOKEN }}" \
-            -d '{"score": 100, "puzzleId": 1, "timeMs": 5000}')
+            -d '{"mode": "free-play", "score": 100, "correctCount": 5, "totalRounds": 5, "bestStreak": 5}')
           HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
           echo "Score submit status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
