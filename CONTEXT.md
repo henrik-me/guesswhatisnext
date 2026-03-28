@@ -137,9 +137,9 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 51 | Simplify Dockerfile | ⬜ Pending | — | Switch from multi-stage node:22-alpine to single-stage node:22-slim; better-sqlite3 has prebuilds, no build tools needed |
-| 52 | Slim down PR CI checks | ⬜ Pending | 51 | Remove Docker build step from ci.yml; keep only parallel lint + test for fast PR feedback |
-| 53 | Remove push-to-main deploy pipeline | ⬜ Pending | 52 | Gut ci-cd.yml: remove all deploy/staging/production/rollback jobs. Push to main no longer triggers any deployment |
+| 51 | Simplify Dockerfile | ✅ Done | — | Single-stage node:22-slim; better-sqlite3 has prebuilds, no build tools needed |
+| 52 | Slim down PR CI checks | ✅ Done | 51 | New ci.yml with parallel lint + test only; no Docker build in PR checks |
+| 53 | Remove push-to-main deploy pipeline | ✅ Done | 52 | ci-cd.yml gutted to disabled placeholder; push to main no longer triggers any deployment |
 | 54 | Hourly staging cron workflow | ⬜ Pending | 53 | New staging-deploy.yml: runs every 1h, checks if main has new commits since last run, fast-forwards release/staging branch to main HEAD, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, then (with manual approval) deploys to Azure staging |
 | 55 | Manual production deploy workflow | ⬜ Pending | 54 | New prod-deploy.yml: workflow_dispatch triggered manually from release/staging branch. Requires staging environment to be green. Deploys same image to production, verifies, auto-rollback on failure |
 
