@@ -38,9 +38,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
-      - run: npm install
+      # Lockfile generated on Windows lacks Linux-specific optional deps
+      # (rolldown native bindings). Fresh install resolves correctly.
+      - run: rm -f package-lock.json && npm install
 
       - name: Run tests
         run: npm test
