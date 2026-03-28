@@ -1,0 +1,201 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+  workflow_dispatch: {}
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/henrik-me/guesswhatisnext
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+
+  smoke-test:
+    name: Ephemeral Smoke Test
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+    services:
+      app:
+        image: ghcr.io/henrik-me/guesswhatisnext:${{ needs.build-and-push.outputs.image-tag }}
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 3000:3000
+        env:
+          NODE_ENV: staging
+          PORT: 3000
+          JWT_SECRET: ephemeral-smoke-test-secret
+          SYSTEM_API_KEY: ephemeral-smoke-test-key
+        options: >-
+          --health-cmd "curl -sf http://localhost:3000/api/health -H 'X-API-Key: ephemeral-smoke-test-key' || exit 1"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 10
+          --health-start-period 15s
+    steps:
+      - name: Health check
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "X-API-Key: ephemeral-smoke-test-key" \
+            "http://localhost:3000/api/health")
+          echo "Health check status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Health check failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Register test user
+        run: |
+          TIMESTAMP=$(date +%s)
+          RESPONSE=$(curl -s -w '\n%{http_code}' \
+            -X POST "http://localhost:3000/api/auth/register" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\": \"smoketest_${TIMESTAMP}\", \"password\": \"SmokeTest123!\"}")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "Register status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "::error::User registration failed with status $HTTP_STATUS"
+            echo "$BODY"
+            exit 1
+          fi
+          TOKEN=$(echo "$BODY" | jq -r '.token')
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Submit test score
+        run: |
+          RESPONSE=$(curl -s -w '\n%{http_code}' \
+            -X POST "http://localhost:3000/api/scores" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ env.TOKEN }}" \
+            -d '{"score": 100, "puzzleId": 1, "timeMs": 5000}')
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+          echo "Score submit status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "201" ]; then
+            echo "::error::Score submission failed with status $HTTP_STATUS"
+            echo "$RESPONSE" | sed '$d'
+            exit 1
+          fi
+
+      - name: Fetch puzzles
+        run: |
+          RESPONSE=$(curl -s -w '\n%{http_code}' \
+            -H "Authorization: Bearer ${{ env.TOKEN }}" \
+            "http://localhost:3000/api/puzzles")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+          echo "Puzzles endpoint status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Puzzles endpoint failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+  update-staging-branch:
+    name: Fast-Forward release/staging
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward release/staging to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create release/staging if it doesn't exist
+          if ! git ls-remote --exit-code origin refs/heads/release/staging > /dev/null 2>&1; then
+            echo "Creating release/staging branch"
+            git checkout -b release/staging
+            git push origin release/staging
+          else
+            echo "Fast-forwarding release/staging to main"
+            git fetch origin release/staging
+            git checkout release/staging
+            git merge --ff-only origin/main
+            git push origin release/staging
+          fi
+
+  deploy-azure-staging:
+    name: Deploy to Azure Staging
+    needs: [build-and-push, update-staging-branch]
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to staging Container App
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name gwn-staging \
+              --resource-group gwn-rg \
+              --image ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+              --set-env-vars \
+                NODE_ENV=staging \
+                PORT=3000 \
+                JWT_SECRET=${{ secrets.JWT_SECRET }} \
+                SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
+
+      - name: Wait for deployment to stabilize
+        run: sleep 30
+
+      - name: Verify staging deployment
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
+            "${{ vars.STAGING_URL }}/api/health")
+          echo "Staging health check: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Staging health check failed with status $HTTP_STATUS"
+            exit 1
+          fi

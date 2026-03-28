@@ -43,19 +43,20 @@ az provider register --namespace Microsoft.Storage
 ## Initial Deployment
 
 ```bash
-# Set required environment variables
+# 1. Set required environment variables
 export JWT_SECRET="<generate-a-strong-secret>"
 export SYSTEM_API_KEY="<generate-a-strong-key>"
 
-# Optionally specify image tag (defaults to 'latest')
-export IMAGE_TAG="latest"
-
-# Run the deployment script
+# 2. Provision Azure resources
 chmod +x infra/deploy.sh
 ./infra/deploy.sh
+
+# 3. Configure GitHub secrets and variables
+chmod +x infra/setup-github.sh
+./infra/setup-github.sh
 ```
 
-The script is idempotent — safe to re-run at any time.
+Both scripts are idempotent — safe to re-run at any time.
 
 ## GitHub Configuration
 
@@ -106,11 +107,25 @@ visibility is set correctly:
 
 ## CI/CD Pipeline
 
-The pipeline (`.github/workflows/ci-cd.yml`) runs on every push to `main`:
+Three workflows handle the full pipeline:
 
+### PR Checks (`.github/workflows/ci.yml`)
+Runs on every pull request to `main`:
 ```
-lint → test → build & push image → deploy staging → smoke test
-  → manual approval → deploy production → verify → auto-rollback (on failure)
+[Lint] + [Test]  (parallel)
+```
+
+### Staging Deploy (`.github/workflows/staging-deploy.yml`)
+Runs on every merge to `main`:
+```
+Build & Push GHCR → Ephemeral Smoke Test → ff release/staging
+  → Manual Approval → Deploy Azure Staging → Verify Health
+```
+
+### Production Deploy (`.github/workflows/prod-deploy.yml` — planned)
+Manual trigger from `release/staging`:
+```
+Deploy same image to prod → Verify → Auto-rollback on failure
 ```
 
 ### Auto-Rollback
