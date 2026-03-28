@@ -16,7 +16,9 @@ Azure Resources
   ├── Container Apps Environment: gwn-env
   ├── Container App: gwn-staging  (0-2 replicas, 0.25 CPU, 0.5 GiB)
   ├── Container App: gwn-production (1-5 replicas, 0.5 CPU, 1 GiB)
-  └── Storage Account: gwnstorage* (Azure Files for SQLite persistence)
+  └── Storage Account: gwnstorage*
+      ├── gwn-data-staging (Azure Files → gwn-staging /app/data)
+      └── gwn-data-production (Azure Files → gwn-production /app/data)
 ```
 
 ## Prerequisites
@@ -206,8 +208,14 @@ When the monitor creates an issue:
 
 ## Persistent Storage
 
-SQLite database files are stored on an Azure Files share mounted at `/app/data`.
-This ensures data persists across container restarts and deployments.
+SQLite database files are stored on Azure Files shares mounted at `/app/data`.
+Each environment has its own isolated file share to prevent data corruption
+and ensure staging tests never affect production data.
+
+| Environment | File Share | Storage Mount |
+|---|---|---|
+| Staging | `gwn-data-staging` | `gwn-storage-staging` |
+| Production | `gwn-data-production` | `gwn-storage-production` |
 
 > **Note:** Azure Files has higher latency than local disk. For high-traffic
 > production use, consider migrating to Azure SQL or Cosmos DB.
