@@ -11,7 +11,8 @@ RESOURCE_GROUP="gwn-rg"
 LOCATION="eastus"
 ENVIRONMENT="gwn-env"
 STORAGE_ACCOUNT="gwnstorage${RANDOM_SUFFIX:-$(az account show --query id -o tsv | cut -c1-8)}"
-SHARE_NAME="gwn-data"
+SHARE_NAME_STAGING="gwn-data-staging"
+SHARE_NAME_PRODUCTION="gwn-data-production"
 REGISTRY="ghcr.io"
 IMAGE_NAME="ghcr.io/henrik-me/guesswhatisnext"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
@@ -82,21 +83,34 @@ STORAGE_KEY=$(az storage account keys list \
   --query "[0].value" \
   -o tsv)
 
-# Create file share for SQLite data
-az storage share create \
-  --name "$SHARE_NAME" \
-  --account-name "$STORAGE_ACCOUNT" \
-  --account-key "$STORAGE_KEY" \
-  --output none 2>/dev/null || true
+# Create separate file shares for staging and production
+for SHARE in "$SHARE_NAME_STAGING" "$SHARE_NAME_PRODUCTION"; do
+  echo "  Creating file share: $SHARE"
+  az storage share create \
+    --name "$SHARE" \
+    --account-name "$STORAGE_ACCOUNT" \
+    --account-key "$STORAGE_KEY" \
+    --output none 2>/dev/null || true
+done
 
-# Add storage to Container Apps environment
+# Register storage mounts in Container Apps environment (one per share)
 az containerapp env storage set \
   --name "$ENVIRONMENT" \
   --resource-group "$RESOURCE_GROUP" \
-  --storage-name gwn-storage \
+  --storage-name gwn-storage-staging \
   --azure-file-account-name "$STORAGE_ACCOUNT" \
   --azure-file-account-key "$STORAGE_KEY" \
-  --azure-file-share-name "$SHARE_NAME" \
+  --azure-file-share-name "$SHARE_NAME_STAGING" \
+  --access-mode ReadWrite \
+  --output none 2>/dev/null || true
+
+az containerapp env storage set \
+  --name "$ENVIRONMENT" \
+  --resource-group "$RESOURCE_GROUP" \
+  --storage-name gwn-storage-production \
+  --azure-file-account-name "$STORAGE_ACCOUNT" \
+  --azure-file-account-key "$STORAGE_KEY" \
+  --azure-file-share-name "$SHARE_NAME_PRODUCTION" \
   --access-mode ReadWrite \
   --output none 2>/dev/null || true
 
@@ -144,7 +158,7 @@ properties:
   template:
     volumes:
       - name: data-volume
-        storageName: gwn-storage
+        storageName: gwn-storage-staging
         storageType: AzureFile
     containers:
       - name: gwn-staging
@@ -198,7 +212,7 @@ properties:
   template:
     volumes:
       - name: data-volume
-        storageName: gwn-storage
+        storageName: gwn-storage-production
         storageType: AzureFile
     containers:
       - name: gwn-production
