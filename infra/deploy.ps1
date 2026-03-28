@@ -177,7 +177,9 @@ if (-not $stagingExists) {
     Write-Host "  Staging app updated."
 }
 
-# Volume mount for staging (via YAML)
+# Volume mount for staging (via YAML) — preserve the currently deployed image
+$stagingCurrentImage = az containerapp show --name gwn-staging --resource-group $ResourceGroup --query "properties.template.containers[0].image" -o tsv 2>$null
+if (-not $stagingCurrentImage) { $stagingCurrentImage = $PlaceholderImage }
 $stagingYaml = @"
 properties:
   template:
@@ -187,7 +189,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-staging
-        image: ${PlaceholderImage}
+        image: ${stagingCurrentImage}
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data
@@ -241,7 +243,9 @@ if (-not $prodExists) {
     Write-Host "  Production app updated."
 }
 
-# Volume mount for production (via YAML)
+# Volume mount for production (via YAML) — preserve the currently deployed image
+$prodCurrentImage = az containerapp show --name gwn-production --resource-group $ResourceGroup --query "properties.template.containers[0].image" -o tsv 2>$null
+if (-not $prodCurrentImage) { $prodCurrentImage = $PlaceholderImage }
 $prodYaml = @"
 properties:
   template:
@@ -251,7 +255,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-production
-        image: ${PlaceholderImage}
+        image: ${prodCurrentImage}
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data

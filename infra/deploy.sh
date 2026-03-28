@@ -161,7 +161,10 @@ else
   echo "  Staging app updated."
 fi
 
-# Add volume mount to staging
+# Add volume mount to staging — preserve the currently deployed image
+STAGING_CURRENT_IMAGE=$(az containerapp show --name gwn-staging --resource-group "$RESOURCE_GROUP" \
+  --query "properties.template.containers[0].image" -o tsv 2>/dev/null)
+STAGING_CURRENT_IMAGE="${STAGING_CURRENT_IMAGE:-$PLACEHOLDER_IMAGE}"
 az containerapp update \
   --name gwn-staging \
   --resource-group "$RESOURCE_GROUP" \
@@ -174,7 +177,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-staging
-        image: $PLACEHOLDER_IMAGE
+        image: $STAGING_CURRENT_IMAGE
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data
@@ -215,7 +218,10 @@ else
   echo "  Production app updated."
 fi
 
-# Add volume mount to production
+# Add volume mount to production — preserve the currently deployed image
+PROD_CURRENT_IMAGE=$(az containerapp show --name gwn-production --resource-group "$RESOURCE_GROUP" \
+  --query "properties.template.containers[0].image" -o tsv 2>/dev/null)
+PROD_CURRENT_IMAGE="${PROD_CURRENT_IMAGE:-$PLACEHOLDER_IMAGE}"
 az containerapp update \
   --name gwn-production \
   --resource-group "$RESOURCE_GROUP" \
@@ -228,7 +234,7 @@ properties:
         storageType: AzureFile
     containers:
       - name: gwn-production
-        image: $PLACEHOLDER_IMAGE
+        image: $PROD_CURRENT_IMAGE
         volumeMounts:
           - volumeName: data-volume
             mountPath: /app/data
