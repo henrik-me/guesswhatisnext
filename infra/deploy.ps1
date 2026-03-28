@@ -14,6 +14,9 @@ $ShareNameProduction = "gwn-data-production"
 $Registry = "ghcr.io"
 $ImageName = "ghcr.io/henrik-me/guesswhatisnext"
 $ImageTag = if ($env:IMAGE_TAG) { $env:IMAGE_TAG } else { "latest" }
+# For initial provisioning, use a public placeholder image since GHCR is private.
+# The CI/CD pipeline will deploy the real image on first merge to main.
+$PlaceholderImage = "mcr.microsoft.com/k8se/quickstart:latest"
 
 # Validate required environment variables
 foreach ($var in @("JWT_SECRET", "SYSTEM_API_KEY")) {
@@ -144,7 +147,7 @@ if (-not $stagingExists) {
         --name gwn-staging `
         --resource-group $ResourceGroup `
         --environment $Environment `
-        --image "${ImageName}:${ImageTag}" `
+        --image $PlaceholderImage `
         --target-port 3000 `
         --ingress external `
         --min-replicas 0 `
@@ -208,7 +211,7 @@ if (-not $prodExists) {
         --name gwn-production `
         --resource-group $ResourceGroup `
         --environment $Environment `
-        --image "${ImageName}:${ImageTag}" `
+        --image $PlaceholderImage `
         --target-port 3000 `
         --ingress external `
         --min-replicas 1 `

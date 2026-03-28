@@ -16,6 +16,9 @@ SHARE_NAME_PRODUCTION="gwn-data-production"
 REGISTRY="ghcr.io"
 IMAGE_NAME="ghcr.io/henrik-me/guesswhatisnext"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
+# For initial provisioning, use a public placeholder since GHCR is private.
+# The CI/CD pipeline will deploy the real image on first merge to main.
+PLACEHOLDER_IMAGE="mcr.microsoft.com/k8se/quickstart:latest"
 
 # Validate required environment variables
 for var in JWT_SECRET SYSTEM_API_KEY; do
@@ -130,7 +133,7 @@ if ! az containerapp show --name gwn-staging --resource-group "$RESOURCE_GROUP" 
     --name gwn-staging \
     --resource-group "$RESOURCE_GROUP" \
     --environment "$ENVIRONMENT" \
-    --image "$IMAGE_NAME:$IMAGE_TAG" \
+    --image "$PLACEHOLDER_IMAGE" \
     --target-port 3000 \
     --ingress external \
     --min-replicas 0 \
@@ -184,7 +187,7 @@ if ! az containerapp show --name gwn-production --resource-group "$RESOURCE_GROU
     --name gwn-production \
     --resource-group "$RESOURCE_GROUP" \
     --environment "$ENVIRONMENT" \
-    --image "$IMAGE_NAME:$IMAGE_TAG" \
+    --image "$PLACEHOLDER_IMAGE" \
     --target-port 3000 \
     --ingress external \
     --min-replicas 1 \
