@@ -594,9 +594,9 @@ Agent in wt-Y (if main has moved since branch creation):
 
 Every PR must be reviewed by GitHub Copilot before merging. This is part of the standard workflow.
 
-**Requesting review:**
+**Requesting review (requires gh CLI ≥ 2.88.0):**
 ```bash
-gh pr edit <PR#> --add-reviewer copilot-pull-request-reviewer[bot]
+gh pr edit <PR#> --add-reviewer "@copilot"
 ```
 
 **After Copilot reviews:**
