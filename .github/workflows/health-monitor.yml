@@ -24,10 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     outputs:
-      app-exists: ${{ steps.check.outputs.app-exists }}
-      provisioning-state: ${{ steps.check.outputs.provisioning-state }}
-      revision-health: ${{ steps.check.outputs.revision-health }}
-      revision-name: ${{ steps.check.outputs.revision-name }}
+      app-exists: ${{ steps.check.outputs['app-exists'] }}
+      provisioning-state: ${{ steps.check.outputs['provisioning-state'] }}
+      revision-health: ${{ steps.check.outputs['revision-health'] }}
+      revision-name: ${{ steps.check.outputs['revision-name'] }}
       status: ${{ steps.check.outputs.status }}
     steps:
       - name: Log in to Azure
@@ -67,10 +67,15 @@ jobs:
             # Check latest revision
             set +e
             ACTIVE_COUNT=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "[?properties.active==\`true\`] | length(@)" -o tsv 2>&1)
+            if [ $? -ne 0 ]; then ACTIVE_COUNT=""; fi
             LATEST_NAME=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].name" -o tsv 2>&1)
+            if [ $? -ne 0 ]; then LATEST_NAME=""; fi
             LATEST_HEALTH=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.runningState" -o tsv 2>&1)
+            if [ $? -ne 0 ]; then LATEST_HEALTH=""; fi
             LATEST_PROV=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.provisioningState" -o tsv 2>&1)
+            if [ $? -ne 0 ]; then LATEST_PROV=""; fi
             LATEST_REPLICAS=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.replicas" -o tsv 2>&1)
+            if [ $? -ne 0 ]; then LATEST_REPLICAS=""; fi
             set -e
 
             ACTIVE_COUNT=${ACTIVE_COUNT:-0}
@@ -82,6 +87,11 @@ jobs:
             # Validate ACTIVE_COUNT is numeric
             if ! [[ "$ACTIVE_COUNT" =~ ^[0-9]+$ ]]; then
               ACTIVE_COUNT=0
+            fi
+
+            # Validate LATEST_REPLICAS is numeric
+            if ! [[ "$LATEST_REPLICAS" =~ ^[0-9]+$ ]]; then
+              LATEST_REPLICAS=0
             fi
 
             echo "revision-name=$LATEST_NAME" >> "$GITHUB_OUTPUT"
@@ -107,6 +117,9 @@ jobs:
             elif [ "$LATEST_HEALTH" = "Failed" ] || [ "$LATEST_HEALTH" = "Degraded" ]; then
               echo "status=failed" >> "$GITHUB_OUTPUT"
               echo "error=Latest revision $LATEST_NAME running state: $LATEST_HEALTH" >> "$GITHUB_OUTPUT"
+            elif [ "$LATEST_REPLICAS" -gt 0 ] && [ "$LATEST_HEALTH" != "Running" ]; then
+              echo "status=failed" >> "$GITHUB_OUTPUT"
+              echo "error=Latest revision $LATEST_NAME has $LATEST_REPLICAS replicas but running state is: $LATEST_HEALTH" >> "$GITHUB_OUTPUT"
             else
               echo "status=healthy" >> "$GITHUB_OUTPUT"
               echo "✅ Azure infrastructure healthy"
@@ -128,7 +141,7 @@ jobs:
             const { data: existing } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              labels: 'service-health',
+              labels: 'health-azure',
               state: 'open',
               per_page: 5,
             });
@@ -161,7 +174,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title,
-                labels: ['service-health'],
+                labels: ['health-azure'],
                 body,
               });
             }
@@ -170,8 +183,8 @@ jobs:
         if: steps.check.outputs.status == 'healthy'
         run: |
           echo "✅ Azure check passed"
-          echo "  Revision: ${{ steps.check.outputs.revision-name }}"
-          echo "  Health: ${{ steps.check.outputs.revision-health }}"
+          echo "  Revision: ${{ steps.check.outputs['revision-name'] }}"
+          echo "  Health: ${{ steps.check.outputs['revision-health'] }}"
           echo "  Replicas: ${{ steps.check.outputs.replicas }}"
 
   # Tier 2: Deep HTTP checks — manual dispatch only, WILL wake the container
@@ -337,7 +350,7 @@ jobs:
             const { data: existingIssues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              labels: 'service-health',
+              labels: 'health-deep',
               state: 'open',
               per_page: 10,
             });
@@ -356,13 +369,10 @@ jobs:
               `| **Environment** | production |`,
               `| **Workflow run** | [View logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
               ``,
-              `### Health endpoint response`,
-              '```json',
-              responseBody || 'No response body',
-              '```',
-              ``,
               healthError ? `### Error\n${healthError}` : '',
               puzzlesError ? `### Puzzles error\n${puzzlesError}` : '',
+              ``,
+              `> Full response details available in the [workflow logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
             ].filter(Boolean).join('\n');
 
             const matching = existingIssues.filter(i => i.title.startsWith('[Deep]'));
@@ -380,7 +390,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title,
-                labels: ['service-health'],
+                labels: ['health-deep'],
                 body,
               });
             }
