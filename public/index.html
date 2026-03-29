@@ -4,7 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Guess What's Next — a pattern recognition game. Spot the sequence and pick what comes next!">
-  <meta name="theme-color" content="#0f0f1a">
+  <meta name="theme-color" content="#6c5ce7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Guess What's Next">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="img/icons/icon-192.png">
   <title>Guess What's Next</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -223,6 +228,7 @@
       <div class="lobby-code-container">
         <span class="lobby-code" data-bind="lobby-room-code" aria-label="Room code"></span>
         <button class="lobby-copy-btn" data-action="copy-room-code" aria-label="Copy room code">📋</button>
+        <button class="lobby-copy-btn" data-action="copy-room-link" aria-label="Copy shareable link">🔗 Copy Link</button>
       </div>
       <div class="lobby-player-count" data-bind="lobby-player-count" aria-label="Player count"></div>
       <div class="lobby-status">
@@ -240,6 +246,7 @@
     <section id="screen-match" class="screen" data-screen="match" aria-label="Multiplayer match">
       <div class="match-hud-bar">
         <span class="match-round-badge" data-bind="match-round">Round 1/5</span>
+        <button class="sound-toggle-btn" data-action="toggle-sound" aria-label="Toggle sound effects">🔇</button>
       </div>
       <div class="match-scoreboard" role="status" aria-label="Match scores" data-bind="match-scoreboard">
         <!-- Dynamic scoreboard rows rendered by JS -->
@@ -369,5 +376,10 @@
   </div>
 
   <script type="module" src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>
