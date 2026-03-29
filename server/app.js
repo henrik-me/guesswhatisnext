@@ -98,13 +98,24 @@ function createServer() {
     });
   });
 
+  // Unauthenticated liveness probe for container orchestrators
+  app.get('/healthz', (_req, res) => {
+    res.status(200).send('ok');
+  });
+
   // SPA fallback — serve index.html for non-API routes
   app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   });
 
   // Initialize database and WebSocket
-  initDb();
+  try {
+    initDb();
+  } catch (err) {
+    console.error('❌ Database initialization failed:', err.message);
+    console.error(err.stack);
+    process.exit(1);
+  }
   initWebSocket(server);
 
   return { app, server };
