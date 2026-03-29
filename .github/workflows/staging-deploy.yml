@@ -236,6 +236,10 @@ jobs:
             echo "Tagging commit as: $REVISION"
             echo "REVISION=$REVISION" >> "$GITHUB_ENV"
 
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Push deployment tag
         run: |
           git tag "$REVISION" "${{ github.sha }}"
