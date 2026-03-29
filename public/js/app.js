@@ -18,8 +18,10 @@ let activePuzzles = localPuzzles;
 
 /** Fetch puzzles from the server API; falls back to local data on failure. */
 async function fetchPuzzlesFromServer() {
+  if (!authToken) return; // no auth — keep local puzzles
+
   try {
-    const resp = await fetch('/api/puzzles');
+    const resp = await apiFetch('/api/puzzles');
     if (!resp.ok) return;
     const data = await resp.json();
     if (Array.isArray(data) && data.length > 0) {
@@ -391,8 +393,12 @@ function init() {
       if (!res.ok) {
         authToken = null;
         authUsername = null;
-        localStorage.removeItem('gwn_auth_token');
-        localStorage.removeItem('gwn_auth_username');
+        try {
+          localStorage.removeItem('gwn_auth_token');
+          localStorage.removeItem('gwn_auth_username');
+        } catch {
+          // Ignore storage errors during startup token cleanup
+        }
         updateHomeAuthDisplay();
       }
     }).catch(() => {
@@ -923,7 +929,13 @@ const MAX_PENDING_SCORES = 10;
 
 /** Queue a score for submission after the user logs in. */
 function queuePendingScore(summary) {
-  const pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
+  let pending;
+  try {
+    pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
+  } catch {
+    pending = [];
+    try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
+  }
   const fastestAnswerMs = (summary.results || [])
     .filter(r => r.correct)
     .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
@@ -936,7 +948,11 @@ function queuePendingScore(summary) {
     fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
   });
   while (pending.length > MAX_PENDING_SCORES) pending.shift();
-  localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(pending));
+  try {
+    localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(pending));
+  } catch {
+    // Storage full or unavailable — score will be lost
+  }
 }
 
 /** Submit any pending scores that were queued while logged out. */
@@ -944,19 +960,25 @@ async function submitPendingScores() {
   const pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
   if (pending.length === 0) return;
 
-  for (const entry of pending) {
+  while (pending.length > 0) {
+    const entry = pending[0];
     try {
       const res = await apiFetch('/api/scores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry),
       });
-      if (!res.ok) return;
+      if (!res.ok) return; // leave remaining entries for retry
     } catch {
-      return;
+      return; // network error; keep remaining for later
+    }
+    pending.shift();
+    if (pending.length > 0) {
+      localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(pending));
+    } else {
+      localStorage.removeItem(PENDING_SCORES_KEY);
     }
   }
-  localStorage.removeItem(PENDING_SCORES_KEY);
 }
 
 /** Perform login or register. */
