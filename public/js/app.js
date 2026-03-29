@@ -18,13 +18,8 @@ let activePuzzles = localPuzzles;
 
 /** Fetch puzzles from the server API; falls back to local data on failure. */
 async function fetchPuzzlesFromServer() {
-  const token = localStorage.getItem('gwn_auth_token');
-  if (!token) return; // no auth — keep local puzzles
-
   try {
-    const resp = await fetch('/api/puzzles', {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
+    const resp = await fetch('/api/puzzles');
     if (!resp.ok) return;
     const data = await resp.json();
     if (Array.isArray(data) && data.length > 0) {
@@ -231,13 +226,16 @@ const ui = {
       bestStreak: summary.bestStreak,
     });
 
-    // Submit score to server if logged in
+    // Submit score to server if logged in, otherwise queue for later
     if (authToken) {
       submitScore(summary).then(data => {
         if (data && data.newAchievements && data.newAchievements.length > 0) {
           showAchievementToasts(data.newAchievements);
         }
       }).catch(() => {});
+    } else {
+      queuePendingScore(summary);
+      showToast('Log in to save your score to the leaderboard');
     }
 
     // Show/hide share button based on mode
@@ -384,6 +382,23 @@ function init() {
 
   // Update auth display on home screen
   updateHomeAuthDisplay();
+
+  // Validate stored token on startup (non-blocking)
+  if (authToken) {
+    fetch('/api/auth/me', {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    }).then(res => {
+      if (!res.ok) {
+        authToken = null;
+        authUsername = null;
+        localStorage.removeItem('gwn_auth_token');
+        localStorage.removeItem('gwn_auth_username');
+        updateHomeAuthDisplay();
+      }
+    }).catch(() => {
+      // Network error — keep token, will validate on next API call
+    });
+  }
 
   // Fetch puzzles from server (non-blocking, falls back to local data)
   fetchPuzzlesFromServer();
@@ -660,13 +675,10 @@ async function fetchLeaderboard(period) {
   container.innerHTML = '<div class="leaderboard-loading">Loading</div>';
 
   try {
-    const headers = {};
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
     const url = leaderboardMode === 'multiplayer'
       ? `/api/scores/leaderboard/multiplayer?period=${period}`
       : `/api/scores/leaderboard?mode=freeplay&period=${period}`;
-    const res = await fetch(url, { headers });
-    if (handle401(res)) return;
+    const res = await apiFetch(url);
     if (res.status === 401) {
       container.innerHTML =
         '<div class="leaderboard-error">Log in to view the leaderboard 🔒</div>';
@@ -690,11 +702,10 @@ async function submitScore(summary) {
   const fastestAnswerMs = (summary.results || [])
     .filter(r => r.correct)
     .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
-  const res = await fetch('/api/scores', {
+  const res = await apiFetch('/api/scores', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authToken}`,
     },
     body: JSON.stringify({
       score: summary.score,
@@ -705,7 +716,7 @@ async function submitScore(summary) {
       fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
     }),
   });
-  if (handle401(res)) return null;
+  if (res.status === 401) return null;
   if (!res.ok) throw new Error(`Score submit failed: ${res.status}`);
   return res.json();
 }
@@ -795,10 +806,8 @@ async function fetchAchievements() {
   container.innerHTML = '<div class="achievements-loading">Loading achievements...</div>';
 
   try {
-    const res = await fetch('/api/achievements', {
-      headers: { 'Authorization': `Bearer ${authToken}` },
-    });
-    if (handle401(res)) return;
+    const res = await apiFetch('/api/achievements');
+    if (res.status === 401) return;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     renderAchievements(data.achievements);
@@ -893,13 +902,61 @@ function logout() {
   showScreen('home');
 }
 
-/** Handle a 401 response — prompt user to re-login. Returns true if 401 was handled. */
-function handle401(res) {
-  if (res.status !== 401) return false;
-  logout();
-  showToast('Session expired — please log in again');
-  showScreen('auth');
-  return true;
+/** Central API fetch wrapper — adds auth header and handles 401 automatically. */
+async function apiFetch(url, options = {}) {
+  const opts = { ...options };
+  opts.headers = { ...opts.headers };
+  if (authToken) {
+    opts.headers['Authorization'] = `Bearer ${authToken}`;
+  }
+  const res = await fetch(url, opts);
+  if (res.status === 401 && authToken) {
+    logout();
+    showToast('Session expired — please log in again');
+    showScreen('auth');
+  }
+  return res;
+}
+
+const PENDING_SCORES_KEY = 'gwn_pending_scores';
+const MAX_PENDING_SCORES = 10;
+
+/** Queue a score for submission after the user logs in. */
+function queuePendingScore(summary) {
+  const pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
+  const fastestAnswerMs = (summary.results || [])
+    .filter(r => r.correct)
+    .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
+  pending.push({
+    score: summary.score,
+    mode: summary.mode || 'freeplay',
+    correctCount: summary.correctCount || 0,
+    totalRounds: summary.totalRounds || 0,
+    bestStreak: summary.bestStreak || 0,
+    fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
+  });
+  while (pending.length > MAX_PENDING_SCORES) pending.shift();
+  localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(pending));
+}
+
+/** Submit any pending scores that were queued while logged out. */
+async function submitPendingScores() {
+  const pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
+  if (pending.length === 0) return;
+
+  for (const entry of pending) {
+    try {
+      const res = await apiFetch('/api/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      });
+      if (!res.ok) return;
+    } catch {
+      return;
+    }
+  }
+  localStorage.removeItem(PENDING_SCORES_KEY);
 }
 
 /** Perform login or register. */
@@ -942,6 +999,7 @@ async function authAction(action) {
     bindText('auth-error', '');
 
     updateHomeAuthDisplay();
+    submitPendingScores();
     showScreen('multiplayer');
   } catch {
     bindText('auth-error', 'Network error — is the server running?');
@@ -1068,11 +1126,10 @@ async function createRoom() {
   }
 
   try {
-    const res = await fetch('/api/matches', {
+    const res = await apiFetch('/api/matches', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
       },
       body: JSON.stringify({
         totalRounds: Number(document.getElementById('room-rounds')?.value) || 5,
@@ -1080,7 +1137,7 @@ async function createRoom() {
       }),
     });
     const data = await res.json();
-    if (handle401(res)) return;
+    if (res.status === 401) return;
     if (!res.ok) {
       showToast(data.error || 'Failed to create room');
       return;
@@ -1121,16 +1178,15 @@ async function joinRoom(code) {
   }
 
   try {
-    const res = await fetch('/api/matches/join', {
+    const res = await apiFetch('/api/matches/join', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
       },
       body: JSON.stringify({ roomCode }),
     });
     const data = await res.json();
-    if (handle401(res)) return;
+    if (res.status === 401) return;
     if (!res.ok) {
       showToast(data.error || 'Failed to join room');
       return;
@@ -1883,18 +1939,15 @@ async function fetchProfile() {
   container.innerHTML = '<div class="profile-loading">Loading profile...</div>';
 
   try {
-    const headers = { 'Authorization': `Bearer ${authToken}` };
     const [meRes, scoresRes, achievementsRes, historyRes] = await Promise.all([
-      fetch('/api/auth/me', { headers }),
-      fetch('/api/scores/me', { headers }),
-      fetch('/api/achievements', { headers }),
-      fetch('/api/matches/history', { headers }),
+      apiFetch('/api/auth/me'),
+      apiFetch('/api/scores/me'),
+      apiFetch('/api/achievements'),
+      apiFetch('/api/matches/history'),
     ]);
 
-    if (handle401(meRes)) return;
-    if (handle401(scoresRes)) return;
-    if (handle401(achievementsRes)) return;
-    if (handle401(historyRes)) return;
+    if (meRes.status === 401 || scoresRes.status === 401 ||
+        achievementsRes.status === 401 || historyRes.status === 401) return;
 
     if (!meRes.ok) throw new Error(`me: ${meRes.status}`);
     if (!scoresRes.ok) throw new Error(`scores: ${scoresRes.status}`);
@@ -2041,10 +2094,8 @@ async function fetchMatchHistory() {
   container.innerHTML = '<div class="leaderboard-loading">Loading</div>';
 
   try {
-    const res = await fetch('/api/matches/history', {
-      headers: { 'Authorization': `Bearer ${authToken}` },
-    });
-    if (handle401(res)) return;
+    const res = await apiFetch('/api/matches/history');
+    if (res.status === 401) return;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     renderMatchHistory(data.history || []);
