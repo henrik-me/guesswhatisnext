@@ -957,7 +957,13 @@ function queuePendingScore(summary) {
 
 /** Submit any pending scores that were queued while logged out. */
 async function submitPendingScores() {
-  const pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
+  let pending;
+  try {
+    pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
+  } catch {
+    pending = [];
+    try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
+  }
   if (pending.length === 0) return;
 
   while (pending.length > 0) {
