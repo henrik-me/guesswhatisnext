@@ -51,7 +51,7 @@ jobs:
         run: |
           IMAGE_PATH="${IMAGE_NAME#${REGISTRY}/}"
           echo "Checking for image $IMAGE_NAME:${{ inputs.image-tag }}"
-          RESPONSE=$(curl -s -o /dev/null -w '%{http_code}' \
+          RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' \
             -u "${{ vars.GHCR_USERNAME }}:${{ secrets.GHCR_PAT }}" \
             -H "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
             "https://${REGISTRY}/v2/${IMAGE_PATH}/manifests/${{ inputs.image-tag }}")
@@ -189,6 +189,19 @@ jobs:
               -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
               "${{ secrets.PROD_URL }}/api/health" || true)
             echo "Rollback health check: $HTTP_STATUS"
+
+            # Deactivate the failed revision after rollback
+            FAILED_REVISION=$(az containerapp revision list \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --query "[?properties.template.containers[0].image=='$IMAGE_NAME:${{ inputs.image-tag }}'].name | [0]" -o tsv 2>/dev/null || true)
+            if [ -n "$FAILED_REVISION" ]; then
+              az containerapp revision deactivate \
+                --name gwn-production \
+                --resource-group gwn-rg \
+                --revision "$FAILED_REVISION" || true
+              echo "🧹 Deactivated failed revision: $FAILED_REVISION"
+            fi
 
       - name: Fail if unhealthy
         if: steps.healthcheck.outputs.healthy != 'true'
