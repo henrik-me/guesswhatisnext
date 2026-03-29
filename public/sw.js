@@ -43,9 +43,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k.startsWith('gwn-') && k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 /** Fetch handler — cache-first for static, network-first for API. */
@@ -76,21 +75,21 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() =>
-          caches.match(request).then((cached) =>
-            cached || new Response(JSON.stringify({ error: 'Service unavailable' }), {
-              status: 503,
-              headers: { 'Content-Type': 'application/json' },
-            })
-          )
-        )
+        .catch(() => {
+          const offlineResponse = new Response(JSON.stringify({ error: 'Service unavailable' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+          if (isAuthEndpoint || hasAuthHeader) return offlineResponse;
+          return caches.match(request).then((cached) => cached || offlineResponse);
+        })
     );
     return;
   }
 
   // Cache-first for static assets
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(request, { ignoreSearch: request.mode === 'navigate' }).then((cached) => {
       if (cached) return cached;
       return fetch(request)
         .then((response) => {
