@@ -6,8 +6,9 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const { config } = require('../config');
 
-const DB_PATH = process.env.GWN_DB_PATH || path.join(__dirname, '..', '..', 'data', 'game.db');
+const DB_PATH = config.GWN_DB_PATH;
 let db = null;
 
 /** Get the database instance (lazy init). */
@@ -47,7 +48,7 @@ function initDb() {
   }
 
   // Seed system account if it doesn't exist
-  const SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
+  const SYSTEM_API_KEY = config.SYSTEM_API_KEY;
   const existing = database.prepare('SELECT id FROM users WHERE username = ?').get('system');
   if (!existing) {
     const bcrypt = require('bcryptjs');

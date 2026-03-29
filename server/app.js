@@ -7,6 +7,7 @@ const express = require('express');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const { config } = require('./config');
 const { initDb, getDb } = require('./db/connection');
 const { requireSystem } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
@@ -69,7 +70,7 @@ function createServer() {
     checks.websocket = { status: 'ok', activeConnections };
 
     // Disk check
-    const dbPath = process.env.GWN_DB_PATH || path.join(__dirname, '..', 'data', 'game.db');
+    const dbPath = config.GWN_DB_PATH;
     try {
       const stat = fs.statSync(dbPath);
       checks.disk = {

@@ -3,9 +3,10 @@
  */
 
 const jwt = require('jsonwebtoken');
+const { config } = require('../config');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'gwn-dev-secret-change-in-production';
-const SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
+const JWT_SECRET = config.JWT_SECRET;
+const SYSTEM_API_KEY = config.SYSTEM_API_KEY;
 
 /** Middleware: require valid auth (JWT Bearer OR X-API-Key). */
 function requireAuth(req, res, next) {
