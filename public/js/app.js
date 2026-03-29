@@ -964,6 +964,10 @@ async function submitPendingScores() {
     pending = [];
     try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
   }
+  if (!Array.isArray(pending)) {
+    pending = [];
+    try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
+  }
   if (pending.length === 0) return;
 
   while (pending.length > 0) {
@@ -979,10 +983,15 @@ async function submitPendingScores() {
       return; // network error; keep remaining for later
     }
     pending.shift();
-    if (pending.length > 0) {
-      localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(pending));
-    } else {
-      localStorage.removeItem(PENDING_SCORES_KEY);
+    try {
+      if (pending.length > 0) {
+        localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(pending));
+      } else {
+        localStorage.removeItem(PENDING_SCORES_KEY);
+      }
+    } catch {
+      // Storage unavailable — stop persisting but don't break submission
+      return;
     }
   }
 }
