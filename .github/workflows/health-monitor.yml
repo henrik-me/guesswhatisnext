@@ -1,24 +1,161 @@
 name: Health Monitor
 
 on:
-  # schedule:
-  #   - cron: '*/5 * * * *'
+  schedule:
+    - cron: '0 */6 * * *'
   workflow_dispatch:
+    inputs:
+      check-level:
+        description: 'Check level to run'
+        required: true
+        type: choice
+        options:
+          - azure-only
+          - deep
+        default: azure-only
 
 permissions:
   issues: write
 
 jobs:
-  health-check:
-    name: Production Health Check
+  # Tier 1: Azure API checks — runs on cron, does NOT wake the container ($0 cost)
+  azure-check:
+    name: Azure Infrastructure Check
+    runs-on: ubuntu-latest
+    outputs:
+      app-exists: ${{ steps.check.outputs.app-exists }}
+      provisioning-state: ${{ steps.check.outputs.provisioning-state }}
+      revision-health: ${{ steps.check.outputs.revision-health }}
+      revision-name: ${{ steps.check.outputs.revision-name }}
+      status: ${{ steps.check.outputs.status }}
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Check Azure infrastructure
+        id: check
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            echo "timestamp=$TIMESTAMP" >> "$GITHUB_OUTPUT"
+
+            # Check container app exists and is provisioned
+            APP_JSON=$(az containerapp show --name gwn-production --resource-group gwn-rg -o json 2>/dev/null || echo "NOT_FOUND")
+            if [ "$APP_JSON" = "NOT_FOUND" ]; then
+              echo "app-exists=false" >> "$GITHUB_OUTPUT"
+              echo "status=failed" >> "$GITHUB_OUTPUT"
+              echo "error=Container app gwn-production not found" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "app-exists=true" >> "$GITHUB_OUTPUT"
+
+            PROV_STATE=$(echo "$APP_JSON" | jq -r '.properties.provisioningState')
+            echo "provisioning-state=$PROV_STATE" >> "$GITHUB_OUTPUT"
+            echo "Provisioning state: $PROV_STATE"
+
+            # Check latest revision
+            REV_JSON=$(az containerapp revision list --name gwn-production --resource-group gwn-rg -o json)
+            ACTIVE_COUNT=$(echo "$REV_JSON" | jq '[.[] | select(.properties.active == true)] | length')
+            LATEST_NAME=$(echo "$REV_JSON" | jq -r 'sort_by(.properties.createdTime) | last | .name // "none"')
+            LATEST_HEALTH=$(echo "$REV_JSON" | jq -r 'sort_by(.properties.createdTime) | last | .properties.runningState // "unknown"')
+            LATEST_PROV=$(echo "$REV_JSON" | jq -r 'sort_by(.properties.createdTime) | last | .properties.provisioningState // "unknown"')
+            LATEST_REPLICAS=$(echo "$REV_JSON" | jq -r 'sort_by(.properties.createdTime) | last | .properties.replicas // 0')
+
+            echo "revision-name=$LATEST_NAME" >> "$GITHUB_OUTPUT"
+            echo "revision-health=$LATEST_HEALTH" >> "$GITHUB_OUTPUT"
+            echo "revision-prov=$LATEST_PROV" >> "$GITHUB_OUTPUT"
+            echo "active-revisions=$ACTIVE_COUNT" >> "$GITHUB_OUTPUT"
+            echo "replicas=$LATEST_REPLICAS" >> "$GITHUB_OUTPUT"
+
+            echo "Latest revision: $LATEST_NAME (health=$LATEST_HEALTH, prov=$LATEST_PROV, replicas=$LATEST_REPLICAS)"
+            echo "Active revisions: $ACTIVE_COUNT"
+
+            # Determine status
+            # Scale-to-zero is normal — 0 replicas with Running state is healthy
+            if [ "$PROV_STATE" != "Succeeded" ]; then
+              echo "status=failed" >> "$GITHUB_OUTPUT"
+              echo "error=App provisioning state: $PROV_STATE" >> "$GITHUB_OUTPUT"
+            elif [ "$LATEST_PROV" = "Failed" ]; then
+              echo "status=failed" >> "$GITHUB_OUTPUT"
+              echo "error=Latest revision $LATEST_NAME provisioning failed" >> "$GITHUB_OUTPUT"
+            elif [ "$ACTIVE_COUNT" -eq 0 ]; then
+              echo "status=failed" >> "$GITHUB_OUTPUT"
+              echo "error=No active revisions found" >> "$GITHUB_OUTPUT"
+            else
+              echo "status=healthy" >> "$GITHUB_OUTPUT"
+              echo "✅ Azure infrastructure healthy"
+            fi
+
+      - name: Alert on failure
+        if: steps.check.outputs.status == 'failed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const timestamp = '${{ steps.check.outputs.timestamp }}';
+            const error = '${{ steps.check.outputs.error }}';
+            const provState = '${{ steps.check.outputs.provisioning-state }}';
+            const revName = '${{ steps.check.outputs.revision-name }}';
+            const revHealth = '${{ steps.check.outputs.revision-health }}';
+
+            const title = `[Azure] Infrastructure issue: ${error}`.slice(0, 120);
+
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'service-health',
+              state: 'open',
+              per_page: 5,
+            });
+
+            const body = [
+              `## Azure Infrastructure Alert`,
+              ``,
+              `| Field | Value |`,
+              `|-------|-------|`,
+              `| **Detected at** | ${timestamp} |`,
+              `| **Check type** | Azure API (no container wake) |`,
+              `| **Provisioning** | ${provState} |`,
+              `| **Latest revision** | ${revName} |`,
+              `| **Revision health** | ${revHealth} |`,
+              `| **Error** | ${error} |`,
+              `| **Workflow run** | [View logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
+            ].join('\n');
+
+            if (existing.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body: `### Azure check still failing\n\n**Time:** ${timestamp}\n**Error:** ${error}\n**Revision:** ${revName} (${revHealth})`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                labels: ['service-health'],
+                body,
+              });
+            }
+
+      - name: Log success
+        if: steps.check.outputs.status == 'healthy'
+        run: |
+          echo "✅ Azure check passed"
+          echo "  Revision: ${{ steps.check.outputs.revision-name }}"
+          echo "  Health: ${{ steps.check.outputs.revision-health }}"
+          echo "  Replicas: ${{ steps.check.outputs.replicas }}"
+
+  # Tier 2: Deep HTTP checks — manual dispatch only, WILL wake the container
+  deep-check:
+    name: Deep Health Check (wakes container)
+    if: github.event_name == 'workflow_dispatch' && inputs.check-level == 'deep'
+    needs: azure-check
     runs-on: ubuntu-latest
     environment: production
-    outputs:
-      status: ${{ steps.result.outputs.status }}
-      health_status: ${{ steps.health.outputs.health_status }}
-      health_response_time: ${{ steps.health.outputs.response_time }}
-      puzzles_status: ${{ steps.puzzles.outputs.puzzles_status }}
-      timestamp: ${{ steps.result.outputs.timestamp }}
     steps:
       - name: Check health endpoint (with retries)
         id: health
@@ -127,7 +264,6 @@ jobs:
             exit 0
           fi
 
-          # Verify response is a non-empty JSON array
           if echo "$PZ_BODY" | grep -q '^\[.\+\]$'; then
             echo "puzzles_status=ok" >> "$GITHUB_OUTPUT"
           elif echo "$PZ_BODY" | grep -q '^\[\]$'; then
@@ -171,7 +307,7 @@ jobs:
             const timestamp = '${{ steps.result.outputs.timestamp }}';
 
             let errorSummary = healthError || `Health: ${healthStatus}, Puzzles: ${puzzlesStatus}`;
-            const title = `Service health issue: ${errorSummary}`.slice(0, 120);
+            const title = `[Deep] Service health issue: ${errorSummary}`.slice(0, 120);
 
             const { data: existingIssues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
@@ -182,11 +318,12 @@ jobs:
             });
 
             const body = [
-              `## Service Health Alert`,
+              `## Deep Health Check Alert`,
               ``,
               `| Field | Value |`,
               `|-------|-------|`,
               `| **Detected at** | ${timestamp} |`,
+              `| **Check type** | Deep HTTP (container was woken) |`,
               `| **Health endpoint** | ${healthStatus} |`,
               `| **HTTP status** | ${httpStatus} |`,
               `| **Response time** | ${responseTime}ms |`,
@@ -209,9 +346,8 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue.number,
-                body: `### Health check still failing\n\n**Time:** ${timestamp}\n**Health:** ${healthStatus} (HTTP ${httpStatus}, ${responseTime}ms)\n**Puzzles:** ${puzzlesStatus || 'skipped'}\n\n${healthError || ''}`,
+                body: `### Deep check still failing\n\n**Time:** ${timestamp}\n**Health:** ${healthStatus} (HTTP ${httpStatus}, ${responseTime}ms)\n**Puzzles:** ${puzzlesStatus || 'skipped'}\n\n${healthError || ''}`,
               });
-              console.log(`Updated existing issue #${issue.number}`);
             } else {
               await github.rest.issues.create({
                 owner: context.repo.owner,
@@ -220,7 +356,6 @@ jobs:
                 labels: ['service-health'],
                 body,
               });
-              console.log('Created new service health issue');
             }
 
       - name: Handle degraded — warn but don't fail
@@ -231,4 +366,4 @@ jobs:
 
       - name: Log success
         if: steps.result.outputs.status == 'healthy'
-        run: echo "✅ Production health check passed (${{ steps.health.outputs.response_time }}ms)"
+        run: echo "✅ Deep health check passed (${{ steps.health.outputs.response_time }}ms)"
