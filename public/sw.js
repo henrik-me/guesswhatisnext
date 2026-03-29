@@ -30,7 +30,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k.startsWith('gwn-') && k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -40,12 +40,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Skip non-GET requests and WebSocket upgrades
+  // Skip non-GET requests
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
 
-  // Network-first for public API calls (skip auth endpoints and authenticated requests)
+  // Skip cross-origin requests — let the browser handle them normally
+  if (url.origin !== self.location.origin) return;
+
+  // Network-first for public API calls(skip auth endpoints and authenticated requests)
   if (url.pathname.startsWith('/api/')) {
     const isAuthEndpoint = url.pathname.startsWith('/api/auth/') || url.pathname.includes('/me');
     const hasAuthHeader = request.headers.get('Authorization');

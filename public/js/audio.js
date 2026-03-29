@@ -20,20 +20,24 @@ function getContext() {
 
 /** Play a tone at a given frequency/duration using an oscillator. */
 function playTone(freq, duration, type = 'sine', gainVal = 0.15, startDelay = 0) {
-  const ctx = getContext();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
+  try {
+    const ctx = getContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, ctx.currentTime + startDelay);
-  gain.gain.setValueAtTime(gainVal, ctx.currentTime + startDelay);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startDelay + duration);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + startDelay);
+    gain.gain.setValueAtTime(gainVal, ctx.currentTime + startDelay);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startDelay + duration);
 
-  osc.connect(gain);
-  gain.connect(ctx.destination);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
 
-  osc.start(ctx.currentTime + startDelay);
-  osc.stop(ctx.currentTime + startDelay + duration);
+    osc.start(ctx.currentTime + startDelay);
+    osc.stop(ctx.currentTime + startDelay + duration);
+  } catch {
+    // AudioContext may be blocked by browser autoplay policy — silently ignore
+  }
 }
 
 function isSoundEnabled() {
