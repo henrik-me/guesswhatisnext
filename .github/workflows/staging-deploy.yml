@@ -198,6 +198,17 @@ jobs:
                 JWT_SECRET=${{ secrets.JWT_SECRET }} \
                 SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
 
+      - name: Deactivate old revisions
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            LATEST=$(az containerapp show --name gwn-staging --resource-group gwn-rg --query "properties.latestRevisionName" -o tsv)
+            echo "Latest revision: $LATEST"
+            az containerapp revision list --name gwn-staging --resource-group gwn-rg --query "[?name!='$LATEST'].name" -o tsv | while read -r rev; do
+              echo "Deactivating old revision: $rev"
+              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg --revision "$rev" || true
+            done
+
       - name: Wait for deployment to stabilize
         run: sleep 90
 
