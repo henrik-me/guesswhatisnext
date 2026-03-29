@@ -590,6 +590,30 @@ Agent in wt-Y (if main has moved since branch creation):
 - PR requires review approval + passing status checks before merge
 - Main agent or reviewer merges PRs one at a time via GitHub UI or `gh pr merge`
 
+**10. Copilot PR Review Policy:**
+
+Every PR must be reviewed by GitHub Copilot before merging. This is part of the standard workflow.
+
+**Requesting review:**
+```bash
+gh pr edit <PR#> --add-reviewer copilot-pull-request-reviewer[bot]
+```
+
+**After Copilot reviews:**
+1. Read all review comments and suggestions
+2. Assess each comment — categorize as **Fix** (valid issue), **Skip** (by design / low risk), or **Accept suggestion** (has code suggestion that can be applied directly)
+3. For each comment, reply with the decision and rationale
+4. Fix valid issues, commit, and push
+5. Resolve all threads (fixed or acknowledged)
+6. If Copilot re-reviews after fixes, repeat the cycle
+
+**Assessment criteria:**
+- **Fix**: Real bugs, security issues, correctness problems, missing error handling that could cause silent failures
+- **Skip**: Cosmetic concerns, extremely unlikely edge cases (e.g., port 0), style preferences already covered by lint, or by-design decisions
+- **Accept suggestion**: When Copilot provides a complete code suggestion that is correct and improves the code
+
+**Agents creating PRs must also request Copilot review** as part of their PR creation step.
+
 **5. Merge order and conflict resolution:**
 - Merge zero-conflict branches first (e.g., new-files-only tasks like infra)
 - For branches that touch shared files (`index.html`, `app.js`, `style.css`):
