@@ -45,16 +45,30 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Network-first for API calls
+  // Network-first for public API calls (skip auth endpoints and authenticated requests)
   if (url.pathname.startsWith('/api/')) {
+    const isAuthEndpoint = url.pathname.startsWith('/api/auth/') || url.pathname.includes('/me');
+    const hasAuthHeader = request.headers.get('Authorization');
+
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          if (response.ok && !isAuthEndpoint && !hasAuthHeader) {
+            const clone = response.clone();
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+            );
+          }
           return response;
         })
-        .catch(() => caches.match(request))
+        .catch(() =>
+          caches.match(request).then((cached) =>
+            cached || new Response(JSON.stringify({ error: 'Service unavailable' }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            })
+          )
+        )
     );
     return;
   }
@@ -68,7 +82,9 @@ self.addEventListener('fetch', (event) => {
           // Cache successful responses for static assets
           if (response.ok) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+            );
           }
           return response;
         })

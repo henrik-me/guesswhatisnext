@@ -1009,7 +1009,7 @@ function handleWSMessage(msg) {
       onRound(msg);
       break;
     case 'answer-received':
-      GameAudio.playOpponentAnswered();
+      // No sound here — this event is sent to the answering player, not the opponent
       break;
     case 'roundResult':
       onRoundResult(msg);
