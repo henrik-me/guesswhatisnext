@@ -227,3 +227,17 @@ jobs:
           done
           echo "::error::Staging health check failed after 5 attempts (last: $HTTP_STATUS)"
           exit 1
+
+      - name: Tag deployment
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            REVISION=$(az containerapp show --name gwn-staging --resource-group gwn-rg --query "properties.latestRevisionName" -o tsv)
+            echo "Tagging commit as: $REVISION"
+            echo "REVISION=$REVISION" >> "$GITHUB_ENV"
+
+      - name: Push deployment tag
+        run: |
+          git tag "$REVISION" "${{ github.sha }}"
+          git push origin "$REVISION"
+          echo "✅ Tagged ${{ github.sha }} as $REVISION"
