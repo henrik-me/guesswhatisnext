@@ -1,0 +1,270 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: >
+          Docker image tag to deploy (short SHA from staging, e.g. "40ef2f8").
+          Must be an image already validated in staging.
+        required: true
+        type: string
+      confirm:
+        description: 'Type "production" to confirm deployment'
+        required: true
+        type: string
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/henrik-me/guesswhatisnext
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  validate-inputs:
+    name: Validate Deployment Inputs
+    runs-on: ubuntu-latest
+    outputs:
+      commit-sha: ${{ steps.resolve.outputs.commit-sha }}
+    steps:
+      - name: Confirm production intent
+        run: |
+          if [ "${{ inputs.confirm }}" != "production" ]; then
+            echo "::error::Confirmation failed — type 'production' to proceed."
+            exit 1
+          fi
+
+      - name: Validate image tag format
+        run: |
+          if ! echo "${{ inputs.image-tag }}" | grep -qE '^[0-9a-f]{7,40}$'; then
+            echo "::error::Image tag must be a valid commit SHA (7-40 hex chars). Got: '${{ inputs.image-tag }}'"
+            exit 1
+          fi
+
+      - name: Verify image exists in GHCR
+        run: |
+          IMAGE_PATH="${IMAGE_NAME#${REGISTRY}/}"
+          echo "Checking for image $IMAGE_NAME:${{ inputs.image-tag }}"
+          RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' \
+            -u "${{ vars.GHCR_USERNAME }}:${{ secrets.GHCR_PAT }}" \
+            -H "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
+            "https://${REGISTRY}/v2/${IMAGE_PATH}/manifests/${{ inputs.image-tag }}")
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Image verified in GHCR (HTTP $RESPONSE)"
+            exit 0
+          fi
+
+          if [ "$RESPONSE" = "401" ]; then
+            echo "::error::Unauthorized when checking image in GHCR (HTTP $RESPONSE). Check GHCR_USERNAME/GHCR_PAT credentials and package visibility."
+            exit 1
+          fi
+
+          if [ "$RESPONSE" = "404" ]; then
+            echo "::error::Image tag '${{ inputs.image-tag }}' not found in GHCR. Deploy only images validated in staging."
+            exit 1
+          fi
+
+          echo "::error::Failed to verify image '${{ inputs.image-tag }}' in GHCR (HTTP $RESPONSE). Aborting deployment."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve commit SHA from image tag
+        id: resolve
+        run: |
+          COMMIT_SHA=$(git rev-parse "${{ inputs.image-tag }}^{commit}" 2>/dev/null || git rev-parse "${{ inputs.image-tag }}" 2>/dev/null)
+          if [ -z "$COMMIT_SHA" ]; then
+            echo "::error::Could not resolve commit for image tag '${{ inputs.image-tag }}'"
+            exit 1
+          fi
+          echo "commit-sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "Resolved image tag '${{ inputs.image-tag }}' → $COMMIT_SHA"
+
+  deploy-azure-production:
+    name: Deploy to Azure Production
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Capture current image for rollback
+        id: rollback
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            CURRENT=$(az containerapp show \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --query "properties.template.containers[0].image" -o tsv)
+            echo "current-image=$CURRENT" >> "$GITHUB_OUTPUT"
+            echo "Current image (rollback target): $CURRENT"
+
+      - name: Configure GHCR registry credentials
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp registry set \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --server ghcr.io \
+              --username ${{ vars.GHCR_USERNAME }} \
+              --password ${{ secrets.GHCR_PAT }}
+
+      - name: Deploy to production Container App
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --image ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }} \
+              --min-replicas 0 \
+              --max-replicas 5 \
+              --set-env-vars \
+                NODE_ENV=production \
+                PORT=3000 \
+                JWT_SECRET=${{ secrets.JWT_SECRET }} \
+                SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
+
+      - name: Deactivate old revisions
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            LATEST=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv)
+            echo "Latest revision: $LATEST"
+            az containerapp revision list --name gwn-production --resource-group gwn-rg \
+              --query "[?name!='$LATEST'].name" -o tsv | while read -r rev; do
+              echo "Deactivating old revision: $rev"
+              az containerapp revision deactivate --name gwn-production --resource-group gwn-rg \
+                --revision "$rev" || true
+            done
+
+      - name: Wait for deployment to stabilize
+        run: sleep 90
+
+      - name: Verify production deployment
+        id: healthcheck
+        run: |
+          for i in 1 2 3 4 5; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
+              "${{ secrets.PROD_URL }}/api/health" || true)
+            echo "Health check attempt $i: $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Production deployment healthy!"
+              echo "healthy=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "healthy=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::Health check failed after 5 attempts (last: $HTTP_STATUS)"
+
+      - name: Rollback on failure
+        if: steps.healthcheck.outputs.healthy != 'true'
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "::error::Rolling back to previous image: ${{ steps.rollback.outputs.current-image }}"
+            az containerapp update \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --image ${{ steps.rollback.outputs.current-image }}
+            echo "Waiting for rollback to stabilize..."
+            sleep 60
+            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
+              "${{ secrets.PROD_URL }}/api/health" || true)
+            echo "Rollback health check: $HTTP_STATUS"
+
+            # Deactivate the failed revision after rollback
+            FAILED_REVISION=$(az containerapp revision list \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --query "[?properties.template.containers[0].image=='$IMAGE_NAME:${{ inputs.image-tag }}'].name | [0]" -o tsv 2>/dev/null || true)
+            if [ -n "$FAILED_REVISION" ]; then
+              az containerapp revision deactivate \
+                --name gwn-production \
+                --resource-group gwn-rg \
+                --revision "$FAILED_REVISION" || true
+              echo "🧹 Deactivated failed revision: $FAILED_REVISION"
+            fi
+
+      - name: Fail if unhealthy
+        if: steps.healthcheck.outputs.healthy != 'true'
+        run: |
+          echo "::error::Production deployment failed health checks and was rolled back."
+          exit 1
+
+  update-production-branch:
+    name: Fast-Forward release/production
+    needs: [deploy-azure-production, validate-inputs]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward release/production to deployed commit
+        env:
+          COMMIT_SHA: ${{ needs.validate-inputs.outputs.commit-sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "Using commit $COMMIT_SHA for release/production (from image-tag='${{ inputs.image-tag }}')"
+
+          if ! git ls-remote --exit-code origin refs/heads/release/production > /dev/null 2>&1; then
+            echo "Creating release/production branch at $COMMIT_SHA"
+            git checkout -b release/production "$COMMIT_SHA"
+            git push origin release/production
+          else
+            echo "Fast-forwarding release/production to $COMMIT_SHA"
+            git fetch origin release/production
+            git checkout release/production
+            git merge --ff-only "$COMMIT_SHA"
+            git push origin release/production
+          fi
+
+  tag-deployment:
+    name: Tag Production Deployment
+    needs: [deploy-azure-production, validate-inputs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get revision name
+        id: rev
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            REVISION=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv)
+            echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+            echo "Production revision: $REVISION"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push deployment tag
+        run: |
+          git tag "${{ steps.rev.outputs.revision }}" "${{ needs.validate-inputs.outputs.commit-sha }}"
+          git push origin "${{ steps.rev.outputs.revision }}"
+          echo "✅ Tagged commit ${{ needs.validate-inputs.outputs.commit-sha }} as ${{ steps.rev.outputs.revision }}"
