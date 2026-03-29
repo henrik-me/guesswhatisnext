@@ -246,7 +246,7 @@ jobs:
               echo "health_status=failed" >> "$GITHUB_OUTPUT"
               echo "response_time=$ELAPSED" >> "$GITHUB_OUTPUT"
               echo "http_status=${HTTP_STATUS:-0}" >> "$GITHUB_OUTPUT"
-              echo "error=Health check failedafter $MAX_RETRIES attempts (HTTP ${HTTP_STATUS:-N/A}, ${ELAPSED}ms)" >> "$GITHUB_OUTPUT"
+              echo "error=Health check failed after $MAX_RETRIES attempts (HTTP ${HTTP_STATUS:-N/A}, ${ELAPSED}ms)" >> "$GITHUB_OUTPUT"
             fi
           done
 
