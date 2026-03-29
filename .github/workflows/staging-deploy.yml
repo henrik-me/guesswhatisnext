@@ -185,14 +185,10 @@ jobs:
 
       - name: Deploy to staging Container App
         uses: azure/cli@v2
-        env:
-          DEPLOY_JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          DEPLOY_SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
-          DEPLOY_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
         with:
           inlineScript: |
-            trap 'rm -f /tmp/staging-deploy.yaml' EXIT
-            cat > /tmp/staging-deploy.yaml <<'YAMLEOF'
+            trap 'rm -f /tmp/deploy-template.yaml' EXIT
+            cat > /tmp/deploy-template.yaml <<'YAMLEOF'
             properties:
               template:
                 volumes:
@@ -201,28 +197,21 @@ jobs:
                     storageType: AzureFile
                 containers:
                   - name: gwn-staging
-                    image: PLACEHOLDER_IMAGE
-                    env:
-                      - name: NODE_ENV
-                        value: "staging"
-                      - name: PORT
-                        value: "3000"
-                      - name: JWT_SECRET
-                        value: "PLACEHOLDER_JWT"
-                      - name: SYSTEM_API_KEY
-                        value: "PLACEHOLDER_KEY"
+                    image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
                     volumeMounts:
                       - volumeName: data-volume
                         mountPath: /app/data
             YAMLEOF
-            sed -i "s|PLACEHOLDER_IMAGE|${DEPLOY_IMAGE}|" /tmp/staging-deploy.yaml
-            sed -i "s|PLACEHOLDER_JWT|${DEPLOY_JWT_SECRET}|" /tmp/staging-deploy.yaml
-            sed -i "s|PLACEHOLDER_KEY|${DEPLOY_SYSTEM_API_KEY}|" /tmp/staging-deploy.yaml
             az containerapp update \
               --name gwn-staging \
               --resource-group gwn-rg \
               --min-replicas 1 \
-              --yaml /tmp/staging-deploy.yaml
+              --yaml /tmp/deploy-template.yaml \
+              --set-env-vars \
+                NODE_ENV=staging \
+                PORT=3000 \
+                JWT_SECRET=${{ secrets.JWT_SECRET }} \
+                SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
 
       - name: Deactivate old revisions
         uses: azure/cli@v2
