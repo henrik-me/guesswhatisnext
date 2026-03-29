@@ -3,14 +3,16 @@
  * Creates the app via the factory and starts listening.
  */
 
-const { createServer } = require('./app');
+const { config, validateConfig } = require('./config');
 
-const PORT = process.env.PORT || 3000;
+validateConfig();
+
+const { createServer } = require('./app');
 
 const { server } = createServer();
 
-server.listen(PORT, () => {
-  console.log(`🧩 Guess What's Next server running on http://localhost:${PORT}`);
+server.listen(config.PORT, () => {
+  console.log(`🧩 Guess What's Next server running on http://localhost:${config.PORT}`);
 });
 
 module.exports = { server };

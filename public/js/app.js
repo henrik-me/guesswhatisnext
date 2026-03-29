@@ -1470,8 +1470,6 @@ function onGameOver(msg) {
   // Track host status from server
   const gameOverIsHost = msg.isHost || false;
   matchState.isHost = gameOverIsHost;
-  console.log('[rematch] gameOver received — isHost:', gameOverIsHost, 'hostUsername:', msg.hostUsername);
-
   // Show host indicator
   const hostIndicator = document.querySelector('[data-bind="rematch-host-indicator"]');
   if (hostIndicator) {
@@ -1714,14 +1712,12 @@ let rematchSent = false;
 function sendRematchRequest() {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     showToast('Connection lost — cannot send rematch request');
-    console.log('[rematch] sendRematchRequest FAILED — ws null or not open');
     return;
   }
   if (rematchSent) return;
 
   rematchSent = true;
   ws.send(JSON.stringify({ type: 'rematch-request' }));
-  console.log('[rematch] Sent rematch-request, isHost:', matchState.isHost);
 
   const btn = document.querySelector('[data-action="rematch"]');
   if (btn) {
@@ -1744,8 +1740,6 @@ function onRematchOffered(_msg) {
 function onRematchReady(msg) {
   const readyPlayers = msg.readyPlayers || [];
   const totalPlayers = msg.totalPlayers || 0;
-
-  console.log('[rematch] rematch-ready received — ready:', readyPlayers.length, '/', totalPlayers, 'isHost:', matchState.isHost, 'hostUsername:', msg.hostUsername);
 
   const container = document.querySelector('[data-bind="rematch-players"]');
   if (container) {
@@ -1777,7 +1771,6 @@ function onRematchReady(msg) {
     if (matchState.isHost && readyPlayers.length >= 2) {
       startBtn.style.display = '';
       startBtn.disabled = false;
-      console.log('[rematch] Showing Start Rematch button for host');
     } else {
       startBtn.style.display = 'none';
     }
@@ -1786,7 +1779,6 @@ function onRematchReady(msg) {
   // Update host status if host transferred
   if (msg.hostUsername && msg.hostUsername === authUsername && !matchState.isHost) {
     matchState.isHost = true;
-    console.log('[rematch] Host transferred to me');
     const hostIndicator = document.querySelector('[data-bind="rematch-host-indicator"]');
     if (hostIndicator) {
       hostIndicator.textContent = '👑 You are now the host';
