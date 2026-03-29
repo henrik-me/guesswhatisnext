@@ -390,7 +390,7 @@ function init() {
     fetch('/api/auth/me', {
       headers: { 'Authorization': `Bearer ${authToken}` },
     }).then(res => {
-      if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         authToken = null;
         authUsername = null;
         try {
@@ -936,6 +936,10 @@ function queuePendingScore(summary) {
     pending = [];
     try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
   }
+  if (!Array.isArray(pending)) {
+    pending = [];
+    try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
+  }
   const fastestAnswerMs = (summary.results || [])
     .filter(r => r.correct)
     .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
@@ -990,8 +994,10 @@ async function submitPendingScores() {
         localStorage.removeItem(PENDING_SCORES_KEY);
       }
     } catch {
-      // Storage unavailable — stop persisting but don't break submission
-      return;
+      // Storage unavailable — clear stale data to prevent duplicates, then
+      // continue submitting remaining entries this session without persisting.
+      try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
+      continue;
     }
   }
 }
