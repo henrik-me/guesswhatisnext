@@ -501,6 +501,21 @@ function init() {
         }
         break;
       }
+      case 'copy-room-link': {
+        const roomCode = document.querySelector('[data-bind="lobby-room-code"]')?.textContent;
+        if (roomCode) {
+          const url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomCode)}`;
+          navigator.clipboard.writeText(url).then(() => showToast('Copied! 🔗')).catch(() => {});
+        }
+        break;
+      }
+      case 'toggle-sound': {
+        const settings = Storage.getSettings();
+        const newVal = !settings.sound;
+        Storage.saveSetting('sound', newVal);
+        updateSoundToggleButton();
+        break;
+      }
       case 'leave-lobby':
         disconnectWebSocket();
         resetMatchState();
@@ -565,7 +580,23 @@ function init() {
   // Apply saved settings on load
   applySettings();
 
-  showScreen('home');
+  // Handle ?room=CODE deep links
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomParam = urlParams.get('room');
+  if (roomParam) {
+    const codeInput = document.getElementById('join-room-code');
+    if (codeInput) codeInput.value = roomParam.toUpperCase();
+    // Clean URL without reload
+    window.history.replaceState({}, '', window.location.pathname);
+    // If logged in, go to multiplayer; otherwise go to auth first
+    if (isLoggedIn()) {
+      showScreen('multiplayer');
+    } else {
+      showScreen('auth');
+    }
+  } else {
+    showScreen('home');
+  }
 }
 
 /** Apply the theme to the root element. */
@@ -581,6 +612,14 @@ function applyTheme(theme) {
 function applySettings() {
   const settings = Storage.getSettings();
   applyTheme(settings.theme);
+  updateSoundToggleButton();
+}
+
+/** Update the sound toggle button icon to reflect current state. */
+function updateSoundToggleButton() {
+  const btn = document.querySelector('[data-action="toggle-sound"]');
+  if (!btn) return;
+  btn.textContent = Storage.getSettings().sound ? '🔊' : '🔇';
 }
 
 /** Load current settings values into the settings form. */
@@ -970,6 +1009,7 @@ function handleWSMessage(msg) {
       onRound(msg);
       break;
     case 'answer-received':
+      GameAudio.playOpponentAnswered();
       break;
     case 'roundResult':
       onRoundResult(msg);
@@ -1279,6 +1319,7 @@ function startMatchTimer(durationMs) {
   if (matchState.roundTimer) clearInterval(matchState.roundTimer);
   const startTime = Date.now();
   const bar = document.querySelector('[data-bind="match-timer-bar"]');
+  let lastTickSecond = -1;
 
   matchState.roundTimer = setInterval(() => {
     const elapsed = Date.now() - startTime;
@@ -1295,6 +1336,12 @@ function startMatchTimer(durationMs) {
         bar.style.backgroundColor = '';
         bar.classList.remove('warning');
       }
+    }
+    // Countdown tick in last 5 seconds
+    const remainingSeconds = Math.ceil((durationMs - elapsed) / 1000);
+    if (remainingSeconds <= 5 && remainingSeconds > 0 && remainingSeconds !== lastTickSecond) {
+      lastTickSecond = remainingSeconds;
+      GameAudio.playCountdownTick();
     }
     if (ratio <= 0) {
       clearInterval(matchState.roundTimer);
@@ -1510,6 +1557,13 @@ function onGameOver(msg) {
   }
 
   showScreen('match-over');
+
+  // Play win/loss sound based on outcome
+  if (outcomeIcon === '🏆') {
+    GameAudio.playWinFanfare();
+  } else if (outcomeIcon === '😢') {
+    GameAudio.playLossSound();
+  }
 
   // Do NOT disconnect WebSocket — keep it alive for rematch
 }

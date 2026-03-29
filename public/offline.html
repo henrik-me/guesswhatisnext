@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6c5ce7">
+  <title>Offline — Guess What's Next</title>
+  <style>
+    :root {
+      --color-primary: #6c5ce7;
+      --color-bg: #0f0f1a;
+      --color-surface: #1a1a2e;
+      --color-text: #f0f0f0;
+      --color-text-muted: #a0a0b0;
+      --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-main);
+      background-color: var(--color-bg);
+      color: var(--color-text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+    .offline-container {
+      max-width: 400px;
+    }
+    .offline-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      color: var(--color-text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .btn-retry {
+      display: inline-block;
+      padding: 0.75rem 2rem;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .btn-retry:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="offline-container">
+    <div class="offline-icon" aria-hidden="true">📡</div>
+    <h1>You're Offline</h1>
+    <p>It looks like you've lost your internet connection. Reconnect and try again to keep playing!</p>
+    <button class="btn-retry" onclick="location.reload()">Try Again</button>
+  </div>
+</body>
+</html>

@@ -1,0 +1,84 @@
+/**
+ * Service Worker — offline support and caching.
+ * Cache-first for static assets, network-first for API calls.
+ */
+
+const CACHE_NAME = 'gwn-v1';
+const STATIC_ASSETS = [
+  '/',
+  '/index.html',
+  '/offline.html',
+  '/css/style.css',
+  '/js/app.js',
+  '/js/game.js',
+  '/js/puzzles.js',
+  '/js/daily.js',
+  '/js/storage.js',
+  '/js/audio.js',
+  '/manifest.json',
+];
+
+/** Pre-cache static assets on install. */
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+  );
+  self.skipWaiting();
+});
+
+/** Clean up old caches on activate. */
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+/** Fetch handler — cache-first for static, network-first for API. */
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+
+  // Skip non-GET requests and WebSocket upgrades
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  // Network-first for API calls
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Cache-first for static assets
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+      return fetch(request)
+        .then((response) => {
+          // Cache successful responses for static assets
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          // Return offline page for navigation requests
+          if (request.mode === 'navigate') {
+            return caches.match('/offline.html');
+          }
+          return new Response('', { status: 503, statusText: 'Offline' });
+        });
+    })
+  );
+});

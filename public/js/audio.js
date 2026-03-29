@@ -78,4 +78,36 @@ export const GameAudio = {
     playTone(1174.66, 0.12, 'sine', 0.12, 0.2);  // D6
     playTone(1567.98, 0.3, 'triangle', 0.1, 0.3); // G6
   },
+
+  /** Short notification tone — opponent answered. */
+  playOpponentAnswered() {
+    if (!isSoundEnabled()) return;
+    playTone(698.46, 0.08, 'sine', 0.1, 0);      // F5
+    playTone(880, 0.1, 'sine', 0.1, 0.06);        // A5
+  },
+
+  /** Subtle tick for countdown timer. */
+  playCountdownTick() {
+    if (!isSoundEnabled()) return;
+    playTone(1200, 0.03, 'sine', 0.06, 0);
+  },
+
+  /** Ascending fanfare — win celebration. */
+  playWinFanfare() {
+    if (!isSoundEnabled()) return;
+    playTone(523.25, 0.12, 'sine', 0.12, 0);      // C5
+    playTone(659.25, 0.12, 'sine', 0.12, 0.1);    // E5
+    playTone(783.99, 0.12, 'sine', 0.12, 0.2);    // G5
+    playTone(1046.5, 0.15, 'sine', 0.14, 0.3);    // C6
+    playTone(1318.5, 0.2, 'triangle', 0.12, 0.4); // E6
+    playTone(1567.98, 0.35, 'sine', 0.1, 0.5);    // G6
+  },
+
+  /** Descending tone — loss sound. */
+  playLossSound() {
+    if (!isSoundEnabled()) return;
+    playTone(440, 0.15, 'sawtooth', 0.08, 0);     // A4
+    playTone(349.23, 0.15, 'sawtooth', 0.07, 0.12); // F4
+    playTone(261.63, 0.25, 'sawtooth', 0.06, 0.24); // C4
+  },
 };
