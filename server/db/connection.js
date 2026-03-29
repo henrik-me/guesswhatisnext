@@ -19,7 +19,10 @@ function getDb() {
       fs.mkdirSync(dir, { recursive: true });
     }
     db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
+    // WAL mode requires shared memory which Azure Files (SMB) doesn't support.
+    // Use DELETE journal mode in production/staging, WAL locally for performance.
+    const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
+    db.pragma(isAzure ? 'journal_mode = DELETE' : 'journal_mode = WAL');
     db.pragma('foreign_keys = ON');
   }
   return db;
