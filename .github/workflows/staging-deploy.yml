@@ -185,9 +185,14 @@ jobs:
 
       - name: Deploy to staging Container App
         uses: azure/cli@v2
+        env:
+          DEPLOY_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DEPLOY_SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          DEPLOY_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
         with:
           inlineScript: |
-            cat > /tmp/staging-deploy.yaml <<EOF
+            trap 'rm -f /tmp/staging-deploy.yaml' EXIT
+            cat > /tmp/staging-deploy.yaml <<'YAMLEOF'
             properties:
               template:
                 volumes:
@@ -196,26 +201,28 @@ jobs:
                     storageType: AzureFile
                 containers:
                   - name: gwn-staging
-                    image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+                    image: PLACEHOLDER_IMAGE
                     env:
                       - name: NODE_ENV
-                        value: staging
+                        value: "staging"
                       - name: PORT
                         value: "3000"
                       - name: JWT_SECRET
-                        value: ${{ secrets.JWT_SECRET }}
+                        value: "PLACEHOLDER_JWT"
                       - name: SYSTEM_API_KEY
-                        value: ${{ secrets.SYSTEM_API_KEY }}
+                        value: "PLACEHOLDER_KEY"
                     volumeMounts:
                       - volumeName: data-volume
                         mountPath: /app/data
-            EOF
+            YAMLEOF
+            sed -i "s|PLACEHOLDER_IMAGE|${DEPLOY_IMAGE}|" /tmp/staging-deploy.yaml
+            sed -i "s|PLACEHOLDER_JWT|${DEPLOY_JWT_SECRET}|" /tmp/staging-deploy.yaml
+            sed -i "s|PLACEHOLDER_KEY|${DEPLOY_SYSTEM_API_KEY}|" /tmp/staging-deploy.yaml
             az containerapp update \
               --name gwn-staging \
               --resource-group gwn-rg \
               --min-replicas 1 \
               --yaml /tmp/staging-deploy.yaml
-            rm -f /tmp/staging-deploy.yaml
 
       - name: Deactivate old revisions
         uses: azure/cli@v2

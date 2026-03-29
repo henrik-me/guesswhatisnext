@@ -124,9 +124,14 @@ jobs:
 
       - name: Deploy to production Container App
         uses: azure/cli@v2
+        env:
+          DEPLOY_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DEPLOY_SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          DEPLOY_IMAGE: ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}
         with:
           inlineScript: |
-            cat > /tmp/prod-deploy.yaml <<EOF
+            trap 'rm -f /tmp/prod-deploy.yaml' EXIT
+            cat > /tmp/prod-deploy.yaml <<'YAMLEOF'
             properties:
               template:
                 volumes:
@@ -135,27 +140,29 @@ jobs:
                     storageType: AzureFile
                 containers:
                   - name: gwn-production
-                    image: ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}
+                    image: PLACEHOLDER_IMAGE
                     env:
                       - name: NODE_ENV
-                        value: production
+                        value: "production"
                       - name: PORT
                         value: "3000"
                       - name: JWT_SECRET
-                        value: ${{ secrets.JWT_SECRET }}
+                        value: "PLACEHOLDER_JWT"
                       - name: SYSTEM_API_KEY
-                        value: ${{ secrets.SYSTEM_API_KEY }}
+                        value: "PLACEHOLDER_KEY"
                     volumeMounts:
                       - volumeName: data-volume
                         mountPath: /app/data
-            EOF
+            YAMLEOF
+            sed -i "s|PLACEHOLDER_IMAGE|${DEPLOY_IMAGE}|" /tmp/prod-deploy.yaml
+            sed -i "s|PLACEHOLDER_JWT|${DEPLOY_JWT_SECRET}|" /tmp/prod-deploy.yaml
+            sed -i "s|PLACEHOLDER_KEY|${DEPLOY_SYSTEM_API_KEY}|" /tmp/prod-deploy.yaml
             az containerapp update \
               --name gwn-production \
               --resource-group gwn-rg \
               --min-replicas 0 \
               --max-replicas 5 \
               --yaml /tmp/prod-deploy.yaml
-            rm -f /tmp/prod-deploy.yaml
 
       - name: Deactivate old revisions
         uses: azure/cli@v2
@@ -195,10 +202,15 @@ jobs:
       - name: Rollback on failure
         if: steps.healthcheck.outputs.healthy != 'true'
         uses: azure/cli@v2
+        env:
+          ROLLBACK_IMAGE: ${{ steps.rollback.outputs.current-image }}
+          DEPLOY_JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DEPLOY_SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
         with:
           inlineScript: |
-            echo "::error::Rolling back to previous image: ${{ steps.rollback.outputs.current-image }}"
-            cat > /tmp/rollback-deploy.yaml <<EOF
+            echo "::error::Rolling back to previous image: ${ROLLBACK_IMAGE}"
+            trap 'rm -f /tmp/rollback-deploy.yaml' EXIT
+            cat > /tmp/rollback-deploy.yaml <<'YAMLEOF'
             properties:
               template:
                 volumes:
@@ -207,16 +219,27 @@ jobs:
                     storageType: AzureFile
                 containers:
                   - name: gwn-production
-                    image: ${{ steps.rollback.outputs.current-image }}
+                    image: PLACEHOLDER_IMAGE
+                    env:
+                      - name: NODE_ENV
+                        value: "production"
+                      - name: PORT
+                        value: "3000"
+                      - name: JWT_SECRET
+                        value: "PLACEHOLDER_JWT"
+                      - name: SYSTEM_API_KEY
+                        value: "PLACEHOLDER_KEY"
                     volumeMounts:
                       - volumeName: data-volume
                         mountPath: /app/data
-            EOF
+            YAMLEOF
+            sed -i "s|PLACEHOLDER_IMAGE|${ROLLBACK_IMAGE}|" /tmp/rollback-deploy.yaml
+            sed -i "s|PLACEHOLDER_JWT|${DEPLOY_JWT_SECRET}|" /tmp/rollback-deploy.yaml
+            sed -i "s|PLACEHOLDER_KEY|${DEPLOY_SYSTEM_API_KEY}|" /tmp/rollback-deploy.yaml
             az containerapp update \
               --name gwn-production \
               --resource-group gwn-rg \
               --yaml /tmp/rollback-deploy.yaml
-            rm -f /tmp/rollback-deploy.yaml
             echo "Waiting for rollback to stabilize..."
             sleep 60
             HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
