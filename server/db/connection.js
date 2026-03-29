@@ -24,6 +24,7 @@ function getDb() {
     // Use DELETE journal mode in production/staging, WAL locally for performance.
     const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
     db.pragma(isAzure ? 'journal_mode = DELETE' : 'journal_mode = WAL');
+    db.pragma('busy_timeout = 5000');
     db.pragma('foreign_keys = ON');
   }
   return db;
