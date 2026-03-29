@@ -195,6 +195,7 @@ jobs:
               --set-env-vars \
                 NODE_ENV=staging \
                 PORT=3000 \
+                GWN_DB_PATH=/tmp/game.db \
                 JWT_SECRET=${{ secrets.JWT_SECRET }} \
                 SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
 
