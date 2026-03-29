@@ -574,6 +574,7 @@ function init() {
       }
       Storage.saveSetting(key, value);
       if (key === 'theme') applyTheme(value);
+      if (key === 'sound') updateSoundToggleButton();
     });
   });
 

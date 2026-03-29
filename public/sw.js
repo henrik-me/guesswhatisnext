@@ -16,6 +16,18 @@ const STATIC_ASSETS = [
   '/js/storage.js',
   '/js/audio.js',
   '/manifest.json',
+  '/img/shapes/circle.svg',
+  '/img/shapes/hexagon.svg',
+  '/img/shapes/pentagon.svg',
+  '/img/shapes/square.svg',
+  '/img/shapes/star.svg',
+  '/img/shapes/triangle.svg',
+  '/img/colors/blue.svg',
+  '/img/colors/green.svg',
+  '/img/colors/orange.svg',
+  '/img/colors/purple.svg',
+  '/img/colors/red.svg',
+  '/img/colors/yellow.svg',
 ];
 
 /** Pre-cache static assets on install. */
