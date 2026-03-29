@@ -228,8 +228,6 @@ jobs:
                 echo "health_status=healthy" >> "$GITHUB_OUTPUT"
                 echo "response_time=$ELAPSED" >> "$GITHUB_OUTPUT"
                 echo "http_status=$HTTP_STATUS" >> "$GITHUB_OUTPUT"
-                BODY_ESCAPED=$(echo "$BODY" | tr '\n' ' ' | head -c 1000)
-                echo "response_body=$BODY_ESCAPED" >> "$GITHUB_OUTPUT"
 
                 if [ "$ELAPSED" -gt "$DEGRADED_THRESHOLD" ]; then
                   echo "::warning::Health endpoint responded in ${ELAPSED}ms (>${DEGRADED_THRESHOLD}ms threshold)"
@@ -248,8 +246,7 @@ jobs:
               echo "health_status=failed" >> "$GITHUB_OUTPUT"
               echo "response_time=$ELAPSED" >> "$GITHUB_OUTPUT"
               echo "http_status=${HTTP_STATUS:-0}" >> "$GITHUB_OUTPUT"
-              echo "response_body=${BODY:-Connection failed (curl exit $CURL_EXIT)}" >> "$GITHUB_OUTPUT"
-              echo "error=Health check failed after $MAX_RETRIES attempts (HTTP ${HTTP_STATUS:-N/A}, ${ELAPSED}ms)" >> "$GITHUB_OUTPUT"
+              echo "error=Health check failedafter $MAX_RETRIES attempts (HTTP ${HTTP_STATUS:-N/A}, ${ELAPSED}ms)" >> "$GITHUB_OUTPUT"
             fi
           done
 
@@ -338,7 +335,6 @@ jobs:
             const healthStatus = ${{ toJson(steps.health.outputs.health_status) }};
             const httpStatus = ${{ toJson(steps.health.outputs.http_status) }};
             const responseTime = ${{ toJson(steps.health.outputs.response_time) }};
-            const responseBody = ${{ toJson(steps.health.outputs.response_body) }};
             const healthError = ${{ toJson(steps.health.outputs.error) }};
             const puzzlesStatus = ${{ toJson(steps.puzzles.outputs.puzzles_status) }};
             const puzzlesError = ${{ toJson(steps.puzzles.outputs.puzzles_error) }};
