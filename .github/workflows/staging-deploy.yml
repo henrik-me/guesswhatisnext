@@ -180,7 +180,7 @@ jobs:
               --name gwn-staging \
               --resource-group gwn-rg \
               --server ghcr.io \
-              --username henrik-me \
+              --username ${{ vars.GHCR_USERNAME }} \
               --password ${{ secrets.GHCR_PAT }}
 
       - name: Deploy to staging Container App
