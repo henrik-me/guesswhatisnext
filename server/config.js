@@ -6,7 +6,7 @@
 const path = require('path');
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const isProduction = NODE_ENV === 'production';
+const isProduction = NODE_ENV === 'production' || NODE_ENV === 'staging';
 
 const config = {
   NODE_ENV,
