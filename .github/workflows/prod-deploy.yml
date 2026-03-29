@@ -1,0 +1,216 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: >
+          Docker image tag to deploy (short SHA from staging, e.g. "40ef2f8").
+          Must be an image already validated in staging.
+        required: true
+        type: string
+      confirm:
+        description: 'Type "production" to confirm deployment'
+        required: true
+        type: string
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/henrik-me/guesswhatisnext
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  validate-inputs:
+    name: Validate Deployment Inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm production intent
+        run: |
+          if [ "${{ inputs.confirm }}" != "production" ]; then
+            echo "::error::Confirmation failed — type 'production' to proceed."
+            exit 1
+          fi
+
+      - name: Verify image exists in GHCR
+        run: |
+          echo "Checking for image ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}"
+          TOKEN=$(echo ${{ secrets.GITHUB_TOKEN }} | base64)
+          RESPONSE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://ghcr.io/v2/henrik-me/guesswhatisnext/manifests/${{ inputs.image-tag }}")
+          if [ "$RESPONSE" = "401" ] || [ "$RESPONSE" = "404" ]; then
+            echo "::error::Image tag '${{ inputs.image-tag }}' not found in GHCR. Deploy only images validated in staging."
+            exit 1
+          fi
+          echo "✅ Image verified (HTTP $RESPONSE)"
+
+  deploy-azure-production:
+    name: Deploy to Azure Production
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Capture current image for rollback
+        id: rollback
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            CURRENT=$(az containerapp show \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --query "properties.template.containers[0].image" -o tsv)
+            echo "current-image=$CURRENT" >> "$GITHUB_OUTPUT"
+            echo "Current image (rollback target): $CURRENT"
+
+      - name: Configure GHCR registry credentials
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp registry set \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --server ghcr.io \
+              --username ${{ github.actor }} \
+              --password ${{ secrets.GHCR_PAT }}
+
+      - name: Deploy to production Container App
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --image ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }} \
+              --min-replicas 0 \
+              --max-replicas 5 \
+              --set-env-vars \
+                NODE_ENV=production \
+                PORT=3000 \
+                JWT_SECRET=${{ secrets.JWT_SECRET }} \
+                SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
+
+      - name: Deactivate old revisions
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            LATEST=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv)
+            echo "Latest revision: $LATEST"
+            az containerapp revision list --name gwn-production --resource-group gwn-rg \
+              --query "[?name!='$LATEST'].name" -o tsv | while read -r rev; do
+              echo "Deactivating old revision: $rev"
+              az containerapp revision deactivate --name gwn-production --resource-group gwn-rg \
+                --revision "$rev" || true
+            done
+
+      - name: Wait for deployment to stabilize
+        run: sleep 90
+
+      - name: Verify production deployment
+        id: healthcheck
+        run: |
+          for i in 1 2 3 4 5; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
+              "${{ secrets.PROD_URL }}/api/health" || true)
+            echo "Health check attempt $i: $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Production deployment healthy!"
+              echo "healthy=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "healthy=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::Health check failed after 5 attempts (last: $HTTP_STATUS)"
+
+      - name: Rollback on failure
+        if: steps.healthcheck.outputs.healthy != 'true'
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "::error::Rolling back to previous image: ${{ steps.rollback.outputs.current-image }}"
+            az containerapp update \
+              --name gwn-production \
+              --resource-group gwn-rg \
+              --image ${{ steps.rollback.outputs.current-image }}
+            echo "Waiting for rollback to stabilize..."
+            sleep 60
+            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
+              "${{ secrets.PROD_URL }}/api/health" || true)
+            echo "Rollback health check: $HTTP_STATUS"
+
+      - name: Fail if unhealthy
+        if: steps.healthcheck.outputs.healthy != 'true'
+        run: |
+          echo "::error::Production deployment failed health checks and was rolled back."
+          exit 1
+
+  update-production-branch:
+    name: Fast-Forward release/production
+    needs: deploy-azure-production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward release/production to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if ! git ls-remote --exit-code origin refs/heads/release/production > /dev/null 2>&1; then
+            echo "Creating release/production branch"
+            git checkout -b release/production
+            git push origin release/production
+          else
+            echo "Fast-forwarding release/production to main"
+            git fetch origin release/production
+            git checkout release/production
+            git merge --ff-only origin/main
+            git push origin release/production
+          fi
+
+  tag-deployment:
+    name: Tag Production Deployment
+    needs: deploy-azure-production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get revision name
+        id: rev
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            REVISION=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv)
+            echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+            echo "Production revision: $REVISION"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Push deployment tag
+        run: |
+          git tag "${{ steps.rev.outputs.revision }}" "${{ github.sha }}"
+          git push origin "${{ steps.rev.outputs.revision }}"
+          echo "✅ Tagged ${{ github.sha }} as ${{ steps.rev.outputs.revision }}"
