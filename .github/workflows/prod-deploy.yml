@@ -41,15 +41,26 @@ jobs:
       - name: Verify image exists in GHCR
         run: |
           echo "Checking for image ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}"
-          TOKEN=$(echo ${{ secrets.GITHUB_TOKEN }} | base64)
           RESPONSE=$(curl -s -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://ghcr.io/v2/henrik-me/guesswhatisnext/manifests/${{ inputs.image-tag }}")
-          if [ "$RESPONSE" = "401" ] || [ "$RESPONSE" = "404" ]; then
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Image verified in GHCR (HTTP $RESPONSE)"
+            exit 0
+          fi
+
+          if [ "$RESPONSE" = "401" ]; then
+            echo "::error::Unauthorized when checking image in GHCR (HTTP $RESPONSE). Check GITHUB_TOKEN permissions and package visibility."
+            exit 1
+          fi
+
+          if [ "$RESPONSE" = "404" ]; then
             echo "::error::Image tag '${{ inputs.image-tag }}' not found in GHCR. Deploy only images validated in staging."
             exit 1
           fi
-          echo "✅ Image verified (HTTP $RESPONSE)"
+
+          echo "::error::Failed to verify image '${{ inputs.image-tag }}' in GHCR (HTTP $RESPONSE). Aborting deployment."
+          exit 1
 
   deploy-azure-production:
     name: Deploy to Azure Production
@@ -168,20 +179,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fast-forward release/production to main
+      - name: Fast-forward release/production to deployed commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Resolve the commit corresponding to the deployed image tag (short SHA)
+          if ! COMMIT_SHA=$(git rev-parse "${{ inputs.image-tag }}^{commit}" 2>/dev/null); then
+            echo "::error::Could not resolve commit for image tag '${{ inputs.image-tag }}'."
+            exit 1
+          fi
+          echo "Using commit $COMMIT_SHA for release/production (from image-tag='${{ inputs.image-tag }}')"
+
           if ! git ls-remote --exit-code origin refs/heads/release/production > /dev/null 2>&1; then
-            echo "Creating release/production branch"
-            git checkout -b release/production
+            echo "Creating release/production branch at $COMMIT_SHA"
+            git checkout -b release/production "$COMMIT_SHA"
             git push origin release/production
           else
-            echo "Fast-forwarding release/production to main"
+            echo "Fast-forwarding release/production to $COMMIT_SHA"
             git fetch origin release/production
             git checkout release/production
-            git merge --ff-only origin/main
+            git merge --ff-only "$COMMIT_SHA"
             git push origin release/production
           fi
 
@@ -207,10 +225,10 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Push deployment tag
         run: |
-          git tag "${{ steps.rev.outputs.revision }}" "${{ github.sha }}"
+          git tag "${{ steps.rev.outputs.revision }}" "${{ inputs.image-tag }}"
           git push origin "${{ steps.rev.outputs.revision }}"
-          echo "✅ Tagged ${{ github.sha }} as ${{ steps.rev.outputs.revision }}"
+          echo "✅ Tagged commit ${{ inputs.image-tag }} as ${{ steps.rev.outputs.revision }}"
