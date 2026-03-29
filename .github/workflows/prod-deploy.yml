@@ -40,12 +40,19 @@ jobs:
             exit 1
           fi
 
+      - name: Validate image tag format
+        run: |
+          if ! echo "${{ inputs.image-tag }}" | grep -qE '^[0-9a-f]{7,40}$'; then
+            echo "::error::Image tag must be a valid commit SHA (7-40 hex chars). Got: '${{ inputs.image-tag }}'"
+            exit 1
+          fi
+
       - name: Verify image exists in GHCR
         run: |
           IMAGE_PATH="${IMAGE_NAME#${REGISTRY}/}"
           echo "Checking for image $IMAGE_NAME:${{ inputs.image-tag }}"
           RESPONSE=$(curl -s -o /dev/null -w '%{http_code}' \
-            -u "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
+            -u "${{ vars.GHCR_USERNAME }}:${{ secrets.GHCR_PAT }}" \
             -H "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
             "https://${REGISTRY}/v2/${IMAGE_PATH}/manifests/${{ inputs.image-tag }}")
           if [ "$RESPONSE" = "200" ]; then
