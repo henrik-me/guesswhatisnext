@@ -59,7 +59,7 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests — let the browser handle them normally
   if (url.origin !== self.location.origin) return;
 
-  // Network-first for public API calls(skip auth endpoints and authenticated requests)
+  // Network-first for public API calls (skip auth endpoints and authenticated requests)
   if (url.pathname.startsWith('/api/')) {
     const isAuthEndpoint = url.pathname.startsWith('/api/auth/') || url.pathname.includes('/me');
     const hasAuthHeader = request.headers.get('Authorization');
@@ -93,8 +93,8 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(request)
         .then((response) => {
-          // Cache successful responses for static assets
-          if (response.ok) {
+          // Cache successful responses for static assets (skip navigation — already pre-cached)
+          if (response.ok && request.mode !== 'navigate') {
             const clone = response.clone();
             event.waitUntil(
               caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
