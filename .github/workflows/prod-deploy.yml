@@ -30,6 +30,8 @@ jobs:
   validate-inputs:
     name: Validate Deployment Inputs
     runs-on: ubuntu-latest
+    outputs:
+      commit-sha: ${{ steps.resolve.outputs.commit-sha }}
     steps:
       - name: Confirm production intent
         run: |
@@ -40,10 +42,11 @@ jobs:
 
       - name: Verify image exists in GHCR
         run: |
-          echo "Checking for image ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}"
+          IMAGE_PATH="${IMAGE_NAME#${REGISTRY}/}"
+          echo "Checking for image $IMAGE_NAME:${{ inputs.image-tag }}"
           RESPONSE=$(curl -s -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://ghcr.io/v2/henrik-me/guesswhatisnext/manifests/${{ inputs.image-tag }}")
+            "https://${REGISTRY}/v2/${IMAGE_PATH}/manifests/${{ inputs.image-tag }}")
           if [ "$RESPONSE" = "200" ]; then
             echo "✅ Image verified in GHCR (HTTP $RESPONSE)"
             exit 0
@@ -61,6 +64,21 @@ jobs:
 
           echo "::error::Failed to verify image '${{ inputs.image-tag }}' in GHCR (HTTP $RESPONSE). Aborting deployment."
           exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve commit SHA from image tag
+        id: resolve
+        run: |
+          COMMIT_SHA=$(git rev-parse "${{ inputs.image-tag }}^{commit}" 2>/dev/null || git rev-parse "${{ inputs.image-tag }}" 2>/dev/null)
+          if [ -z "$COMMIT_SHA" ]; then
+            echo "::error::Could not resolve commit for image tag '${{ inputs.image-tag }}'"
+            exit 1
+          fi
+          echo "commit-sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+          echo "Resolved image tag '${{ inputs.image-tag }}' → $COMMIT_SHA"
 
   deploy-azure-production:
     name: Deploy to Azure Production
@@ -93,7 +111,7 @@ jobs:
               --name gwn-production \
               --resource-group gwn-rg \
               --server ghcr.io \
-              --username ${{ github.actor }} \
+              --username henrik-me \
               --password ${{ secrets.GHCR_PAT }}
 
       - name: Deploy to production Container App
@@ -172,7 +190,7 @@ jobs:
 
   update-production-branch:
     name: Fast-Forward release/production
-    needs: deploy-azure-production
+    needs: [deploy-azure-production, validate-inputs]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -180,15 +198,12 @@ jobs:
           fetch-depth: 0
 
       - name: Fast-forward release/production to deployed commit
+        env:
+          COMMIT_SHA: ${{ needs.validate-inputs.outputs.commit-sha }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Resolve the commit corresponding to the deployed image tag (short SHA)
-          if ! COMMIT_SHA=$(git rev-parse "${{ inputs.image-tag }}^{commit}" 2>/dev/null); then
-            echo "::error::Could not resolve commit for image tag '${{ inputs.image-tag }}'."
-            exit 1
-          fi
           echo "Using commit $COMMIT_SHA for release/production (from image-tag='${{ inputs.image-tag }}')"
 
           if ! git ls-remote --exit-code origin refs/heads/release/production > /dev/null 2>&1; then
@@ -205,7 +220,7 @@ jobs:
 
   tag-deployment:
     name: Tag Production Deployment
-    needs: deploy-azure-production
+    needs: [deploy-azure-production, validate-inputs]
     runs-on: ubuntu-latest
     steps:
       - name: Log in to Azure
@@ -229,6 +244,6 @@ jobs:
 
       - name: Push deployment tag
         run: |
-          git tag "${{ steps.rev.outputs.revision }}" "${{ inputs.image-tag }}"
+          git tag "${{ steps.rev.outputs.revision }}" "${{ needs.validate-inputs.outputs.commit-sha }}"
           git push origin "${{ steps.rev.outputs.revision }}"
-          echo "✅ Tagged commit ${{ inputs.image-tag }} as ${{ steps.rev.outputs.revision }}"
+          echo "✅ Tagged commit ${{ needs.validate-inputs.outputs.commit-sha }} as ${{ steps.rev.outputs.revision }}"

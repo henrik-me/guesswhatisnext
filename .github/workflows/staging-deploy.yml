@@ -180,7 +180,7 @@ jobs:
               --name gwn-staging \
               --resource-group gwn-rg \
               --server ghcr.io \
-              --username ${{ github.actor }} \
+              --username henrik-me \
               --password ${{ secrets.GHCR_PAT }}
 
       - name: Deploy to staging Container App
