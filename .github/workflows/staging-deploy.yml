@@ -191,6 +191,7 @@ jobs:
               --name gwn-staging \
               --resource-group gwn-rg \
               --image ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+              --min-replicas 1 \
               --set-env-vars \
                 NODE_ENV=staging \
                 PORT=3000 \
@@ -198,15 +199,20 @@ jobs:
                 SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
 
       - name: Wait for deployment to stabilize
-        run: sleep 30
+        run: sleep 60
 
       - name: Verify staging deployment
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
-            -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
-            "${{ vars.STAGING_URL }}/api/health")
-          echo "Staging health check: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "::error::Staging health check failed with status $HTTP_STATUS"
-            exit 1
-          fi
+          for i in 1 2 3; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
+              "${{ vars.STAGING_URL }}/api/health")
+            echo "Health check attempt $i: $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "Staging deployment healthy!"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::Staging health check failed after 3 attempts (last: $HTTP_STATUS)"
+          exit 1
