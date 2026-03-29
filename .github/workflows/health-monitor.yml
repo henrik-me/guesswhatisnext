@@ -55,7 +55,8 @@ jobs:
               if echo "$PROV_STATE" | grep -qi "ResourceNotFound"; then
                 echo "error=Container app gwn-production not found" >> "$GITHUB_OUTPUT"
               else
-                echo "error=Azure CLI error: $(echo "$PROV_STATE" | head -c 200)" >> "$GITHUB_OUTPUT"
+                SANITIZED_ERROR=$(printf '%s' "$PROV_STATE" | tr '\n\r' '  ' | head -c 200)
+                echo "error=Azure CLI error: $SANITIZED_ERROR" >> "$GITHUB_OUTPUT"
               fi
               exit 0
             fi
@@ -64,15 +65,24 @@ jobs:
             echo "Provisioning state: $PROV_STATE"
 
             # Check latest revision
-            ACTIVE_COUNT=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "[?properties.active==\`true\`] | length(@)" -o tsv)
-            LATEST_NAME=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].name" -o tsv)
-            LATEST_HEALTH=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.runningState" -o tsv)
-            LATEST_PROV=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.provisioningState" -o tsv)
-            LATEST_REPLICAS=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.replicas" -o tsv)
+            set +e
+            ACTIVE_COUNT=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "[?properties.active==\`true\`] | length(@)" -o tsv 2>&1)
+            LATEST_NAME=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].name" -o tsv 2>&1)
+            LATEST_HEALTH=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.runningState" -o tsv 2>&1)
+            LATEST_PROV=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.provisioningState" -o tsv 2>&1)
+            LATEST_REPLICAS=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.replicas" -o tsv 2>&1)
+            set -e
+
+            ACTIVE_COUNT=${ACTIVE_COUNT:-0}
             LATEST_NAME=${LATEST_NAME:-none}
             LATEST_HEALTH=${LATEST_HEALTH:-unknown}
             LATEST_PROV=${LATEST_PROV:-unknown}
             LATEST_REPLICAS=${LATEST_REPLICAS:-0}
+
+            # Validate ACTIVE_COUNT is numeric
+            if ! [[ "$ACTIVE_COUNT" =~ ^[0-9]+$ ]]; then
+              ACTIVE_COUNT=0
+            fi
 
             echo "revision-name=$LATEST_NAME" >> "$GITHUB_OUTPUT"
             echo "revision-health=$LATEST_HEALTH" >> "$GITHUB_OUTPUT"
@@ -107,11 +117,11 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const timestamp = '${{ steps.check.outputs.timestamp }}';
-            const error = '${{ steps.check.outputs.error }}';
-            const provState = '${{ steps.check.outputs.provisioning-state }}';
-            const revName = '${{ steps.check.outputs.revision-name }}';
-            const revHealth = '${{ steps.check.outputs.revision-health }}';
+            const timestamp = ${{ toJson(steps.check.outputs.timestamp) }};
+            const error = ${{ toJson(steps.check.outputs.error) }};
+            const provState = ${{ toJson(steps.check.outputs['provisioning-state']) }};
+            const revName = ${{ toJson(steps.check.outputs['revision-name']) }};
+            const revHealth = ${{ toJson(steps.check.outputs['revision-health']) }};
 
             const title = `[Azure] Infrastructure issue: ${error}`.slice(0, 120);
 
@@ -312,14 +322,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const healthStatus = '${{ steps.health.outputs.health_status }}';
-            const httpStatus = '${{ steps.health.outputs.http_status }}';
-            const responseTime = '${{ steps.health.outputs.response_time }}';
-            const responseBody = `${{ steps.health.outputs.response_body }}`;
-            const healthError = '${{ steps.health.outputs.error }}';
-            const puzzlesStatus = '${{ steps.puzzles.outputs.puzzles_status }}';
-            const puzzlesError = '${{ steps.puzzles.outputs.puzzles_error }}';
-            const timestamp = '${{ steps.result.outputs.timestamp }}';
+            const healthStatus = ${{ toJson(steps.health.outputs.health_status) }};
+            const httpStatus = ${{ toJson(steps.health.outputs.http_status) }};
+            const responseTime = ${{ toJson(steps.health.outputs.response_time) }};
+            const responseBody = ${{ toJson(steps.health.outputs.response_body) }};
+            const healthError = ${{ toJson(steps.health.outputs.error) }};
+            const puzzlesStatus = ${{ toJson(steps.puzzles.outputs.puzzles_status) }};
+            const puzzlesError = ${{ toJson(steps.puzzles.outputs.puzzles_error) }};
+            const timestamp = ${{ toJson(steps.result.outputs.timestamp) }};
 
             let errorSummary = healthError || `Health: ${healthStatus}, Puzzles: ${puzzlesStatus}`;
             const title = `[Deep] Service health issue: ${errorSummary}`.slice(0, 120);
