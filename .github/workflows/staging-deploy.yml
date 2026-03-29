@@ -172,6 +172,17 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Configure GHCR registry credentials
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp registry set \
+              --name gwn-staging \
+              --resource-group gwn-rg \
+              --server ghcr.io \
+              --username ${{ github.actor }} \
+              --password ${{ secrets.GITHUB_TOKEN }}
+
       - name: Deploy to staging Container App
         uses: azure/cli@v2
         with:
