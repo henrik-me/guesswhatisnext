@@ -22,8 +22,8 @@ const config = {
  */
 function validateConfig() {
   const missing = [];
-  if (!config.JWT_SECRET) missing.push('JWT_SECRET');
-  if (!config.SYSTEM_API_KEY) missing.push('SYSTEM_API_KEY');
+  if (!(process.env.JWT_SECRET || '').trim()) missing.push('JWT_SECRET');
+  if (!(process.env.SYSTEM_API_KEY || '').trim()) missing.push('SYSTEM_API_KEY');
 
   if (missing.length > 0) {
     if (isProduction) {
