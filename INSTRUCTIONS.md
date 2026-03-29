@@ -16,7 +16,7 @@ guesswhatisnext/
 │   ├── js/
 │   │   ├── app.js                  # Entry point, screen nav, auth, multiplayer UI
 │   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
-│   │   ├── puzzles.js              # Client-side puzzle data (85 puzzles, 12 categories)
+│   │   ├── puzzles.js              # Client-side puzzle data (85 puzzles, 12 categories — server has 200+)
 │   │   ├── daily.js                # Date-seeded daily challenge logic
 │   │   ├── storage.js              # LocalStorage persistence
 │   │   └── audio.js                # Web Audio API sound effects
