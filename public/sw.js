@@ -94,7 +94,12 @@ self.addEventListener('fetch', (event) => {
         .catch(() => {
           // Return offline page for navigation requests
           if (request.mode === 'navigate') {
-            return caches.match('/offline.html');
+            return caches.match('/offline.html').then((offline) =>
+              offline || new Response('<h1>You are offline</h1><p>Please check your connection.</p>', {
+                status: 503,
+                headers: { 'Content-Type': 'text/html' },
+              })
+            );
           }
           return new Response('', { status: 503, statusText: 'Offline' });
         });
