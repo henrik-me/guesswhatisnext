@@ -26,12 +26,19 @@ function validateConfig() {
   if (!config.SYSTEM_API_KEY) missing.push('SYSTEM_API_KEY');
 
   if (missing.length > 0) {
-    console.error(
-      `❌ Missing required environment variables: ${missing.join(', ')}\n` +
-      '   These must be set when NODE_ENV=production.\n' +
-      '   Example: JWT_SECRET=… SYSTEM_API_KEY=… node server/index.js'
-    );
-    process.exit(1);
+    if (isProduction) {
+      console.error(
+        `❌ Missing required environment variables: ${missing.join(', ')}\n` +
+        '   These must be set when NODE_ENV=production.\n' +
+        '   Example: JWT_SECRET=… SYSTEM_API_KEY=… node server/index.js'
+      );
+      process.exit(1);
+    } else {
+      console.warn(
+        `⚠️  Missing environment variables: ${missing.join(', ')}\n` +
+        '   Using dev defaults. Set these before deploying to production.'
+      );
+    }
   }
 }
 
