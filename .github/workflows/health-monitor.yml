@@ -22,6 +22,7 @@ jobs:
   azure-check:
     name: Azure Infrastructure Check
     runs-on: ubuntu-latest
+    environment: production
     outputs:
       app-exists: ${{ steps.check.outputs.app-exists }}
       provisioning-state: ${{ steps.check.outputs.provisioning-state }}
@@ -42,27 +43,36 @@ jobs:
             TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
             echo "timestamp=$TIMESTAMP" >> "$GITHUB_OUTPUT"
 
-            # Check container app exists and is provisioned
-            APP_JSON=$(az containerapp show --name gwn-production --resource-group gwn-rg -o json 2>/dev/null || echo "NOT_FOUND")
-            if [ "$APP_JSON" = "NOT_FOUND" ]; then
+            # Check container app exists and get provisioning state
+            set +e
+            PROV_STATE=$(az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.provisioningState" -o tsv 2>&1)
+            AZ_EXIT=$?
+            set -e
+
+            if [ "$AZ_EXIT" -ne 0 ]; then
               echo "app-exists=false" >> "$GITHUB_OUTPUT"
               echo "status=failed" >> "$GITHUB_OUTPUT"
-              echo "error=Container app gwn-production not found" >> "$GITHUB_OUTPUT"
+              if echo "$PROV_STATE" | grep -qi "ResourceNotFound"; then
+                echo "error=Container app gwn-production not found" >> "$GITHUB_OUTPUT"
+              else
+                echo "error=Azure CLI error: $(echo "$PROV_STATE" | head -c 200)" >> "$GITHUB_OUTPUT"
+              fi
               exit 0
             fi
             echo "app-exists=true" >> "$GITHUB_OUTPUT"
-
-            PROV_STATE=$(echo "$APP_JSON" | jq -r '.properties.provisioningState')
             echo "provisioning-state=$PROV_STATE" >> "$GITHUB_OUTPUT"
             echo "Provisioning state: $PROV_STATE"
 
             # Check latest revision
-            REV_JSON=$(az containerapp revision list --name gwn-production --resource-group gwn-rg -o json)
-            ACTIVE_COUNT=$(echo "$REV_JSON" | jq '[.[] | select(.properties.active == true)] | length')
-            LATEST_NAME=$(echo "$REV_JSON" | jq -r 'sort_by(.properties.createdTime) | last | .name // "none"')
-            LATEST_HEALTH=$(echo "$REV_JSON" | jq -r 'sort_by(.properties.createdTime) | last | .properties.runningState // "unknown"')
-            LATEST_PROV=$(echo "$REV_JSON" | jq -r 'sort_by(.properties.createdTime) | last | .properties.provisioningState // "unknown"')
-            LATEST_REPLICAS=$(echo "$REV_JSON" | jq -r 'sort_by(.properties.createdTime) | last | .properties.replicas // 0')
+            ACTIVE_COUNT=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "[?properties.active==\`true\`] | length(@)" -o tsv)
+            LATEST_NAME=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].name" -o tsv)
+            LATEST_HEALTH=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.runningState" -o tsv)
+            LATEST_PROV=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.provisioningState" -o tsv)
+            LATEST_REPLICAS=$(az containerapp revision list --name gwn-production --resource-group gwn-rg --query "sort_by(@, &properties.createdTime)[-1].properties.replicas" -o tsv)
+            LATEST_NAME=${LATEST_NAME:-none}
+            LATEST_HEALTH=${LATEST_HEALTH:-unknown}
+            LATEST_PROV=${LATEST_PROV:-unknown}
+            LATEST_REPLICAS=${LATEST_REPLICAS:-0}
 
             echo "revision-name=$LATEST_NAME" >> "$GITHUB_OUTPUT"
             echo "revision-health=$LATEST_HEALTH" >> "$GITHUB_OUTPUT"
