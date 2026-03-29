@@ -68,7 +68,7 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 22 | Enhanced health endpoint | ✅ Done | 21 | Deep checks (DB, WS, disk, uptime), version, environment |
 | 23 | Local container dev | ✅ Done | — | Dockerfile, docker-compose.yml, .dockerignore, local dev in container |
 | 27 | Puzzles to DB | ✅ Done | 21 | Puzzles table, auto-seed 22 puzzles, API with filters, client fetch with fallback |
-| 28 | Puzzle expansion | ✅ Done | 27 | 85 puzzles across 12 categories (was 22 across 5) |
+| 28 | Puzzle expansion | ✅ Done | 27 | 287 puzzles across 16 categories (was 22 across 5) |
 | 29 | Achievements | ✅ Done | 21 | 12 achievements, unlock logic, API, frontend grid, toast notifications |
 | 30 | Player profiles | ✅ Done | 29 | Unified profile screen with stats, achievements, match history |
 | 31 | Settings & audio | ✅ Done | — | Web Audio API sounds, light/dark theme, timer duration, settings screen |
