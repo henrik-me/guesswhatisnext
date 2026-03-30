@@ -15,10 +15,6 @@ config:
   defaults:
     headers:
       Content-Type: "application/json"
-  plugins:
-    ensure:
-      thresholds:
-        - http.response_time.p95: 500
   processor: "./ws-helpers.js"
 
 before:

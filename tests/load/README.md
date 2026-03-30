@@ -134,11 +134,13 @@ limiting works correctly under load.
 
 ### WebSocket Stress Test
 
-| Metric | Threshold | Meaning |
-|---|---|---|
-| `http.response_time.p95` | < 500ms | Applies to HTTP setup calls (registration, room creation) made by processor functions. WebSocket connect/message latency is tracked separately by Artillery's `ws` engine metrics (`websocket.send_rate`, `websocket.messages_sent/received`). |
+The WebSocket test does not enforce automated thresholds. HTTP setup calls
+(registration, room creation) use a custom Node.js helper and are not captured
+in Artillery's `http.response_time` metrics. Review the Artillery summary
+output manually for WebSocket-specific metrics (`websocket.send_rate`,
+`websocket.messages_sent/received`).
 
-If thresholds are breached, Artillery exits with a non-zero code.
+If API test thresholds are breached, Artillery exits with a non-zero code.
 
 ## Interpreting Results
 

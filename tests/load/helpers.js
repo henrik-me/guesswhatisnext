@@ -22,11 +22,11 @@ let userCounter = 0;
 
 /**
  * Generate a short unique username that fits the server's 3-20 character limit.
- * Uses base36 timestamp + counter for uniqueness.
+ * Uses base36 timestamp + PID + counter for cross-process uniqueness.
  */
 function makeUsername(prefix) {
   userCounter++;
-  const id = Date.now().toString(36) + userCounter.toString(36);
+  const id = Date.now().toString(36) + process.pid.toString(36) + userCounter.toString(36);
   return `${prefix}${id}`.slice(0, 20);
 }
 
@@ -114,6 +114,12 @@ async function setupUsers(context, _events, done) {
     const waitStart = Date.now();
     while (!fs.existsSync(USER_POOL_FILE) && Date.now() - waitStart < 5 * 60 * 1000) {
       await new Promise((r) => setTimeout(r, 2000));
+    }
+    if (!fs.existsSync(USER_POOL_FILE)) {
+      const err = new Error('[setup] Timed out waiting for pool file from another process');
+      console.error(err.message);
+      if (typeof done === 'function') return done(err);
+      throw err;
     }
     if (typeof done === 'function') return done();
     return;
@@ -251,7 +257,9 @@ function generateUniqueUser(context, _events, done) {
 }
 
 /**
- * Clean up the user pool file (called via `after` hook).
+ * Clean up the user pool and lock files (called via top-level `after` hook).
+ * The `after` hook runs once after all Artillery workers have completed,
+ * so there is no risk of deleting files while workers are still running.
  */
 function cleanupUserPool(_context, _events, done) {
   try {
