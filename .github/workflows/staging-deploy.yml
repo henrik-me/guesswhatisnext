@@ -229,6 +229,9 @@ jobs:
             properties:
               template:
                 revisionSuffix: $SUFFIX
+                scale:
+                  minReplicas: 1
+                  maxReplicas: 1
                 volumes:
                   - name: data-volume
                     storageName: gwn-storage-staging
@@ -255,12 +258,15 @@ jobs:
             az containerapp update \
               --name gwn-staging \
               --resource-group gwn-rg \
-              --min-replicas 1 \
               --yaml "$TEMPLATE_FILE"
 
             # Get new revision name
             NEW_REV=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
               --query "properties.latestRevisionName" -o tsv)
+            if [ -z "$NEW_REV" ] || [ "$NEW_REV" = "None" ]; then
+              echo "::error::Failed to get new revision name"
+              exit 1
+            fi
             echo "new-revision=$NEW_REV" >> "$GITHUB_OUTPUT"
 
             echo "New revision: $NEW_REV"
@@ -283,6 +289,10 @@ jobs:
         with:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            if [ -z "$NEW_REV" ] || [ "$NEW_REV" = "None" ]; then
+              echo "::error::NEW_REV is invalid — skipping deactivation to avoid taking app offline"
+              exit 1
+            fi
             echo "Deactivating all revisions except $NEW_REV to release SQLite file lock..."
             az containerapp revision list --name gwn-staging --resource-group gwn-rg \
               --query "[?properties.active && name != '$NEW_REV'].name" -o tsv | while read -r rev; do
@@ -296,9 +306,14 @@ jobs:
       - name: Initialize DB on new revision
         run: |
           STAGING_URL="${{ vars.STAGING_URL }}"
+          STAGING_URL="${STAGING_URL%/}"
+          if [ -z "$STAGING_URL" ]; then
+            echo "::error::STAGING_URL is not set"
+            exit 1
+          fi
           echo "Initializing DB via app URL: $STAGING_URL ..."
           for i in 1 2 3 4 5 6 7 8; do
-            RESPONSE=$(curl -s -w '\n%{http_code}' --max-time 30 \
+            RESPONSE=$(curl -sS -w '\n%{http_code}' --max-time 30 \
               -X POST "$STAGING_URL/api/admin/init-db" \
               -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || echo -e "\n000")
             HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
@@ -317,10 +332,16 @@ jobs:
 
       - name: Verify staging deployment
         run: |
+          STAGING_URL="${{ vars.STAGING_URL }}"
+          STAGING_URL="${STAGING_URL%/}"
+          if [ -z "$STAGING_URL" ]; then
+            echo "::error::STAGING_URL is not set"
+            exit 1
+          fi
           for i in 1 2 3 4 5; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+            HTTP_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
               -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
-              "${{ vars.STAGING_URL }}/api/health" || true)
+              "$STAGING_URL/api/health" || true)
             echo "Health check attempt $i: $HTTP_STATUS"
             if [ "$HTTP_STATUS" = "200" ]; then
               echo "Staging deployment healthy!"
@@ -337,26 +358,46 @@ jobs:
         with:
           inlineScript: |
             CURRENT_REV="${{ steps.deploy.outputs.current-revision }}"
+            if [ -z "$CURRENT_REV" ] || [ "$CURRENT_REV" = "None" ]; then
+              echo "::error::CURRENT_REV is invalid ('$CURRENT_REV') — cannot rollback safely"
+              exit 1
+            fi
             echo "::warning::Rolling back to $CURRENT_REV"
             # Reactivate old revision
             az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
               --revision "$CURRENT_REV" || true
+            # Switch traffic back to old revision (minimize downtime first), with retries
+            TRAFFIC_SET=0
+            for attempt in 1 2 3; do
+              if az containerapp ingress traffic set \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision-weight "$CURRENT_REV=100"; then
+                TRAFFIC_SET=1
+                break
+              fi
+              echo "::warning::Failed to set ingress traffic to $CURRENT_REV (attempt $attempt/3); retrying in 10s..."
+              sleep 10
+            done
+            if [ "$TRAFFIC_SET" -ne 1 ]; then
+              echo "::error::Failed to set ingress traffic to $CURRENT_REV after 3 attempts; aborting rollback"
+              exit 1
+            fi
             # Deactivate failed new revision to release SQLite lock
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
-            if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
+            if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "None" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
               az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" || true
-              sleep 10
             fi
-            # Switch traffic back
-            az containerapp ingress traffic set \
-              --name gwn-staging --resource-group gwn-rg \
-              --revision-weight "$CURRENT_REV=100" || true
+            # Wait for lock release
+            sleep 15
             # Try to re-init DB on old revision via app URL
-            sleep 10
-            curl -s --max-time 30 -X POST \
-              "${{ vars.STAGING_URL }}/api/admin/init-db" \
-              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || true
+            STAGING_URL="${{ vars.STAGING_URL }}"
+            STAGING_URL="${STAGING_URL%/}"
+            if [ -n "$STAGING_URL" ]; then
+              curl -sS --max-time 30 -X POST \
+                "$STAGING_URL/api/admin/init-db" \
+                -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || true
+            fi
 
       - name: Tag deployment
         uses: azure/cli@v2
