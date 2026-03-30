@@ -37,6 +37,7 @@ coverage/
 
 # Load test artifacts
 tests/load/.user-pool.json
+tests/load/.user-pool.lock
 
 # Logs
 logs/

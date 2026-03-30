@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const USER_POOL_FILE = path.join(__dirname, '.user-pool.json');
+const LOCK_FILE = path.join(__dirname, '.user-pool.lock');
 
 let poolIndex = 0;
 let userCounter = 0;
@@ -90,8 +91,8 @@ function loadUserPool() {
     if (fs.existsSync(USER_POOL_FILE)) {
       return JSON.parse(fs.readFileSync(USER_POOL_FILE, 'utf8'));
     }
-  } catch {
-    // Ignore read errors
+  } catch (err) {
+    console.error('[loadUserPool] Failed to read pool file:', err.message);
   }
   return [];
 }
@@ -103,96 +104,119 @@ function loadUserPool() {
  * so scenario workers can access the pool.
  */
 async function setupUsers(context, _events, done) {
-  // Guard against concurrent executions (before hook should only run once)
-  if (fs.existsSync(USER_POOL_FILE)) {
-    console.log('[setup] User pool already exists, skipping setup');
+  // Acquire exclusive lock to prevent concurrent setup across processes
+  let lockFd;
+  try {
+    lockFd = fs.openSync(LOCK_FILE, 'wx');
+  } catch {
+    // Lock file exists — another process is running setup; wait for pool file
+    console.log('[setup] Another process is running setup, waiting for pool file...');
+    const waitStart = Date.now();
+    while (!fs.existsSync(USER_POOL_FILE) && Date.now() - waitStart < 5 * 60 * 1000) {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
     if (typeof done === 'function') return done();
     return;
   }
 
-  const baseUrl = getBaseUrl(context);
-  const count = parseInt(process.env.LOAD_TEST_USER_COUNT, 10) || 20;
+  try {
+    // Double-check pool file after acquiring lock
+    if (fs.existsSync(USER_POOL_FILE)) {
+      console.log('[setup] User pool already exists, skipping setup');
+      if (typeof done === 'function') return done();
+      return;
+    }
 
-  if (count < 1) {
-    const err = new Error(`[setup] LOAD_TEST_USER_COUNT must be >= 1, got ${count}`);
-    console.error(err.message);
-    if (typeof done === 'function') return done(err);
-    throw err;
-  }
+    const baseUrl = getBaseUrl(context);
+    const count = parseInt(process.env.LOAD_TEST_USER_COUNT, 10) || 20;
 
-  const batchSize = 4; // stay under 5/min rate limit
-  const windowMs = 61000; // slightly over 60s rate limit window
-  const maxDurationMs =
-    parseInt(process.env.LOAD_TEST_SETUP_TIMEOUT_MS, 10) || 5 * 60 * 1000;
-  const maxAttempts = count * 10;
-  const non429BackoffMs = 500;
-  const startTime = Date.now();
-  let attempts = 0;
-  let shouldAbort = false;
-  const pool = [];
-  console.log(`[setup] Pre-registering ${count} users at ${baseUrl}...`);
+    if (count < 1) {
+      const err = new Error(`[setup] LOAD_TEST_USER_COUNT must be >= 1, got ${count}`);
+      console.error(err.message);
+      if (typeof done === 'function') return done(err);
+      throw err;
+    }
 
-  while (pool.length < count && !shouldAbort) {
-    const batchEnd = Math.min(pool.length + batchSize, count);
-    const targetCount = batchEnd;
+    const batchSize = 4; // stay under 5/min rate limit
+    const windowMs = 61000; // slightly over 60s rate limit window
+    const maxDurationMs =
+      parseInt(process.env.LOAD_TEST_SETUP_TIMEOUT_MS, 10) || 5 * 60 * 1000;
+    const maxAttempts = count * 10;
+    const non429BackoffMs = 500;
+    const startTime = Date.now();
+    let attempts = 0;
+    let shouldAbort = false;
+    const pool = [];
+    console.log(`[setup] Pre-registering ${count} users at ${baseUrl}...`);
 
-    while (pool.length < targetCount && !shouldAbort) {
-      const username = makeUsername('l');
-      const password = 'LoadTest123!';
-      attempts++;
+    while (pool.length < count && !shouldAbort) {
+      const batchEnd = Math.min(pool.length + batchSize, count);
+      const targetCount = batchEnd;
 
-      try {
-        const res = await httpRequest(baseUrl, 'POST', '/api/auth/register', {
-          username,
-          password,
-        });
+      while (pool.length < targetCount && !shouldAbort) {
+        const username = makeUsername('l');
+        const password = 'LoadTest123!';
+        attempts++;
 
-        if (res.statusCode === 201 && res.body.token) {
-          pool.push({ username, token: res.body.token });
-        } else if (res.statusCode === 429) {
-          console.log(`[setup] Rate limited at ${pool.length} users, waiting for window reset...`);
-          await new Promise((r) => setTimeout(r, windowMs));
-        } else {
-          console.error(`[setup] Registration failed (${res.statusCode}):`, res.body);
+        try {
+          const res = await httpRequest(baseUrl, 'POST', '/api/auth/register', {
+            username,
+            password,
+          });
+
+          if (res.statusCode === 201 && res.body.token) {
+            pool.push({ username, token: res.body.token });
+          } else if (res.statusCode === 429) {
+            console.log(`[setup] Rate limited at ${pool.length} users, waiting for window reset...`);
+            await new Promise((r) => setTimeout(r, windowMs));
+          } else {
+            console.error(`[setup] Registration failed (${res.statusCode}):`, res.body);
+            await new Promise((r) => setTimeout(r, non429BackoffMs));
+          }
+        } catch (err) {
+          console.error(`[setup] Error registering user:`, err.message);
           await new Promise((r) => setTimeout(r, non429BackoffMs));
         }
-      } catch (err) {
-        console.error(`[setup] Error registering user:`, err.message);
-        await new Promise((r) => setTimeout(r, non429BackoffMs));
+
+        const elapsed = Date.now() - startTime;
+        if (elapsed > maxDurationMs) {
+          console.error(
+            `[setup] Aborting: exceeded max duration (${maxDurationMs}ms) with ${pool.length}/${count} users`,
+          );
+          shouldAbort = true;
+        } else if (attempts >= maxAttempts && pool.length < count) {
+          console.error(
+            `[setup] Aborting: exceeded max attempts (${maxAttempts}) with ${pool.length}/${count} users`,
+          );
+          shouldAbort = true;
+        }
       }
 
-      const elapsed = Date.now() - startTime;
-      if (elapsed > maxDurationMs) {
-        console.error(
-          `[setup] Aborting: exceeded max duration (${maxDurationMs}ms) with ${pool.length}/${count} users`,
-        );
-        shouldAbort = true;
-      } else if (attempts >= maxAttempts && pool.length < count) {
-        console.error(
-          `[setup] Aborting: exceeded max attempts (${maxAttempts}) with ${pool.length}/${count} users`,
-        );
-        shouldAbort = true;
+      if (!shouldAbort && pool.length < count) {
+        console.log(`[setup] Registered ${pool.length}/${count}, waiting for rate limit window...`);
+        await new Promise((r) => setTimeout(r, windowMs));
       }
     }
 
-    if (!shouldAbort && pool.length < count) {
-      console.log(`[setup] Registered ${pool.length}/${count}, waiting for rate limit window...`);
-      await new Promise((r) => setTimeout(r, windowMs));
+    if (pool.length < count) {
+      const err = new Error(
+        `[setup] Failed to prepare user pool: created ${pool.length}/${count} users before hitting limits`,
+      );
+      console.error(err.message);
+      if (typeof done === 'function') return done(err);
+      throw err;
+    }
+
+    // Persist tokens only (not passwords) with restrictive permissions
+    fs.writeFileSync(USER_POOL_FILE, JSON.stringify(pool, null, 2), { mode: 0o600 });
+    console.log(`[setup] Registered ${pool.length} users, saved to ${USER_POOL_FILE}`);
+  } finally {
+    // Release lock
+    if (lockFd !== undefined) {
+      fs.closeSync(lockFd);
+      try { fs.unlinkSync(LOCK_FILE); } catch { /* ignore */ }
     }
   }
-
-  if (pool.length < count) {
-    const err = new Error(
-      `[setup] Failed to prepare user pool: created ${pool.length}/${count} users before hitting limits`,
-    );
-    console.error(err.message);
-    if (typeof done === 'function') return done(err);
-    throw err;
-  }
-
-  // Persist tokens only (not passwords) with restrictive permissions
-  fs.writeFileSync(USER_POOL_FILE, JSON.stringify(pool, null, 2), { mode: 0o600 });
-  console.log(`[setup] Registered ${pool.length} users, saved to ${USER_POOL_FILE}`);
   if (typeof done === 'function') return done();
 }
 
@@ -233,6 +257,9 @@ function cleanupUserPool(_context, _events, done) {
   try {
     if (fs.existsSync(USER_POOL_FILE)) {
       fs.unlinkSync(USER_POOL_FILE);
+    }
+    if (fs.existsSync(LOCK_FILE)) {
+      fs.unlinkSync(LOCK_FILE);
     }
   } catch {
     // Ignore cleanup errors
