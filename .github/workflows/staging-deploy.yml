@@ -187,16 +187,31 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
+            trap 'rm -f /tmp/deploy-template.yaml' EXIT
+            cat > /tmp/deploy-template.yaml <<'YAMLEOF'
+            properties:
+              template:
+                volumes:
+                  - name: data-volume
+                    storageName: gwn-storage-staging
+                    storageType: AzureFile
+                containers:
+                  - name: gwn-staging
+                    image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+                    volumeMounts:
+                      - volumeName: data-volume
+                        mountPath: /app/data
+            YAMLEOF
             az containerapp update \
               --name gwn-staging \
               --resource-group gwn-rg \
-              --image ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
               --min-replicas 1 \
+              --yaml /tmp/deploy-template.yaml \
               --set-env-vars \
                 NODE_ENV=staging \
                 PORT=3000 \
-                JWT_SECRET=${{ secrets.JWT_SECRET }} \
-                SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
+                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
 
       - name: Deactivate old revisions
         uses: azure/cli@v2

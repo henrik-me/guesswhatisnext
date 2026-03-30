@@ -126,17 +126,32 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
+            trap 'rm -f /tmp/deploy-template.yaml' EXIT
+            cat > /tmp/deploy-template.yaml <<'YAMLEOF'
+            properties:
+              template:
+                volumes:
+                  - name: data-volume
+                    storageName: gwn-storage-production
+                    storageType: AzureFile
+                containers:
+                  - name: gwn-production
+                    image: ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}
+                    volumeMounts:
+                      - volumeName: data-volume
+                        mountPath: /app/data
+            YAMLEOF
             az containerapp update \
               --name gwn-production \
               --resource-group gwn-rg \
-              --image ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }} \
               --min-replicas 0 \
               --max-replicas 5 \
+              --yaml /tmp/deploy-template.yaml \
               --set-env-vars \
                 NODE_ENV=production \
                 PORT=3000 \
-                JWT_SECRET=${{ secrets.JWT_SECRET }} \
-                SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
+                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
 
       - name: Deactivate old revisions
         uses: azure/cli@v2
@@ -179,10 +194,30 @@ jobs:
         with:
           inlineScript: |
             echo "::error::Rolling back to previous image: ${{ steps.rollback.outputs.current-image }}"
+            trap 'rm -f /tmp/deploy-template.yaml' EXIT
+            cat > /tmp/deploy-template.yaml <<'YAMLEOF'
+            properties:
+              template:
+                volumes:
+                  - name: data-volume
+                    storageName: gwn-storage-production
+                    storageType: AzureFile
+                containers:
+                  - name: gwn-production
+                    image: ${{ steps.rollback.outputs.current-image }}
+                    volumeMounts:
+                      - volumeName: data-volume
+                        mountPath: /app/data
+            YAMLEOF
             az containerapp update \
               --name gwn-production \
               --resource-group gwn-rg \
-              --image ${{ steps.rollback.outputs.current-image }}
+              --yaml /tmp/deploy-template.yaml \
+              --set-env-vars \
+                NODE_ENV=production \
+                PORT=3000 \
+                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
             echo "Waiting for rollback to stabilize..."
             sleep 60
             HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
