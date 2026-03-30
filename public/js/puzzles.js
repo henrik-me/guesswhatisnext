@@ -880,9 +880,8 @@ export const puzzles = [
     options: ["📉", "🌍", "📱", "💃"],
     explanation: "A viral trend: phone → catchy song → dance challenge → trending upward → goes worldwide."
   },
-,
 
-  // ─── Geography ────────────────────────────────────
+  // ─── Geography────────────────────────────────────
   {
     id: "geo-continents-size",
     category: "Geography",
@@ -1676,10 +1675,10 @@ export const puzzles = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥚","〰️","🐸"],
+    sequence: ["🥚","〰️","🧒"],
     answer: "🐸",
     options: ["🐸","🐍","🦎","🐢"],
-    explanation: "Frog life cycle: egg → tadpole → froglet → adult frog."
+    explanation: "Frog life cycle: egg → tadpole → froglet → adult frog (🐸)."
   },
   {
     id: "animal-fastest-land",

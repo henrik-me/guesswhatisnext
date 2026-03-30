@@ -4194,10 +4194,10 @@ module.exports = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥚","〰️","🐸"],
+    sequence: ["🥚","〰️","🧒"],
     answer: "🐸",
     options: ["🐸","🐍","🦎","🐢"],
-    explanation: "Frog life cycle: egg → tadpole → froglet → adult frog."
+    explanation: "Frog life cycle: egg → tadpole → froglet → adult frog (🐸)."
   },
   {
     id: "animal-fastest-land",
@@ -4678,10 +4678,10 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "emoji",
-    sequence: ["☝️","✌️","🤟"],
+    sequence: ["☝️","✌️","🤟","🖖"],
     answer: "🖐️",
     options: ["🖐️","👊","👋","👍"],
-    explanation: "Counting on fingers: one ☝️ → two ✌️ → three 🤟 → five (open hand) 🖐️."
+    explanation: "Counting on fingers: one ☝️ → two ✌️ → three 🤟 → four 🖖 → five (open hand) 🖐️."
   },
   // ─── Emoji Sequences ──────────────────────────────
   {
@@ -5037,7 +5037,7 @@ module.exports = [
     sequence: ["()","(())","((()))"],
     answer: "(((())))",
     options: ["(((())))","()()","((()))","(()())"],
-    explanation: "Each step adds another layer of nesting: () → (()) → ((())) → (((())))."
+    explanation: "Each step adds another layer of nesting: () → (()) → ((())) → (((())))"
   },
   {
     id: "visual-size-emoji",
