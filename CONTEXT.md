@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Mostly Done — Phase 10b In Progress, Phase 11 Planned
+## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Mostly Done — Phase 10b Planned, Phase 11 Planned
 
 ### Development Workflow
 
