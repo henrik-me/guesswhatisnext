@@ -204,7 +204,7 @@ function createServer() {
     let selfInitAttempt = 0;
 
     const attemptSelfInit = () => {
-      if (dbInitialized) return;
+      if (draining || dbInitialized) return;
       selfInitAttempt++;
       try {
         setDraining(false);
