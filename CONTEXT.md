@@ -157,7 +157,7 @@ During staging deployment testing, we discovered that SQLite on Azure Files (SMB
 |---|---|---|---|
 | 57 | EXCLUSIVE locking + self-init DB | ✅ Done | `PRAGMA locking_mode = EXCLUSIVE` holds lock for connection lifetime. Self-init retry loop on startup (30 attempts × 5s). Configurable via `GWN_EXCLUSIVE_LOCKING` env var. |
 | 58 | Simplified deploy workflow | ✅ Done | Removed external init-db dependency. Verification via revision state + az logs grep. Rollback reordered: reactivate old → wait → deactivate new. Auto-deploy on push to main DISABLED (manual workflow_dispatch only). |
-| 59 | Validate staging + first prod deploy | ⬜ Pending | 58 | Deploy PR #41, verify self-init creates DB. Then apply same patterns to prod-deploy.yml. |
+| 59 | Validate staging + first prod deploy | ⬜ Pending | Depends on 58. Deploy PR #41, verify self-init creates DB. Then apply same patterns to prod-deploy.yml. |
 
 **Key technical decisions in PR #41:**
 - `busy_timeout` MUST be set before `journal_mode` and `locking_mode` pragmas (those acquire locks)
@@ -210,7 +210,7 @@ Integrate E2E and load tests into CI/CD pipelines so they run automatically, not
   │  [Lint] + [Test]  (parallel)                                │
   └──────────────────────────────────────────────────────────────┘
 
-  On merge to main (staging-deploy.yml)
+  Manual trigger (staging-deploy.yml — auto-deploy disabled in PR #41)
          │  (concurrency: cancel superseded)
          ▼
   ┌──────────────────────────────────────────────────────────────────────────────────┐
