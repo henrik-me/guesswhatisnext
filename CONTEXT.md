@@ -134,7 +134,7 @@ clone folder name minus the repo name (see INSTRUCTIONS.md § Parallel Agent Wor
 | 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
 | 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. Phase 10 task 56 is the only remaining item.
+**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
 
 ## Phase 10 — CI/CD Pipeline Rework
 
@@ -181,7 +181,7 @@ clone folder name minus the repo name (see INSTRUCTIONS.md § Parallel Agent Wor
                                                       │  Scale-to-zero ($0)   │
                                                       └───────────────────────┘
 
-  Manual trigger (prod-deploy.yml — planned)
+  Manual trigger (prod-deploy.yml)
          │  (requires staging green)
          ▼
   ┌──────────────────────────────────────────────────────────────────────┐
