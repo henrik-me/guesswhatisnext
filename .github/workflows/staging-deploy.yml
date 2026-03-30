@@ -94,7 +94,7 @@ jobs:
             fi
             sleep 2
           done
-          echo "::error::Database not ready after 60s"
+          echo "::error::Database not ready after ~6 minutes"
           exit 1
 
       - name: Health check

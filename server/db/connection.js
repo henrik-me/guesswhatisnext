@@ -46,7 +46,7 @@ function isSqliteLockError(err) {
  *   when `_draining` is true and no connection has been opened yet. In Azure
  *   (staging/production) environments, `_draining` starts as true and is typically
  *   cleared either by the `/api/admin/init-db` endpoint calling
- *   {@link setDraining}(false) or by the background self-initialization logic in
+ *   {@link setDraining|setDraining(false)} or by the background self-initialization logic in
  *   `createServer()` before it begins attempting database initialization. That
  *   background path keeps `_draining` cleared across retryable initialization
  *   failures; only if initialization encounters a fatal condition and gives up
