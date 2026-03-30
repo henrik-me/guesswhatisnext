@@ -36,17 +36,19 @@ function initDb(maxRetries = 5) {
     try {
       return _initDbOnce();
     } catch (err) {
-      const isLockError = err.message && (
-        err.message.includes('database is locked') ||
-        err.message.includes('SQLITE_BUSY')
-      );
+      const isLockError = err.code === 'SQLITE_BUSY' ||
+        err.code === 'SQLITE_LOCKED' ||
+        err.code === 'SQLITE_BUSY_SNAPSHOT';
       if (!isLockError || attempt === maxRetries) throw err;
       const delay = 1000 * attempt;
       console.warn(
-        `⏳ Database init attempt ${attempt}/${maxRetries} failed: ${err.message}. ` +
+        `⏳ Database init attempt ${attempt}/${maxRetries} failed (${err.code}): ${err.message}. ` +
         `Retrying in ${delay}ms...`
       );
       closeDb();
+      // Synchronous sleep: initDb runs once at startup before the server
+      // listens, and better-sqlite3 is synchronous. Making this async would
+      // require refactoring createServer/index.js and all test call-sites.
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
     }
   }
