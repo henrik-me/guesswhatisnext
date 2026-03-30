@@ -146,7 +146,15 @@ jobs:
               --resource-group gwn-rg \
               --min-replicas 0 \
               --max-replicas 5 \
-              --yaml /tmp/deploy-template.yaml \
+              --yaml /tmp/deploy-template.yaml
+
+      - name: Set production environment variables
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name gwn-production \
+              --resource-group gwn-rg \
               --set-env-vars \
                 NODE_ENV=production \
                 PORT=3000 \
@@ -212,7 +220,10 @@ jobs:
             az containerapp update \
               --name gwn-production \
               --resource-group gwn-rg \
-              --yaml /tmp/deploy-template.yaml \
+              --yaml /tmp/deploy-template.yaml
+            az containerapp update \
+              --name gwn-production \
+              --resource-group gwn-rg \
               --set-env-vars \
                 NODE_ENV=production \
                 PORT=3000 \
