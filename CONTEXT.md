@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Mostly Done — Phases 7/9 Planned
+## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Mostly Done — Phase 10b In Progress, Phase 11 Planned
 
 ### Development Workflow
 
@@ -147,7 +147,31 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | 55 | Manual production deploy workflow | ✅ Done | 54 | prod-deploy.yml: manual workflow_dispatch with image tag + confirmation, validates image exists in GHCR, deploys to production environment (with approval gate), runs health verification, auto-rollback on failure (PR #21) |
 | 56 | Unified infra setup script | ⬜ Pending | 55 | Merge deploy.sh + setup-github.sh into one script: auto-generates secrets, creates Azure service principal, sets all GitHub secrets/variables, runs verification health check |
 
-**Parallelism:** Tasks 51–56 are sequential. Phase 10 is independent of Phases 6–9.
+### Phase 10b — Orchestrated Deploy (SQLite/SMB Fix)
+
+During staging deployment testing, we discovered that SQLite on Azure Files (SMB) cannot handle concurrent access during Azure Container Apps revision transitions. Both old and new revisions access the DB simultaneously, causing `SQLITE_BUSY` errors. Phase 10b orchestrates deploys so only one revision touches the DB at a time.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 57 | Lazy DB init + admin endpoints | ⬜ Pending | 54 | Defer initDb() to first request instead of startup. Add POST /api/admin/drain (close DB on old revision) and POST /api/admin/init-db (init DB on new revision). Fix trust proxy for express-rate-limit. |
+| 58 | Orchestrated deploy workflow | ⬜ Pending | 57 | Rewrite staging-deploy.yml: deploy at 0% traffic, switch traffic, drain old revision via FQDN, init-db on new revision via FQDN, verify health, deactivate old. Rollback on failure. |
+| 59 | Validate staging + first prod deploy | ⬜ Pending | 58 | Deactivate crash-looping revisions, deploy with orchestrated workflow, verify end-to-end. Then first production deploy. |
+
+**Parallelism:** Tasks 51–56 are sequential. Phase 10 is independent of Phases 6–9. Phase 10b addresses SQLite/SMB deployment issues discovered during staging testing.
+
+## Phase 11 — Azure SQL Database Migration
+
+Replace SQLite + Azure Files with Azure SQL Database (free tier) to permanently eliminate SMB locking issues and enable true zero-downtime deploys. The free tier provides 10 serverless databases per subscription with auto-pause, 32 GB storage, and 100K vCore-seconds/month.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 60 | Provision Azure SQL free tier | ⬜ Pending | 59 | Create Azure SQL logical server + 2 free-tier serverless databases (gwn-staging, gwn-production). Configure firewall rules. Store connection strings as GitHub secrets. |
+| 61 | Migrate schema SQLite to T-SQL | ⬜ Pending | 60 | Convert schema.sql: AUTOINCREMENT to IDENTITY, TEXT to NVARCHAR, datetime functions. Write migration script. |
+| 62 | Rewrite DB layer for mssql | ⬜ Pending | 61 | Replace better-sqlite3 (sync) with mssql driver (async). Convert all route handlers to async. Add connection pooling. |
+| 63 | Update deploy workflows | ⬜ Pending | 62 | Remove Azure Files volume mounts. Add DATABASE_URL env var. Simplify deploy back to standard (no orchestration needed). |
+| 64 | Test and deploy | ⬜ Pending | 63 | Update all tests for async DB. Integration test against Azure SQL. Deploy to staging, verify. Deploy to production. |
+
+**Parallelism:** Phase 11 is sequential and depends on Phase 10b completing first.
 
 ### Deployment Architecture
 
