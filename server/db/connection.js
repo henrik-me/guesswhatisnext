@@ -133,4 +133,9 @@ function closeDb() {
   }
 }
 
-module.exports = { getDb, initDb, closeDb };
+/** Check whether the database connection has been opened. */
+function isDbInitialized() {
+  return db !== null;
+}
+
+module.exports = { getDb, initDb, closeDb, isDbInitialized };
