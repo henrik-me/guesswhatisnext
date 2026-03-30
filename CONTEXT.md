@@ -149,6 +149,16 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 
 **Parallelism:** Tasks 51–56 are sequential. Phase 10 is independent of Phases 6–9.
 
+## Phase 11 — Test Infrastructure Integration
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 57 | E2E tests in PR CI | ⬜ Pending | 43 | Add Playwright job to ci.yml: install browsers, start server, run E2E alongside lint+test |
+| 58 | E2E tests in staging validation | ⬜ Pending | 57 | Run Playwright against ephemeral staging container in staging-deploy.yml after smoke tests |
+| 59 | Load test integration | ⬜ Pending | 44 | Decide where/when load tests run: on-demand workflow_dispatch, nightly schedule, or pre-prod gate |
+
+**Parallelism:** Tasks 57 and 58 are sequential. Task 59 is independent and can start anytime after 44 merges. Phase 11 depends on PRs #32 (task 43) and #34 (task 44) being merged first.
+
 ### Deployment Architecture
 
 ```
