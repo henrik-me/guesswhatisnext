@@ -8,7 +8,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const { config } = require('./config');
-const { initDb, getDb, closeDb, isDbInitialized, setDraining } = require('./db/connection');
+const { initDb, getDb, closeDb, isDbInitialized, setDraining, isSqliteLockError } = require('./db/connection');
 const { requireSystem } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const scoreRoutes = require('./routes/scores');
@@ -220,7 +220,10 @@ function createServer() {
       } catch (err) {
         closeDb();
         setDraining(true);
-        if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
+        if (!isSqliteLockError(err)) {
+          console.error(`❌ Self-init failed with non-retryable error: ${err.message}`);
+          console.error('Call POST /api/admin/init-db after fixing the underlying issue.');
+        } else if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
           console.warn(
             `⏳ Self-init attempt ${selfInitAttempt}/${SELF_INIT_MAX_ATTEMPTS} failed: ${err.message}. ` +
             `Retrying in ${SELF_INIT_INTERVAL_MS / 1000}s...`

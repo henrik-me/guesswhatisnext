@@ -159,4 +159,4 @@ function isDbInitialized() {
   return db !== null;
 }
 
-module.exports = { getDb, initDb, closeDb, isDbInitialized, setDraining };
+module.exports = { getDb, initDb, closeDb, isDbInitialized, setDraining, isSqliteLockError };

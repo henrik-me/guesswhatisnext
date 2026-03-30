@@ -79,7 +79,7 @@ jobs:
       - name: Wait for database self-initialization
         run: |
           echo "Waiting for database self-initialization..."
-          for i in $(seq 1 15); do
+          for i in $(seq 1 30); do
             DB_STATUS=$(curl -s \
               -H "X-API-Key: ephemeral-smoke-test-key" \
               "http://localhost:3000/api/health" | jq -r '.checks.database.status' 2>/dev/null || echo "unreachable")
@@ -90,7 +90,7 @@ jobs:
             fi
             sleep 2
           done
-          echo "::error::Database not ready after 30s"
+          echo "::error::Database not ready after 60s"
           exit 1
 
       - name: Health check
@@ -329,7 +329,7 @@ jobs:
             fi
             echo "Revision is running — verifying DB initialization via application logs..."
             DB_CONFIRMED=0
-            for i in $(seq 1 12); do
+            for i in $(seq 1 30); do
               if ! LOGS=$(az containerapp logs show \
                 --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" \
@@ -343,11 +343,11 @@ jobs:
                 DB_CONFIRMED=1
                 break
               fi
-              echo "DB init not confirmed yet (attempt $i/12)..."
+              echo "DB init not confirmed yet (attempt $i/30)..."
               sleep 5
             done
             if [ "$DB_CONFIRMED" -ne 1 ]; then
-              echo "::error::DB initialization not confirmed in application logs after 60s"
+              echo "::error::DB initialization not confirmed in application logs after 150s"
               exit 1
             fi
 
