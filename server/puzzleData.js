@@ -3146,10 +3146,10 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Superior", "Michigan", "Huron"],
+    sequence: ["Superior", "Huron", "Michigan"],
     answer: "Erie",
     options: ["Erie", "Tahoe", "Ontario", "Victoria"],
-    explanation: "The Great Lakes by surface area: Superior → Michigan → Huron → Erie → Ontario."
+    explanation: "The Great Lakes by surface area: Superior → Huron → Michigan → Erie → Ontario."
   },
   {
     id: "geo-tallest-buildings",
@@ -3954,7 +3954,7 @@ module.exports = [
     type: "text",
     sequence: ["Brazil 2014", "Russia 2018", "Qatar 2022"],
     answer: "USA/Canada/Mexico 2026",
-    options: ["USA/Canada/Mexico 2026", "Japan 2002", "Australia 2034", "England 1966"],
+    options: ["USA/Canada/Mexico 2026", "Japan 2002", "Saudi Arabia 2034", "England 1966"],
     explanation: "Recent FIFA World Cup hosts: Brazil → Russia → Qatar → USA/Canada/Mexico."
   },
   {
