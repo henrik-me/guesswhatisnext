@@ -44,15 +44,17 @@ function isSqliteLockError(err) {
  * @returns {import('better-sqlite3').Database} The initialized Database instance.
  * @throws {Error} Throws `"Database is not available — waiting for initialization"`
  *   when `_draining` is true and no connection has been opened yet. In Azure
- *   (staging/production) environments, `_draining` starts as true and is cleared
- *   either by the `/api/admin/init-db` endpoint calling {@link setDraining}(false)
- *   or by the background self-initialization loop in `createServer()` once the
- *   database has been successfully initialized. If that background self-init
- *   path encounters a fatal error, it may re-enable draining, causing subsequent
- *   `getDb()` calls to throw again until initialization is retried or completed.
- *   Callers such as WebSocket handlers that run outside the API middleware gate
- *   should be prepared to catch this error and surface a "service unavailable"
- *   response while initialization is pending or has failed.
+ *   (staging/production) environments, `_draining` starts as true and is typically
+ *   cleared either by the `/api/admin/init-db` endpoint calling
+ *   {@link setDraining}(false) or by the background self-initialization logic in
+ *   `createServer()` before it begins attempting database initialization. That
+ *   background path keeps `_draining` cleared across retryable initialization
+ *   failures; only if initialization encounters a fatal condition and gives up
+ *   may other code choose to re-enable draining, causing subsequent `getDb()`
+ *   calls to throw again until initialization is retried or completed. Callers
+ *   such as WebSocket handlers that run outside the API middleware gate should
+ *   be prepared to catch this error and surface a "service unavailable" response
+ *   while initialization is pending or has failed.
  */
 function getDb({ busyTimeout = 30000 } = {}) {
   if (_draining && !db) {
