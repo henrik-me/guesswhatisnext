@@ -197,6 +197,15 @@ jobs:
               --username ${{ vars.GHCR_USERNAME }} \
               --password ${{ secrets.GHCR_PAT }}
 
+      - name: Ensure multiple revision mode
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp revision set-mode \
+              --name gwn-staging \
+              --resource-group gwn-rg \
+              --mode multiple
+
       - name: Deploy new revision (0% traffic)
         id: deploy
         uses: azure/cli@v2
