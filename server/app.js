@@ -179,7 +179,8 @@ function createServer() {
       console.log('📦 Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
     } catch (err) {
-      // Restore draining state so DB stays blocked after failed init
+      // Close stale connection to release SMB file handle before restoring draining state
+      closeDb();
       setDraining(true);
       draining = true;
       dbInitialized = false;

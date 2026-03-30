@@ -68,6 +68,13 @@ function getDb() {
     db.pragma(isAzure ? 'journal_mode = DELETE' : 'journal_mode = WAL');
     db.pragma('busy_timeout = 30000');
     db.pragma('foreign_keys = ON');
+    if (isAzure) {
+      // Azure Files (SMB) handles file locking poorly — the normal SQLite
+      // lock/unlock cycle causes SQLITE_BUSY even with a single process.
+      // EXCLUSIVE mode grabs the lock once and holds it for the connection
+      // lifetime, avoiding repeated SMB lock negotiations.
+      db.pragma('locking_mode = EXCLUSIVE');
+    }
   }
   return db;
 }
