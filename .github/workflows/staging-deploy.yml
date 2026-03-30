@@ -76,6 +76,20 @@ jobs:
           --health-retries 10
           --health-start-period 15s
     steps:
+      - name: Initialize database
+        run: |
+          # NODE_ENV=staging blocks DB access until init-db is called
+          RESPONSE=$(curl -s -w '\n%{http_code}' \
+            -X POST "http://localhost:3000/api/admin/init-db" \
+            -H "X-API-Key: ephemeral-smoke-test-key")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+          echo "Init-db status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Database initialization failed with status $HTTP_STATUS"
+            echo "$RESPONSE" | sed '$d'
+            exit 1
+          fi
+
       - name: Health check
         run: |
           HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
