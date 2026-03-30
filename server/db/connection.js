@@ -43,8 +43,6 @@ function getDb() {
 
     // WAL mode requires shared memory which Azure Files (SMB) doesn't support.
     // Use DELETE journal mode in production/staging, WAL locally for performance.
-    const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
-
     try {
       db = new Database(DB_PATH);
     } catch (openErr) {

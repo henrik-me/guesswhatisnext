@@ -50,20 +50,7 @@ function createServer() {
     }
 
     if (!dbInitialized && req.path.startsWith('/api/')) {
-      // In Azure environments, DB is initialized only via /api/admin/init-db
-      // to prevent race conditions during orchestrated deploys
-      if (isAzure) {
-        return res.status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
-      }
-      // In non-Azure (dev/test), auto-init on first request for convenience
-      try {
-        initDb();
-        dbInitialized = true;
-        console.log('📦 Database initialized (on first request)');
-      } catch (err) {
-        console.error('❌ Database auto-init failed:', err.message);
-        return res.status(503).json({ error: 'Database not ready', retryAfter: 5 });
-      }
+      return res.status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
     }
 
     activeRequests++;
@@ -186,12 +173,16 @@ function createServer() {
   app.post('/api/admin/init-db', requireSystem, (_req, res) => {
     try {
       setDraining(false);
-      draining = false;
       initDb();
+      draining = false;
       dbInitialized = true;
       console.log('📦 Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
     } catch (err) {
+      // Restore draining state so DB stays blocked after failed init
+      setDraining(true);
+      draining = true;
+      dbInitialized = false;
       console.error('❌ Database init failed:', err.message);
       res.status(500).json({ error: 'Database initialization failed', message: err.message });
     }
