@@ -30,7 +30,7 @@ function isSqliteLockError(err) {
 }
 
 /** Get the database instance (lazy init). */
-function getDb() {
+function getDb({ busyTimeout = 30000 } = {}) {
   if (_draining && !db) {
     throw new Error('Database is not available — waiting for initialization');
   }
@@ -66,7 +66,7 @@ function getDb() {
       }
     }
     db.pragma(isAzure ? 'journal_mode = DELETE' : 'journal_mode = WAL');
-    db.pragma('busy_timeout = 30000');
+    db.pragma(`busy_timeout = ${busyTimeout}`);
     db.pragma('foreign_keys = ON');
     if (isAzure && process.env.GWN_EXCLUSIVE_LOCKING !== 'false') {
       // Azure Files (SMB) handles file locking poorly — the normal SQLite

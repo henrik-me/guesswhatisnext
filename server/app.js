@@ -208,12 +208,12 @@ function createServer() {
       selfInitAttempt++;
       try {
         setDraining(false);
-        const database = getDb();
-        // Use short busy_timeout so each attempt blocks the event loop for at
-        // most 2 s, keeping /healthz responsive to Azure health probes.
-        database.pragma('busy_timeout = 2000');
+        // Short busy_timeout so each attempt blocks the event loop for at most
+        // 2 s, keeping /healthz responsive to Azure health probes. The timeout
+        // is passed to getDb() so it's in effect before any lock-acquiring pragmas.
+        getDb({ busyTimeout: 2000 });
         initDb(1);
-        database.pragma('busy_timeout = 30000');
+        getDb().pragma('busy_timeout = 30000');
         draining = false;
         dbInitialized = true;
         console.log(`📦 Database self-initialized on attempt ${selfInitAttempt}`);
