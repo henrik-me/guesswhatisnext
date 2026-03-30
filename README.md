@@ -69,7 +69,7 @@ Features single-player (free play + daily challenge), global leaderboards, and r
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) v18+
+- [Node.js](https://nodejs.org/) v20+
 - [Git](https://git-scm.com/)
 - [Docker](https://www.docker.com/) (optional, for container-based dev)
 
