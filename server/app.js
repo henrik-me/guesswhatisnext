@@ -8,7 +8,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const { config } = require('./config');
-const { initDb, getDb } = require('./db/connection');
+const { initDb, getDb, closeDb, isDbInitialized, setDraining } = require('./db/connection');
 const { requireSystem } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const scoreRoutes = require('./routes/scores');
@@ -27,11 +27,41 @@ function createServer() {
   const app = express();
   const server = http.createServer(app);
 
+  app.set('trust proxy', 1);
+
+  // DB state tracking for orchestrated deploys
+  let dbInitialized = false;
+  let draining = false;
+  let activeRequests = 0;
+  const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
+
   // Middleware
   app.use(express.json());
 
   // Serve static files from public/
   app.use(express.static(path.join(__dirname, '..', 'public')));
+
+  // Request tracking middleware — gates API access on DB readiness
+  app.use((req, res, next) => {
+    if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/')) return next();
+
+    if (draining) {
+      return res.status(503).json({ error: 'Server is draining', retryAfter: 5 });
+    }
+
+    if (!dbInitialized && req.path.startsWith('/api/')) {
+      return res.status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
+    }
+
+    activeRequests++;
+    let decremented = false;
+    const decrement = () => {
+      if (!decremented) { decremented = true; activeRequests = Math.max(0, activeRequests - 1); }
+    };
+    res.on('finish', decrement);
+    res.on('close', decrement);
+    next();
+  });
 
   // API routes
   app.use('/api/auth', authRoutes);
@@ -45,17 +75,21 @@ function createServer() {
     const checks = {};
 
     // Database check
-    try {
-      const start = Date.now();
-      const db = getDb();
-      db.prepare('SELECT 1').get();
-      const responseMs = Date.now() - start;
-      checks.database = {
-        status: responseMs > 5000 ? 'error' : 'ok',
-        responseMs,
-      };
-    } catch {
-      checks.database = { status: 'error', responseMs: -1 };
+    if (!dbInitialized || !isDbInitialized()) {
+      checks.database = { status: 'not_initialized', responseMs: -1 };
+    } else {
+      try {
+        const start = Date.now();
+        const db = getDb();
+        db.prepare('SELECT 1').get();
+        const responseMs = Date.now() - start;
+        checks.database = {
+          status: responseMs > 5000 ? 'error' : 'ok',
+          responseMs,
+        };
+      } catch {
+        checks.database = { status: 'error', responseMs: -1 };
+      }
     }
 
     // WebSocket check
@@ -104,18 +138,71 @@ function createServer() {
     res.status(200).send('ok');
   });
 
+  // Admin: drain DB connections (for orchestrated deploys)
+  app.post('/api/admin/drain', requireSystem, (_req, res) => {
+    draining = true;
+    setDraining(true);
+    let responded = false;
+
+    const finish = (result) => {
+      if (responded) return;
+      responded = true;
+      closeDb();
+      dbInitialized = false;
+      console.log(`🔌 Database connection closed (drain: ${result.status})`);
+      res.json(result);
+    };
+
+    const timeout = setTimeout(() => {
+      finish({ status: 'drained', activeRequests, forced: true });
+    }, 30000);
+
+    const poll = () => {
+      if (responded) return;
+      if (activeRequests <= 0) {
+        clearTimeout(timeout);
+        finish({ status: 'drained', activeRequests: 0 });
+        return;
+      }
+      setTimeout(poll, 500);
+    };
+    poll();
+  });
+
+  // Admin: initialize DB connection (for orchestrated deploys)
+  app.post('/api/admin/init-db', requireSystem, (_req, res) => {
+    try {
+      setDraining(false);
+      initDb();
+      draining = false;
+      dbInitialized = true;
+      console.log('📦 Database initialized (via admin endpoint)');
+      res.json({ status: 'initialized' });
+    } catch (err) {
+      // Restore draining state so DB stays blocked after failed init
+      setDraining(true);
+      draining = true;
+      dbInitialized = false;
+      console.error('❌ Database init failed:', err.message);
+      res.status(500).json({ error: 'Database initialization failed', message: err.message });
+    }
+  });
+
   // SPA fallback — serve index.html for non-API routes
   app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   });
 
-  // Initialize database and WebSocket
-  try {
-    initDb();
-  } catch (err) {
-    console.error('❌ Database initialization failed:', err.message);
-    console.error(err.stack);
-    process.exit(1);
+  // In non-Azure environments, init DB eagerly for local dev convenience
+  if (!isAzure) {
+    try {
+      initDb();
+      dbInitialized = true;
+    } catch (err) {
+      console.error('❌ Database initialization failed:', err.message);
+      console.error(err.stack);
+      process.exit(1);
+    }
   }
   initWebSocket(server);
 

@@ -9,7 +9,18 @@ const fs = require('fs');
 const { config } = require('../config');
 
 const DB_PATH = config.GWN_DB_PATH;
+const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 let db = null;
+
+// In Azure environments, DB access is blocked until /api/admin/init-db runs.
+// This prevents WebSocket handlers (which bypass the API middleware gate)
+// from opening the DB before the orchestrated deploy flow is ready.
+let _draining = isAzure;
+
+/** Set the draining flag to block new connections via getDb(). */
+function setDraining(value) {
+  _draining = !!value;
+}
 
 /** Check if an error is a SQLite lock/busy error. */
 function isSqliteLockError(err) {
@@ -20,6 +31,9 @@ function isSqliteLockError(err) {
 
 /** Get the database instance (lazy init). */
 function getDb() {
+  if (_draining && !db) {
+    throw new Error('Database is not available — waiting for initialization');
+  }
   if (!db) {
     // Ensure data/ directory exists
     const dir = path.dirname(DB_PATH);
@@ -29,8 +43,6 @@ function getDb() {
 
     // WAL mode requires shared memory which Azure Files (SMB) doesn't support.
     // Use DELETE journal mode in production/staging, WAL locally for performance.
-    const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
-
     try {
       db = new Database(DB_PATH);
     } catch (openErr) {
@@ -133,4 +145,9 @@ function closeDb() {
   }
 }
 
-module.exports = { getDb, initDb, closeDb };
+/** Check whether the database connection has been opened. */
+function isDbInitialized() {
+  return db !== null;
+}
+
+module.exports = { getDb, initDb, closeDb, isDbInitialized, setDraining };
