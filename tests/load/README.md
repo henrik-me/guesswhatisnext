@@ -4,15 +4,16 @@ Load tests for the Guess What's Next API and WebSocket server using [Artillery](
 
 ## Prerequisites
 
-Artillery is installed as a dev dependency. From the project root:
+Artillery is listed as an optional dependency (requires **Node.js >= 22.13.0**).
+It will be installed automatically on compatible Node versions:
 
 ```bash
-npm install          # installs artillery along with other dev deps
+npm install          # installs artillery on Node >= 22.13
 ```
 
-> **Note:** Artillery v2.0.30+ requires **Node.js >= 22.13.0**. The load tests
-> will not run on older Node versions. The rest of the project works with
-> Node.js v18+, but load testing requires v22+.
+> **Note:** On Node versions below 22.13, `npm install` will skip Artillery
+> without failing. To run load tests, you need Node >= 22.13. The rest of the
+> project works with Node.js v18+.
 
 Alternatively, install Artillery globally:
 
@@ -96,7 +97,7 @@ set LOAD_TEST_TARGET=https://your-staging-url.com && npx artillery run tests/loa
 | Puzzle fetching | 25% | Fetch puzzles with difficulty filters |
 
 **Load profile:**
-- **Ramp up**: 0 → 10 virtual users/sec over 30 seconds
+- **Ramp up**: 1 → 10 virtual users/sec over 30 seconds
 - **Sustained**: 10 virtual users/sec for 60 seconds
 - **Ramp down**: 10 → 1 virtual users/sec over 10 seconds
 
@@ -104,11 +105,11 @@ set LOAD_TEST_TARGET=https://your-staging-url.com && npx artillery run tests/loa
 
 | Scenario | Description |
 |---|---|
-| Match flow | Authenticate → create room → connect WS → join room → send answers |
-| Connect-disconnect cycle | Authenticate → connect → rapid reconnect ×3 |
+| Connection and room join | Authenticate → create room → connect WS → join room → close |
+| Connect-disconnect cycle | Authenticate → connect → close → reconnect ×3 |
 
 **Load profile:**
-- **Ramp up**: 0 → 5 virtual users/sec over 30 seconds
+- **Ramp up**: 1 → 5 virtual users/sec over 30 seconds
 - **Sustained**: 5 virtual users/sec for 60 seconds
 - **Ramp down**: 5 → 1 virtual users/sec over 10 seconds
 

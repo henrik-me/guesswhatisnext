@@ -27,7 +27,7 @@ async function registerAndGetToken(context, _events, done) {
       counter++;
       context.vars.token = user.token;
       context.vars.username = user.username;
-      context.vars.wsTarget = baseUrl.replace(/^http/, 'ws');
+      context.vars.wsTarget = baseUrl.replace(/^http/, 'ws').replace(/\/+$/, '');
       return done();
     }
 
@@ -47,7 +47,7 @@ async function registerAndGetToken(context, _events, done) {
       if (res.statusCode === 201 && res.body.token) {
         context.vars.token = res.body.token;
         context.vars.username = username;
-        context.vars.wsTarget = baseUrl.replace(/^http/, 'ws');
+        context.vars.wsTarget = baseUrl.replace(/^http/, 'ws').replace(/\/+$/, '');
         return done();
       }
 

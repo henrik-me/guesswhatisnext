@@ -9,9 +9,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:load": "artillery run tests/load/api-stress.yml",
-    "test:load:ws": "artillery run tests/load/websocket-stress.yml",
-    "test:load:all": "artillery run tests/load/api-stress.yml && artillery run tests/load/websocket-stress.yml",
+    "test:load": "npx artillery run tests/load/api-stress.yml",
+    "test:load:ws": "npx artillery run tests/load/websocket-stress.yml",
+    "test:load:all": "npx artillery run tests/load/api-stress.yml && npx artillery run tests/load/websocket-stress.yml",
     "lint": "eslint . --max-warnings 50"
   },
   "keywords": [
