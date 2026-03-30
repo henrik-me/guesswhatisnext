@@ -4,7 +4,7 @@
  */
 
 module.exports = [
-  // ─── Nature ────────────────────────────────────────────
+  // ─── Nature ──────────────────────────────────────────────
   {
     id: "moon-phases",
     category: "Nature",
@@ -86,7 +86,7 @@ module.exports = [
     explanation: "Erosion over time: mountain → rain wears it down → valley forms → desert → bare rock remains."
   },
 
-  // ─── Math & Numbers ────────────────────────────────────
+  // ─── 🔢 Math & Numbers ───────────────────────────────────
   {
     id: "counting-up",
     category: "Math & Numbers",
@@ -168,7 +168,7 @@ module.exports = [
     explanation: "Counting down by twos: 10, 8, 6, 4, 2."
   },
 
-  // ─── Colors & Patterns ─────────────────────────────────
+  // ─── 🎨 Colors & Patterns ────────────────────────────────
   {
     id: "rainbow-order",
     category: "Colors & Patterns",
@@ -230,7 +230,7 @@ module.exports = [
     explanation: "Full color spectrum from warm to cool: red → orange → yellow → green → blue → purple."
   },
 
-  // ─── General Knowledge ─────────────────────────────────
+  // ─── 🌍 General Knowledge ────────────────────────────────
   {
     id: "weekdays",
     category: "General Knowledge",
@@ -312,7 +312,7 @@ module.exports = [
     explanation: "Traffic signal cycle: stop 🚫 → caution ⚠️ → go ✅ → stop 🚫 → caution ⚠️."
   },
 
-  // ─── Emoji Sequences ───────────────────────────────────
+  // ─── 😀 Emoji Sequences ──────────────────────────────────
   {
     id: "sunrise-to-night",
     category: "Emoji Sequences",
@@ -394,7 +394,7 @@ module.exports = [
     explanation: "Sending a letter: write → draft → seal in envelope → post in mailbox → delivered 📬."
   },
 
-  // ─── Image Puzzles ─────────────────────────────────────
+  // ─── Image Puzzles ───────────────────────────────────────
   {
     id: "shapes-sides",
     category: "Colors & Patterns",
@@ -416,7 +416,7 @@ module.exports = [
     explanation: "Following the color spectrum (rainbow order): red → orange → yellow → green."
   },
 
-  // ─── Music ─────────────────────────────────────────────
+  // ─── 🎵 Music ────────────────────────────────────────────
   {
     id: "music-volume",
     category: "Music",
@@ -478,7 +478,7 @@ module.exports = [
     explanation: "Music format evolution: radio → cassette tape → CD → smartphone → wireless headphones/streaming."
   },
 
-  // ─── Flags ─────────────────────────────────────────────
+  // ─── 🚩 Flags ────────────────────────────────────────────
   {
     id: "olympic-rings",
     category: "Flags",
@@ -540,7 +540,7 @@ module.exports = [
     explanation: "Complete race story: car → green flag → checkered flag → trophy → gold medal → champagne celebration."
   },
 
-  // ─── Science ───────────────────────────────────────────
+  // ─── 🔬 Science ──────────────────────────────────────────
   {
     id: "telescope-zoom",
     category: "Science",
@@ -612,7 +612,7 @@ module.exports = [
     explanation: "Electricity cycle: power generated ⚡ → lights up 💡 → through the grid 🔌 → power plant 🏭 → generates again ⚡."
   },
 
-  // ─── Sports ────────────────────────────────────────────
+  // ─── ⚽ Sports ────────────────────────────────────────────
   {
     id: "race-to-gold",
     category: "Sports",
@@ -674,7 +674,7 @@ module.exports = [
     explanation: "Martial arts belt progression: white → yellow → green → blue → red. Moving toward mastery."
   },
 
-  // ─── Food ──────────────────────────────────────────────
+  // ─── 🍕 Food ─────────────────────────────────────────────
   {
     id: "fruit-rainbow",
     category: "Food",
@@ -746,7 +746,7 @@ module.exports = [
     explanation: "Apple pie journey: plant → grow → blossom → harvest fruit → bake a pie!"
   },
 
-  // ─── Animals ───────────────────────────────────────────
+  // ─── 🐾 Animals ──────────────────────────────────────────
   {
     id: "animal-size",
     category: "Animals",
@@ -818,7 +818,7 @@ module.exports = [
     explanation: "Dinosaur era to modern day: sauropod → T-rex → asteroid strike → fossils → birds evolved (chickens are dinosaur descendants)!"
   },
 
-  // ─── Pop Culture ───────────────────────────────────────
+  // ─── 🎭 Pop Culture ──────────────────────────────────────
   {
     id: "movie-night",
     category: "Pop Culture",
@@ -2262,7 +2262,7 @@ module.exports = [
     explanation: "Shapes losing one side: hexagon (6) → pentagon (5) → square (4) → triangle (3)."
   },
 
-  // ─── Additional Math & Numbers ─────────────────────────
+  // ─── Additional Math & Numbers ───────────────────────────
   {
     id: "pentagonal-numbers",
     category: "Math & Numbers",
@@ -2314,7 +2314,7 @@ module.exports = [
     explanation: "Catalan numbers: 1, 1, 2, 5, 14. Used in combinatorics for counting paths."
   },
 
-  // ─── Additional Logic Sequences ────────────────────────
+  // ─── Additional Logic Sequences ──────────────────────────
   {
     id: "fizzbuzz-start",
     category: "Logic Sequences",
@@ -2366,7 +2366,7 @@ module.exports = [
     explanation: "Each step adds the next number: 1 | 1 2 | 1 2 3 | 1 2 3 4 | 1 2 3 4 5."
   },
 
-  // ─── Additional Visual & Spatial ───────────────────────
+  // ─── Additional Visual & Spatial ─────────────────────────
   {
     id: "clock-counter-clockwise",
     category: "Visual & Spatial",
@@ -2388,7 +2388,7 @@ module.exports = [
     explanation: "Zooming out from microscopic: microscope → petri dish → microbe → insect → cat (visible world)."
   },
 
-  // ─── Additional General Knowledge ──────────────────────
+  // ─── Additional General Knowledge ────────────────────────
   {
     id: "rainbow-promise",
     category: "General Knowledge",
@@ -2410,7 +2410,7 @@ module.exports = [
     explanation: "A school day: alarm → school → study → bell rings → go home."
   },
 
-  // ─── Additional Nature ─────────────────────────────────
+  // ─── Additional Nature ───────────────────────────────────
   {
     id: "river-journey",
     category: "Nature",
@@ -2432,7 +2432,7 @@ module.exports = [
     explanation: "Storm forming: heat → wind → clouds → lightning → rain."
   },
 
-  // ─── Additional Science ────────────────────────────────
+  // ─── Additional Science ──────────────────────────────────
   {
     id: "lab-safety-steps",
     category: "Science",
@@ -2454,7 +2454,7 @@ module.exports = [
     explanation: "Space mission stages: launch → boost → burn → orbit Earth → reach the Moon."
   },
 
-  // ─── Additional Emoji Sequences ────────────────────────
+  // ─── Additional Emoji Sequences ──────────────────────────
   {
     id: "clapping-rhythm",
     category: "Emoji Sequences",
@@ -2476,7 +2476,7 @@ module.exports = [
     explanation: "Smiling faces getting happier: grin → big grin → squinting grin → big squinting grin → laughing."
   },
 
-  // ─── Additional Music ──────────────────────────────────
+  // ─── Additional Music ────────────────────────────────────
   {
     id: "band-formation",
     category: "Music",
@@ -2498,7 +2498,7 @@ module.exports = [
     explanation: "Music media evolution: vinyl record → CD → phone streaming → wireless headphones."
   },
 
-  // ─── Additional Sports ─────────────────────────────────
+  // ─── Additional Sports ───────────────────────────────────
   {
     id: "soccer-match-flow",
     category: "Sports",
@@ -2520,7 +2520,7 @@ module.exports = [
     explanation: "Cycling race: start → accelerate → climb mountain → finish line."
   },
 
-  // ─── Additional Food ───────────────────────────────────
+  // ─── Additional Food ─────────────────────────────────────
   {
     id: "tea-making",
     category: "Food",
@@ -2542,7 +2542,7 @@ module.exports = [
     explanation: "Chocolate making: cacao plant → cacao beans → roast → chocolate bar."
   },
 
-  // ─── Additional Animals ────────────────────────────────
+  // ─── Additional Animals ──────────────────────────────────
   {
     id: "chicken-lifecycle",
     category: "Animals",
@@ -2564,7 +2564,7 @@ module.exports = [
     explanation: "African safari animals: lion → giraffe → elephant → zebra → hippo."
   },
 
-  // ─── Additional Letter & Word Patterns ─────────────────
+  // ─── Additional Letter & Word Patterns ───────────────────
   {
     id: "greek-alphabet-start",
     category: "Letter & Word Patterns",
@@ -2586,7 +2586,7 @@ module.exports = [
     explanation: "Top row of a QWERTY keyboard: Q, W, E, R, T, Y."
   },
 
-  // ─── Additional Creative & Mixed ───────────────────────
+  // ─── Additional Creative & Mixed ─────────────────────────
   {
     id: "morning-routine",
     category: "Creative & Mixed",
@@ -2670,7 +2670,7 @@ module.exports = [
     explanation: "Sum of 1+2+3+...+n: 1, 3, 6, 10, 15, 21 (adding 6 to 15)."
   },
 
-  // ─── More Logic Sequences ──────────────────────────────
+  // ─── More Logic Sequences ────────────────────────────────
   {
     id: "abab-pattern",
     category: "Logic Sequences",
@@ -2702,7 +2702,7 @@ module.exports = [
     explanation: "AABB repeating: star, star, moon, moon, star, star."
   },
 
-  // ─── More Visual & Spatial ─────────────────────────────
+  // ─── More Visual & Spatial ───────────────────────────────
   {
     id: "emoji-size-shrink",
     category: "Visual & Spatial",
@@ -2714,7 +2714,7 @@ module.exports = [
     explanation: "Animals shrinking in size: elephant → dog → cat → mouse → ant."
   },
 
-  // ─── More Creative & Mixed ─────────────────────────────
+  // ─── More Creative & Mixed ───────────────────────────────
   {
     id: "recycling-cycle",
     category: "Creative & Mixed",
@@ -2746,7 +2746,7 @@ module.exports = [
     explanation: "Fitness journey: couch → start running → get strong → weightlifting → achievement/trophy."
   },
 
-  // ─── Additional Letter & Word Patterns ─────────────────
+  // ─── Additional Letter & Word Patterns ───────────────────
   {
     id: "hex-digits",
     category: "Letter & Word Patterns",
@@ -2768,7 +2768,7 @@ module.exports = [
     explanation: "Ordinal numbers: 1st, 2nd, 3rd, 4th, 5th."
   },
 
-  // ─── Additional Flags ──────────────────────────────────
+  // ─── Additional Flags ────────────────────────────────────
   {
     id: "brics-flags",
     category: "Flags",
@@ -2780,7 +2780,7 @@ module.exports = [
     explanation: "BRICS nations: Brazil, Russia, India, China, South Africa."
   },
 
-  // ─── Additional Sports ─────────────────────────────────
+  // ─── Additional Sports ───────────────────────────────────
   {
     id: "swimming-race",
     category: "Sports",
@@ -2792,7 +2792,7 @@ module.exports = [
     explanation: "Swimming race: start swimming → faster → fastest → win a medal!"
   },
 
-  // ─── Additional Food ───────────────────────────────────
+  // ─── Additional Food ─────────────────────────────────────
   {
     id: "smoothie-making",
     category: "Food",
@@ -2804,7 +2804,7 @@ module.exports = [
     explanation: "Making a smoothie: banana → strawberry → milk → blended smoothie."
   },
 
-  // ─── Additional Animals ────────────────────────────────
+  // ─── Additional Animals ──────────────────────────────────
   {
     id: "arctic-animals",
     category: "Animals",
@@ -2816,7 +2816,7 @@ module.exports = [
     explanation: "Arctic/Antarctic animals by size: penguin → seal → polar bear → whale."
   },
 
-  // ─── Additional Pop Culture ────────────────────────────
+  // ─── Additional Pop Culture ──────────────────────────────
   {
     id: "phone-evolution",
     category: "Pop Culture",
@@ -2980,7 +2980,7 @@ module.exports = [
     explanation: "Pattern moves +1 letter, +2 number each time: a1 → b3 → c5 → d7 → e9."
   },
 
-  // ─── Geography ────────────────────────────────────
+  // ─── 🌍 Geography ────────────────────────────────────────
   {
     id: "geo-european-capitals",
     category: "Geography",
@@ -3161,7 +3161,7 @@ module.exports = [
     options: ["Abraj Al-Bait", "Empire State", "Eiffel Tower", "CN Tower"],
     explanation: "Tallest buildings in the world: Burj Khalifa → Merdeka 118 → Shanghai Tower → Abraj Al-Bait."
   },
-  // ─── History ──────────────────────────────────────
+  // ─── 📜 History ──────────────────────────────────────────
   {
     id: "hist-ancient-civilizations",
     category: "History",
@@ -3332,7 +3332,7 @@ module.exports = [
     options: ["Alexander", "Homer", "Pythagoras", "Herodotus"],
     explanation: "Each taught the next: Socrates → Plato → Aristotle → Alexander the Great."
   },
-  // ─── Technology ───────────────────────────────────
+  // ─── 💻 Technology ───────────────────────────────────────
   {
     id: "tech-storage-evolution",
     category: "Technology",
@@ -3503,7 +3503,7 @@ module.exports = [
     options: ["USB 4.0", "USB 3.5", "Thunderbolt", "FireWire"],
     explanation: "USB standard progression: 1.0 → 2.0 → 3.0 → 4.0."
   },
-  // ─── Art & Design ─────────────────────────────────
+  // ─── 🎨 Art & Design ─────────────────────────────────────
   {
     id: "art-primary-colors",
     category: "Art & Design",
@@ -3634,7 +3634,7 @@ module.exports = [
     options: ["🔵", "🟠", "🟤", "⚫"],
     explanation: "Color temperature transition from warm to cool: Red → Yellow → Green → Blue."
   },
-  // ─── Language & Grammar ───────────────────────────
+  // ─── 📝 Language & Grammar ───────────────────────────────
   {
     id: "lang-vowels",
     category: "Language & Grammar",
@@ -3785,7 +3785,7 @@ module.exports = [
     options: ["Short Story", "Alphabet", "Dictionary", "Grammar"],
     explanation: "Literary forms in historical order of development: Poetry → Drama → Novel → Short Story."
   },
-  // ─── Science ──────────────────────────────────────
+  // ─── 🔬 Science ──────────────────────────────────────────
   {
     id: "sci-planets-order",
     category: "Science",
@@ -3936,7 +3936,7 @@ module.exports = [
     options: ["Action-Reaction", "Gravity", "Friction", "Momentum"],
     explanation: "Newton's three laws of motion: 1st (Inertia) → 2nd (F=ma) → 3rd (Action-Reaction)."
   },
-  // ─── Sports ───────────────────────────────────────
+  // ─── ⚽ Sports ────────────────────────────────────────────
   {
     id: "sport-olympic-host-recent",
     category: "Sports",
@@ -3944,7 +3944,7 @@ module.exports = [
     type: "text",
     sequence: ["London 2012", "Rio 2016", "Tokyo 2020"],
     answer: "Paris 2024",
-    options: ["Paris 2024", "Beijing 2024", "LA 2024", "Sydney 2024"],
+    options: ["Paris 2024", "Beijing 2008", "LA 2028", "Sydney 2000"],
     explanation: "Recent Summer Olympic host cities: London → Rio → Tokyo → Paris."
   },
   {
@@ -3954,7 +3954,7 @@ module.exports = [
     type: "text",
     sequence: ["Brazil 2014", "Russia 2018", "Qatar 2022"],
     answer: "USA/Canada/Mexico 2026",
-    options: ["USA/Canada/Mexico 2026", "Japan 2026", "Australia 2026", "England 2026"],
+    options: ["USA/Canada/Mexico 2026", "Japan 2002", "Australia 2034", "England 1966"],
     explanation: "Recent FIFA World Cup hosts: Brazil → Russia → Qatar → USA/Canada/Mexico."
   },
   {
@@ -4057,7 +4057,7 @@ module.exports = [
     options: ["Freestyle", "Doggy Paddle", "Sidestroke", "Float"],
     explanation: "Individual medley swimming order: Butterfly → Backstroke → Breaststroke → Freestyle."
   },
-  // ─── Food ─────────────────────────────────────────
+  // ─── 🍕 Food ─────────────────────────────────────────────
   {
     id: "food-courses-formal",
     category: "Food",
@@ -4168,7 +4168,7 @@ module.exports = [
     options: ["🍕", "🥖", "🌮", "🍝"],
     explanation: "Making pizza: dough → tomato sauce → cheese → pizza is ready!"
   },
-  // ─── Animals ──────────────────────────────────────
+  // ─── 🐾 Animals ──────────────────────────────────────────
   {
     id: "animal-size-land",
     category: "Animals",
@@ -4269,7 +4269,7 @@ module.exports = [
     options: ["🐒", "🪱", "🦠", "🐚"],
     explanation: "Increasing complexity: insect → fish → reptile → primate."
   },
-  // ─── Music ────────────────────────────────────────
+  // ─── 🎵 Music ────────────────────────────────────────────
   {
     id: "music-note-values",
     category: "Music",
@@ -4350,7 +4350,7 @@ module.exports = [
     options: ["📢", "🔇", "🔕", "🔈"],
     explanation: "Getting louder (crescendo): quiet → medium → loud → maximum volume."
   },
-  // ─── Math & Numbers ───────────────────────────────
+  // ─── 🔢 Math & Numbers ───────────────────────────────────
   {
     id: "math-square-numbers",
     category: "Math & Numbers",
@@ -4481,7 +4481,7 @@ module.exports = [
     options: ["23", "21", "25", "27"],
     explanation: "Prime numbers after 10: 11, 13, 17, 19, 23. Each is divisible only by 1 and itself."
   },
-  // ─── Logic Sequences ──────────────────────────────
+  // ─── 🧩 Logic Sequences ──────────────────────────────────
   {
     id: "logic-mirror-letters",
     category: "Logic Sequences",
@@ -4582,7 +4582,7 @@ module.exports = [
     options: ["4D", "5E", "3D", "4C"],
     explanation: "Numbers increment (1,2,3,4) and letters increment (A,B,C,D): 1A → 2B → 3C → 4D."
   },
-  // ─── General Knowledge ────────────────────────────
+  // ─── 🌍 General Knowledge ────────────────────────────────
   {
     id: "gk-days-of-week",
     category: "General Knowledge",
@@ -4683,7 +4683,7 @@ module.exports = [
     options: ["🖐️", "👊", "👋", "👍"],
     explanation: "Counting on fingers: one ☝️ → two ✌️ → three 🤟 → four 🖖 → five (open hand) 🖐️."
   },
-  // ─── Emoji Sequences ──────────────────────────────
+  // ─── 😀 Emoji Sequences ──────────────────────────────────
   {
     id: "emoji-morning-routine",
     category: "Emoji Sequences",
@@ -4774,7 +4774,7 @@ module.exports = [
     options: ["🌈", "⛈️", "❄️", "☁️"],
     explanation: "Rainy day sequence: clouds → rain → umbrella → rainbow appears after."
   },
-  // ─── Colors & Patterns ────────────────────────────
+  // ─── 🎨 Colors & Patterns ────────────────────────────────
   {
     id: "color-traffic-light",
     category: "Colors & Patterns",
@@ -4835,7 +4835,7 @@ module.exports = [
     options: ["🔵", "🔴", "🟡", "🟢"],
     explanation: "Repeating pattern of three: Red, Yellow, Blue, Red, Yellow, Blue..."
   },
-  // ─── Creative & Mixed ─────────────────────────────
+  // ─── ✨ Creative & Mixed ──────────────────────────────────
   {
     id: "creative-story-arc",
     category: "Creative & Mixed",
@@ -4896,7 +4896,7 @@ module.exports = [
     options: ["🏆", "💤", "💡", "❌"],
     explanation: "From idea to achievement: idea → plan → build → success."
   },
-  // ─── Flags ────────────────────────────────────────
+  // ─── 🚩 Flags ────────────────────────────────────────────
   {
     id: "flag-nordic-countries",
     category: "Flags",
@@ -4947,7 +4947,7 @@ module.exports = [
     options: ["🇨🇴", "🇲🇽", "🇪🇸", "🇵🇹"],
     explanation: "South American countries by population: Brazil → Argentina → Chile → Colombia."
   },
-  // ─── Pop Culture ──────────────────────────────────
+  // ─── 🎭 Pop Culture ──────────────────────────────────────
   {
     id: "pop-movie-ratings",
     category: "Pop Culture",
@@ -4998,7 +4998,7 @@ module.exports = [
     options: ["⌚", "📞", "📺", "💻"],
     explanation: "Personal communication devices: rotary phone → pager → smartphone → smartwatch."
   },
-  // ─── Visual & Spatial ─────────────────────────────
+  // ─── 🖼️ Visual & Spatial ────────────────────────────────
   {
     id: "visual-symmetry-shapes",
     category: "Visual & Spatial",
@@ -5049,7 +5049,7 @@ module.exports = [
     options: ["💠", "🔸", "🔹", "⬛"],
     explanation: "Diamond shapes getting larger: small diamond → medium diamond → gem → large diamond."
   },
-  // ─── Letter & Word Patterns ───────────────────────
+  // ─── 🔤 Letter & Word Patterns ───────────────────────────
   {
     id: "letter-alphabet-groups",
     category: "Letter & Word Patterns",
@@ -5100,7 +5100,6 @@ module.exports = [
     options: ["EE", "FF", "AB", "DE"],
     explanation: "Double-letter pairs in alphabetical order: AA → BB → CC → DD → EE."
   },
-  // ─── Geography ────────────────────────────────────
   {
     id: "geo-time-zones",
     category: "Geography",
@@ -5111,7 +5110,6 @@ module.exports = [
     options: ["UTC+8 (Beijing)", "UTC-8 (LA)", "UTC+1 (Paris)", "UTC+12 (Auckland)"],
     explanation: "Major cities moving east through time zones: New York → London → Moscow → Beijing."
   },
-  // ─── History ──────────────────────────────────────
   {
     id: "hist-industrial-inventions",
     category: "History",
@@ -5122,7 +5120,6 @@ module.exports = [
     options: ["Radio", "Wheel", "Printing Press", "Compass"],
     explanation: "Major inventions of the industrial era: Steam Engine → Telegraph → Telephone → Radio."
   },
-  // ─── Technology ───────────────────────────────────
   {
     id: "tech-coding-concepts",
     category: "Technology",
@@ -5133,7 +5130,6 @@ module.exports = [
     options: ["Module", "Bit", "Pixel", "Wire"],
     explanation: "Programming concepts by abstraction level: Variable → Function → Class → Module."
   },
-  // ─── Science ──────────────────────────────────────
   {
     id: "sci-planet-types",
     category: "Science",
@@ -5144,7 +5140,6 @@ module.exports = [
     options: ["Sun (star)", "Moon (satellite)", "Pluto (dwarf)", "Ceres (asteroid)"],
     explanation: "Celestial body types in increasing scale: rocky planet → gas giant → ice giant → star."
   },
-  // ─── General Knowledge ────────────────────────────
   {
     id: "gk-coin-values",
     category: "General Knowledge",
@@ -5155,7 +5150,6 @@ module.exports = [
     options: ["Quarter", "Dollar", "Half Dollar", "Cent"],
     explanation: "US coins by value: Penny (1¢) → Nickel (5¢) → Dime (10¢) → Quarter (25¢)."
   },
-  // ─── Emoji Sequences ──────────────────────────────
   {
     id: "emoji-bedtime-routine",
     category: "Emoji Sequences",
@@ -5166,7 +5160,6 @@ module.exports = [
     options: ["😴", "☀️", "🏃", "📱"],
     explanation: "Bedtime routine: brush teeth → read a book → get in bed → sleep."
   },
-  // ─── Music ────────────────────────────────────────
   {
     id: "music-tempo-terms",
     category: "Music",

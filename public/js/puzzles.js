@@ -881,7 +881,7 @@ export const puzzles = [
     explanation: "A viral trend: phone → catchy song → dance challenge → trending upward → goes worldwide."
   },
 
-  // ─── Geography────────────────────────────────────
+  // ─── 🌍 Geography ────────────────────────────────────────
   {
     id: "geo-continents-size",
     category: "Geography",
@@ -1002,7 +1002,7 @@ export const puzzles = [
     options: ["Lhotse", "Denali", "Kilimanjaro", "Mont Blanc"],
     explanation: "World's highest mountains: Everest → K2 → Kangchenjunga → Lhotse."
   },
-  // ─── History ──────────────────────────────────────
+  // ─── 📜 History ──────────────────────────────────────────
   {
     id: "hist-world-wars",
     category: "History",
@@ -1113,7 +1113,7 @@ export const puzzles = [
     options: ["Latin Alphabet", "Binary", "Morse Code", "Braille"],
     explanation: "Writing systems in order of development: Cuneiform → Hieroglyphs → Greek → Latin alphabet."
   },
-  // ─── Technology ───────────────────────────────────
+  // ─── 💻 Technology ───────────────────────────────────────
   {
     id: "tech-storage-evolution",
     category: "Technology",
@@ -1224,7 +1224,7 @@ export const puzzles = [
     options: ["ChatGPT 2022", "Siri 2011", "Alexa 2014", "Cortana 2014"],
     explanation: "AI milestones: Deep Blue beat chess → Watson beat Jeopardy → AlphaGo beat Go → ChatGPT launched."
   },
-  // ─── Art & Design ─────────────────────────────────
+  // ─── 🎨 Art & Design ─────────────────────────────────────
   {
     id: "art-primary-colors",
     category: "Art & Design",
@@ -1305,7 +1305,7 @@ export const puzzles = [
     options: ["Renaissance", "Prehistoric", "Modern", "Baroque"],
     explanation: "Sculpture style evolution: Greek Classical → Roman → Gothic → Renaissance."
   },
-  // ─── Language & Grammar ───────────────────────────
+  // ─── 📝 Language & Grammar ───────────────────────────────
   {
     id: "lang-vowels",
     category: "Language & Grammar",
@@ -1396,7 +1396,7 @@ export const puzzles = [
     options: ["deci", "kilo", "mega", "nano"],
     explanation: "Metric prefixes from smallest to largest: micro → milli → centi → deci."
   },
-  // ─── Science ──────────────────────────────────────
+  // ─── 🔬 Science ──────────────────────────────────────────
   {
     id: "sci-planets-order",
     category: "Science",
@@ -1497,7 +1497,7 @@ export const puzzles = [
     options: ["Order", "Species", "Domain", "Genus"],
     explanation: "Taxonomy hierarchy: Kingdom → Phylum → Class → Order → Family → Genus → Species."
   },
-  // ─── Sports ───────────────────────────────────────
+  // ─── ⚽ Sports ────────────────────────────────────────────
   {
     id: "sport-track-distances",
     category: "Sports",
@@ -1535,7 +1535,7 @@ export const puzzles = [
     type: "text",
     sequence: ["London 2012", "Rio 2016", "Tokyo 2020"],
     answer: "Paris 2024",
-    options: ["Paris 2024", "Beijing 2024", "LA 2024", "Sydney 2024"],
+    options: ["Paris 2024", "Beijing 2008", "LA 2028", "Sydney 2000"],
     explanation: "Recent Summer Olympic host cities: London → Rio → Tokyo → Paris."
   },
   {
@@ -1575,10 +1575,10 @@ export const puzzles = [
     type: "text",
     sequence: ["Brazil 2014", "Russia 2018", "Qatar 2022"],
     answer: "USA/Canada/Mexico 2026",
-    options: ["USA/Canada/Mexico 2026", "Japan 2026", "Australia 2026", "England 2026"],
+    options: ["USA/Canada/Mexico 2026", "Japan 2002", "Australia 2034", "England 1966"],
     explanation: "Recent FIFA World Cup hosts: Brazil → Russia → Qatar → USA/Canada/Mexico."
   },
-  // ─── Food ─────────────────────────────────────────
+  // ─── 🍕 Food ─────────────────────────────────────────────
   {
     id: "food-courses-formal",
     category: "Food",
@@ -1649,7 +1649,7 @@ export const puzzles = [
     options: ["🍣", "🍕", "🍔", "🌮"],
     explanation: "Making sushi: rice → chopsticks → fish → sushi roll!"
   },
-  // ─── Animals ──────────────────────────────────────
+  // ─── 🐾 Animals ──────────────────────────────────────────
   {
     id: "animal-size-land",
     category: "Animals",
@@ -1710,7 +1710,7 @@ export const puzzles = [
     options: ["🦅", "🐣", "🐧", "🦜"],
     explanation: "Birds by size: sparrow → duck → swan → eagle."
   },
-  // ─── Music ────────────────────────────────────────
+  // ─── 🎵 Music ────────────────────────────────────────────
   {
     id: "music-do-re-mi",
     category: "Music",
@@ -1771,7 +1771,7 @@ export const puzzles = [
     options: ["Allegro", "Presto", "Forte", "Piano"],
     explanation: "Musical tempo markings from slow to fast: Largo → Adagio → Andante → Allegro."
   },
-  // ─── Math & Numbers ───────────────────────────────
+  // ─── 🔢 Math & Numbers ───────────────────────────────────
   {
     id: "math-square-numbers",
     category: "Math & Numbers",
@@ -1852,7 +1852,7 @@ export const puzzles = [
     options: ["5", "6", "2", "9"],
     explanation: "Digits of Pi: 3.1415926... The fifth digit is 5."
   },
-  // ─── Logic Sequences ──────────────────────────────
+  // ─── 🧩 Logic Sequences ──────────────────────────────────
   {
     id: "logic-skip-one-letter",
     category: "Logic Sequences",
@@ -1913,7 +1913,7 @@ export const puzzles = [
     options: ["DW", "DE", "EV", "DA"],
     explanation: "First letter goes forward A→B→C→D, second goes backward Z→Y→X→W."
   },
-  // ─── General Knowledge ────────────────────────────
+  // ─── 🌍 General Knowledge ────────────────────────────────
   {
     id: "gk-days-of-week",
     category: "General Knowledge",
@@ -1984,7 +1984,7 @@ export const puzzles = [
     options: ["Cancer", "Leo", "Virgo", "Pisces"],
     explanation: "Zodiac signs in order: Aries → Taurus → Gemini → Cancer."
   },
-  // ─── Emoji Sequences ──────────────────────────────
+  // ─── 😀 Emoji Sequences ──────────────────────────────────
   {
     id: "emoji-morning-routine",
     category: "Emoji Sequences",
@@ -2045,7 +2045,7 @@ export const puzzles = [
     options: ["😴", "🎮", "📖", "🎬"],
     explanation: "Movie night: pick a movie → popcorn → watch → fall asleep."
   },
-  // ─── Colors & Patterns ────────────────────────────
+  // ─── 🎨 Colors & Patterns ────────────────────────────────
   {
     id: "color-traffic-light",
     category: "Colors & Patterns",
@@ -2086,7 +2086,7 @@ export const puzzles = [
     options: ["🔵", "🔴", "🟡", "🟢"],
     explanation: "Repeating pattern of three: Red, Yellow, Blue, Red, Yellow, Blue..."
   },
-  // ─── Creative & Mixed ─────────────────────────────
+  // ─── ✨ Creative & Mixed ──────────────────────────────────
   {
     id: "creative-art-supplies",
     category: "Creative & Mixed",
@@ -2127,7 +2127,7 @@ export const puzzles = [
     options: ["🏠", "🏗️", "🔨", "🧰"],
     explanation: "Building a house: blueprint → bricks → wood framing → finished house."
   },
-  // ─── Flags ────────────────────────────────────────
+  // ─── 🚩 Flags ────────────────────────────────────────────
   {
     id: "flag-english-speaking",
     category: "Flags",
@@ -2158,7 +2158,7 @@ export const puzzles = [
     options: ["🇨🇴", "🇲🇽", "🇪🇸", "🇵🇹"],
     explanation: "South American countries by population: Brazil → Argentina → Chile → Colombia."
   },
-  // ─── Pop Culture ──────────────────────────────────
+  // ─── 🎭 Pop Culture ──────────────────────────────────────
   {
     id: "pop-movie-ratings",
     category: "Pop Culture",
@@ -2189,7 +2189,7 @@ export const puzzles = [
     options: ["🔴", "🟣", "⚫", "⚪"],
     explanation: "Game difficulty levels: Easy (green) → Medium (yellow) → Hard (orange) → Expert (red)."
   },
-  // ─── Visual & Spatial ─────────────────────────────
+  // ─── 🖼️ Visual & Spatial ────────────────────────────────
   {
     id: "visual-symmetry-shapes",
     category: "Visual & Spatial",
@@ -2220,7 +2220,7 @@ export const puzzles = [
     options: ["····", "·····", "··", "·"],
     explanation: "Adding one dot each time: 1 dot, 2 dots, 3 dots, 4 dots."
   },
-  // ─── Letter & Word Patterns ───────────────────────
+  // ─── 🔤 Letter & Word Patterns ───────────────────────────
   {
     id: "letter-alphabet-groups",
     category: "Letter & Word Patterns",
