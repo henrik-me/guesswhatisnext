@@ -13,7 +13,7 @@ npm install          # installs artillery on Node >= 22.13
 
 > **Note:** On Node versions below 22.13, `npm install` will skip Artillery
 > without failing. To run load tests, you need Node >= 22.13. The rest of the
-> project works with Node.js v18+.
+> project works with Node.js v20+.
 
 Alternatively, install Artillery globally:
 

@@ -103,8 +103,23 @@ function loadUserPool() {
  * so scenario workers can access the pool.
  */
 async function setupUsers(context, _events, done) {
+  // Guard against concurrent executions (before hook should only run once)
+  if (fs.existsSync(USER_POOL_FILE)) {
+    console.log('[setup] User pool already exists, skipping setup');
+    if (typeof done === 'function') return done();
+    return;
+  }
+
   const baseUrl = getBaseUrl(context);
   const count = parseInt(process.env.LOAD_TEST_USER_COUNT, 10) || 20;
+
+  if (count < 1) {
+    const err = new Error(`[setup] LOAD_TEST_USER_COUNT must be >= 1, got ${count}`);
+    console.error(err.message);
+    if (typeof done === 'function') return done(err);
+    throw err;
+  }
+
   const batchSize = 4; // stay under 5/min rate limit
   const windowMs = 61000; // slightly over 60s rate limit window
   const maxDurationMs =
@@ -214,7 +229,7 @@ function generateUniqueUser(context, _events, done) {
 /**
  * Clean up the user pool file (called via `after` hook).
  */
-function cleanupUserPool(context, _events, done) {
+function cleanupUserPool(_context, _events, done) {
   try {
     if (fs.existsSync(USER_POOL_FILE)) {
       fs.unlinkSync(USER_POOL_FILE);
