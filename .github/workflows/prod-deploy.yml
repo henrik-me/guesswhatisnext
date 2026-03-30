@@ -150,8 +150,8 @@ jobs:
               --set-env-vars \
                 NODE_ENV=production \
                 PORT=3000 \
-                JWT_SECRET=${{ secrets.JWT_SECRET }} \
-                SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
+                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
 
       - name: Deactivate old revisions
         uses: azure/cli@v2
@@ -216,8 +216,8 @@ jobs:
               --set-env-vars \
                 NODE_ENV=production \
                 PORT=3000 \
-                JWT_SECRET=${{ secrets.JWT_SECRET }} \
-                SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}
+                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
             echo "Waiting for rollback to stabilize..."
             sleep 60
             HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
