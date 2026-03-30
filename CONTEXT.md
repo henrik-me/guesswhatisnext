@@ -173,6 +173,18 @@ Replace SQLite + Azure Files with Azure SQL Database (free tier) to permanently 
 
 **Parallelism:** Phase 11 is sequential and depends on Phase 10b completing first.
 
+## Phase 12 — Test Infrastructure Integration
+
+Integrate E2E and load tests into CI/CD pipelines so they run automatically, not just locally.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 65 | E2E tests in PR CI | ⬜ Pending | 43 | Add Playwright job to ci.yml: install Chromium, start server with temp DB, run `npx playwright test` in parallel with lint+test |
+| 66 | E2E tests in staging validation | ⬜ Pending | 65 | Run Playwright against ephemeral staging container in staging-deploy.yml after smoke tests pass |
+| 67 | Load test integration | ⬜ Pending | 44 | Decide where/when load tests run: on-demand workflow_dispatch, nightly schedule, or pre-prod gate. Add workflow accordingly. |
+
+**Parallelism:** Tasks 65 and 66 are sequential. Task 67 is independent and can start anytime after task 44 merges. Phase 12 depends on PRs #32 (task 43) and #34 (task 44) being merged first.
+
 ### Deployment Architecture
 
 ```
