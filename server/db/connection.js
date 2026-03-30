@@ -35,8 +35,9 @@ function isSqliteLockError(err) {
  * @param {Object} [options] - Optional configuration for the connection.
  * @param {number} [options.busyTimeout=30000] - SQLite busy timeout in milliseconds.
  *   Configures the `busy_timeout` pragma used to wait for locked database
- *   operations before failing with SQLITE_BUSY/SQLITE_LOCKED. Non-numeric
- *   values are ignored and fall back to the default.
+ *   operations before failing with SQLITE_BUSY/SQLITE_LOCKED. Parsed with
+ *   parseInt — leading numeric portions of strings are accepted (e.g. '2000ms'
+ *   becomes 2000). Completely non-numeric values fall back to the default.
  * @returns {import('better-sqlite3').Database} The initialized Database instance.
  */
 function getDb({ busyTimeout = 30000 } = {}) {
