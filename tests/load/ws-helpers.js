@@ -5,7 +5,7 @@
  * Handles user registration and match creation via HTTP before WS connection.
  */
 
-const { httpRequest, getBaseUrl, loadUserPool, setupUsers, cleanupUserPool } = require('./helpers');
+const { httpRequest, getBaseUrl, loadUserPool, setupUsers, cleanupUserPool, makeUsername } = require('./helpers');
 
 let counter = 0;
 let cachedPool = null;
@@ -34,9 +34,7 @@ async function registerAndGetToken(context, _events, done) {
     // Fall back to direct registration with retry on 429
     const maxRetries = 3;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      counter++;
-      const id = Date.now().toString(36) + counter.toString(36);
-      const username = `w${id}`.slice(0, 20);
+      const username = makeUsername('w');
       const password = 'LoadTest123!';
 
       const res = await httpRequest(baseUrl, 'POST', '/api/auth/register', {

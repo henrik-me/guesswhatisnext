@@ -89,7 +89,9 @@ function getBaseUrl(context) {
 function loadUserPool() {
   try {
     if (fs.existsSync(USER_POOL_FILE)) {
-      return JSON.parse(fs.readFileSync(USER_POOL_FILE, 'utf8'));
+      const data = JSON.parse(fs.readFileSync(USER_POOL_FILE, 'utf8'));
+      // Support new format { baseUrl, users } and legacy array format
+      return Array.isArray(data) ? data : (data.users || []);
     }
   } catch (err) {
     console.error('[loadUserPool] Failed to read pool file:', err.message);
@@ -149,9 +151,14 @@ async function setupUsers(context, _events, done) {
   try {
     // Double-check pool file after acquiring lock
     if (fs.existsSync(USER_POOL_FILE)) {
-      console.log('[setup] User pool already exists, skipping setup');
-      if (typeof done === 'function') return done();
-      return;
+      const existing = JSON.parse(fs.readFileSync(USER_POOL_FILE, 'utf8'));
+      const currentBase = getBaseUrl(context);
+      if (existing.baseUrl === currentBase) {
+        console.log('[setup] User pool already exists for this target, skipping setup');
+        if (typeof done === 'function') return done();
+        return;
+      }
+      console.log(`[setup] Pool exists for ${existing.baseUrl} but target is ${currentBase}, recreating...`);
     }
 
     const baseUrl = getBaseUrl(context);
@@ -234,7 +241,11 @@ async function setupUsers(context, _events, done) {
     }
 
     // Persist tokens only (not passwords) with restrictive permissions
-    fs.writeFileSync(USER_POOL_FILE, JSON.stringify(pool, null, 2), { mode: 0o600 });
+    // Write to temp file first, then rename for atomic visibility
+    const poolData = { baseUrl, users: pool };
+    const tmpFile = USER_POOL_FILE + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(poolData, null, 2), { mode: 0o600 });
+    fs.renameSync(tmpFile, USER_POOL_FILE);
     console.log(`[setup] Registered ${pool.length} users, saved to ${USER_POOL_FILE}`);
   } finally {
     // Release lock
@@ -303,4 +314,5 @@ module.exports = {
   httpRequest,
   getBaseUrl,
   loadUserPool,
+  makeUsername,
 };
