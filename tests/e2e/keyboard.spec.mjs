@@ -16,7 +16,7 @@ test.describe('Keyboard Navigation', () => {
     for (let round = 0; round < 3; round++) {
       // Wait for option buttons to appear and be enabled
       const options = page.locator('[data-screen="game"] .option-btn:not([disabled])');
-      await options.first().waitFor({ state: 'visible', timeout: 10_000 });
+      await options.first().waitFor({ state: 'visible', timeout: 10000 });
 
       // Press a different key each round
       const key = keys[round % keys.length];
@@ -24,7 +24,7 @@ test.describe('Keyboard Navigation', () => {
 
       // Result screen should appear
       await expect(page.locator('[data-screen="result"]')).toHaveClass(/active/, {
-        timeout: 5_000,
+        timeout: 5000,
       });
 
       // Advance to next round
@@ -33,7 +33,7 @@ test.describe('Keyboard Navigation', () => {
       // Wait for either next round or game over
       const gameScreen = page.locator('[data-screen="game"].active');
       const gameOver = page.locator('[data-screen="gameover"].active');
-      await expect(gameScreen.or(gameOver)).toBeVisible({ timeout: 5_000 });
+      await expect(gameScreen.or(gameOver)).toBeVisible({ timeout: 5000 });
 
       if (await gameOver.isVisible()) break;
     }
@@ -52,13 +52,13 @@ test.describe('Keyboard Navigation', () => {
 
     // Wait for options
     const options = page.locator('[data-screen="game"] .option-btn');
-    await options.first().waitFor({ state: 'visible', timeout: 10_000 });
+    await options.first().waitFor({ state: 'visible', timeout: 10000 });
 
     // Press key '3' (selects the third option, index 2)
     await page.keyboard.press('3');
 
     // The third option should get a feedback class (correct or wrong)
     const thirdOption = options.nth(2);
-    await expect(thirdOption).toHaveClass(/correct|wrong/, { timeout: 2_000 });
+    await expect(thirdOption).toHaveClass(/correct|wrong/, { timeout: 2000 });
   });
 });

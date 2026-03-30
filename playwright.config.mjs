@@ -21,8 +21,8 @@ const dbPath = path.join(tmpDir, 'test.db');
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 30_000,
-  expect: { timeout: 10_000 },
+  timeout: 30000,
+  expect: { timeout: 10000 },
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -48,7 +48,7 @@ export default defineConfig({
       JWT_SECRET: 'test-jwt-secret',
       SYSTEM_API_KEY: 'test-system-api-key',
     },
-    timeout: 15_000,
+    timeout: 15000,
   },
   globalTeardown: './tests/e2e/global-teardown.mjs',
 });

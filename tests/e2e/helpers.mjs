@@ -7,11 +7,11 @@ import { expect } from '@playwright/test';
  */
 export async function playOneRound(page) {
   const option = page.locator('[data-screen="game"] .option-btn:not([disabled])').first();
-  await option.waitFor({ state: 'visible', timeout: 10_000 });
+  await option.waitFor({ state: 'visible', timeout: 10000 });
   await option.click();
 
   // After the 600ms feedback delay the result screen appears
-  await expect(page.locator('[data-screen="result"]')).toHaveClass(/active/, { timeout: 5_000 });
+  await expect(page.locator('[data-screen="result"]')).toHaveClass(/active/, { timeout: 5000 });
 
   // Click next-round (may say "See Results →" on last round)
   await page.click('[data-action="next-round"]');
@@ -19,7 +19,7 @@ export async function playOneRound(page) {
   // Wait for either the next game round or the game-over screen
   const gameScreen = page.locator('[data-screen="game"].active');
   const gameOver = page.locator('[data-screen="gameover"].active');
-  await expect(gameScreen.or(gameOver)).toBeVisible({ timeout: 5_000 });
+  await expect(gameScreen.or(gameOver)).toBeVisible({ timeout: 5000 });
 
   return gameOver.isVisible();
 }

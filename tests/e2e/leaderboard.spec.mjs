@@ -20,7 +20,7 @@ test.describe('Leaderboard', () => {
     await page.fill('#auth-password', password);
     await page.click('[data-action="auth-register"]');
     await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, {
-      timeout: 5_000,
+      timeout: 5000,
     });
 
     // Go home and start free play
@@ -33,7 +33,7 @@ test.describe('Leaderboard', () => {
     // Play all rounds; listen for score submission during the game
     const scoreSubmitted = page.waitForResponse(
       (resp) => resp.url().includes('/api/scores') && resp.request().method() === 'POST',
-      { timeout: 30_000 },
+      { timeout: 30000 },
     );
     for (let i = 0; i < 10; i++) {
       const done = await playOneRound(page);
@@ -47,11 +47,11 @@ test.describe('Leaderboard', () => {
     await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
     await page.click('[data-action="show-leaderboard"]');
     await expect(page.locator('[data-screen="leaderboard"]')).toHaveClass(/active/, {
-      timeout: 5_000,
+      timeout: 5000,
     });
 
     // Wait for leaderboard table to load and contain our username
     const table = page.locator('[data-bind="leaderboard-table"]');
-    await expect(table).toContainText(username, { timeout: 10_000 });
+    await expect(table).toContainText(username, { timeout: 10000 });
   });
 });

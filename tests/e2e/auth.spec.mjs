@@ -28,7 +28,7 @@ test.describe('Authentication', () => {
 
     // After registration, app navigates to multiplayer screen
     await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, {
-      timeout: 5_000,
+      timeout: 5000,
     });
 
     // Go home and verify username is displayed
@@ -47,12 +47,12 @@ test.describe('Authentication', () => {
     await page.fill('#auth-password', password);
     await page.click('[data-action="auth-register"]');
     await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, {
-      timeout: 5_000,
+      timeout: 5000,
     });
 
     // Reload the page
     await page.reload();
-    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/, { timeout: 5_000 });
+    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/, { timeout: 5000 });
 
     // Username should still be visible (token persisted)
     await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
@@ -68,7 +68,7 @@ test.describe('Authentication', () => {
     await page.fill('#auth-password', password);
     await page.click('[data-action="auth-register"]');
     await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, {
-      timeout: 5_000,
+      timeout: 5000,
     });
 
     // Go home to see logged-in state
