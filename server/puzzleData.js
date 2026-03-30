@@ -2979,4 +2979,2202 @@ module.exports = [
     options: ["e9", "f1", "d5", "c3"],
     explanation: "Pattern moves +1 letter, +2 number each time: a1 → b3 → c5 → d7 → e9."
   },
+
+  // ─── Geography ────────────────────────────────────
+  {
+    id: "geo-european-capitals",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Paris","Berlin","Madrid"],
+    answer: "Rome",
+    options: ["Rome","Milan","Barcelona","Munich"],
+    explanation: "Capital cities of France, Germany, Spain — next is Italy's capital: Rome."
+  },
+  {
+    id: "geo-continents-size",
+    category: "Geography",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Asia","Africa","North America"],
+    answer: "South America",
+    options: ["Europe","South America","Antarctica","Australia"],
+    explanation: "Continents ordered by area from largest to smallest: Asia → Africa → N. America → S. America."
+  },
+  {
+    id: "geo-oceans-size",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Pacific","Atlantic","Indian"],
+    answer: "Southern",
+    options: ["Arctic","Southern","Mediterranean","Caribbean"],
+    explanation: "Oceans ordered by size: Pacific → Atlantic → Indian → Southern → Arctic."
+  },
+  {
+    id: "geo-longest-rivers",
+    category: "Geography",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Nile","Amazon","Yangtze"],
+    answer: "Mississippi",
+    options: ["Mississippi","Thames","Danube","Rhine"],
+    explanation: "World's longest rivers in order: Nile → Amazon → Yangtze → Mississippi."
+  },
+  {
+    id: "geo-largest-countries",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Russia","Canada","USA"],
+    answer: "China",
+    options: ["India","China","Brazil","Australia"],
+    explanation: "Largest countries by area: Russia → Canada → USA → China."
+  },
+  {
+    id: "geo-compass-directions",
+    category: "Geography",
+    difficulty: 1,
+    type: "text",
+    sequence: ["North","East","South"],
+    answer: "West",
+    options: ["West","Northeast","Down","Center"],
+    explanation: "The four cardinal compass directions clockwise: North → East → South → West."
+  },
+  {
+    id: "geo-asian-capitals",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Tokyo","Beijing","Seoul"],
+    answer: "Bangkok",
+    options: ["Bangkok","Shanghai","Osaka","Taipei"],
+    explanation: "Capital cities of Japan, China, South Korea — next is Thailand's capital: Bangkok."
+  },
+  {
+    id: "geo-south-american-capitals",
+    category: "Geography",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Brasília","Buenos Aires","Santiago"],
+    answer: "Lima",
+    options: ["Lima","São Paulo","Bogotá","Rio de Janeiro"],
+    explanation: "Capitals of Brazil, Argentina, Chile — next is Peru's capital: Lima."
+  },
+  {
+    id: "geo-earth-layers",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Crust","Mantle","Outer Core"],
+    answer: "Inner Core",
+    options: ["Inner Core","Magma","Bedrock","Lithosphere"],
+    explanation: "Earth's layers from outside in: Crust → Mantle → Outer Core → Inner Core."
+  },
+  {
+    id: "geo-us-states-alphabetical",
+    category: "Geography",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Alabama","Alaska","Arizona"],
+    answer: "Arkansas",
+    options: ["Arkansas","California","Colorado","Connecticut"],
+    explanation: "US states in alphabetical order: Alabama → Alaska → Arizona → Arkansas."
+  },
+  {
+    id: "geo-highest-mountains",
+    category: "Geography",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Everest","K2","Kangchenjunga"],
+    answer: "Lhotse",
+    options: ["Lhotse","Denali","Kilimanjaro","Mont Blanc"],
+    explanation: "World's highest mountains: Everest → K2 → Kangchenjunga → Lhotse."
+  },
+  {
+    id: "geo-world-population",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["India","China","USA"],
+    answer: "Indonesia",
+    options: ["Indonesia","Brazil","Japan","Mexico"],
+    explanation: "Most populous countries: India → China → USA → Indonesia."
+  },
+  {
+    id: "geo-african-capitals",
+    category: "Geography",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Cairo","Nairobi","Abuja"],
+    answer: "Pretoria",
+    options: ["Pretoria","Lagos","Addis Ababa","Casablanca"],
+    explanation: "Capitals of Egypt, Kenya, Nigeria — next is South Africa's capital: Pretoria."
+  },
+  {
+    id: "geo-deserts-size",
+    category: "Geography",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Antarctic","Sahara","Arabian"],
+    answer: "Gobi",
+    options: ["Gobi","Mojave","Kalahari","Atacama"],
+    explanation: "Largest deserts by area: Antarctic → Sahara → Arabian → Gobi."
+  },
+  {
+    id: "geo-flag-tricolor-vert",
+    category: "Geography",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🇫🇷","🇮🇹","🇮🇪"],
+    answer: "🇧🇪",
+    options: ["🇧🇪","🇯🇵","🇧🇷","🇨🇭"],
+    explanation: "Flags with vertical tricolor stripes: France → Italy → Ireland → Belgium."
+  },
+  {
+    id: "geo-island-nations",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Japan","Philippines","Indonesia"],
+    answer: "Madagascar",
+    options: ["Madagascar","Brazil","India","Egypt"],
+    explanation: "Large island nations from east to west: Japan → Philippines → Indonesia → Madagascar."
+  },
+  {
+    id: "geo-great-lakes",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Superior","Michigan","Huron"],
+    answer: "Erie",
+    options: ["Erie","Tahoe","Ontario","Victoria"],
+    explanation: "The Great Lakes by surface area: Superior → Michigan → Huron → Erie → Ontario."
+  },
+  {
+    id: "geo-tallest-buildings",
+    category: "Geography",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Burj Khalifa","Merdeka 118","Shanghai Tower"],
+    answer: "Abraj Al-Bait",
+    options: ["Abraj Al-Bait","Empire State","Eiffel Tower","CN Tower"],
+    explanation: "Tallest buildings in the world: Burj Khalifa → Merdeka 118 → Shanghai Tower → Abraj Al-Bait."
+  },
+  // ─── History ──────────────────────────────────────
+  {
+    id: "hist-ancient-civilizations",
+    category: "History",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Mesopotamia","Egypt","Greece"],
+    answer: "Rome",
+    options: ["Rome","Aztec","Viking","Mongol"],
+    explanation: "Major ancient civilizations in chronological order of rise: Mesopotamia → Egypt → Greece → Rome."
+  },
+  {
+    id: "hist-world-wars",
+    category: "History",
+    difficulty: 1,
+    type: "text",
+    sequence: ["1914","1918","1939"],
+    answer: "1945",
+    options: ["1945","1950","1941","1942"],
+    explanation: "WWI: 1914–1918, WWII: 1939–1945. The pattern shows start/end dates of both world wars."
+  },
+  {
+    id: "hist-us-presidents-early",
+    category: "History",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Washington","Adams","Jefferson"],
+    answer: "Madison",
+    options: ["Madison","Monroe","Lincoln","Hamilton"],
+    explanation: "First US presidents in order: Washington → Adams → Jefferson → Madison."
+  },
+  {
+    id: "hist-space-race",
+    category: "History",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Sputnik 1957","Gagarin 1961","Apollo 11 1969"],
+    answer: "Skylab 1973",
+    options: ["Skylab 1973","Hubble 1980","ISS 1965","Viking 1960"],
+    explanation: "Space race milestones: Sputnik → Gagarin → Moon landing → Skylab space station."
+  },
+  {
+    id: "hist-egyptian-periods",
+    category: "History",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Old Kingdom","Middle Kingdom","New Kingdom"],
+    answer: "Late Period",
+    options: ["Late Period","Early Period","Bronze Age","Iron Age"],
+    explanation: "Egyptian historical periods: Old Kingdom → Middle Kingdom → New Kingdom → Late Period."
+  },
+  {
+    id: "hist-inventions-timeline",
+    category: "History",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔥","🏹","⚙️"],
+    answer: "💡",
+    options: ["💡","🔥","🗡️","🏰"],
+    explanation: "Major inventions through history: fire → bow & arrow → mechanical wheel/gear → light bulb."
+  },
+  {
+    id: "hist-transportation-evolution",
+    category: "History",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🐴","🚂","🚗"],
+    answer: "✈️",
+    options: ["✈️","🚲","🛶","🐴"],
+    explanation: "Transportation evolution: horse → train → car → airplane."
+  },
+  {
+    id: "hist-communication-evolution",
+    category: "History",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["✉️","📞","💻"],
+    answer: "📱",
+    options: ["📱","📺","📻","✉️"],
+    explanation: "Communication evolution: letter → telephone → computer → smartphone."
+  },
+  {
+    id: "hist-roman-empire-phases",
+    category: "History",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Kingdom","Republic","Empire"],
+    answer: "Fall",
+    options: ["Fall","Democracy","Renaissance","Feudalism"],
+    explanation: "Phases of Roman civilization: Kingdom → Republic → Empire → Fall (476 AD)."
+  },
+  {
+    id: "hist-renaissance-to-modern",
+    category: "History",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Renaissance","Reformation","Enlightenment"],
+    answer: "Industrial Revolution",
+    options: ["Industrial Revolution","Dark Ages","Bronze Age","Cold War"],
+    explanation: "European historical periods: Renaissance → Reformation → Enlightenment → Industrial Revolution."
+  },
+  {
+    id: "hist-writing-systems",
+    category: "History",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Cuneiform","Hieroglyphs","Greek Alphabet"],
+    answer: "Latin Alphabet",
+    options: ["Latin Alphabet","Binary","Morse Code","Braille"],
+    explanation: "Writing systems in order of development: Cuneiform → Hieroglyphs → Greek → Latin alphabet."
+  },
+  {
+    id: "hist-ages-of-man",
+    category: "History",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Stone Age","Bronze Age","Iron Age"],
+    answer: "Classical Age",
+    options: ["Classical Age","Digital Age","Space Age","Ice Age"],
+    explanation: "Ages of human civilization: Stone → Bronze → Iron → Classical."
+  },
+  {
+    id: "hist-cold-war-events",
+    category: "History",
+    difficulty: 3,
+    type: "text",
+    sequence: ["NATO formed 1949","Korean War 1950","Cuban Missile Crisis 1962"],
+    answer: "Moon Landing 1969",
+    options: ["Moon Landing 1969","Vietnam War 1945","Berlin Wall 1940","Sputnik 1970"],
+    explanation: "Cold War milestones: NATO → Korean War → Cuban Missile Crisis → Moon Landing."
+  },
+  {
+    id: "hist-uk-monarchs",
+    category: "History",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Victoria","Edward VII","George V"],
+    answer: "Edward VIII",
+    options: ["Edward VIII","George IV","Elizabeth I","Henry VIII"],
+    explanation: "British monarchs in order: Victoria → Edward VII → George V → Edward VIII."
+  },
+  {
+    id: "hist-dynasty-china",
+    category: "History",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Han","Tang","Song"],
+    answer: "Ming",
+    options: ["Ming","Qin","Zhou","Shang"],
+    explanation: "Major Chinese dynasties in chronological order: Han → Tang → Song → Ming."
+  },
+  {
+    id: "hist-money-evolution",
+    category: "History",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🐚","🪙","💵"],
+    answer: "💳",
+    options: ["💳","🪙","🏦","💰"],
+    explanation: "Evolution of money: shells → coins → paper bills → credit cards."
+  },
+  {
+    id: "hist-greek-philosophers",
+    category: "History",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Socrates","Plato","Aristotle"],
+    answer: "Alexander",
+    options: ["Alexander","Homer","Pythagoras","Herodotus"],
+    explanation: "Each taught the next: Socrates → Plato → Aristotle → Alexander the Great."
+  },
+  // ─── Technology ───────────────────────────────────
+  {
+    id: "tech-storage-evolution",
+    category: "Technology",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["💾","💿","🔌"],
+    answer: "☁️",
+    options: ["☁️","💾","📼","🖨️"],
+    explanation: "Storage evolution: floppy disk → CD → USB drive → cloud storage."
+  },
+  {
+    id: "tech-web-versions",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Web 1.0","Web 2.0","Web 3.0"],
+    answer: "Web 4.0",
+    options: ["Web 4.0","Web 2.5","Web 5.0","Internet 2"],
+    explanation: "Web evolution: static pages (1.0) → social/interactive (2.0) → decentralized (3.0) → AI-driven (4.0)."
+  },
+  {
+    id: "tech-programming-generations",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Machine Code","Assembly","C"],
+    answer: "Python",
+    options: ["Python","Binary","HTML","Punch Cards"],
+    explanation: "Programming language generations from low to high level: Machine Code → Assembly → C → Python."
+  },
+  {
+    id: "tech-mobile-generations",
+    category: "Technology",
+    difficulty: 1,
+    type: "text",
+    sequence: ["2G","3G","4G"],
+    answer: "5G",
+    options: ["5G","6G","4.5G","WiFi"],
+    explanation: "Mobile network generations: 2G → 3G → 4G → 5G."
+  },
+  {
+    id: "tech-apple-devices",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["iPod","iPhone","iPad"],
+    answer: "Apple Watch",
+    options: ["Apple Watch","iMac","MacBook","iTunes"],
+    explanation: "Apple's major product launches in order: iPod (2001) → iPhone (2007) → iPad (2010) → Apple Watch (2015)."
+  },
+  {
+    id: "tech-data-units",
+    category: "Technology",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Byte","Kilobyte","Megabyte"],
+    answer: "Gigabyte",
+    options: ["Gigabyte","Terabyte","Bit","Nibble"],
+    explanation: "Data units in ascending order: Byte → Kilobyte → Megabyte → Gigabyte."
+  },
+  {
+    id: "tech-social-media-timeline",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["MySpace","Facebook","Twitter"],
+    answer: "Instagram",
+    options: ["Instagram","Friendster","LinkedIn","AOL"],
+    explanation: "Major social media platforms by launch: MySpace (2003) → Facebook (2004) → Twitter (2006) → Instagram (2010)."
+  },
+  {
+    id: "tech-computer-input",
+    category: "Technology",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["⌨️","🖱️","🎤"],
+    answer: "👆",
+    options: ["👆","🖨️","📷","🔊"],
+    explanation: "Computer input evolution: keyboard → mouse → voice → touch screen."
+  },
+  {
+    id: "tech-gaming-consoles",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Atari","NES","PlayStation"],
+    answer: "Xbox",
+    options: ["Xbox","Sega","Commodore","Pong"],
+    explanation: "Landmark gaming consoles: Atari (1977) → NES (1985) → PlayStation (1994) → Xbox (2001)."
+  },
+  {
+    id: "tech-internet-protocols",
+    category: "Technology",
+    difficulty: 3,
+    type: "text",
+    sequence: ["HTTP","HTTPS","HTTP/2"],
+    answer: "HTTP/3",
+    options: ["HTTP/3","HTTP/4","FTP","TCP"],
+    explanation: "Web protocol evolution: HTTP → HTTPS → HTTP/2 → HTTP/3 (QUIC)."
+  },
+  {
+    id: "tech-display-resolution",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["480p","720p","1080p"],
+    answer: "4K",
+    options: ["4K","8K","360p","HD"],
+    explanation: "Display resolution progression: 480p → 720p → 1080p → 4K (2160p)."
+  },
+  {
+    id: "tech-ai-milestones",
+    category: "Technology",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Deep Blue 1997","Watson 2011","AlphaGo 2016"],
+    answer: "ChatGPT 2022",
+    options: ["ChatGPT 2022","Siri 2005","Alexa 2000","Cortana 2010"],
+    explanation: "AI milestones: Deep Blue beat chess → Watson beat Jeopardy → AlphaGo beat Go → ChatGPT launched."
+  },
+  {
+    id: "tech-os-timeline",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["MS-DOS","Windows 95","Windows XP"],
+    answer: "Windows 10",
+    options: ["Windows 10","Windows ME","Windows 3.1","Linux"],
+    explanation: "Major Windows releases: MS-DOS → Windows 95 → Windows XP → Windows 10."
+  },
+  {
+    id: "tech-bluetooth-versions",
+    category: "Technology",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Bluetooth 2.0","Bluetooth 3.0","Bluetooth 4.0"],
+    answer: "Bluetooth 5.0",
+    options: ["Bluetooth 5.0","Bluetooth 4.5","WiFi 6","NFC 2.0"],
+    explanation: "Bluetooth version progression: 2.0 → 3.0 → 4.0 → 5.0."
+  },
+  {
+    id: "tech-binary-powers",
+    category: "Technology",
+    difficulty: 1,
+    type: "text",
+    sequence: ["1","2","4","8"],
+    answer: "16",
+    options: ["16","10","12","15"],
+    explanation: "Powers of 2 (fundamental in computing): 1, 2, 4, 8, 16, 32, 64..."
+  },
+  {
+    id: "tech-screen-types",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["CRT","LCD","LED"],
+    answer: "OLED",
+    options: ["OLED","Plasma","VGA","DLP"],
+    explanation: "Display technology evolution: CRT → LCD → LED → OLED."
+  },
+  {
+    id: "tech-usb-versions",
+    category: "Technology",
+    difficulty: 2,
+    type: "text",
+    sequence: ["USB 1.0","USB 2.0","USB 3.0"],
+    answer: "USB 4.0",
+    options: ["USB 4.0","USB 3.5","Thunderbolt","FireWire"],
+    explanation: "USB standard progression: 1.0 → 2.0 → 3.0 → 4.0."
+  },
+  // ─── Art & Design ─────────────────────────────────
+  {
+    id: "art-primary-colors",
+    category: "Art & Design",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔴","🔵"],
+    answer: "🟡",
+    options: ["🟡","🟢","🟠","🟣"],
+    explanation: "The three primary colors in traditional color theory: Red, Blue, Yellow."
+  },
+  {
+    id: "art-rainbow-order",
+    category: "Art & Design",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔴","🟠","🟡","🟢"],
+    answer: "🔵",
+    options: ["🔵","🟣","⚪","🟤"],
+    explanation: "Rainbow order (ROYGBIV): Red → Orange → Yellow → Green → Blue."
+  },
+  {
+    id: "art-movements-timeline",
+    category: "Art & Design",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Renaissance","Baroque","Impressionism"],
+    answer: "Cubism",
+    options: ["Cubism","Gothic","Romanticism","Prehistoric"],
+    explanation: "Art movements in chronological order: Renaissance → Baroque → Impressionism → Cubism."
+  },
+  {
+    id: "art-color-wheel-warm",
+    category: "Art & Design",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔴","🟠"],
+    answer: "🟡",
+    options: ["🟡","🔵","🟣","🟤"],
+    explanation: "Warm colors on the color wheel progress: Red → Orange → Yellow."
+  },
+  {
+    id: "art-pencil-grades",
+    category: "Art & Design",
+    difficulty: 2,
+    type: "text",
+    sequence: ["2H","H","HB"],
+    answer: "B",
+    options: ["B","2B","F","3H"],
+    explanation: "Pencil hardness grades from hard to soft: 2H → H → HB → B."
+  },
+  {
+    id: "art-famous-painters",
+    category: "Art & Design",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Da Vinci","Rembrandt","Monet"],
+    answer: "Picasso",
+    options: ["Picasso","Michelangelo","Raphael","Vermeer"],
+    explanation: "Famous painters in chronological order: Da Vinci (1500s) → Rembrandt (1600s) → Monet (1800s) → Picasso (1900s)."
+  },
+  {
+    id: "art-sculpture-evolution",
+    category: "Art & Design",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Greek Classical","Roman","Gothic"],
+    answer: "Renaissance",
+    options: ["Renaissance","Prehistoric","Modern","Baroque"],
+    explanation: "Sculpture style evolution: Greek Classical → Roman → Gothic → Renaissance."
+  },
+  {
+    id: "art-photography-evolution",
+    category: "Art & Design",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["📷","🎞️","📸"],
+    answer: "🤳",
+    options: ["🤳","🖼️","🎨","📹"],
+    explanation: "Photography evolution: early camera → film camera → digital camera → selfie/smartphone camera."
+  },
+  {
+    id: "art-architecture-styles",
+    category: "Art & Design",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Egyptian","Greek","Roman"],
+    answer: "Gothic",
+    options: ["Gothic","Modern","Art Deco","Baroque"],
+    explanation: "Architectural styles in chronological order: Egyptian → Greek → Roman → Gothic."
+  },
+  {
+    id: "art-design-principles",
+    category: "Art & Design",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Line","Shape","Form"],
+    answer: "Texture",
+    options: ["Texture","Paragraph","Margin","Pixel"],
+    explanation: "Elements of art: Line → Shape → Form → Texture → Value → Space → Color."
+  },
+  {
+    id: "art-paper-sizes",
+    category: "Art & Design",
+    difficulty: 2,
+    type: "text",
+    sequence: ["A1","A2","A3"],
+    answer: "A4",
+    options: ["A4","A0","B5","A10"],
+    explanation: "Standard paper sizes getting smaller: A1 → A2 → A3 → A4."
+  },
+  {
+    id: "art-music-to-film",
+    category: "Art & Design",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🎨","🎭","🎵"],
+    answer: "🎬",
+    options: ["🎬","📚","🎪","🏛️"],
+    explanation: "Art forms through history: visual art → theater → music → cinema."
+  },
+  {
+    id: "art-warm-to-cool",
+    category: "Art & Design",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔴","🟡","🟢"],
+    answer: "🔵",
+    options: ["🔵","🟠","🟤","⚫"],
+    explanation: "Color temperature transition from warm to cool: Red → Yellow → Green → Blue."
+  },
+  // ─── Language & Grammar ───────────────────────────
+  {
+    id: "lang-vowels",
+    category: "Language & Grammar",
+    difficulty: 1,
+    type: "text",
+    sequence: ["A","E","I"],
+    answer: "O",
+    options: ["O","U","B","Y"],
+    explanation: "English vowels in order: A, E, I, O, U."
+  },
+  {
+    id: "lang-tenses",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Past","Present"],
+    answer: "Future",
+    options: ["Future","Perfect","Pluperfect","Conditional"],
+    explanation: "The three basic tenses: Past → Present → Future."
+  },
+  {
+    id: "lang-sentence-structure",
+    category: "Language & Grammar",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Subject","Verb"],
+    answer: "Object",
+    options: ["Object","Adjective","Comma","Period"],
+    explanation: "Basic English sentence structure: Subject → Verb → Object (SVO)."
+  },
+  {
+    id: "lang-parts-of-speech",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Noun","Verb","Adjective"],
+    answer: "Adverb",
+    options: ["Adverb","Sentence","Paragraph","Syllable"],
+    explanation: "Common parts of speech: Noun → Verb → Adjective → Adverb."
+  },
+  {
+    id: "lang-greek-alphabet-start",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Alpha","Beta","Gamma"],
+    answer: "Delta",
+    options: ["Delta","Epsilon","Omega","Sigma"],
+    explanation: "First four letters of the Greek alphabet: Alpha → Beta → Gamma → Delta."
+  },
+  {
+    id: "lang-roman-numerals",
+    category: "Language & Grammar",
+    difficulty: 1,
+    type: "text",
+    sequence: ["I","II","III"],
+    answer: "IV",
+    options: ["IV","IIII","V","VI"],
+    explanation: "Roman numerals: I (1), II (2), III (3), IV (4)."
+  },
+  {
+    id: "lang-phonetic-alphabet",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Alpha","Bravo","Charlie"],
+    answer: "Delta",
+    options: ["Delta","Echo","Dog","David"],
+    explanation: "NATO phonetic alphabet: Alpha → Bravo → Charlie → Delta."
+  },
+  {
+    id: "lang-punctuation-hierarchy",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Period","Comma","Semicolon"],
+    answer: "Colon",
+    options: ["Colon","Dash","Paragraph","Space"],
+    explanation: "Common punctuation marks: Period → Comma → Semicolon → Colon."
+  },
+  {
+    id: "lang-prefixes-size",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["micro","milli","centi"],
+    answer: "deci",
+    options: ["deci","kilo","mega","nano"],
+    explanation: "Metric prefixes from smallest to largest: micro → milli → centi → deci."
+  },
+  {
+    id: "lang-book-structure",
+    category: "Language & Grammar",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Letter","Word","Sentence"],
+    answer: "Paragraph",
+    options: ["Paragraph","Chapter","Page","Syllable"],
+    explanation: "Text units from smallest to largest: Letter → Word → Sentence → Paragraph."
+  },
+  {
+    id: "lang-spanish-numbers",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["uno","dos","tres"],
+    answer: "cuatro",
+    options: ["cuatro","cinco","quattro","quatro"],
+    explanation: "Counting in Spanish: uno (1), dos (2), tres (3), cuatro (4)."
+  },
+  {
+    id: "lang-french-numbers",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["un","deux","trois"],
+    answer: "quatre",
+    options: ["quatre","cinq","quatro","fünf"],
+    explanation: "Counting in French: un (1), deux (2), trois (3), quatre (4)."
+  },
+  {
+    id: "lang-japanese-numbers",
+    category: "Language & Grammar",
+    difficulty: 3,
+    type: "text",
+    sequence: ["ichi","ni","san"],
+    answer: "shi",
+    options: ["shi","go","roku","hachi"],
+    explanation: "Counting in Japanese: ichi (1), ni (2), san (3), shi (4)."
+  },
+  {
+    id: "lang-writing-tools",
+    category: "Language & Grammar",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🪶","✒️","✏️"],
+    answer: "🖊️",
+    options: ["🖊️","📱","🖨️","📋"],
+    explanation: "Evolution of writing tools: quill → fountain pen → pencil → ballpoint pen."
+  },
+  {
+    id: "lang-literary-genres",
+    category: "Language & Grammar",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Poetry","Drama","Novel"],
+    answer: "Short Story",
+    options: ["Short Story","Alphabet","Dictionary","Grammar"],
+    explanation: "Literary forms in historical order of development: Poetry → Drama → Novel → Short Story."
+  },
+  // ─── Science ──────────────────────────────────────
+  {
+    id: "sci-planets-order",
+    category: "Science",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Mercury","Venus","Earth"],
+    answer: "Mars",
+    options: ["Mars","Jupiter","Saturn","Moon"],
+    explanation: "Planets from the Sun: Mercury → Venus → Earth → Mars."
+  },
+  {
+    id: "sci-periodic-first-four",
+    category: "Science",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Hydrogen","Helium","Lithium"],
+    answer: "Beryllium",
+    options: ["Beryllium","Carbon","Boron","Nitrogen"],
+    explanation: "First elements of the periodic table: Hydrogen (1) → Helium (2) → Lithium (3) → Beryllium (4)."
+  },
+  {
+    id: "sci-states-of-matter",
+    category: "Science",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Solid","Liquid"],
+    answer: "Gas",
+    options: ["Gas","Plasma","Vapor","Ice"],
+    explanation: "States of matter by increasing energy: Solid → Liquid → Gas."
+  },
+  {
+    id: "sci-cell-division",
+    category: "Science",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Interphase","Prophase","Metaphase"],
+    answer: "Anaphase",
+    options: ["Anaphase","Telophase","Cytokinesis","G1 Phase"],
+    explanation: "Stages of mitosis: Interphase → Prophase → Metaphase → Anaphase → Telophase."
+  },
+  {
+    id: "sci-electromagnetic-spectrum",
+    category: "Science",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Radio","Microwave","Infrared"],
+    answer: "Visible Light",
+    options: ["Visible Light","X-ray","Gamma","Sound"],
+    explanation: "EM spectrum by wavelength: Radio → Microwave → Infrared → Visible Light."
+  },
+  {
+    id: "sci-taxonomy",
+    category: "Science",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Kingdom","Phylum","Class"],
+    answer: "Order",
+    options: ["Order","Species","Domain","Genus"],
+    explanation: "Taxonomy hierarchy: Kingdom → Phylum → Class → Order → Family → Genus → Species."
+  },
+  {
+    id: "sci-rock-cycle",
+    category: "Science",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Igneous","Sedimentary"],
+    answer: "Metamorphic",
+    options: ["Metamorphic","Calcium","Volcanic","Crystal"],
+    explanation: "The three main rock types in the rock cycle: Igneous → Sedimentary → Metamorphic."
+  },
+  {
+    id: "sci-human-body-systems",
+    category: "Science",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Skeletal","Muscular","Circulatory"],
+    answer: "Nervous",
+    options: ["Nervous","Battery","Mechanical","Digital"],
+    explanation: "Major body systems: Skeletal → Muscular → Circulatory → Nervous."
+  },
+  {
+    id: "sci-ph-scale",
+    category: "Science",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Acid","Neutral"],
+    answer: "Base",
+    options: ["Base","Salt","Water","Ion"],
+    explanation: "The pH scale goes from Acid (0-6) → Neutral (7) → Base (8-14)."
+  },
+  {
+    id: "sci-gas-giants",
+    category: "Science",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Jupiter","Saturn"],
+    answer: "Uranus",
+    options: ["Uranus","Mars","Venus","Pluto"],
+    explanation: "Outer planets in order: Jupiter → Saturn → Uranus → Neptune."
+  },
+  {
+    id: "sci-scientific-method",
+    category: "Science",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Question","Hypothesis","Experiment"],
+    answer: "Conclusion",
+    options: ["Conclusion","Guess","Theory","Law"],
+    explanation: "The scientific method: Question → Hypothesis → Experiment → Conclusion."
+  },
+  {
+    id: "sci-dna-bases",
+    category: "Science",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Adenine","Thymine","Guanine"],
+    answer: "Cytosine",
+    options: ["Cytosine","Uracil","Ribose","Amino"],
+    explanation: "The four DNA bases: Adenine, Thymine, Guanine, Cytosine. They pair A-T and G-C."
+  },
+  {
+    id: "sci-speed-of-things",
+    category: "Science",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🐌","🚶","🚗"],
+    answer: "✈️",
+    options: ["✈️","🚲","🐇","🚂"],
+    explanation: "Increasing speed: snail → walking → car → airplane."
+  },
+  {
+    id: "sci-lab-equipment",
+    category: "Science",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔬","🧪","⚗️"],
+    answer: "🧫",
+    options: ["🧫","🔭","📐","🖩"],
+    explanation: "Laboratory equipment getting smaller: microscope → test tube → flask → petri dish."
+  },
+  {
+    id: "sci-newton-laws",
+    category: "Science",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Inertia","F=ma"],
+    answer: "Action-Reaction",
+    options: ["Action-Reaction","Gravity","Friction","Momentum"],
+    explanation: "Newton's three laws of motion: 1st (Inertia) → 2nd (F=ma) → 3rd (Action-Reaction)."
+  },
+  // ─── Sports ───────────────────────────────────────
+  {
+    id: "sport-olympic-host-recent",
+    category: "Sports",
+    difficulty: 2,
+    type: "text",
+    sequence: ["London 2012","Rio 2016","Tokyo 2020"],
+    answer: "Paris 2024",
+    options: ["Paris 2024","Beijing 2024","LA 2024","Sydney 2024"],
+    explanation: "Recent Summer Olympic host cities: London → Rio → Tokyo → Paris."
+  },
+  {
+    id: "sport-world-cup-hosts",
+    category: "Sports",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Brazil 2014","Russia 2018","Qatar 2022"],
+    answer: "USA/Canada/Mexico 2026",
+    options: ["USA/Canada/Mexico 2026","Japan 2026","Australia 2026","England 2026"],
+    explanation: "Recent FIFA World Cup hosts: Brazil → Russia → Qatar → USA/Canada/Mexico."
+  },
+  {
+    id: "sport-tennis-grand-slams",
+    category: "Sports",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Australian Open","French Open","Wimbledon"],
+    answer: "US Open",
+    options: ["US Open","Indian Wells","ATP Finals","Davis Cup"],
+    explanation: "Tennis Grand Slams in calendar order: Australian Open → French Open → Wimbledon → US Open."
+  },
+  {
+    id: "sport-track-distances",
+    category: "Sports",
+    difficulty: 1,
+    type: "text",
+    sequence: ["100m","200m","400m"],
+    answer: "800m",
+    options: ["800m","500m","1000m","300m"],
+    explanation: "Standard Olympic track events: 100m → 200m → 400m → 800m (each roughly doubling)."
+  },
+  {
+    id: "sport-medal-order",
+    category: "Sports",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🥇","🥈"],
+    answer: "🥉",
+    options: ["🥉","🏅","🎖️","⭐"],
+    explanation: "Olympic medal order: Gold 🥇 → Silver 🥈 → Bronze 🥉."
+  },
+  {
+    id: "sport-karate-belts",
+    category: "Sports",
+    difficulty: 2,
+    type: "text",
+    sequence: ["White","Yellow","Orange"],
+    answer: "Green",
+    options: ["Green","Black","Red","Blue"],
+    explanation: "Karate belt progression: White → Yellow → Orange → Green."
+  },
+  {
+    id: "sport-baseball-bases",
+    category: "Sports",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Home","First","Second"],
+    answer: "Third",
+    options: ["Third","Pitcher","Outfield","Dugout"],
+    explanation: "Baseball base running order: Home → First → Second → Third."
+  },
+  {
+    id: "sport-triathlon-events",
+    category: "Sports",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🏊","🚴"],
+    answer: "🏃",
+    options: ["🏃","🏇","⛷️","🤸"],
+    explanation: "Triathlon events in order: Swim 🏊 → Bike 🚴 → Run 🏃."
+  },
+  {
+    id: "sport-golf-par",
+    category: "Sports",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Eagle","Birdie","Par"],
+    answer: "Bogey",
+    options: ["Bogey","Hole-in-one","Albatross","Double Eagle"],
+    explanation: "Golf scores relative to par: Eagle (-2) → Birdie (-1) → Par (0) → Bogey (+1)."
+  },
+  {
+    id: "sport-chess-pieces-value",
+    category: "Sports",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Pawn (1)","Knight (3)","Bishop (3)"],
+    answer: "Rook (5)",
+    options: ["Rook (5)","Queen (9)","King (∞)","Pawn (2)"],
+    explanation: "Chess piece values: Pawn (1) → Knight (3) → Bishop (3) → Rook (5)."
+  },
+  {
+    id: "sport-soccer-positions",
+    category: "Sports",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Goalkeeper","Defender","Midfielder"],
+    answer: "Forward",
+    options: ["Forward","Referee","Coach","Substitute"],
+    explanation: "Soccer positions from back to front: Goalkeeper → Defender → Midfielder → Forward."
+  },
+  {
+    id: "sport-swimming-strokes",
+    category: "Sports",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Butterfly","Backstroke","Breaststroke"],
+    answer: "Freestyle",
+    options: ["Freestyle","Doggy Paddle","Sidestroke","Float"],
+    explanation: "Individual medley swimming order: Butterfly → Backstroke → Breaststroke → Freestyle."
+  },
+  // ─── Food ─────────────────────────────────────────
+  {
+    id: "food-courses-formal",
+    category: "Food",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🥗","🍜","🥩"],
+    answer: "🍰",
+    options: ["🍰","🥗","🍞","🧃"],
+    explanation: "Formal dinner courses: salad → soup → main course → dessert."
+  },
+  {
+    id: "food-spice-heat",
+    category: "Food",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🫑","🌶️","🌶️🌶️"],
+    answer: "🌶️🌶️🌶️",
+    options: ["🌶️🌶️🌶️","🍅","🥒","🧊"],
+    explanation: "Increasing spice levels: bell pepper (mild) → one chili → two chilies → three chilies (hot!)."
+  },
+  {
+    id: "food-coffee-strength",
+    category: "Food",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Decaf","Americano","Latte"],
+    answer: "Espresso",
+    options: ["Espresso","Water","Tea","Milk"],
+    explanation: "Coffee drinks by strength: Decaf → Americano → Latte → Espresso."
+  },
+  {
+    id: "food-bread-making",
+    category: "Food",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Mix","Knead","Rise"],
+    answer: "Bake",
+    options: ["Bake","Freeze","Fry","Grill"],
+    explanation: "Bread making steps: Mix ingredients → Knead dough → Let it Rise → Bake."
+  },
+  {
+    id: "food-egg-cooking",
+    category: "Food",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Raw","Soft-boiled","Medium-boiled"],
+    answer: "Hard-boiled",
+    options: ["Hard-boiled","Scrambled","Poached","Fried"],
+    explanation: "Egg doneness by cooking time: Raw → Soft-boiled → Medium-boiled → Hard-boiled."
+  },
+  {
+    id: "food-sushi-progression",
+    category: "Food",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🍚","🥢","🐟"],
+    answer: "🍣",
+    options: ["🍣","🍕","🍔","🌮"],
+    explanation: "Making sushi: rice → chopsticks → fish → sushi roll!"
+  },
+  {
+    id: "food-wine-colors",
+    category: "Food",
+    difficulty: 1,
+    type: "text",
+    sequence: ["White","Rosé"],
+    answer: "Red",
+    options: ["Red","Blue","Green","Purple"],
+    explanation: "Wine categories by color depth: White → Rosé → Red."
+  },
+  {
+    id: "food-pasta-sizes",
+    category: "Food",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Orzo","Penne","Rigatoni"],
+    answer: "Lasagna",
+    options: ["Lasagna","Angel Hair","Couscous","Rice"],
+    explanation: "Pasta types from smallest to largest: Orzo → Penne → Rigatoni → Lasagna sheets."
+  },
+  {
+    id: "food-fruit-seasons",
+    category: "Food",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🍓","🍑","🍎"],
+    answer: "🍊",
+    options: ["🍊","🍓","🍇","🍉"],
+    explanation: "Seasonal fruits: Strawberry (spring) → Peach (summer) → Apple (fall) → Orange (winter)."
+  },
+  {
+    id: "food-tea-oxidation",
+    category: "Food",
+    difficulty: 3,
+    type: "text",
+    sequence: ["White","Green","Oolong"],
+    answer: "Black",
+    options: ["Black","Herbal","Chamomile","Mint"],
+    explanation: "Tea types by oxidation level: White (least) → Green → Oolong → Black (most)."
+  },
+  {
+    id: "food-pizza-making",
+    category: "Food",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🫓","🍅","🧀"],
+    answer: "🍕",
+    options: ["🍕","🥖","🌮","🍝"],
+    explanation: "Making pizza: dough → tomato sauce → cheese → pizza is ready!"
+  },
+  // ─── Animals ──────────────────────────────────────
+  {
+    id: "animal-size-land",
+    category: "Animals",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🐜","🐁","🐈"],
+    answer: "🐕",
+    options: ["🐕","🦠","🐛","🐜"],
+    explanation: "Land animals by size: ant → mouse → cat → dog."
+  },
+  {
+    id: "animal-life-stages-butterfly",
+    category: "Animals",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🥚","🐛","🫘"],
+    answer: "🦋",
+    options: ["🦋","🐝","🐞","🪲"],
+    explanation: "Butterfly life cycle: egg → caterpillar → chrysalis → butterfly."
+  },
+  {
+    id: "animal-life-stages-frog",
+    category: "Animals",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🥚","〰️","🐸"],
+    answer: "🐸",
+    options: ["🐸","🐍","🦎","🐢"],
+    explanation: "Frog life cycle: egg → tadpole → froglet → adult frog."
+  },
+  {
+    id: "animal-fastest-land",
+    category: "Animals",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🐢","🐇","🐎"],
+    answer: "🐆",
+    options: ["🐆","🐌","🐘","🦥"],
+    explanation: "Animals by speed: turtle → rabbit → horse → cheetah (fastest land animal)."
+  },
+  {
+    id: "animal-ocean-size",
+    category: "Animals",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🦐","🐟","🐬"],
+    answer: "🐋",
+    options: ["🐋","🦑","🐙","🦀"],
+    explanation: "Ocean creatures by size: shrimp → fish → dolphin → whale."
+  },
+  {
+    id: "animal-domestication",
+    category: "Animals",
+    difficulty: 3,
+    type: "emoji",
+    sequence: ["🐕","🐑","🐄"],
+    answer: "🐔",
+    options: ["🐔","🦁","🐻","🦊"],
+    explanation: "Animals by approximate domestication order: dog → sheep → cattle → chicken."
+  },
+  {
+    id: "animal-bird-sizes",
+    category: "Animals",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🐦","🦆","🦢"],
+    answer: "🦅",
+    options: ["🦅","🐣","🐧","🦜"],
+    explanation: "Birds by size: sparrow → duck → swan → eagle."
+  },
+  {
+    id: "animal-predator-chain",
+    category: "Animals",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🌿","🐁","🐍"],
+    answer: "🦅",
+    options: ["🦅","🐜","🐛","🐸"],
+    explanation: "Food chain: grass → mouse → snake → eagle."
+  },
+  {
+    id: "animal-life-span",
+    category: "Animals",
+    difficulty: 3,
+    type: "emoji",
+    sequence: ["🪰","🐁","🐕"],
+    answer: "🐘",
+    options: ["🐘","🐈","🐇","🐓"],
+    explanation: "Animals by lifespan: fly (days) → mouse (2yr) → dog (13yr) → elephant (70yr)."
+  },
+  {
+    id: "animal-insect-to-mammal",
+    category: "Animals",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🐛","🐟","🦎"],
+    answer: "🐒",
+    options: ["🐒","🪱","🦠","🐚"],
+    explanation: "Increasing complexity: insect → fish → reptile → primate."
+  },
+  // ─── Music ────────────────────────────────────────
+  {
+    id: "music-note-values",
+    category: "Music",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Whole","Half","Quarter"],
+    answer: "Eighth",
+    options: ["Eighth","Third","Fifth","Double"],
+    explanation: "Musical note durations, each half the previous: Whole → Half → Quarter → Eighth."
+  },
+  {
+    id: "music-do-re-mi",
+    category: "Music",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Do","Re","Mi"],
+    answer: "Fa",
+    options: ["Fa","Sol","La","Ti"],
+    explanation: "Solfège scale: Do, Re, Mi, Fa, Sol, La, Ti, Do."
+  },
+  {
+    id: "music-instrument-families",
+    category: "Music",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Strings","Woodwinds","Brass"],
+    answer: "Percussion",
+    options: ["Percussion","Electronic","Vocals","Piano"],
+    explanation: "Orchestra instrument families: Strings → Woodwinds → Brass → Percussion."
+  },
+  {
+    id: "music-volume-levels",
+    category: "Music",
+    difficulty: 2,
+    type: "text",
+    sequence: ["pianissimo","piano","mezzo-piano"],
+    answer: "mezzo-forte",
+    options: ["mezzo-forte","fortissimo","forte","sforzando"],
+    explanation: "Musical dynamics from quiet to loud: pp → p → mp → mf."
+  },
+  {
+    id: "music-decades-genres",
+    category: "Music",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Jazz (1920s)","Rock (1960s)","Disco (1970s)"],
+    answer: "Hip-Hop (1980s)",
+    options: ["Hip-Hop (1980s)","Classical (1990s)","Opera (2000s)","Blues (1980s)"],
+    explanation: "Dominant music genres by decade: Jazz → Rock → Disco → Hip-Hop."
+  },
+  {
+    id: "music-string-instruments",
+    category: "Music",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Violin","Viola","Cello"],
+    answer: "Double Bass",
+    options: ["Double Bass","Guitar","Harp","Banjo"],
+    explanation: "String family from highest to lowest pitch: Violin → Viola → Cello → Double Bass."
+  },
+  {
+    id: "music-band-formation",
+    category: "Music",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🎸","🥁","🎤"],
+    answer: "🎵",
+    options: ["🎵","🎹","📻","📢"],
+    explanation: "Forming a band: guitar → drums → vocals → music! A band makes music together."
+  },
+  {
+    id: "music-crescendo",
+    category: "Music",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔈","🔉","🔊"],
+    answer: "📢",
+    options: ["📢","🔇","🔕","🔈"],
+    explanation: "Getting louder (crescendo): quiet → medium → loud → maximum volume."
+  },
+  // ─── Math & Numbers ───────────────────────────────
+  {
+    id: "math-square-numbers",
+    category: "Math & Numbers",
+    difficulty: 1,
+    type: "text",
+    sequence: ["1","4","9","16"],
+    answer: "25",
+    options: ["25","20","24","36"],
+    explanation: "Perfect squares: 1², 2², 3², 4², 5² = 1, 4, 9, 16, 25."
+  },
+  {
+    id: "math-cube-numbers",
+    category: "Math & Numbers",
+    difficulty: 2,
+    type: "text",
+    sequence: ["1","8","27"],
+    answer: "64",
+    options: ["64","36","81","100"],
+    explanation: "Perfect cubes: 1³=1, 2³=8, 3³=27, 4³=64."
+  },
+  {
+    id: "math-triangular-numbers",
+    category: "Math & Numbers",
+    difficulty: 2,
+    type: "text",
+    sequence: ["1","3","6","10"],
+    answer: "15",
+    options: ["15","12","14","20"],
+    explanation: "Triangular numbers: 1, 3, 6, 10, 15. Each adds one more than the previous gap."
+  },
+  {
+    id: "math-powers-of-ten",
+    category: "Math & Numbers",
+    difficulty: 1,
+    type: "text",
+    sequence: ["10","100","1000"],
+    answer: "10000",
+    options: ["10000","5000","10001","2000"],
+    explanation: "Powers of 10: 10¹, 10², 10³, 10⁴ = 10, 100, 1000, 10000."
+  },
+  {
+    id: "math-negative-countdown",
+    category: "Math & Numbers",
+    difficulty: 1,
+    type: "text",
+    sequence: ["3","2","1","0"],
+    answer: "-1",
+    options: ["-1","-2","00","0.5"],
+    explanation: "Counting down by 1: 3, 2, 1, 0, -1."
+  },
+  {
+    id: "math-fractions-halving",
+    category: "Math & Numbers",
+    difficulty: 2,
+    type: "text",
+    sequence: ["1","1/2","1/4"],
+    answer: "1/8",
+    options: ["1/8","1/3","1/6","1/16"],
+    explanation: "Each fraction is half the previous: 1 → 1/2 → 1/4 → 1/8."
+  },
+  {
+    id: "math-pi-digits",
+    category: "Math & Numbers",
+    difficulty: 3,
+    type: "text",
+    sequence: ["3","1","4","1"],
+    answer: "5",
+    options: ["5","6","2","9"],
+    explanation: "Digits of Pi: 3.1415926... The fifth digit is 5."
+  },
+  {
+    id: "math-double-sequence",
+    category: "Math & Numbers",
+    difficulty: 1,
+    type: "text",
+    sequence: ["3","6","12","24"],
+    answer: "48",
+    options: ["48","36","30","42"],
+    explanation: "Each number doubles: 3 × 2 = 6, 6 × 2 = 12, 12 × 2 = 24, 24 × 2 = 48."
+  },
+  {
+    id: "math-multiples-of-seven",
+    category: "Math & Numbers",
+    difficulty: 1,
+    type: "text",
+    sequence: ["7","14","21"],
+    answer: "28",
+    options: ["28","27","35","30"],
+    explanation: "Multiples of 7: 7, 14, 21, 28."
+  },
+  {
+    id: "math-fibonacci-extended",
+    category: "Math & Numbers",
+    difficulty: 2,
+    type: "text",
+    sequence: ["5","8","13","21"],
+    answer: "34",
+    options: ["34","29","32","40"],
+    explanation: "Fibonacci sequence: each number is the sum of the two before. 13+21=34."
+  },
+  {
+    id: "math-roman-large",
+    category: "Math & Numbers",
+    difficulty: 3,
+    type: "text",
+    sequence: ["L","C","D"],
+    answer: "M",
+    options: ["M","X","E","G"],
+    explanation: "Large Roman numerals: L (50), C (100), D (500), M (1000)."
+  },
+  {
+    id: "math-alternating-sign",
+    category: "Math & Numbers",
+    difficulty: 2,
+    type: "text",
+    sequence: ["1","-2","3","-4"],
+    answer: "5",
+    options: ["5","-5","4","6"],
+    explanation: "Alternating sign pattern: +1, -2, +3, -4, +5. Absolute values increase, signs alternate."
+  },
+  {
+    id: "math-primes-extended",
+    category: "Math & Numbers",
+    difficulty: 2,
+    type: "text",
+    sequence: ["11","13","17","19"],
+    answer: "23",
+    options: ["23","21","25","27"],
+    explanation: "Prime numbers after 10: 11, 13, 17, 19, 23. Each is divisible only by 1 and itself."
+  },
+  // ─── Logic Sequences ──────────────────────────────
+  {
+    id: "logic-mirror-letters",
+    category: "Logic Sequences",
+    difficulty: 3,
+    type: "text",
+    sequence: ["AZ","BY","CX"],
+    answer: "DW",
+    options: ["DW","DE","EV","DA"],
+    explanation: "First letter goes forward A→B→C→D, second goes backward Z→Y→X→W."
+  },
+  {
+    id: "logic-skip-one-letter",
+    category: "Logic Sequences",
+    difficulty: 1,
+    type: "text",
+    sequence: ["A","C","E","G"],
+    answer: "I",
+    options: ["I","H","J","F"],
+    explanation: "Every other letter of the alphabet: A, C, E, G, I (skipping B, D, F, H)."
+  },
+  {
+    id: "logic-double-letters",
+    category: "Logic Sequences",
+    difficulty: 2,
+    type: "text",
+    sequence: ["AA","BB","CC"],
+    answer: "DD",
+    options: ["DD","EE","AB","CD"],
+    explanation: "Each letter doubled in alphabetical order: AA → BB → CC → DD."
+  },
+  {
+    id: "logic-reverse-countdown",
+    category: "Logic Sequences",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Z","Y","X","W"],
+    answer: "V",
+    options: ["V","U","A","T"],
+    explanation: "Alphabet in reverse: Z → Y → X → W → V."
+  },
+  {
+    id: "logic-shape-sides",
+    category: "Logic Sequences",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Triangle","Square","Pentagon"],
+    answer: "Hexagon",
+    options: ["Hexagon","Circle","Octagon","Rectangle"],
+    explanation: "Polygons with increasing sides: Triangle (3) → Square (4) → Pentagon (5) → Hexagon (6)."
+  },
+  {
+    id: "logic-multiply-three",
+    category: "Logic Sequences",
+    difficulty: 2,
+    type: "text",
+    sequence: ["2","6","18"],
+    answer: "54",
+    options: ["54","36","48","72"],
+    explanation: "Each number is multiplied by 3: 2 × 3 = 6, 6 × 3 = 18, 18 × 3 = 54."
+  },
+  {
+    id: "logic-add-increasing",
+    category: "Logic Sequences",
+    difficulty: 2,
+    type: "text",
+    sequence: ["2","3","5","8"],
+    answer: "12",
+    options: ["12","11","13","10"],
+    explanation: "Add increasing amounts: +1, +2, +3, +4. So 2→3→5→8→12."
+  },
+  {
+    id: "logic-binary-count",
+    category: "Logic Sequences",
+    difficulty: 3,
+    type: "text",
+    sequence: ["001","010","011"],
+    answer: "100",
+    options: ["100","110","101","111"],
+    explanation: "Binary counting: 001 (1), 010 (2), 011 (3), 100 (4)."
+  },
+  {
+    id: "logic-vowel-consonant",
+    category: "Logic Sequences",
+    difficulty: 2,
+    type: "text",
+    sequence: ["A","B","E","F"],
+    answer: "I",
+    options: ["I","G","H","J"],
+    explanation: "Alternating vowels and consonants (first of each): A, B, E, F, I."
+  },
+  {
+    id: "logic-compound-pattern",
+    category: "Logic Sequences",
+    difficulty: 3,
+    type: "text",
+    sequence: ["1A","2B","3C"],
+    answer: "4D",
+    options: ["4D","5E","3D","4C"],
+    explanation: "Numbers increment (1,2,3,4) and letters increment (A,B,C,D): 1A → 2B → 3C → 4D."
+  },
+  // ─── General Knowledge ────────────────────────────
+  {
+    id: "gk-days-of-week",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Monday","Tuesday","Wednesday"],
+    answer: "Thursday",
+    options: ["Thursday","Friday","Sunday","Saturday"],
+    explanation: "Days of the week: Monday → Tuesday → Wednesday → Thursday."
+  },
+  {
+    id: "gk-months-year",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "text",
+    sequence: ["January","February","March"],
+    answer: "April",
+    options: ["April","May","June","December"],
+    explanation: "Months in order: January → February → March → April."
+  },
+  {
+    id: "gk-zodiac-signs",
+    category: "General Knowledge",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Aries","Taurus","Gemini"],
+    answer: "Cancer",
+    options: ["Cancer","Leo","Virgo","Pisces"],
+    explanation: "Zodiac signs in order: Aries → Taurus → Gemini → Cancer."
+  },
+  {
+    id: "gk-playing-cards",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Jack","Queen","King"],
+    answer: "Ace",
+    options: ["Ace","Joker","10","2"],
+    explanation: "Playing card face values: Jack → Queen → King → Ace."
+  },
+  {
+    id: "gk-decades",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "text",
+    sequence: ["1980s","1990s","2000s"],
+    answer: "2010s",
+    options: ["2010s","2020s","1970s","2050s"],
+    explanation: "Consecutive decades: 1980s → 1990s → 2000s → 2010s."
+  },
+  {
+    id: "gk-life-stages",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["👶","🧒","🧑"],
+    answer: "🧓",
+    options: ["🧓","👶","🧒","🦴"],
+    explanation: "Human life stages: baby → child → adult → elderly."
+  },
+  {
+    id: "gk-meal-times",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Breakfast","Lunch"],
+    answer: "Dinner",
+    options: ["Dinner","Brunch","Snack","Midnight Feast"],
+    explanation: "Daily meals in order: Breakfast → Lunch → Dinner."
+  },
+  {
+    id: "gk-education-levels",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Elementary","Middle School","High School"],
+    answer: "College",
+    options: ["College","Preschool","Daycare","Kindergarten"],
+    explanation: "Education progression: Elementary → Middle School → High School → College."
+  },
+  {
+    id: "gk-time-units",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Second","Minute","Hour"],
+    answer: "Day",
+    options: ["Day","Week","Month","Millisecond"],
+    explanation: "Time units from smallest to largest: Second → Minute → Hour → Day."
+  },
+  {
+    id: "gk-counting-fingers",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["☝️","✌️","🤟"],
+    answer: "🖐️",
+    options: ["🖐️","👊","👋","👍"],
+    explanation: "Counting on fingers: one ☝️ → two ✌️ → three 🤟 → five (open hand) 🖐️."
+  },
+  // ─── Emoji Sequences ──────────────────────────────
+  {
+    id: "emoji-morning-routine",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["⏰","🚿","👔"],
+    answer: "🚗",
+    options: ["🚗","😴","🍳","🛏️"],
+    explanation: "Morning routine: alarm → shower → get dressed → drive to work."
+  },
+  {
+    id: "emoji-cooking-process",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🛒","🔪","🍳"],
+    answer: "🍽️",
+    options: ["🍽️","🗑️","🛒","🔥"],
+    explanation: "Cooking process: shop → chop → cook → serve/eat."
+  },
+  {
+    id: "emoji-plant-growth",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🌧️","🌱","🌿"],
+    answer: "🌻",
+    options: ["🌻","🍂","🌵","🪨"],
+    explanation: "Plant growth: rain → sprout → leaves → flower."
+  },
+  {
+    id: "emoji-space-journey",
+    category: "Emoji Sequences",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🌍","🚀","🌙"],
+    answer: "⭐",
+    options: ["⭐","🌍","☀️","🛸"],
+    explanation: "Space journey: Earth → launch → Moon → stars (going further into space)."
+  },
+  {
+    id: "emoji-weather-day",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🌅","☀️","🌤️"],
+    answer: "🌆",
+    options: ["🌆","🌃","⛈️","🌅"],
+    explanation: "A day's weather: sunrise → sunny → partly cloudy → sunset."
+  },
+  {
+    id: "emoji-birthday-party",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🎈","🎂","🕯️"],
+    answer: "🎉",
+    options: ["🎉","😢","🎈","🍕"],
+    explanation: "Birthday party: balloons → cake → blow candles → celebration!"
+  },
+  {
+    id: "emoji-movie-night",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🎬","🍿","📺"],
+    answer: "😴",
+    options: ["😴","🎮","📖","🎬"],
+    explanation: "Movie night: pick a movie → popcorn → watch → fall asleep."
+  },
+  {
+    id: "emoji-workout",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🏋️","🏃","💦"],
+    answer: "💪",
+    options: ["💪","🍕","😴","🛋️"],
+    explanation: "Workout routine: lift weights → run → sweat → get strong!"
+  },
+  {
+    id: "emoji-rainy-day",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["☁️","🌧️","☂️"],
+    answer: "🌈",
+    options: ["🌈","⛈️","❄️","☁️"],
+    explanation: "Rainy day sequence: clouds → rain → umbrella → rainbow appears after."
+  },
+  // ─── Colors & Patterns ────────────────────────────
+  {
+    id: "color-traffic-light",
+    category: "Colors & Patterns",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔴","🟡"],
+    answer: "🟢",
+    options: ["🟢","🔵","🟠","⚫"],
+    explanation: "Traffic light sequence: Red (stop) → Yellow (caution) → Green (go)."
+  },
+  {
+    id: "color-mixing-primary",
+    category: "Colors & Patterns",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Red + Blue = Purple","Red + Yellow = Orange"],
+    answer: "Blue + Yellow = Green",
+    options: ["Blue + Yellow = Green","Red + Green = Brown","Blue + Red = Pink","Yellow + Green = Lime"],
+    explanation: "Primary color mixing: Red+Blue=Purple, Red+Yellow=Orange, Blue+Yellow=Green."
+  },
+  {
+    id: "color-greyscale",
+    category: "Colors & Patterns",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["⬛","🩶"],
+    answer: "⬜",
+    options: ["⬜","🟦","🟥","🟫"],
+    explanation: "Greyscale from dark to light: Black → Grey → White."
+  },
+  {
+    id: "color-complementary",
+    category: "Colors & Patterns",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Red↔Green","Blue↔Orange"],
+    answer: "Yellow↔Purple",
+    options: ["Yellow↔Purple","Red↔Blue","Green↔Orange","White↔Black"],
+    explanation: "Complementary color pairs: Red↔Green, Blue↔Orange, Yellow↔Purple."
+  },
+  {
+    id: "color-pattern-repeat",
+    category: "Colors & Patterns",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔴","🔵","🔴","🔵"],
+    answer: "🔴",
+    options: ["🔴","🔵","🟡","🟢"],
+    explanation: "Simple alternating pattern: Red, Blue, Red, Blue, Red..."
+  },
+  {
+    id: "color-pattern-triple",
+    category: "Colors & Patterns",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🔴","🟡","🔵","🔴","🟡"],
+    answer: "🔵",
+    options: ["🔵","🔴","🟡","🟢"],
+    explanation: "Repeating pattern of three: Red, Yellow, Blue, Red, Yellow, Blue..."
+  },
+  // ─── Creative & Mixed ─────────────────────────────
+  {
+    id: "creative-story-arc",
+    category: "Creative & Mixed",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Setup","Conflict","Climax"],
+    answer: "Resolution",
+    options: ["Resolution","Sequel","Prologue","Epilogue"],
+    explanation: "Classic story structure: Setup → Conflict → Climax → Resolution."
+  },
+  {
+    id: "creative-art-supplies",
+    category: "Creative & Mixed",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["✏️","🖍️","🖌️"],
+    answer: "🎨",
+    options: ["🎨","📏","✂️","📐"],
+    explanation: "Art supplies progression: pencil sketch → crayon color → paint brush → palette (masterpiece)."
+  },
+  {
+    id: "creative-emotions-positive",
+    category: "Creative & Mixed",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["😐","🙂","😊"],
+    answer: "😄",
+    options: ["😄","😢","😡","😐"],
+    explanation: "Increasing happiness: neutral → slightly happy → happy → very happy."
+  },
+  {
+    id: "creative-seasons-activities",
+    category: "Creative & Mixed",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🌷","🏖️","🍁"],
+    answer: "⛷️",
+    options: ["⛷️","🎄","🌸","🏊"],
+    explanation: "Seasonal activities: spring flowers → summer beach → fall leaves → winter skiing."
+  },
+  {
+    id: "creative-house-building",
+    category: "Creative & Mixed",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["📐","🧱","🪵"],
+    answer: "🏠",
+    options: ["🏠","🏗️","🔨","🧰"],
+    explanation: "Building a house: blueprint → bricks → wood framing → finished house."
+  },
+  {
+    id: "creative-dream-to-reality",
+    category: "Creative & Mixed",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["💡","📝","🔨"],
+    answer: "🏆",
+    options: ["🏆","💤","💡","❌"],
+    explanation: "From idea to achievement: idea → plan → build → success."
+  },
+  // ─── Flags ────────────────────────────────────────
+  {
+    id: "flag-nordic-countries",
+    category: "Flags",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🇳🇴","🇸🇪","🇩🇰"],
+    answer: "🇫🇮",
+    options: ["🇫🇮","🇩🇪","🇵🇱","🇳🇱"],
+    explanation: "Nordic countries: Norway → Sweden → Denmark → Finland."
+  },
+  {
+    id: "flag-english-speaking",
+    category: "Flags",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🇺🇸","🇬🇧","🇦🇺"],
+    answer: "🇨🇦",
+    options: ["🇨🇦","🇫🇷","🇩🇪","🇯🇵"],
+    explanation: "Major English-speaking countries: USA → UK → Australia → Canada."
+  },
+  {
+    id: "flag-brics-nations",
+    category: "Flags",
+    difficulty: 3,
+    type: "emoji",
+    sequence: ["🇧🇷","🇷🇺","🇮🇳"],
+    answer: "🇨🇳",
+    options: ["🇨🇳","🇯🇵","🇰🇷","🇲🇽"],
+    explanation: "BRICS nations: Brazil → Russia → India → China → South Africa."
+  },
+  {
+    id: "flag-southeast-asia",
+    category: "Flags",
+    difficulty: 3,
+    type: "emoji",
+    sequence: ["🇹🇭","🇻🇳","🇲🇾"],
+    answer: "🇸🇬",
+    options: ["🇸🇬","🇨🇳","🇯🇵","🇰🇷"],
+    explanation: "Southeast Asian nations: Thailand → Vietnam → Malaysia → Singapore."
+  },
+  {
+    id: "flag-south-american",
+    category: "Flags",
+    difficulty: 2,
+    type: "emoji",
+    sequence: ["🇧🇷","🇦🇷","🇨🇱"],
+    answer: "🇨🇴",
+    options: ["🇨🇴","🇲🇽","🇪🇸","🇵🇹"],
+    explanation: "South American countries by population: Brazil → Argentina → Chile → Colombia."
+  },
+  // ─── Pop Culture ──────────────────────────────────
+  {
+    id: "pop-movie-ratings",
+    category: "Pop Culture",
+    difficulty: 1,
+    type: "text",
+    sequence: ["G","PG","PG-13"],
+    answer: "R",
+    options: ["R","NC-17","X","AA"],
+    explanation: "US movie ratings from least to most restrictive: G → PG → PG-13 → R."
+  },
+  {
+    id: "pop-social-media-actions",
+    category: "Pop Culture",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["📸","❤️","💬"],
+    answer: "🔄",
+    options: ["🔄","🗑️","📵","🔇"],
+    explanation: "Social media engagement: post photo → like → comment → share/repost."
+  },
+  {
+    id: "pop-gaming-levels",
+    category: "Pop Culture",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🟢","🟡","🟠"],
+    answer: "🔴",
+    options: ["🔴","🟣","⚫","⚪"],
+    explanation: "Game difficulty levels: Easy (green) → Medium (yellow) → Hard (orange) → Expert (red)."
+  },
+  {
+    id: "pop-streaming-evolution",
+    category: "Pop Culture",
+    difficulty: 2,
+    type: "text",
+    sequence: ["VHS","DVD","Blu-ray"],
+    answer: "Streaming",
+    options: ["Streaming","Betamax","LaserDisc","Film Reel"],
+    explanation: "Home entertainment evolution: VHS → DVD → Blu-ray → Streaming."
+  },
+  {
+    id: "pop-phone-evolution",
+    category: "Pop Culture",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["☎️","📟","📱"],
+    answer: "⌚",
+    options: ["⌚","📞","📺","💻"],
+    explanation: "Personal communication devices: rotary phone → pager → smartphone → smartwatch."
+  },
+  // ─── Visual & Spatial ─────────────────────────────
+  {
+    id: "visual-symmetry-shapes",
+    category: "Visual & Spatial",
+    difficulty: 1,
+    type: "text",
+    sequence: ["▲","■","⬠"],
+    answer: "⬡",
+    options: ["⬡","●","★","◆"],
+    explanation: "Shapes with increasing sides: triangle (3) → square (4) → pentagon (5) → hexagon (6)."
+  },
+  {
+    id: "visual-arrow-rotation",
+    category: "Visual & Spatial",
+    difficulty: 1,
+    type: "text",
+    sequence: ["→","↓","←"],
+    answer: "↑",
+    options: ["↑","↗","↙","⟳"],
+    explanation: "Arrow rotating 90° clockwise: right → down → left → up."
+  },
+  {
+    id: "visual-growing-dots",
+    category: "Visual & Spatial",
+    difficulty: 1,
+    type: "text",
+    sequence: ["·","··","···"],
+    answer: "····",
+    options: ["····","·····","··","·"],
+    explanation: "Adding one dot each time: 1 dot, 2 dots, 3 dots, 4 dots."
+  },
+  {
+    id: "visual-nesting-brackets",
+    category: "Visual & Spatial",
+    difficulty: 2,
+    type: "text",
+    sequence: ["()","(())","((()))"],
+    answer: "(((())))",
+    options: ["(((())))","()()","((()))","(()())"],
+    explanation: "Each step adds another layer of nesting: () → (()) → ((())) → (((())))."
+  },
+  {
+    id: "visual-size-emoji",
+    category: "Visual & Spatial",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🔹","🔷","💎"],
+    answer: "💠",
+    options: ["💠","🔸","🔹","⬛"],
+    explanation: "Diamond shapes getting larger: small diamond → medium diamond → gem → large diamond."
+  },
+  // ─── Letter & Word Patterns ───────────────────────
+  {
+    id: "letter-alphabet-groups",
+    category: "Letter & Word Patterns",
+    difficulty: 1,
+    type: "text",
+    sequence: ["ABC","DEF","GHI"],
+    answer: "JKL",
+    options: ["JKL","KLM","HIJ","MNO"],
+    explanation: "Alphabet in groups of 3: ABC, DEF, GHI, JKL."
+  },
+  {
+    id: "letter-word-length",
+    category: "Letter & Word Patterns",
+    difficulty: 1,
+    type: "text",
+    sequence: ["I","am","the"],
+    answer: "best",
+    options: ["best","go","a","me"],
+    explanation: "Words with increasing letter count: I (1) → am (2) → the (3) → best (4)."
+  },
+  {
+    id: "letter-palindrome-growth",
+    category: "Letter & Word Patterns",
+    difficulty: 3,
+    type: "text",
+    sequence: ["a","aba","abcba"],
+    answer: "abcdcba",
+    options: ["abcdcba","abcba","abcabc","aabbcc"],
+    explanation: "Growing palindromes: a → aba → abcba → abcdcba. Each adds a new letter in the center."
+  },
+  {
+    id: "letter-consonant-sequence",
+    category: "Letter & Word Patterns",
+    difficulty: 2,
+    type: "text",
+    sequence: ["B","C","D","F"],
+    answer: "G",
+    options: ["G","E","H","J"],
+    explanation: "Consonants in order, skipping vowels: B, C, D, F, G."
+  },
+  {
+    id: "letter-double-word",
+    category: "Letter & Word Patterns",
+    difficulty: 2,
+    type: "text",
+    sequence: ["AA","BB","CC","DD"],
+    answer: "EE",
+    options: ["EE","FF","AB","DE"],
+    explanation: "Double-letter pairs in alphabetical order: AA → BB → CC → DD → EE."
+  },
+  // ─── Geography ────────────────────────────────────
+  {
+    id: "geo-time-zones",
+    category: "Geography",
+    difficulty: 2,
+    type: "text",
+    sequence: ["UTC-5 (New York)","UTC+0 (London)","UTC+3 (Moscow)"],
+    answer: "UTC+8 (Beijing)",
+    options: ["UTC+8 (Beijing)","UTC-8 (LA)","UTC+1 (Paris)","UTC+12 (Auckland)"],
+    explanation: "Major cities moving east through time zones: New York → London → Moscow → Beijing."
+  },
+  // ─── History ──────────────────────────────────────
+  {
+    id: "hist-industrial-inventions",
+    category: "History",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Steam Engine","Telegraph","Telephone"],
+    answer: "Radio",
+    options: ["Radio","Wheel","Printing Press","Compass"],
+    explanation: "Major inventions of the industrial era: Steam Engine → Telegraph → Telephone → Radio."
+  },
+  // ─── Technology ───────────────────────────────────
+  {
+    id: "tech-coding-concepts",
+    category: "Technology",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Variable","Function","Class"],
+    answer: "Module",
+    options: ["Module","Bit","Pixel","Wire"],
+    explanation: "Programming concepts by abstraction level: Variable → Function → Class → Module."
+  },
+  // ─── Science ──────────────────────────────────────
+  {
+    id: "sci-planet-types",
+    category: "Science",
+    difficulty: 2,
+    type: "text",
+    sequence: ["Mercury (rocky)","Jupiter (gas giant)","Uranus (ice giant)"],
+    answer: "Sun (star)",
+    options: ["Sun (star)","Moon (satellite)","Pluto (dwarf)","Ceres (asteroid)"],
+    explanation: "Celestial body types by size: rocky planet → gas giant → ice giant → star."
+  },
+  // ─── General Knowledge ────────────────────────────
+  {
+    id: "gk-coin-values",
+    category: "General Knowledge",
+    difficulty: 1,
+    type: "text",
+    sequence: ["Penny","Nickel","Dime"],
+    answer: "Quarter",
+    options: ["Quarter","Dollar","Half Dollar","Cent"],
+    explanation: "US coins by value: Penny (1¢) → Nickel (5¢) → Dime (10¢) → Quarter (25¢)."
+  },
+  // ─── Emoji Sequences ──────────────────────────────
+  {
+    id: "emoji-bedtime-routine",
+    category: "Emoji Sequences",
+    difficulty: 1,
+    type: "emoji",
+    sequence: ["🦷","📖","🛏️"],
+    answer: "😴",
+    options: ["😴","☀️","🏃","📱"],
+    explanation: "Bedtime routine: brush teeth → read a book → get in bed → sleep."
+  },
+  // ─── Music ────────────────────────────────────────
+  {
+    id: "music-tempo-terms",
+    category: "Music",
+    difficulty: 3,
+    type: "text",
+    sequence: ["Largo","Adagio","Andante"],
+    answer: "Allegro",
+    options: ["Allegro","Presto","Forte","Piano"],
+    explanation: "Musical tempo markings from slow to fast: Largo → Adagio → Andante → Allegro."
+  },
 ];
