@@ -45,13 +45,20 @@ function calculateScore(correct, timeMs) {
   return Math.round(base + speedBonus);
 }
 
-/** Initialize WebSocket server on the existing HTTP server. */
+/**
+ * Initialize WebSocket server on the existing HTTP server.
+ *
+ * @param {import('http').Server} server - The HTTP server to attach to.
+ * @param {Function} [isReady] - Optional callback returning true when the server
+ *   is ready to accept connections. When provided and returning false, incoming
+ *   WebSocket connections are closed with code 4503 ("Server not ready").
+ */
 function initWebSocket(server, isReady) {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws, req) => {
     // Reject connections when DB is not ready (Azure self-init in progress)
-    if (isReady && !isReady()) {
+    if (typeof isReady === 'function' && !isReady()) {
       ws.close(4503, 'Server not ready');
       return;
     }

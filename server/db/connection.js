@@ -29,7 +29,16 @@ function isSqliteLockError(err) {
     err.code === 'SQLITE_BUSY_SNAPSHOT';
 }
 
-/** Get the database instance (lazy init). */
+/**
+ * Get the singleton database instance (lazy init).
+ *
+ * @param {Object} [options] - Optional configuration for the connection.
+ * @param {number} [options.busyTimeout=30000] - SQLite busy timeout in milliseconds.
+ *   Configures the `busy_timeout` pragma used to wait for locked database
+ *   operations before failing with SQLITE_BUSY/SQLITE_LOCKED. Non-numeric
+ *   values are ignored and fall back to the default.
+ * @returns {import('better-sqlite3').Database} The initialized Database instance.
+ */
 function getDb({ busyTimeout = 30000 } = {}) {
   if (_draining && !db) {
     throw new Error('Database is not available — waiting for initialization');
