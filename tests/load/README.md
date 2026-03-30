@@ -56,6 +56,12 @@ npm run test:load:all
 
 ## Running Against Staging
 
+> **Warning:** These load tests create **persistent data** in the target environment
+> (e.g. users, scores, match rooms). The `cleanupUserPool` helper only deletes the
+> local `.user-pool.json` file and **does not** remove any data from the target
+> database. Only run against a disposable or easily resettable staging environment,
+> and coordinate with your team before running against shared or long-lived systems.
+
 Set the `LOAD_TEST_TARGET` environment variable:
 
 ```bash
@@ -76,6 +82,7 @@ set LOAD_TEST_TARGET=https://your-staging-url.com && npx artillery run tests/loa
 |---|---|---|
 | `LOAD_TEST_TARGET` | `http://localhost:3000` | Server URL to test against |
 | `LOAD_TEST_USER_COUNT` | `20` | Number of users to pre-register in setup phase |
+| `LOAD_TEST_SETUP_TIMEOUT_MS` | `300000` (5 min) | Max time for user pool setup before aborting |
 
 ## Test Scenarios
 
