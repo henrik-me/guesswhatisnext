@@ -183,6 +183,20 @@ jobs:
               --username ${{ vars.GHCR_USERNAME }} \
               --password ${{ secrets.GHCR_PAT }}
 
+      - name: Stop old revisions before deploy
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "Deactivating all revisions to release SMB file locks..."
+            az containerapp revision list --name gwn-staging --resource-group gwn-rg \
+              --query "[].name" -o tsv | while read -r rev; do
+              echo "Deactivating: $rev"
+              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
+                --revision "$rev" || true
+            done
+            echo "Waiting for SMB locks to release..."
+            sleep 30
+
       - name: Deploy to staging Container App
         uses: azure/cli@v2
         with:
@@ -222,17 +236,6 @@ jobs:
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
-
-      - name: Deactivate old revisions
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            LATEST=$(az containerapp show --name gwn-staging --resource-group gwn-rg --query "properties.latestRevisionName" -o tsv)
-            echo "Latest revision: $LATEST"
-            az containerapp revision list --name gwn-staging --resource-group gwn-rg --query "[?name!='$LATEST'].name" -o tsv | while read -r rev; do
-              echo "Deactivating old revision: $rev"
-              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg --revision "$rev" || true
-            done
 
       - name: Wait for deployment to stabilize
         run: sleep 90
