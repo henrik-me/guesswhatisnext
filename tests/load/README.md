@@ -10,6 +10,10 @@ Artillery is installed as a dev dependency. From the project root:
 npm install          # installs artillery along with other dev deps
 ```
 
+> **Note:** Artillery v2.0.30+ requires **Node.js >= 22.13.0**. The load tests
+> will not run on older Node versions. The rest of the project works with
+> Node.js v18+, but load testing requires v22+.
+
 Alternatively, install Artillery globally:
 
 ```bash

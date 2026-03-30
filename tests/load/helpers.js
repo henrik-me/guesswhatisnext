@@ -33,6 +33,7 @@ function httpRequest(baseUrl, method, urlPath, body, headers = {}) {
       path: url.pathname + url.search,
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
+      timeout: 10000,
     };
 
     if (url.port) {
@@ -51,6 +52,10 @@ function httpRequest(baseUrl, method, urlPath, body, headers = {}) {
       });
     });
 
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error(`Request timeout: ${method} ${urlPath}`));
+    });
     req.on('error', reject);
     if (body) req.write(JSON.stringify(body));
     req.end();
@@ -145,8 +150,9 @@ function assignUser(context, _events, done) {
     cachedPool = loadUserPool();
   }
   if (cachedPool.length === 0) {
-    console.error('[assignUser] No users in pool — run setupUsers first or check LOAD_TEST_TARGET');
-    return done();
+    const err = new Error('[assignUser] No users in pool — run setupUsers first or check LOAD_TEST_TARGET');
+    console.error(err.message);
+    return done(err);
   }
   const user = cachedPool[poolIndex % cachedPool.length];
   poolIndex++;
