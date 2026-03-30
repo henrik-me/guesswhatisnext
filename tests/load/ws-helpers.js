@@ -35,8 +35,8 @@ async function registerAndGetToken(context, _events, done) {
     const maxRetries = 3;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       counter++;
-      const id = `${Date.now()}-${counter}-${Math.random().toString(36).slice(2, 8)}`;
-      const username = `wsload_${id}`;
+      const id = Date.now().toString(36) + counter.toString(36);
+      const username = `w${id}`.slice(0, 20);
       const password = 'LoadTest123!';
 
       const res = await httpRequest(baseUrl, 'POST', '/api/auth/register', {
@@ -52,8 +52,10 @@ async function registerAndGetToken(context, _events, done) {
       }
 
       if (res.statusCode === 429) {
-        console.error(`[ws] Rate limited on registration, retry ${attempt + 1}/${maxRetries}...`);
-        await new Promise((r) => setTimeout(r, 5000));
+        // Rate limit window is 60s; wait long enough to clear it
+        const retryAfter = 61000;
+        console.error(`[ws] Rate limited, waiting ${retryAfter / 1000}s (retry ${attempt + 1}/${maxRetries})...`);
+        await new Promise((r) => setTimeout(r, retryAfter));
         continue;
       }
 

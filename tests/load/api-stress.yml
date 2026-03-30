@@ -42,6 +42,10 @@ scenarios:
           capture:
             - json: "$.token"
               as: "token"
+          expect:
+            - statusCode:
+                - 201
+                - 429
       - think: 1
 
   - name: "Score submission burst"

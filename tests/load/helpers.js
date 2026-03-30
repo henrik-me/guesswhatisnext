@@ -20,6 +20,16 @@ let poolIndex = 0;
 let userCounter = 0;
 
 /**
+ * Generate a short unique username that fits the server's 3-20 character limit.
+ * Uses base36 timestamp + counter for uniqueness.
+ */
+function makeUsername(prefix) {
+  userCounter++;
+  const id = Date.now().toString(36) + userCounter.toString(36);
+  return `${prefix}${id}`.slice(0, 20);
+}
+
+/**
  * Make an HTTP request and return parsed JSON.
  */
 function httpRequest(baseUrl, method, urlPath, body, headers = {}) {
@@ -105,8 +115,7 @@ async function setupUsers(context, _events, done) {
     const targetCount = batchEnd;
 
     while (pool.length < targetCount) {
-      userCounter++;
-      const username = `load_${Date.now()}_${userCounter}`;
+      const username = makeUsername('l');
       const password = 'LoadTest123!';
 
       try {
@@ -116,7 +125,7 @@ async function setupUsers(context, _events, done) {
         });
 
         if (res.statusCode === 201 && res.body.token) {
-          pool.push({ username, password, token: res.body.token });
+          pool.push({ username, token: res.body.token });
         } else if (res.statusCode === 429) {
           console.log(`[setup] Rate limited at ${pool.length} users, waiting for window reset...`);
           await new Promise((r) => setTimeout(r, windowMs));
@@ -134,8 +143,8 @@ async function setupUsers(context, _events, done) {
     }
   }
 
-  // Persist to file so scenario workers can load it
-  fs.writeFileSync(USER_POOL_FILE, JSON.stringify(pool, null, 2));
+  // Persist tokens only (not passwords) with restrictive permissions
+  fs.writeFileSync(USER_POOL_FILE, JSON.stringify(pool, null, 2), { mode: 0o600 });
   console.log(`[setup] Registered ${pool.length} users, saved to ${USER_POOL_FILE}`);
   if (typeof done === 'function') return done();
 }
@@ -157,7 +166,6 @@ function assignUser(context, _events, done) {
   const user = cachedPool[poolIndex % cachedPool.length];
   poolIndex++;
   context.vars.username = user.username;
-  context.vars.password = user.password;
   context.vars.token = user.token;
   return done();
 }
@@ -166,9 +174,7 @@ function assignUser(context, _events, done) {
  * Generate a unique username for auth-specific testing scenarios.
  */
 function generateUniqueUser(context, _events, done) {
-  userCounter++;
-  const id = `${Date.now()}-${userCounter}-${Math.random().toString(36).slice(2, 8)}`;
-  context.vars.username = `load_${id}`;
+  context.vars.username = makeUsername('t');
   context.vars.password = 'LoadTest123!';
   return done();
 }
