@@ -1,13 +1,12 @@
 name: Deploy to Staging
 
 on:
-  # Auto-deploy on push disabled — trigger manually via workflow_dispatch
-  # push:
-  #   branches: [main]
-  #   paths-ignore:
-  #     - '**.md'
-  #     - 'docs/**'
-  #     - 'LICENSE'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
   workflow_dispatch: {}
 
 concurrency:
@@ -25,6 +24,7 @@ permissions:
 jobs:
   build-and-push:
     name: Build & Push Docker Image
+    if: github.event_name == 'workflow_dispatch' || vars.STAGING_AUTO_DEPLOY != 'false'
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.sha }}

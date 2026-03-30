@@ -219,19 +219,24 @@ function createServer() {
         console.log(`📦 Database self-initialized on attempt ${selfInitAttempt}`);
       } catch (err) {
         closeDb();
-        setDraining(true);
-        draining = true;
         dbInitialized = false;
         if (!isSqliteLockError(err)) {
+          // Non-retryable error: put the app into draining mode until manual intervention.
+          setDraining(true);
+          draining = true;
           console.error(`❌ Self-init failed with non-retryable error: ${err.message}`);
           console.error('Call POST /api/admin/init-db after fixing the underlying issue.');
         } else if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
+          // Retryable SQLite lock error: keep serving non-DB traffic and retry later.
           console.warn(
             `⏳ Self-init attempt ${selfInitAttempt}/${SELF_INIT_MAX_ATTEMPTS} failed: ${err.message}. ` +
             `Retrying in ${SELF_INIT_INTERVAL_MS / 1000}s...`
           );
           setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
         } else {
+          // Retries exhausted: mark the app as draining and require manual init.
+          setDraining(true);
+          draining = true;
           console.error(
             `❌ Self-init failed after ${SELF_INIT_MAX_ATTEMPTS} attempts. ` +
             'Call POST /api/admin/init-db to initialize manually.'
