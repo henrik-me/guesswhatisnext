@@ -38,12 +38,12 @@ test.describe('Daily Challenge', () => {
     await page.click('[data-action="next-round"]');
     await expect(page.locator('[data-screen="gameover"]')).toHaveClass(/active/, { timeout: 5_000 });
 
-    // Go back home, then try daily again
-    await page.locator('[data-screen="gameover"] [data-action="go-home"]').click();
-    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
-    await page.click('[data-action="start-daily"]');
+    // Reload the page (daily lock is persisted in localStorage)
+    await page.reload();
+    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/, { timeout: 5_000 });
 
-    // Should show the locked daily screen (reuses gameover screen)
+    // Try daily again — should show locked screen
+    await page.click('[data-action="start-daily"]');
     await expect(page.locator('[data-screen="gameover"]')).toHaveClass(/active/, { timeout: 5_000 });
     await expect(page.locator('[data-screen="gameover"] .gameover-title')).toHaveText(
       "Today's Challenge Complete!"
