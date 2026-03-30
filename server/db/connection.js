@@ -66,7 +66,8 @@ function getDb({ busyTimeout = 30000 } = {}) {
       }
     }
     db.pragma(isAzure ? 'journal_mode = DELETE' : 'journal_mode = WAL');
-    db.pragma(`busy_timeout = ${busyTimeout}`);
+    const bt = parseInt(busyTimeout, 10);
+    db.pragma(`busy_timeout = ${Number.isNaN(bt) ? 30000 : Math.max(0, bt)}`);
     db.pragma('foreign_keys = ON');
     if (isAzure && process.env.GWN_EXCLUSIVE_LOCKING !== 'false') {
       // Azure Files (SMB) handles file locking poorly — the normal SQLite
