@@ -1060,7 +1060,7 @@ export const puzzles = [
     type: "text",
     sequence: ["Sputnik 1957","Gagarin 1961","Apollo 11 1969"],
     answer: "Skylab 1973",
-    options: ["Skylab 1973","Hubble 1980","ISS 1965","Viking 1960"],
+    options: ["Skylab 1973","Hubble 1990","ISS 1998","Viking 1976"],
     explanation: "Space race milestones: Sputnik → Gagarin → Moon landing → Skylab space station."
   },
   {
@@ -1221,7 +1221,7 @@ export const puzzles = [
     type: "text",
     sequence: ["Deep Blue 1997","Watson 2011","AlphaGo 2016"],
     answer: "ChatGPT 2022",
-    options: ["ChatGPT 2022","Siri 2005","Alexa 2000","Cortana 2010"],
+    options: ["ChatGPT 2022","Siri 2011","Alexa 2014","Cortana 2014"],
     explanation: "AI milestones: Deep Blue beat chess → Watson beat Jeopardy → AlphaGo beat Go → ChatGPT launched."
   },
   // ─── Art & Design ─────────────────────────────────

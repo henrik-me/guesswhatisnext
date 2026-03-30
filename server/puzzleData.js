@@ -3116,10 +3116,10 @@ module.exports = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Antarctic","Sahara","Arabian"],
-    answer: "Gobi",
-    options: ["Gobi","Mojave","Kalahari","Atacama"],
-    explanation: "Largest deserts by area: Antarctic → Sahara → Arabian → Gobi."
+    sequence: ["Sahara","Arabian","Gobi"],
+    answer: "Kalahari",
+    options: ["Kalahari","Mojave","Gobi","Atacama"],
+    explanation: "Largest hot deserts by area: Sahara → Arabian → Gobi → Kalahari."
   },
   {
     id: "geo-flag-tricolor-vert",
@@ -3199,7 +3199,7 @@ module.exports = [
     type: "text",
     sequence: ["Sputnik 1957","Gagarin 1961","Apollo 11 1969"],
     answer: "Skylab 1973",
-    options: ["Skylab 1973","Hubble 1980","ISS 1965","Viking 1960"],
+    options: ["Skylab 1973","Hubble 1990","ISS 1998","Viking 1976"],
     explanation: "Space race milestones: Sputnik → Gagarin → Moon landing → Skylab space station."
   },
   {
@@ -3289,7 +3289,7 @@ module.exports = [
     type: "text",
     sequence: ["NATO formed 1949","Korean War 1950","Cuban Missile Crisis 1962"],
     answer: "Moon Landing 1969",
-    options: ["Moon Landing 1969","Vietnam War 1945","Berlin Wall 1940","Sputnik 1970"],
+    options: ["Moon Landing 1969","Vietnam War 1955","Berlin Wall 1961","Sputnik 1957"],
     explanation: "Cold War milestones: NATO → Korean War → Cuban Missile Crisis → Moon Landing."
   },
   {
@@ -3450,7 +3450,7 @@ module.exports = [
     type: "text",
     sequence: ["Deep Blue 1997","Watson 2011","AlphaGo 2016"],
     answer: "ChatGPT 2022",
-    options: ["ChatGPT 2022","Siri 2005","Alexa 2000","Cortana 2010"],
+    options: ["ChatGPT 2022","Siri 2011","Alexa 2014","Cortana 2014"],
     explanation: "AI milestones: Deep Blue beat chess → Watson beat Jeopardy → AlphaGo beat Go → ChatGPT launched."
   },
   {
@@ -3824,7 +3824,7 @@ module.exports = [
     sequence: ["Interphase","Prophase","Metaphase"],
     answer: "Anaphase",
     options: ["Anaphase","Telophase","Cytokinesis","G1 Phase"],
-    explanation: "Stages of mitosis: Interphase → Prophase → Metaphase → Anaphase → Telophase."
+    explanation: "Phases of the cell cycle during cell division: Interphase → Prophase → Metaphase → Anaphase → Telophase."
   },
   {
     id: "sci-electromagnetic-spectrum",
@@ -3924,7 +3924,7 @@ module.exports = [
     sequence: ["🔬","🧪","⚗️"],
     answer: "🧫",
     options: ["🧫","🔭","📐","🖩"],
-    explanation: "Laboratory equipment getting smaller: microscope → test tube → flask → petri dish."
+    explanation: "Common laboratory equipment: microscope, test tube, flask, then petri dish."
   },
   {
     id: "sci-newton-laws",
