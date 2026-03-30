@@ -104,25 +104,46 @@ function loadUserPool() {
  * so scenario workers can access the pool.
  */
 async function setupUsers(context, _events, done) {
+  const setupTimeoutMs =
+    parseInt(process.env.LOAD_TEST_SETUP_TIMEOUT_MS, 10) || 5 * 60 * 1000;
+
   // Acquire exclusive lock to prevent concurrent setup across processes
+  // Write PID+timestamp so stale locks can be detected
   let lockFd;
   try {
     lockFd = fs.openSync(LOCK_FILE, 'wx');
+    fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, ts: Date.now() }));
   } catch {
-    // Lock file exists — another process is running setup; wait for pool file
-    console.log('[setup] Another process is running setup, waiting for pool file...');
-    const waitStart = Date.now();
-    while (!fs.existsSync(USER_POOL_FILE) && Date.now() - waitStart < 5 * 60 * 1000) {
-      await new Promise((r) => setTimeout(r, 2000));
+    // Lock file exists — check if it's stale (owner process died)
+    try {
+      const lockData = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8'));
+      const lockAge = Date.now() - lockData.ts;
+      if (lockAge > setupTimeoutMs + 60000) {
+        console.log(`[setup] Stale lock detected (age: ${lockAge}ms), removing...`);
+        fs.unlinkSync(LOCK_FILE);
+        // Retry lock acquisition
+        lockFd = fs.openSync(LOCK_FILE, 'wx');
+        fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, ts: Date.now() }));
+      }
+    } catch {
+      // Couldn't read/remove stale lock — fall through to wait path
     }
-    if (!fs.existsSync(USER_POOL_FILE)) {
-      const err = new Error('[setup] Timed out waiting for pool file from another process');
-      console.error(err.message);
-      if (typeof done === 'function') return done(err);
-      throw err;
+
+    if (lockFd === undefined) {
+      console.log('[setup] Another process is running setup, waiting for pool file...');
+      const waitStart = Date.now();
+      while (!fs.existsSync(USER_POOL_FILE) && Date.now() - waitStart < setupTimeoutMs) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      if (!fs.existsSync(USER_POOL_FILE)) {
+        const err = new Error('[setup] Timed out waiting for pool file from another process');
+        console.error(err.message);
+        if (typeof done === 'function') return done(err);
+        throw err;
+      }
+      if (typeof done === 'function') return done();
+      return;
     }
-    if (typeof done === 'function') return done();
-    return;
   }
 
   try {
@@ -134,7 +155,8 @@ async function setupUsers(context, _events, done) {
     }
 
     const baseUrl = getBaseUrl(context);
-    const count = parseInt(process.env.LOAD_TEST_USER_COUNT, 10) || 20;
+    const parsed = parseInt(process.env.LOAD_TEST_USER_COUNT, 10);
+    const count = Number.isNaN(parsed) ? 20 : parsed;
 
     if (count < 1) {
       const err = new Error(`[setup] LOAD_TEST_USER_COUNT must be >= 1, got ${count}`);
@@ -145,8 +167,6 @@ async function setupUsers(context, _events, done) {
 
     const batchSize = 4; // stay under 5/min rate limit
     const windowMs = 61000; // slightly over 60s rate limit window
-    const maxDurationMs =
-      parseInt(process.env.LOAD_TEST_SETUP_TIMEOUT_MS, 10) || 5 * 60 * 1000;
     const maxAttempts = count * 10;
     const non429BackoffMs = 500;
     const startTime = Date.now();
@@ -185,9 +205,9 @@ async function setupUsers(context, _events, done) {
         }
 
         const elapsed = Date.now() - startTime;
-        if (elapsed > maxDurationMs) {
+        if (elapsed > setupTimeoutMs) {
           console.error(
-            `[setup] Aborting: exceeded max duration (${maxDurationMs}ms) with ${pool.length}/${count} users`,
+            `[setup] Aborting: exceeded max duration (${setupTimeoutMs}ms) with ${pool.length}/${count} users`,
           );
           shouldAbort = true;
         } else if (attempts >= maxAttempts && pool.length < count) {
