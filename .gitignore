@@ -35,6 +35,9 @@ build/
 # Test coverage
 coverage/
 
+# Load test artifacts
+tests/load/.user-pool.json
+
 # Logs
 logs/
 *.log

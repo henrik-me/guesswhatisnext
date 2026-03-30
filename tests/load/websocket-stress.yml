@@ -1,0 +1,58 @@
+config:
+  target: "{{ $processEnvironment.LOAD_TEST_TARGET || 'http://localhost:3000' }}"
+  phases:
+    - name: "Ramp up"
+      duration: 30
+      arrivalRate: 1
+      rampTo: 5
+    - name: "Sustained load"
+      duration: 60
+      arrivalRate: 5
+    - name: "Ramp down"
+      duration: 10
+      arrivalRate: 5
+      rampTo: 1
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  plugins:
+    ensure:
+      thresholds:
+        - http.response_time.p95: 500
+  processor: "./ws-helpers.js"
+
+scenarios:
+  - name: "WebSocket match flow"
+    engine: ws
+    flow:
+      - function: "registerAndGetToken"
+      - function: "createMatchRoom"
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 1
+      - send:
+          payload: '{"type":"join","roomCode":"{{ roomCode }}"}'
+      - think: 2
+      - send:
+          payload: '{"type":"answer","answerId":"opt-1","timeMs":1200}'
+      - think: 3
+      - send:
+          payload: '{"type":"answer","answerId":"opt-2","timeMs":800}'
+      - think: 3
+      - send:
+          payload: '{"type":"answer","answerId":"opt-1","timeMs":1500}'
+      - think: 2
+
+  - name: "WebSocket connect-disconnect cycle"
+    engine: ws
+    flow:
+      - function: "registerAndGetToken"
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 2
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 1
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 1
