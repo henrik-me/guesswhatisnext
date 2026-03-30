@@ -1485,7 +1485,7 @@ export const puzzles = [
     sequence: ["Interphase", "Prophase", "Metaphase"],
     answer: "Anaphase",
     options: ["Anaphase", "Telophase", "Cytokinesis", "G1 Phase"],
-    explanation: "Stages of mitosis: Interphase → Prophase → Metaphase → Anaphase → Telophase."
+    explanation: "Phases of the cell cycle during cell division: Interphase → Prophase → Metaphase → Anaphase → Telophase."
   },
   {
     id: "sci-taxonomy",
