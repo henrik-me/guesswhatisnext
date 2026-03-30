@@ -221,14 +221,6 @@ jobs:
             echo "current-revision=$CURRENT_REV" >> "$GITHUB_OUTPUT"
             echo "Current revision (rollback target): $CURRENT_REV"
 
-            # Get current revision's FQDN for drain call
-            if [ -n "$CURRENT_REV" ]; then
-              CURRENT_FQDN=$(az containerapp revision show --name gwn-staging --resource-group gwn-rg \
-                --revision "$CURRENT_REV" --query "properties.fqdn" -o tsv 2>/dev/null || echo "")
-              echo "current-fqdn=$CURRENT_FQDN" >> "$GITHUB_OUTPUT"
-              echo "Current revision FQDN: $CURRENT_FQDN"
-            fi
-
             # Deploy with YAML template (preserves volume mounts)
             SUFFIX="deploy-$(date +%s)"
             TEMPLATE_FILE=$(mktemp)
@@ -266,37 +258,15 @@ jobs:
               --min-replicas 1 \
               --yaml "$TEMPLATE_FILE"
 
-            # Get new revision name and FQDN
+            # Get new revision name
             NEW_REV=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
               --query "properties.latestRevisionName" -o tsv)
             echo "new-revision=$NEW_REV" >> "$GITHUB_OUTPUT"
 
-            NEW_FQDN=$(az containerapp revision show --name gwn-staging --resource-group gwn-rg \
-              --revision "$NEW_REV" --query "properties.fqdn" -o tsv)
-            echo "new-fqdn=$NEW_FQDN" >> "$GITHUB_OUTPUT"
-            echo "New revision: $NEW_REV (FQDN: $NEW_FQDN)"
+            echo "New revision: $NEW_REV"
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
-
-      - name: Wait for new revision to be ready (healthz)
-        run: |
-          NEW_FQDN="${{ steps.deploy.outputs.new-fqdn }}"
-          echo "Waiting for new revision at https://$NEW_FQDN/healthz ..."
-          for i in $(seq 1 30); do
-            STATUS=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 \
-              "https://$NEW_FQDN/healthz" || echo "000")
-            echo "  Attempt $i: $STATUS"
-            if [ "$STATUS" = "200" ]; then
-              echo "New revision is ready!"
-              break
-            fi
-            sleep 10
-          done
-          if [ "$STATUS" != "200" ]; then
-            echo "::error::New revision failed to become ready"
-            exit 1
-          fi
 
       - name: Switch traffic to new revision
         uses: azure/cli@v2
@@ -308,44 +278,37 @@ jobs:
               --name gwn-staging --resource-group gwn-rg \
               --revision-weight "$NEW_REV=100"
 
-      - name: Drain old revision DB connection
-        if: steps.deploy.outputs.current-fqdn != ''
-        run: |
-          CURRENT_FQDN="${{ steps.deploy.outputs.current-fqdn }}"
-          echo "Draining old revision at https://$CURRENT_FQDN ..."
-          for i in 1 2 3; do
-            RESPONSE=$(curl -sk -w '\n%{http_code}' --max-time 45 \
-              -X POST "https://$CURRENT_FQDN/api/admin/drain" \
-              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || echo -e "\n000")
-            HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
-            echo "Drain attempt $i: HTTP $HTTP_STATUS"
-            if [ "$HTTP_STATUS" = "200" ]; then
-              echo "Old revision drained successfully"
-              break
-            fi
-            sleep 5
-          done
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "::warning::Drain failed (HTTP $HTTP_STATUS) — proceeding anyway (old revision may be already stopped)"
-          fi
-          echo "Waiting for SMB lock release..."
-          sleep 10
+      - name: Deactivate old revisions (release SQLite lock)
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            echo "Deactivating all revisions except $NEW_REV to release SQLite file lock..."
+            az containerapp revision list --name gwn-staging --resource-group gwn-rg \
+              --query "[?properties.active && name != '$NEW_REV'].name" -o tsv | while read -r rev; do
+              echo "Deactivating: $rev"
+              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
+                --revision "$rev" || true
+            done
+            echo "Waiting for old replicas to shut down and release SMB lock..."
+            sleep 15
 
       - name: Initialize DB on new revision
         run: |
-          NEW_FQDN="${{ steps.deploy.outputs.new-fqdn }}"
-          echo "Initializing DB on new revision at https://$NEW_FQDN ..."
-          for i in 1 2 3 4 5; do
-            RESPONSE=$(curl -sk -w '\n%{http_code}' --max-time 30 \
-              -X POST "https://$NEW_FQDN/api/admin/init-db" \
+          STAGING_URL="${{ vars.STAGING_URL }}"
+          echo "Initializing DB via app URL: $STAGING_URL ..."
+          for i in 1 2 3 4 5 6 7 8; do
+            RESPONSE=$(curl -s -w '\n%{http_code}' --max-time 30 \
+              -X POST "$STAGING_URL/api/admin/init-db" \
               -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || echo -e "\n000")
             HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
-            echo "Init attempt $i: $HTTP_STATUS"
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "Init attempt $i: HTTP $HTTP_STATUS — $BODY"
             if [ "$HTTP_STATUS" = "200" ]; then
               echo "DB initialized successfully!"
               break
             fi
-            sleep 10
+            sleep 15
           done
           if [ "$HTTP_STATUS" != "200" ]; then
             echo "::error::Failed to initialize DB on new revision"
@@ -368,20 +331,6 @@ jobs:
           echo "::error::Staging health check failed after 5 attempts"
           exit 1
 
-      - name: Deactivate old revisions
-        if: success()
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
-            echo "Deactivating all revisions except $NEW_REV ..."
-            az containerapp revision list --name gwn-staging --resource-group gwn-rg \
-              --query "[?properties.active && name != '$NEW_REV'].name" -o tsv | while read -r rev; do
-              echo "Deactivating: $rev"
-              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
-                --revision "$rev" || true
-            done
-
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''
         uses: azure/cli@v2
@@ -392,17 +341,22 @@ jobs:
             # Reactivate old revision
             az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
               --revision "$CURRENT_REV" || true
+            # Deactivate failed new revision to release SQLite lock
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
+              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
+                --revision "$NEW_REV" || true
+              sleep 10
+            fi
             # Switch traffic back
             az containerapp ingress traffic set \
               --name gwn-staging --resource-group gwn-rg \
               --revision-weight "$CURRENT_REV=100" || true
-            # Try to re-init DB on old revision
-            CURRENT_FQDN="${{ steps.deploy.outputs.current-fqdn }}"
-            if [ -n "$CURRENT_FQDN" ]; then
-              curl -sk --max-time 30 -X POST \
-                "https://$CURRENT_FQDN/api/admin/init-db" \
-                -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || true
-            fi
+            # Try to re-init DB on old revision via app URL
+            sleep 10
+            curl -s --max-time 30 -X POST \
+              "${{ vars.STAGING_URL }}/api/admin/init-db" \
+              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || true
 
       - name: Tag deployment
         uses: azure/cli@v2
