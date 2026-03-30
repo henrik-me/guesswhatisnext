@@ -24,22 +24,31 @@ function getDb() {
     // Use DELETE journal mode in production/staging, WAL locally for performance.
     const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 
-    // Clean up stale WAL/SHM files before opening on Azure Files. A previous
-    // revision may have crashed while using WAL mode, leaving these artifacts
-    // on the SMB share. SQLite tries WAL recovery on open, which fails on SMB
-    // because shared memory doesn't work → SQLITE_BUSY. Removing them lets
-    // SQLite open the database cleanly in DELETE journal mode.
-    if (isAzure) {
-      for (const ext of ['-wal', '-shm']) {
-        const staleFile = DB_PATH + ext;
-        if (fs.existsSync(staleFile)) {
-          console.warn(`🧹 Removing stale WAL artifact: ${staleFile}`);
-          try { fs.unlinkSync(staleFile); } catch { /* best effort */ }
+    try {
+      db = new Database(DB_PATH);
+    } catch (openErr) {
+      const isLockError = openErr.code === 'SQLITE_BUSY' ||
+        openErr.code === 'SQLITE_LOCKED' ||
+        openErr.code === 'SQLITE_BUSY_SNAPSHOT';
+      if (isAzure && isLockError) {
+        // Previous revision may have left WAL/SHM artifacts on Azure Files (SMB).
+        // SQLite's WAL recovery requires shared memory which doesn't work on SMB.
+        for (const ext of ['-wal', '-shm']) {
+          const staleFile = DB_PATH + ext;
+          if (fs.existsSync(staleFile)) {
+            console.warn(`🧹 Removing stale WAL artifact after open failure (${openErr.code}): ${staleFile}`);
+            try {
+              fs.unlinkSync(staleFile);
+            } catch (unlinkErr) {
+              console.warn(`⚠️ Failed to remove ${staleFile}: ${unlinkErr.message}`);
+            }
+          }
         }
+        db = new Database(DB_PATH);
+      } else {
+        throw openErr;
       }
     }
-
-    db = new Database(DB_PATH);
     db.pragma(isAzure ? 'journal_mode = DELETE' : 'journal_mode = WAL');
     db.pragma('busy_timeout = 30000');
     db.pragma('foreign_keys = ON');

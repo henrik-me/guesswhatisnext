@@ -247,7 +247,6 @@ jobs:
         run: sleep 90
 
       - name: Verify staging deployment
-        id: healthcheck
         run: |
           for i in 1 2 3 4 5; do
             HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
@@ -260,7 +259,6 @@ jobs:
             fi
             sleep 20
           done
-          echo "healthy=false" >> "$GITHUB_OUTPUT"
           echo "::error::Staging health check failed after 5 attempts (last: $HTTP_STATUS)"
           exit 1
 
