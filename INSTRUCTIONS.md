@@ -474,44 +474,60 @@ Use **fixed-name worktree slots** (`wt-1` through `wt-4`) to avoid filesystem pe
 re-approval every time a new task starts. The branch name carries the task meaning —
 the folder name is just a stable slot.
 
+**Worktree root folder naming convention:**
+
+The worktree root folder is derived from the current working directory to ensure
+multiple clones of the same repo can coexist without collisions:
+
+```
+gwn_<suffix>-worktrees
+```
+
+Where `<suffix>` is the part of the current folder name *after* the repo name.
+
+| Clone folder | Repo name | Suffix | Worktree root |
+|---|---|---|---|
+| `guesswhatisnext` | `guesswhatisnext` | *(empty)* | `gwn-worktrees` |
+| `guesswhatisnext_copilot2` | `guesswhatisnext` | `_copilot2` | `gwn_copilot2-worktrees` |
+| `guesswhatisnext_test` | `guesswhatisnext` | `_test` | `gwn_test-worktrees` |
+
+This keeps each agent's worktrees isolated even when multiple Copilot sessions
+work on the same repo simultaneously.
+
 ```bash
 # One-time setup: create worktree directory alongside the main repo
-mkdir C:\src\gwn-worktrees
+# (replace <suffix> per the naming convention above)
+mkdir C:\src\gwn<suffix>-worktrees
 
 # Create fixed slots with task-specific branches
-git worktree add -b feat/puzzle-expansion C:\src\gwn-worktrees\wt-1 main
-git worktree add -b feat/azure-infra      C:\src\gwn-worktrees\wt-2 main
-git worktree add -b feat/mp-game-logic    C:\src\gwn-worktrees\wt-3 main
-git worktree add -b feat/mp-lobby-ui      C:\src\gwn-worktrees\wt-4 main
+git worktree add -b feat/puzzle-expansion C:\src\gwn<suffix>-worktrees\wt-1 main
+git worktree add -b feat/azure-infra      C:\src\gwn<suffix>-worktrees\wt-2 main
+git worktree add -b feat/mp-game-logic    C:\src\gwn<suffix>-worktrees\wt-3 main
+git worktree add -b feat/mp-lobby-ui      C:\src\gwn<suffix>-worktrees\wt-4 main
 
 # Check which slot has which branch
 git worktree list
-# C:/src/guesswhatisnext      main
-# C:/src/gwn-worktrees/wt-1   feat/puzzle-expansion
-# C:/src/gwn-worktrees/wt-2   feat/azure-infra
-# C:/src/gwn-worktrees/wt-3   feat/mp-game-logic
-# C:/src/gwn-worktrees/wt-4   feat/mp-lobby-ui
 ```
 
 **Recycling a slot for a new task:**
 ```bash
-cd C:\src\guesswhatisnext
+cd C:\src\guesswhatisnext<suffix>
 
 # Remove the old branch from the slot (keeps the folder)
-git worktree remove C:\src\gwn-worktrees\wt-1 --force
+git worktree remove C:\src\gwn<suffix>-worktrees\wt-1 --force
 git branch -d feat/old-task
 
 # Reassign the slot to a new branch
-git worktree add -b feat/new-task C:\src\gwn-worktrees\wt-1 main
+git worktree add -b feat/new-task C:\src\gwn<suffix>-worktrees\wt-1 main
 ```
 
 | Slot | Path | Port | Purpose |
 |---|---|---|---|
-| main | `C:\src\guesswhatisnext` | 3000 | Primary repo, sequential work |
-| wt-1 | `C:\src\gwn-worktrees\wt-1` | 3001 | Parallel agent slot 1 |
-| wt-2 | `C:\src\gwn-worktrees\wt-2` | 3002 | Parallel agent slot 2 |
-| wt-3 | `C:\src\gwn-worktrees\wt-3` | 3003 | Parallel agent slot 3 |
-| wt-4 | `C:\src\gwn-worktrees\wt-4` | 3004 | Parallel agent slot 4 |
+| main | `C:\src\guesswhatisnext<suffix>` | 3000 | Primary repo, sequential work |
+| wt-1 | `C:\src\gwn<suffix>-worktrees\wt-1` | 3001 | Parallel agent slot 1 |
+| wt-2 | `C:\src\gwn<suffix>-worktrees\wt-2` | 3002 | Parallel agent slot 2 |
+| wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Parallel agent slot 3 |
+| wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Parallel agent slot 4 |
 
 **2. Agent environment setup (each worktree):**
 
