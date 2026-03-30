@@ -330,13 +330,11 @@ jobs:
             echo "Revision is running — verifying DB initialization via application logs..."
             DB_CONFIRMED=0
             for i in $(seq 1 12); do
-              LOGS=$(az containerapp logs show \
+              if ! LOGS=$(az containerapp logs show \
                 --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" \
-                --type console --tail 100 2>&1)
-              LOG_EXIT=$?
-              if [ $LOG_EXIT -ne 0 ]; then
-                echo "Log query failed (exit $LOG_EXIT), retrying..."
+                --type console --tail 100 2>&1); then
+                echo "Log query failed, retrying..."
                 sleep 5
                 continue
               fi

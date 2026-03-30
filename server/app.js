@@ -246,7 +246,7 @@ function createServer() {
       process.exit(1);
     }
   }
-  initWebSocket(server);
+  initWebSocket(server, () => dbInitialized);
 
   return { app, server };
 }

@@ -46,10 +46,16 @@ function calculateScore(correct, timeMs) {
 }
 
 /** Initialize WebSocket server on the existing HTTP server. */
-function initWebSocket(server) {
+function initWebSocket(server, isReady) {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws, req) => {
+    // Reject connections when DB is not ready (Azure self-init in progress)
+    if (isReady && !isReady()) {
+      ws.close(4503, 'Server not ready');
+      return;
+    }
+
     // Authenticate via query param token
     const url = new URL(req.url, `http://${req.headers.host}`);
     const token = url.searchParams.get('token');
