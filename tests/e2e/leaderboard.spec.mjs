@@ -1,25 +1,10 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
+import { playOneRound } from './helpers.mjs';
 
 /** Generate a unique username for test isolation. */
 function uniqueUser() {
   return `lb${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-}
-
-/**
- * Play one round: click an option, wait for result, click next-round.
- * Returns true when game-over screen appears.
- */
-async function playOneRound(page) {
-  const option = page.locator('[data-screen="game"] .option-btn:not([disabled])').first();
-  await option.waitFor({ state: 'visible', timeout: 10_000 });
-  await option.click();
-  await expect(page.locator('[data-screen="result"]')).toHaveClass(/active/, { timeout: 5_000 });
-  await page.click('[data-action="next-round"]');
-  const gameOver = page.locator('[data-screen="gameover"].active');
-  const gameScreen = page.locator('[data-screen="game"].active');
-  await expect(gameScreen.or(gameOver)).toBeVisible({ timeout: 5_000 });
-  return gameOver.isVisible();
 }
 
 test.describe('Leaderboard', () => {
