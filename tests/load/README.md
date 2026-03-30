@@ -33,7 +33,7 @@ PORT=3000 node server/index.js
 ### 2. Run API stress test
 
 ```bash
-# Uses default target http://localhost:3000
+# Runs against http://localhost:3000 (default in config)
 npm run test:load
 
 # Or run directly
@@ -63,25 +63,26 @@ npm run test:load:all
 > database. Only run against a disposable or easily resettable staging environment,
 > and coordinate with your team before running against shared or long-lived systems.
 
-Set the `LOAD_TEST_TARGET` environment variable:
+Use Artillery's `--target` flag to override the default target URL:
 
 ```bash
+# Override target (cross-platform)
+npx artillery run tests/load/api-stress.yml --target https://your-staging-url.com
+
+# Or set LOAD_TEST_TARGET env var (used by JS helpers for user pool setup)
 # Linux/macOS
-LOAD_TEST_TARGET=https://your-staging-url.com npx artillery run tests/load/api-stress.yml
+LOAD_TEST_TARGET=https://your-staging-url.com npx artillery run tests/load/api-stress.yml --target https://your-staging-url.com
 
 # Windows PowerShell
 $env:LOAD_TEST_TARGET="https://your-staging-url.com"
-npx artillery run tests/load/api-stress.yml
-
-# Windows CMD
-set LOAD_TEST_TARGET=https://your-staging-url.com && npx artillery run tests/load/api-stress.yml
+npx artillery run tests/load/api-stress.yml --target https://your-staging-url.com
 ```
 
 ## Configuration
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `LOAD_TEST_TARGET` | `http://localhost:3000` | Server URL to test against |
+| `LOAD_TEST_TARGET` | `http://localhost:3000` | Server URL for JS helper HTTP calls (user pool setup). Use `--target` to also override Artillery's config target |
 | `LOAD_TEST_USER_COUNT` | `20` | Number of users to pre-register in setup phase |
 | `LOAD_TEST_SETUP_TIMEOUT_MS` | `300000` (5 min) | Max time for user pool setup before aborting |
 

@@ -1,5 +1,5 @@
 config:
-  target: "{{ $processEnvironment.LOAD_TEST_TARGET }}"
+  target: "http://localhost:3000"
   phases:
     - name: "Ramp up"
       duration: 30
