@@ -1,12 +1,13 @@
 name: Deploy to Staging
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
+  # Auto-deploy on push disabled — trigger manually via workflow_dispatch
+  # push:
+  #   branches: [main]
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'docs/**'
+  #     - 'LICENSE'
   workflow_dispatch: {}
 
 concurrency:
