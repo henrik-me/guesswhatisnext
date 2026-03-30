@@ -887,9 +887,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 1,
     type: "text",
-    sequence: ["Asia","Africa","North America"],
+    sequence: ["Asia", "Africa", "North America"],
     answer: "South America",
-    options: ["Europe","South America","Antarctica","Australia"],
+    options: ["Europe", "South America", "Antarctica", "Australia"],
     explanation: "Continents ordered by area from largest to smallest: Asia → Africa → N. America → S. America."
   },
   {
@@ -897,9 +897,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 1,
     type: "text",
-    sequence: ["North","East","South"],
+    sequence: ["North", "East", "South"],
     answer: "West",
-    options: ["West","Northeast","Down","Center"],
+    options: ["West", "Northeast", "Down", "Center"],
     explanation: "The four cardinal compass directions clockwise: North → East → South → West."
   },
   {
@@ -907,9 +907,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 1,
     type: "text",
-    sequence: ["Alabama","Alaska","Arizona"],
+    sequence: ["Alabama", "Alaska", "Arizona"],
     answer: "Arkansas",
-    options: ["Arkansas","California","Colorado","Connecticut"],
+    options: ["Arkansas", "California", "Colorado", "Connecticut"],
     explanation: "US states in alphabetical order: Alabama → Alaska → Arizona → Arkansas."
   },
   {
@@ -917,9 +917,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Paris","Berlin","Madrid"],
+    sequence: ["Paris", "Berlin", "Madrid"],
     answer: "Rome",
-    options: ["Rome","Milan","Barcelona","Munich"],
+    options: ["Rome", "Milan", "Barcelona", "Munich"],
     explanation: "Capital cities of France, Germany, Spain — next is Italy's capital: Rome."
   },
   {
@@ -927,9 +927,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Pacific","Atlantic","Indian"],
+    sequence: ["Pacific", "Atlantic", "Indian"],
     answer: "Southern",
-    options: ["Arctic","Southern","Mediterranean","Caribbean"],
+    options: ["Arctic", "Southern", "Mediterranean", "Caribbean"],
     explanation: "Oceans ordered by size: Pacific → Atlantic → Indian → Southern → Arctic."
   },
   {
@@ -937,9 +937,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Russia","Canada","USA"],
+    sequence: ["Russia", "Canada", "USA"],
     answer: "China",
-    options: ["India","China","Brazil","Australia"],
+    options: ["India", "China", "Brazil", "Australia"],
     explanation: "Largest countries by area: Russia → Canada → USA → China."
   },
   {
@@ -947,9 +947,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Tokyo","Beijing","Seoul"],
+    sequence: ["Tokyo", "Beijing", "Seoul"],
     answer: "Bangkok",
-    options: ["Bangkok","Shanghai","Osaka","Taipei"],
+    options: ["Bangkok", "Shanghai", "Osaka", "Taipei"],
     explanation: "Capital cities of Japan, China, South Korea — next is Thailand's capital: Bangkok."
   },
   {
@@ -957,9 +957,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Crust","Mantle","Outer Core"],
+    sequence: ["Crust", "Mantle", "Outer Core"],
     answer: "Inner Core",
-    options: ["Inner Core","Magma","Bedrock","Lithosphere"],
+    options: ["Inner Core", "Magma", "Bedrock", "Lithosphere"],
     explanation: "Earth's layers from outside in: Crust → Mantle → Outer Core → Inner Core."
   },
   {
@@ -967,9 +967,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["India","China","USA"],
+    sequence: ["India", "China", "USA"],
     answer: "Indonesia",
-    options: ["Indonesia","Brazil","Japan","Mexico"],
+    options: ["Indonesia", "Brazil", "Japan", "Mexico"],
     explanation: "Most populous countries: India → China → USA → Indonesia."
   },
   {
@@ -977,9 +977,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Nile","Amazon","Yangtze"],
+    sequence: ["Nile", "Amazon", "Yangtze"],
     answer: "Mississippi",
-    options: ["Mississippi","Thames","Danube","Rhine"],
+    options: ["Mississippi", "Thames", "Danube", "Rhine"],
     explanation: "World's longest rivers in order: Nile → Amazon → Yangtze → Mississippi."
   },
   {
@@ -987,9 +987,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Brasília","Buenos Aires","Santiago"],
+    sequence: ["Brasília", "Buenos Aires", "Santiago"],
     answer: "Lima",
-    options: ["Lima","São Paulo","Bogotá","Rio de Janeiro"],
+    options: ["Lima", "São Paulo", "Bogotá", "Rio de Janeiro"],
     explanation: "Capitals of Brazil, Argentina, Chile — next is Peru's capital: Lima."
   },
   {
@@ -997,9 +997,9 @@ export const puzzles = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Everest","K2","Kangchenjunga"],
+    sequence: ["Everest", "K2", "Kangchenjunga"],
     answer: "Lhotse",
-    options: ["Lhotse","Denali","Kilimanjaro","Mont Blanc"],
+    options: ["Lhotse", "Denali", "Kilimanjaro", "Mont Blanc"],
     explanation: "World's highest mountains: Everest → K2 → Kangchenjunga → Lhotse."
   },
   // ─── History ──────────────────────────────────────
@@ -1008,9 +1008,9 @@ export const puzzles = [
     category: "History",
     difficulty: 1,
     type: "text",
-    sequence: ["1914","1918","1939"],
+    sequence: ["1914", "1918", "1939"],
     answer: "1945",
-    options: ["1945","1950","1941","1942"],
+    options: ["1945", "1950", "1941", "1942"],
     explanation: "WWI: 1914–1918, WWII: 1939–1945. The pattern shows start/end dates of both world wars."
   },
   {
@@ -1018,9 +1018,9 @@ export const puzzles = [
     category: "History",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔥","🏹","⚙️"],
+    sequence: ["🔥", "🏹", "⚙️"],
     answer: "💡",
-    options: ["💡","🔥","🗡️","🏰"],
+    options: ["💡", "🔥", "🗡️", "🏰"],
     explanation: "Major inventions through history: fire → bow & arrow → mechanical wheel/gear → light bulb."
   },
   {
@@ -1028,9 +1028,9 @@ export const puzzles = [
     category: "History",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🐴","🚂","🚗"],
+    sequence: ["🐴", "🚂", "🚗"],
     answer: "✈️",
-    options: ["✈️","🚲","🛶","🐴"],
+    options: ["✈️", "🚲", "🛶", "🐴"],
     explanation: "Transportation evolution: horse → train → car → airplane."
   },
   {
@@ -1038,9 +1038,9 @@ export const puzzles = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Mesopotamia","Egypt","Greece"],
+    sequence: ["Mesopotamia", "Egypt", "Greece"],
     answer: "Rome",
-    options: ["Rome","Aztec","Viking","Mongol"],
+    options: ["Rome", "Aztec", "Viking", "Mongol"],
     explanation: "Major ancient civilizations in chronological order of rise: Mesopotamia → Egypt → Greece → Rome."
   },
   {
@@ -1048,9 +1048,9 @@ export const puzzles = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Washington","Adams","Jefferson"],
+    sequence: ["Washington", "Adams", "Jefferson"],
     answer: "Madison",
-    options: ["Madison","Monroe","Lincoln","Hamilton"],
+    options: ["Madison", "Monroe", "Lincoln", "Hamilton"],
     explanation: "First US presidents in order: Washington → Adams → Jefferson → Madison."
   },
   {
@@ -1058,9 +1058,9 @@ export const puzzles = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Sputnik 1957","Gagarin 1961","Apollo 11 1969"],
+    sequence: ["Sputnik 1957", "Gagarin 1961", "Apollo 11 1969"],
     answer: "Skylab 1973",
-    options: ["Skylab 1973","Hubble 1990","ISS 1998","Viking 1976"],
+    options: ["Skylab 1973", "Hubble 1990", "ISS 1998", "Viking 1976"],
     explanation: "Space race milestones: Sputnik → Gagarin → Moon landing → Skylab space station."
   },
   {
@@ -1068,9 +1068,9 @@ export const puzzles = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Renaissance","Reformation","Enlightenment"],
+    sequence: ["Renaissance", "Reformation", "Enlightenment"],
     answer: "Industrial Revolution",
-    options: ["Industrial Revolution","Dark Ages","Bronze Age","Cold War"],
+    options: ["Industrial Revolution", "Dark Ages", "Bronze Age", "Cold War"],
     explanation: "European historical periods: Renaissance → Reformation → Enlightenment → Industrial Revolution."
   },
   {
@@ -1078,9 +1078,9 @@ export const puzzles = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Stone Age","Bronze Age","Iron Age"],
+    sequence: ["Stone Age", "Bronze Age", "Iron Age"],
     answer: "Classical Age",
-    options: ["Classical Age","Digital Age","Space Age","Ice Age"],
+    options: ["Classical Age", "Digital Age", "Space Age", "Ice Age"],
     explanation: "Ages of human civilization: Stone → Bronze → Iron → Classical."
   },
   {
@@ -1088,9 +1088,9 @@ export const puzzles = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["Old Kingdom","Middle Kingdom","New Kingdom"],
+    sequence: ["Old Kingdom", "Middle Kingdom", "New Kingdom"],
     answer: "Late Period",
-    options: ["Late Period","Early Period","Bronze Age","Iron Age"],
+    options: ["Late Period", "Early Period", "Bronze Age", "Iron Age"],
     explanation: "Egyptian historical periods: Old Kingdom → Middle Kingdom → New Kingdom → Late Period."
   },
   {
@@ -1098,9 +1098,9 @@ export const puzzles = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["Kingdom","Republic","Empire"],
+    sequence: ["Kingdom", "Republic", "Empire"],
     answer: "Fall",
-    options: ["Fall","Democracy","Renaissance","Feudalism"],
+    options: ["Fall", "Democracy", "Renaissance", "Feudalism"],
     explanation: "Phases of Roman civilization: Kingdom → Republic → Empire → Fall (476 AD)."
   },
   {
@@ -1108,9 +1108,9 @@ export const puzzles = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["Cuneiform","Hieroglyphs","Greek Alphabet"],
+    sequence: ["Cuneiform", "Hieroglyphs", "Greek Alphabet"],
     answer: "Latin Alphabet",
-    options: ["Latin Alphabet","Binary","Morse Code","Braille"],
+    options: ["Latin Alphabet", "Binary", "Morse Code", "Braille"],
     explanation: "Writing systems in order of development: Cuneiform → Hieroglyphs → Greek → Latin alphabet."
   },
   // ─── Technology ───────────────────────────────────
@@ -1119,9 +1119,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 1,
     type: "emoji",
-    sequence: ["💾","💿","🔌"],
+    sequence: ["💾", "💿", "🔌"],
     answer: "☁️",
-    options: ["☁️","💾","📼","🖨️"],
+    options: ["☁️", "💾", "📼", "🖨️"],
     explanation: "Storage evolution: floppy disk → CD → USB drive → cloud storage."
   },
   {
@@ -1129,9 +1129,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 1,
     type: "text",
-    sequence: ["2G","3G","4G"],
+    sequence: ["2G", "3G", "4G"],
     answer: "5G",
-    options: ["5G","6G","4.5G","WiFi"],
+    options: ["5G", "6G", "4.5G", "WiFi"],
     explanation: "Mobile network generations: 2G → 3G → 4G → 5G."
   },
   {
@@ -1139,9 +1139,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 1,
     type: "text",
-    sequence: ["Byte","Kilobyte","Megabyte"],
+    sequence: ["Byte", "Kilobyte", "Megabyte"],
     answer: "Gigabyte",
-    options: ["Gigabyte","Terabyte","Bit","Nibble"],
+    options: ["Gigabyte", "Terabyte", "Bit", "Nibble"],
     explanation: "Data units in ascending order: Byte → Kilobyte → Megabyte → Gigabyte."
   },
   {
@@ -1149,9 +1149,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["Web 1.0","Web 2.0","Web 3.0"],
+    sequence: ["Web 1.0", "Web 2.0", "Web 3.0"],
     answer: "Web 4.0",
-    options: ["Web 4.0","Web 2.5","Web 5.0","Internet 2"],
+    options: ["Web 4.0", "Web 2.5", "Web 5.0", "Internet 2"],
     explanation: "Web evolution: static pages (1.0) → social/interactive (2.0) → decentralized (3.0) → AI-driven (4.0)."
   },
   {
@@ -1159,9 +1159,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["Machine Code","Assembly","C"],
+    sequence: ["Machine Code", "Assembly", "C"],
     answer: "Python",
-    options: ["Python","Binary","HTML","Punch Cards"],
+    options: ["Python", "Binary", "HTML", "Punch Cards"],
     explanation: "Programming language generations from low to high level: Machine Code → Assembly → C → Python."
   },
   {
@@ -1169,9 +1169,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["iPod","iPhone","iPad"],
+    sequence: ["iPod", "iPhone", "iPad"],
     answer: "Apple Watch",
-    options: ["Apple Watch","iMac","MacBook","iTunes"],
+    options: ["Apple Watch", "iMac", "MacBook", "iTunes"],
     explanation: "Apple's major product launches in order: iPod (2001) → iPhone (2007) → iPad (2010) → Apple Watch (2015)."
   },
   {
@@ -1179,9 +1179,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["MySpace","Facebook","Twitter"],
+    sequence: ["MySpace", "Facebook", "Twitter"],
     answer: "Instagram",
-    options: ["Instagram","Friendster","LinkedIn","AOL"],
+    options: ["Instagram", "Friendster", "LinkedIn", "AOL"],
     explanation: "Major social media platforms by launch: MySpace (2003) → Facebook (2004) → Twitter (2006) → Instagram (2010)."
   },
   {
@@ -1189,9 +1189,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["Atari","NES","PlayStation"],
+    sequence: ["Atari", "NES", "PlayStation"],
     answer: "Xbox",
-    options: ["Xbox","Sega","Commodore","Pong"],
+    options: ["Xbox", "Sega", "Commodore", "Pong"],
     explanation: "Landmark gaming consoles: Atari (1977) → NES (1985) → PlayStation (1994) → Xbox (2001)."
   },
   {
@@ -1199,9 +1199,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["480p","720p","1080p"],
+    sequence: ["480p", "720p", "1080p"],
     answer: "4K",
-    options: ["4K","8K","360p","HD"],
+    options: ["4K", "8K", "360p", "HD"],
     explanation: "Display resolution progression: 480p → 720p → 1080p → 4K (2160p)."
   },
   {
@@ -1209,9 +1209,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 3,
     type: "text",
-    sequence: ["HTTP","HTTPS","HTTP/2"],
+    sequence: ["HTTP", "HTTPS", "HTTP/2"],
     answer: "HTTP/3",
-    options: ["HTTP/3","HTTP/4","FTP","TCP"],
+    options: ["HTTP/3", "HTTP/4", "FTP", "TCP"],
     explanation: "Web protocol evolution: HTTP → HTTPS → HTTP/2 → HTTP/3 (QUIC)."
   },
   {
@@ -1219,9 +1219,9 @@ export const puzzles = [
     category: "Technology",
     difficulty: 3,
     type: "text",
-    sequence: ["Deep Blue 1997","Watson 2011","AlphaGo 2016"],
+    sequence: ["Deep Blue 1997", "Watson 2011", "AlphaGo 2016"],
     answer: "ChatGPT 2022",
-    options: ["ChatGPT 2022","Siri 2011","Alexa 2014","Cortana 2014"],
+    options: ["ChatGPT 2022", "Siri 2011", "Alexa 2014", "Cortana 2014"],
     explanation: "AI milestones: Deep Blue beat chess → Watson beat Jeopardy → AlphaGo beat Go → ChatGPT launched."
   },
   // ─── Art & Design ─────────────────────────────────
@@ -1230,9 +1230,9 @@ export const puzzles = [
     category: "Art & Design",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🔵"],
+    sequence: ["🔴", "🔵"],
     answer: "🟡",
-    options: ["🟡","🟢","🟠","🟣"],
+    options: ["🟡", "🟢", "🟠", "🟣"],
     explanation: "The three primary colors in traditional color theory: Red, Blue, Yellow."
   },
   {
@@ -1240,9 +1240,9 @@ export const puzzles = [
     category: "Art & Design",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🟠","🟡","🟢"],
+    sequence: ["🔴", "🟠", "🟡", "🟢"],
     answer: "🔵",
-    options: ["🔵","🟣","⚪","🟤"],
+    options: ["🔵", "🟣", "⚪", "🟤"],
     explanation: "Rainbow order (ROYGBIV): Red → Orange → Yellow → Green → Blue."
   },
   {
@@ -1250,9 +1250,9 @@ export const puzzles = [
     category: "Art & Design",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🟠"],
+    sequence: ["🔴", "🟠"],
     answer: "🟡",
-    options: ["🟡","🔵","🟣","🟤"],
+    options: ["🟡", "🔵", "🟣", "🟤"],
     explanation: "Warm colors on the color wheel progress: Red → Orange → Yellow."
   },
   {
@@ -1260,9 +1260,9 @@ export const puzzles = [
     category: "Art & Design",
     difficulty: 2,
     type: "text",
-    sequence: ["Renaissance","Baroque","Impressionism"],
+    sequence: ["Renaissance", "Baroque", "Impressionism"],
     answer: "Cubism",
-    options: ["Cubism","Gothic","Romanticism","Prehistoric"],
+    options: ["Cubism", "Gothic", "Romanticism", "Prehistoric"],
     explanation: "Art movements in chronological order: Renaissance → Baroque → Impressionism → Cubism."
   },
   {
@@ -1270,9 +1270,9 @@ export const puzzles = [
     category: "Art & Design",
     difficulty: 2,
     type: "text",
-    sequence: ["2H","H","HB"],
+    sequence: ["2H", "H", "HB"],
     answer: "B",
-    options: ["B","2B","F","3H"],
+    options: ["B", "2B", "F", "3H"],
     explanation: "Pencil hardness grades from hard to soft: 2H → H → HB → B."
   },
   {
@@ -1280,9 +1280,9 @@ export const puzzles = [
     category: "Art & Design",
     difficulty: 2,
     type: "text",
-    sequence: ["Da Vinci","Rembrandt","Monet"],
+    sequence: ["Da Vinci", "Rembrandt", "Monet"],
     answer: "Picasso",
-    options: ["Picasso","Michelangelo","Raphael","Vermeer"],
+    options: ["Picasso", "Michelangelo", "Raphael", "Vermeer"],
     explanation: "Famous painters in chronological order: Da Vinci (1500s) → Rembrandt (1600s) → Monet (1800s) → Picasso (1900s)."
   },
   {
@@ -1290,9 +1290,9 @@ export const puzzles = [
     category: "Art & Design",
     difficulty: 2,
     type: "emoji",
-    sequence: ["📷","🎞️","📸"],
+    sequence: ["📷", "🎞️", "📸"],
     answer: "🤳",
-    options: ["🤳","🖼️","🎨","📹"],
+    options: ["🤳", "🖼️", "🎨", "📹"],
     explanation: "Photography evolution: early camera → film camera → digital camera → selfie/smartphone camera."
   },
   {
@@ -1300,9 +1300,9 @@ export const puzzles = [
     category: "Art & Design",
     difficulty: 3,
     type: "text",
-    sequence: ["Greek Classical","Roman","Gothic"],
+    sequence: ["Greek Classical", "Roman", "Gothic"],
     answer: "Renaissance",
-    options: ["Renaissance","Prehistoric","Modern","Baroque"],
+    options: ["Renaissance", "Prehistoric", "Modern", "Baroque"],
     explanation: "Sculpture style evolution: Greek Classical → Roman → Gothic → Renaissance."
   },
   // ─── Language & Grammar ───────────────────────────
@@ -1311,9 +1311,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 1,
     type: "text",
-    sequence: ["A","E","I"],
+    sequence: ["A", "E", "I"],
     answer: "O",
-    options: ["O","U","B","Y"],
+    options: ["O", "U", "B", "Y"],
     explanation: "English vowels in order: A, E, I, O, U."
   },
   {
@@ -1321,9 +1321,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 1,
     type: "text",
-    sequence: ["Subject","Verb"],
+    sequence: ["Subject", "Verb"],
     answer: "Object",
-    options: ["Object","Adjective","Comma","Period"],
+    options: ["Object", "Adjective", "Comma", "Period"],
     explanation: "Basic English sentence structure: Subject → Verb → Object (SVO)."
   },
   {
@@ -1331,9 +1331,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 1,
     type: "text",
-    sequence: ["I","II","III"],
+    sequence: ["I", "II", "III"],
     answer: "IV",
-    options: ["IV","IIII","V","VI"],
+    options: ["IV", "IIII", "V", "VI"],
     explanation: "Roman numerals: I (1), II (2), III (3), IV (4)."
   },
   {
@@ -1341,9 +1341,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Past","Present"],
+    sequence: ["Past", "Present"],
     answer: "Future",
-    options: ["Future","Perfect","Pluperfect","Conditional"],
+    options: ["Future", "Perfect", "Pluperfect", "Conditional"],
     explanation: "The three basic tenses: Past → Present → Future."
   },
   {
@@ -1351,9 +1351,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Noun","Verb","Adjective"],
+    sequence: ["Noun", "Verb", "Adjective"],
     answer: "Adverb",
-    options: ["Adverb","Sentence","Paragraph","Syllable"],
+    options: ["Adverb", "Sentence", "Paragraph", "Syllable"],
     explanation: "Common parts of speech: Noun → Verb → Adjective → Adverb."
   },
   {
@@ -1361,9 +1361,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Alpha","Beta","Gamma"],
+    sequence: ["Alpha", "Beta", "Gamma"],
     answer: "Delta",
-    options: ["Delta","Epsilon","Omega","Sigma"],
+    options: ["Delta", "Epsilon", "Omega", "Sigma"],
     explanation: "First four letters of the Greek alphabet: Alpha → Beta → Gamma → Delta."
   },
   {
@@ -1371,9 +1371,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Alpha","Bravo","Charlie"],
+    sequence: ["Alpha", "Bravo", "Charlie"],
     answer: "Delta",
-    options: ["Delta","Echo","Dog","David"],
+    options: ["Delta", "Echo", "Dog", "David"],
     explanation: "NATO phonetic alphabet: Alpha → Bravo → Charlie → Delta."
   },
   {
@@ -1381,9 +1381,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Period","Comma","Semicolon"],
+    sequence: ["Period", "Comma", "Semicolon"],
     answer: "Colon",
-    options: ["Colon","Dash","Paragraph","Space"],
+    options: ["Colon", "Dash", "Paragraph", "Space"],
     explanation: "Common punctuation marks: Period → Comma → Semicolon → Colon."
   },
   {
@@ -1391,9 +1391,9 @@ export const puzzles = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["micro","milli","centi"],
+    sequence: ["micro", "milli", "centi"],
     answer: "deci",
-    options: ["deci","kilo","mega","nano"],
+    options: ["deci", "kilo", "mega", "nano"],
     explanation: "Metric prefixes from smallest to largest: micro → milli → centi → deci."
   },
   // ─── Science ──────────────────────────────────────
@@ -1402,9 +1402,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 1,
     type: "text",
-    sequence: ["Mercury","Venus","Earth"],
+    sequence: ["Mercury", "Venus", "Earth"],
     answer: "Mars",
-    options: ["Mars","Jupiter","Saturn","Moon"],
+    options: ["Mars", "Jupiter", "Saturn", "Moon"],
     explanation: "Planets from the Sun: Mercury → Venus → Earth → Mars."
   },
   {
@@ -1412,9 +1412,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 1,
     type: "text",
-    sequence: ["Solid","Liquid"],
+    sequence: ["Solid", "Liquid"],
     answer: "Gas",
-    options: ["Gas","Plasma","Vapor","Ice"],
+    options: ["Gas", "Plasma", "Vapor", "Ice"],
     explanation: "States of matter by increasing energy: Solid → Liquid → Gas."
   },
   {
@@ -1422,9 +1422,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 1,
     type: "text",
-    sequence: ["Question","Hypothesis","Experiment"],
+    sequence: ["Question", "Hypothesis", "Experiment"],
     answer: "Conclusion",
-    options: ["Conclusion","Guess","Theory","Law"],
+    options: ["Conclusion", "Guess", "Theory", "Law"],
     explanation: "The scientific method: Question → Hypothesis → Experiment → Conclusion."
   },
   {
@@ -1432,9 +1432,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Hydrogen","Helium","Lithium"],
+    sequence: ["Hydrogen", "Helium", "Lithium"],
     answer: "Beryllium",
-    options: ["Beryllium","Carbon","Boron","Nitrogen"],
+    options: ["Beryllium", "Carbon", "Boron", "Nitrogen"],
     explanation: "First elements of the periodic table: Hydrogen (1) → Helium (2) → Lithium (3) → Beryllium (4)."
   },
   {
@@ -1442,9 +1442,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Radio","Microwave","Infrared"],
+    sequence: ["Radio", "Microwave", "Infrared"],
     answer: "Visible Light",
-    options: ["Visible Light","X-ray","Gamma","Sound"],
+    options: ["Visible Light", "X-ray", "Gamma", "Sound"],
     explanation: "EM spectrum by wavelength: Radio → Microwave → Infrared → Visible Light."
   },
   {
@@ -1452,9 +1452,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Igneous","Sedimentary"],
+    sequence: ["Igneous", "Sedimentary"],
     answer: "Metamorphic",
-    options: ["Metamorphic","Calcium","Volcanic","Crystal"],
+    options: ["Metamorphic", "Calcium", "Volcanic", "Crystal"],
     explanation: "The three main rock types in the rock cycle: Igneous → Sedimentary → Metamorphic."
   },
   {
@@ -1462,9 +1462,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Skeletal","Muscular","Circulatory"],
+    sequence: ["Skeletal", "Muscular", "Circulatory"],
     answer: "Nervous",
-    options: ["Nervous","Battery","Mechanical","Digital"],
+    options: ["Nervous", "Battery", "Mechanical", "Digital"],
     explanation: "Major body systems: Skeletal → Muscular → Circulatory → Nervous."
   },
   {
@@ -1472,9 +1472,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Acid","Neutral"],
+    sequence: ["Acid", "Neutral"],
     answer: "Base",
-    options: ["Base","Salt","Water","Ion"],
+    options: ["Base", "Salt", "Water", "Ion"],
     explanation: "The pH scale goes from Acid (0-6) → Neutral (7) → Base (8-14)."
   },
   {
@@ -1482,9 +1482,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 3,
     type: "text",
-    sequence: ["Interphase","Prophase","Metaphase"],
+    sequence: ["Interphase", "Prophase", "Metaphase"],
     answer: "Anaphase",
-    options: ["Anaphase","Telophase","Cytokinesis","G1 Phase"],
+    options: ["Anaphase", "Telophase", "Cytokinesis", "G1 Phase"],
     explanation: "Stages of mitosis: Interphase → Prophase → Metaphase → Anaphase → Telophase."
   },
   {
@@ -1492,9 +1492,9 @@ export const puzzles = [
     category: "Science",
     difficulty: 3,
     type: "text",
-    sequence: ["Kingdom","Phylum","Class"],
+    sequence: ["Kingdom", "Phylum", "Class"],
     answer: "Order",
-    options: ["Order","Species","Domain","Genus"],
+    options: ["Order", "Species", "Domain", "Genus"],
     explanation: "Taxonomy hierarchy: Kingdom → Phylum → Class → Order → Family → Genus → Species."
   },
   // ─── Sports ───────────────────────────────────────
@@ -1503,9 +1503,9 @@ export const puzzles = [
     category: "Sports",
     difficulty: 1,
     type: "text",
-    sequence: ["100m","200m","400m"],
+    sequence: ["100m", "200m", "400m"],
     answer: "800m",
-    options: ["800m","500m","1000m","300m"],
+    options: ["800m", "500m", "1000m", "300m"],
     explanation: "Standard Olympic track events: 100m → 200m → 400m → 800m (each roughly doubling)."
   },
   {
@@ -1513,9 +1513,9 @@ export const puzzles = [
     category: "Sports",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥇","🥈"],
+    sequence: ["🥇", "🥈"],
     answer: "🥉",
-    options: ["🥉","🏅","🎖️","⭐"],
+    options: ["🥉", "🏅", "🎖️", "⭐"],
     explanation: "Olympic medal order: Gold 🥇 → Silver 🥈 → Bronze 🥉."
   },
   {
@@ -1523,9 +1523,9 @@ export const puzzles = [
     category: "Sports",
     difficulty: 1,
     type: "text",
-    sequence: ["Home","First","Second"],
+    sequence: ["Home", "First", "Second"],
     answer: "Third",
-    options: ["Third","Pitcher","Outfield","Dugout"],
+    options: ["Third", "Pitcher", "Outfield", "Dugout"],
     explanation: "Baseball base running order: Home → First → Second → Third."
   },
   {
@@ -1533,9 +1533,9 @@ export const puzzles = [
     category: "Sports",
     difficulty: 2,
     type: "text",
-    sequence: ["London 2012","Rio 2016","Tokyo 2020"],
+    sequence: ["London 2012", "Rio 2016", "Tokyo 2020"],
     answer: "Paris 2024",
-    options: ["Paris 2024","Beijing 2024","LA 2024","Sydney 2024"],
+    options: ["Paris 2024", "Beijing 2024", "LA 2024", "Sydney 2024"],
     explanation: "Recent Summer Olympic host cities: London → Rio → Tokyo → Paris."
   },
   {
@@ -1543,9 +1543,9 @@ export const puzzles = [
     category: "Sports",
     difficulty: 2,
     type: "text",
-    sequence: ["Australian Open","French Open","Wimbledon"],
+    sequence: ["Australian Open", "French Open", "Wimbledon"],
     answer: "US Open",
-    options: ["US Open","Indian Wells","ATP Finals","Davis Cup"],
+    options: ["US Open", "Indian Wells", "ATP Finals", "Davis Cup"],
     explanation: "Tennis Grand Slams in calendar order: Australian Open → French Open → Wimbledon → US Open."
   },
   {
@@ -1553,9 +1553,9 @@ export const puzzles = [
     category: "Sports",
     difficulty: 2,
     type: "text",
-    sequence: ["White","Yellow","Orange"],
+    sequence: ["White", "Yellow", "Orange"],
     answer: "Green",
-    options: ["Green","Black","Red","Blue"],
+    options: ["Green", "Black", "Red", "Blue"],
     explanation: "Karate belt progression: White → Yellow → Orange → Green."
   },
   {
@@ -1563,9 +1563,9 @@ export const puzzles = [
     category: "Sports",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🏊","🚴"],
+    sequence: ["🏊", "🚴"],
     answer: "🏃",
-    options: ["🏃","🏇","⛷️","🤸"],
+    options: ["🏃", "🏇", "⛷️", "🤸"],
     explanation: "Triathlon events in order: Swim 🏊 → Bike 🚴 → Run 🏃."
   },
   {
@@ -1573,9 +1573,9 @@ export const puzzles = [
     category: "Sports",
     difficulty: 3,
     type: "text",
-    sequence: ["Brazil 2014","Russia 2018","Qatar 2022"],
+    sequence: ["Brazil 2014", "Russia 2018", "Qatar 2022"],
     answer: "USA/Canada/Mexico 2026",
-    options: ["USA/Canada/Mexico 2026","Japan 2026","Australia 2026","England 2026"],
+    options: ["USA/Canada/Mexico 2026", "Japan 2026", "Australia 2026", "England 2026"],
     explanation: "Recent FIFA World Cup hosts: Brazil → Russia → Qatar → USA/Canada/Mexico."
   },
   // ─── Food ─────────────────────────────────────────
@@ -1584,9 +1584,9 @@ export const puzzles = [
     category: "Food",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥗","🍜","🥩"],
+    sequence: ["🥗", "🍜", "🥩"],
     answer: "🍰",
-    options: ["🍰","🥗","🍞","🧃"],
+    options: ["🍰", "🥗", "🍞", "🧃"],
     explanation: "Formal dinner courses: salad → soup → main course → dessert."
   },
   {
@@ -1594,9 +1594,9 @@ export const puzzles = [
     category: "Food",
     difficulty: 1,
     type: "text",
-    sequence: ["Mix","Knead","Rise"],
+    sequence: ["Mix", "Knead", "Rise"],
     answer: "Bake",
-    options: ["Bake","Freeze","Fry","Grill"],
+    options: ["Bake", "Freeze", "Fry", "Grill"],
     explanation: "Bread making steps: Mix ingredients → Knead dough → Let it Rise → Bake."
   },
   {
@@ -1604,9 +1604,9 @@ export const puzzles = [
     category: "Food",
     difficulty: 1,
     type: "text",
-    sequence: ["Raw","Soft-boiled","Medium-boiled"],
+    sequence: ["Raw", "Soft-boiled", "Medium-boiled"],
     answer: "Hard-boiled",
-    options: ["Hard-boiled","Scrambled","Poached","Fried"],
+    options: ["Hard-boiled", "Scrambled", "Poached", "Fried"],
     explanation: "Egg doneness by cooking time: Raw → Soft-boiled → Medium-boiled → Hard-boiled."
   },
   {
@@ -1614,9 +1614,9 @@ export const puzzles = [
     category: "Food",
     difficulty: 1,
     type: "text",
-    sequence: ["White","Rosé"],
+    sequence: ["White", "Rosé"],
     answer: "Red",
-    options: ["Red","Blue","Green","Purple"],
+    options: ["Red", "Blue", "Green", "Purple"],
     explanation: "Wine categories by color depth: White → Rosé → Red."
   },
   {
@@ -1624,9 +1624,9 @@ export const puzzles = [
     category: "Food",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🫑","🌶️","🌶️🌶️"],
+    sequence: ["🫑", "🌶️", "🌶️🌶️"],
     answer: "🌶️🌶️🌶️",
-    options: ["🌶️🌶️🌶️","🍅","🥒","🧊"],
+    options: ["🌶️🌶️🌶️", "🍅", "🥒", "🧊"],
     explanation: "Increasing spice levels: bell pepper (mild) → one chili → two chilies → three chilies (hot!)."
   },
   {
@@ -1634,9 +1634,9 @@ export const puzzles = [
     category: "Food",
     difficulty: 2,
     type: "text",
-    sequence: ["Decaf","Americano","Latte"],
+    sequence: ["Decaf", "Americano", "Latte"],
     answer: "Espresso",
-    options: ["Espresso","Water","Tea","Milk"],
+    options: ["Espresso", "Water", "Tea", "Milk"],
     explanation: "Coffee drinks by strength: Decaf → Americano → Latte → Espresso."
   },
   {
@@ -1644,9 +1644,9 @@ export const puzzles = [
     category: "Food",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🍚","🥢","🐟"],
+    sequence: ["🍚", "🥢", "🐟"],
     answer: "🍣",
-    options: ["🍣","🍕","🍔","🌮"],
+    options: ["🍣", "🍕", "🍔", "🌮"],
     explanation: "Making sushi: rice → chopsticks → fish → sushi roll!"
   },
   // ─── Animals ──────────────────────────────────────
@@ -1655,9 +1655,9 @@ export const puzzles = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🐜","🐁","🐈"],
+    sequence: ["🐜", "🐁", "🐈"],
     answer: "🐕",
-    options: ["🐕","🦠","🐛","🐜"],
+    options: ["🐕", "🦠", "🐛", "🐜"],
     explanation: "Land animals by size: ant → mouse → cat → dog."
   },
   {
@@ -1665,9 +1665,9 @@ export const puzzles = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥚","🐛","🫘"],
+    sequence: ["🥚", "🐛", "🫘"],
     answer: "🦋",
-    options: ["🦋","🐝","🐞","🪲"],
+    options: ["🦋", "🐝", "🐞", "🪲"],
     explanation: "Butterfly life cycle: egg → caterpillar → chrysalis → butterfly."
   },
   {
@@ -1675,9 +1675,9 @@ export const puzzles = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥚","〰️","🧒"],
+    sequence: ["🥚", "〰️", "🧒"],
     answer: "🐸",
-    options: ["🐸","🐍","🦎","🐢"],
+    options: ["🐸", "🐍", "🦎", "🐢"],
     explanation: "Frog life cycle: egg → tadpole → froglet → adult frog (🐸)."
   },
   {
@@ -1685,9 +1685,9 @@ export const puzzles = [
     category: "Animals",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🐢","🐇","🐎"],
+    sequence: ["🐢", "🐇", "🐎"],
     answer: "🐆",
-    options: ["🐆","🐌","🐘","🦥"],
+    options: ["🐆", "🐌", "🐘", "🦥"],
     explanation: "Animals by speed: turtle → rabbit → horse → cheetah (fastest land animal)."
   },
   {
@@ -1695,9 +1695,9 @@ export const puzzles = [
     category: "Animals",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🦐","🐟","🐬"],
+    sequence: ["🦐", "🐟", "🐬"],
     answer: "🐋",
-    options: ["🐋","🦑","🐙","🦀"],
+    options: ["🐋", "🦑", "🐙", "🦀"],
     explanation: "Ocean creatures by size: shrimp → fish → dolphin → whale."
   },
   {
@@ -1705,9 +1705,9 @@ export const puzzles = [
     category: "Animals",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🐦","🦆","🦢"],
+    sequence: ["🐦", "🦆", "🦢"],
     answer: "🦅",
-    options: ["🦅","🐣","🐧","🦜"],
+    options: ["🦅", "🐣", "🐧", "🦜"],
     explanation: "Birds by size: sparrow → duck → swan → eagle."
   },
   // ─── Music ────────────────────────────────────────
@@ -1716,9 +1716,9 @@ export const puzzles = [
     category: "Music",
     difficulty: 1,
     type: "text",
-    sequence: ["Do","Re","Mi"],
+    sequence: ["Do", "Re", "Mi"],
     answer: "Fa",
-    options: ["Fa","Sol","La","Ti"],
+    options: ["Fa", "Sol", "La", "Ti"],
     explanation: "Solfège scale: Do, Re, Mi, Fa, Sol, La, Ti, Do."
   },
   {
@@ -1726,9 +1726,9 @@ export const puzzles = [
     category: "Music",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🎸","🥁","🎤"],
+    sequence: ["🎸", "🥁", "🎤"],
     answer: "🎵",
-    options: ["🎵","🎹","📻","📢"],
+    options: ["🎵", "🎹", "📻", "📢"],
     explanation: "Forming a band: guitar → drums → vocals → music! A band makes music together."
   },
   {
@@ -1736,9 +1736,9 @@ export const puzzles = [
     category: "Music",
     difficulty: 2,
     type: "text",
-    sequence: ["Whole","Half","Quarter"],
+    sequence: ["Whole", "Half", "Quarter"],
     answer: "Eighth",
-    options: ["Eighth","Third","Fifth","Double"],
+    options: ["Eighth", "Third", "Fifth", "Double"],
     explanation: "Musical note durations, each half the previous: Whole → Half → Quarter → Eighth."
   },
   {
@@ -1746,9 +1746,9 @@ export const puzzles = [
     category: "Music",
     difficulty: 2,
     type: "text",
-    sequence: ["Strings","Woodwinds","Brass"],
+    sequence: ["Strings", "Woodwinds", "Brass"],
     answer: "Percussion",
-    options: ["Percussion","Electronic","Vocals","Piano"],
+    options: ["Percussion", "Electronic", "Vocals", "Piano"],
     explanation: "Orchestra instrument families: Strings → Woodwinds → Brass → Percussion."
   },
   {
@@ -1756,9 +1756,9 @@ export const puzzles = [
     category: "Music",
     difficulty: 2,
     type: "text",
-    sequence: ["pianissimo","piano","mezzo-piano"],
+    sequence: ["pianissimo", "piano", "mezzo-piano"],
     answer: "mezzo-forte",
-    options: ["mezzo-forte","fortissimo","forte","sforzando"],
+    options: ["mezzo-forte", "fortissimo", "forte", "sforzando"],
     explanation: "Musical dynamics from quiet to loud: pp → p → mp → mf."
   },
   {
@@ -1766,9 +1766,9 @@ export const puzzles = [
     category: "Music",
     difficulty: 3,
     type: "text",
-    sequence: ["Largo","Adagio","Andante"],
+    sequence: ["Largo", "Adagio", "Andante"],
     answer: "Allegro",
-    options: ["Allegro","Presto","Forte","Piano"],
+    options: ["Allegro", "Presto", "Forte", "Piano"],
     explanation: "Musical tempo markings from slow to fast: Largo → Adagio → Andante → Allegro."
   },
   // ─── Math & Numbers ───────────────────────────────
@@ -1777,9 +1777,9 @@ export const puzzles = [
     category: "Math & Numbers",
     difficulty: 1,
     type: "text",
-    sequence: ["1","4","9","16"],
+    sequence: ["1", "4", "9", "16"],
     answer: "25",
-    options: ["25","20","24","36"],
+    options: ["25", "20", "24", "36"],
     explanation: "Perfect squares: 1², 2², 3², 4², 5² = 1, 4, 9, 16, 25."
   },
   {
@@ -1787,9 +1787,9 @@ export const puzzles = [
     category: "Math & Numbers",
     difficulty: 1,
     type: "text",
-    sequence: ["10","100","1000"],
+    sequence: ["10", "100", "1000"],
     answer: "10000",
-    options: ["10000","5000","10001","2000"],
+    options: ["10000", "5000", "10001", "2000"],
     explanation: "Powers of 10: 10¹, 10², 10³, 10⁴ = 10, 100, 1000, 10000."
   },
   {
@@ -1797,9 +1797,9 @@ export const puzzles = [
     category: "Math & Numbers",
     difficulty: 1,
     type: "text",
-    sequence: ["3","2","1","0"],
+    sequence: ["3", "2", "1", "0"],
     answer: "-1",
-    options: ["-1","-2","00","0.5"],
+    options: ["-1", "-2", "00", "0.5"],
     explanation: "Counting down by 1: 3, 2, 1, 0, -1."
   },
   {
@@ -1807,9 +1807,9 @@ export const puzzles = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["1","8","27"],
+    sequence: ["1", "8", "27"],
     answer: "64",
-    options: ["64","36","81","100"],
+    options: ["64", "36", "81", "100"],
     explanation: "Perfect cubes: 1³=1, 2³=8, 3³=27, 4³=64."
   },
   {
@@ -1817,9 +1817,9 @@ export const puzzles = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["1","3","6","10"],
+    sequence: ["1", "3", "6", "10"],
     answer: "15",
-    options: ["15","12","14","20"],
+    options: ["15", "12", "14", "20"],
     explanation: "Triangular numbers: 1, 3, 6, 10, 15. Each adds one more than the previous gap."
   },
   {
@@ -1827,9 +1827,9 @@ export const puzzles = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["1","1/2","1/4"],
+    sequence: ["1", "1/2", "1/4"],
     answer: "1/8",
-    options: ["1/8","1/3","1/6","1/16"],
+    options: ["1/8", "1/3", "1/6", "1/16"],
     explanation: "Each fraction is half the previous: 1 → 1/2 → 1/4 → 1/8."
   },
   {
@@ -1837,9 +1837,9 @@ export const puzzles = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["5","8","13","21"],
+    sequence: ["5", "8", "13", "21"],
     answer: "34",
-    options: ["34","29","32","40"],
+    options: ["34", "29", "32", "40"],
     explanation: "Fibonacci sequence: each number is the sum of the two before. 13+21=34."
   },
   {
@@ -1847,9 +1847,9 @@ export const puzzles = [
     category: "Math & Numbers",
     difficulty: 3,
     type: "text",
-    sequence: ["3","1","4","1"],
+    sequence: ["3", "1", "4", "1"],
     answer: "5",
-    options: ["5","6","2","9"],
+    options: ["5", "6", "2", "9"],
     explanation: "Digits of Pi: 3.1415926... The fifth digit is 5."
   },
   // ─── Logic Sequences ──────────────────────────────
@@ -1858,9 +1858,9 @@ export const puzzles = [
     category: "Logic Sequences",
     difficulty: 1,
     type: "text",
-    sequence: ["A","C","E","G"],
+    sequence: ["A", "C", "E", "G"],
     answer: "I",
-    options: ["I","H","J","F"],
+    options: ["I", "H", "J", "F"],
     explanation: "Every other letter of the alphabet: A, C, E, G, I (skipping B, D, F, H)."
   },
   {
@@ -1868,9 +1868,9 @@ export const puzzles = [
     category: "Logic Sequences",
     difficulty: 1,
     type: "text",
-    sequence: ["Z","Y","X","W"],
+    sequence: ["Z", "Y", "X", "W"],
     answer: "V",
-    options: ["V","U","A","T"],
+    options: ["V", "U", "A", "T"],
     explanation: "Alphabet in reverse: Z → Y → X → W → V."
   },
   {
@@ -1878,9 +1878,9 @@ export const puzzles = [
     category: "Logic Sequences",
     difficulty: 2,
     type: "text",
-    sequence: ["AA","BB","CC"],
+    sequence: ["AA", "BB", "CC"],
     answer: "DD",
-    options: ["DD","EE","AB","CD"],
+    options: ["DD", "EE", "AB", "CD"],
     explanation: "Each letter doubled in alphabetical order: AA → BB → CC → DD."
   },
   {
@@ -1888,9 +1888,9 @@ export const puzzles = [
     category: "Logic Sequences",
     difficulty: 2,
     type: "text",
-    sequence: ["2","6","18"],
+    sequence: ["2", "6", "18"],
     answer: "54",
-    options: ["54","36","48","72"],
+    options: ["54", "36", "48", "72"],
     explanation: "Each number is multiplied by 3: 2 × 3 = 6, 6 × 3 = 18, 18 × 3 = 54."
   },
   {
@@ -1898,9 +1898,9 @@ export const puzzles = [
     category: "Logic Sequences",
     difficulty: 2,
     type: "text",
-    sequence: ["2","3","5","8"],
+    sequence: ["2", "3", "5", "8"],
     answer: "12",
-    options: ["12","11","13","10"],
+    options: ["12", "11", "13", "10"],
     explanation: "Add increasing amounts: +1, +2, +3, +4. So 2→3→5→8→12."
   },
   {
@@ -1908,9 +1908,9 @@ export const puzzles = [
     category: "Logic Sequences",
     difficulty: 3,
     type: "text",
-    sequence: ["AZ","BY","CX"],
+    sequence: ["AZ", "BY", "CX"],
     answer: "DW",
-    options: ["DW","DE","EV","DA"],
+    options: ["DW", "DE", "EV", "DA"],
     explanation: "First letter goes forward A→B→C→D, second goes backward Z→Y→X→W."
   },
   // ─── General Knowledge ────────────────────────────
@@ -1919,9 +1919,9 @@ export const puzzles = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Monday","Tuesday","Wednesday"],
+    sequence: ["Monday", "Tuesday", "Wednesday"],
     answer: "Thursday",
-    options: ["Thursday","Friday","Sunday","Saturday"],
+    options: ["Thursday", "Friday", "Sunday", "Saturday"],
     explanation: "Days of the week: Monday → Tuesday → Wednesday → Thursday."
   },
   {
@@ -1929,9 +1929,9 @@ export const puzzles = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["January","February","March"],
+    sequence: ["January", "February", "March"],
     answer: "April",
-    options: ["April","May","June","December"],
+    options: ["April", "May", "June", "December"],
     explanation: "Months in order: January → February → March → April."
   },
   {
@@ -1939,9 +1939,9 @@ export const puzzles = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Jack","Queen","King"],
+    sequence: ["Jack", "Queen", "King"],
     answer: "Ace",
-    options: ["Ace","Joker","10","2"],
+    options: ["Ace", "Joker", "10", "2"],
     explanation: "Playing card face values: Jack → Queen → King → Ace."
   },
   {
@@ -1949,9 +1949,9 @@ export const puzzles = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["1980s","1990s","2000s"],
+    sequence: ["1980s", "1990s", "2000s"],
     answer: "2010s",
-    options: ["2010s","2020s","1970s","2050s"],
+    options: ["2010s", "2020s", "1970s", "2050s"],
     explanation: "Consecutive decades: 1980s → 1990s → 2000s → 2010s."
   },
   {
@@ -1959,9 +1959,9 @@ export const puzzles = [
     category: "General Knowledge",
     difficulty: 1,
     type: "emoji",
-    sequence: ["👶","🧒","🧑"],
+    sequence: ["👶", "🧒", "🧑"],
     answer: "🧓",
-    options: ["🧓","👶","🧒","🦴"],
+    options: ["🧓", "👶", "🧒", "🦴"],
     explanation: "Human life stages: baby → child → adult → elderly."
   },
   {
@@ -1969,9 +1969,9 @@ export const puzzles = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Breakfast","Lunch"],
+    sequence: ["Breakfast", "Lunch"],
     answer: "Dinner",
-    options: ["Dinner","Brunch","Snack","Midnight Feast"],
+    options: ["Dinner", "Brunch", "Snack", "Midnight Feast"],
     explanation: "Daily meals in order: Breakfast → Lunch → Dinner."
   },
   {
@@ -1979,9 +1979,9 @@ export const puzzles = [
     category: "General Knowledge",
     difficulty: 2,
     type: "text",
-    sequence: ["Aries","Taurus","Gemini"],
+    sequence: ["Aries", "Taurus", "Gemini"],
     answer: "Cancer",
-    options: ["Cancer","Leo","Virgo","Pisces"],
+    options: ["Cancer", "Leo", "Virgo", "Pisces"],
     explanation: "Zodiac signs in order: Aries → Taurus → Gemini → Cancer."
   },
   // ─── Emoji Sequences ──────────────────────────────
@@ -1990,9 +1990,9 @@ export const puzzles = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["⏰","🚿","👔"],
+    sequence: ["⏰", "🚿", "👔"],
     answer: "🚗",
-    options: ["🚗","😴","🍳","🛏️"],
+    options: ["🚗", "😴", "🍳", "🛏️"],
     explanation: "Morning routine: alarm → shower → get dressed → drive to work."
   },
   {
@@ -2000,9 +2000,9 @@ export const puzzles = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🛒","🔪","🍳"],
+    sequence: ["🛒", "🔪", "🍳"],
     answer: "🍽️",
-    options: ["🍽️","🗑️","🛒","🔥"],
+    options: ["🍽️", "🗑️", "🛒", "🔥"],
     explanation: "Cooking process: shop → chop → cook → serve/eat."
   },
   {
@@ -2010,9 +2010,9 @@ export const puzzles = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🌧️","🌱","🌿"],
+    sequence: ["🌧️", "🌱", "🌿"],
     answer: "🌻",
-    options: ["🌻","🍂","🌵","🪨"],
+    options: ["🌻", "🍂", "🌵", "🪨"],
     explanation: "Plant growth: rain → sprout → leaves → flower."
   },
   {
@@ -2020,9 +2020,9 @@ export const puzzles = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🌅","☀️","🌤️"],
+    sequence: ["🌅", "☀️", "🌤️"],
     answer: "🌆",
-    options: ["🌆","🌃","⛈️","🌅"],
+    options: ["🌆", "🌃", "⛈️", "🌅"],
     explanation: "A day's weather: sunrise → sunny → partly cloudy → sunset."
   },
   {
@@ -2030,9 +2030,9 @@ export const puzzles = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🎈","🎂","🕯️"],
+    sequence: ["🎈", "🎂", "🕯️"],
     answer: "🎉",
-    options: ["🎉","😢","🎈","🍕"],
+    options: ["🎉", "😢", "🎈", "🍕"],
     explanation: "Birthday party: balloons → cake → blow candles → celebration!"
   },
   {
@@ -2040,9 +2040,9 @@ export const puzzles = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🎬","🍿","📺"],
+    sequence: ["🎬", "🍿", "📺"],
     answer: "😴",
-    options: ["😴","🎮","📖","🎬"],
+    options: ["😴", "🎮", "📖", "🎬"],
     explanation: "Movie night: pick a movie → popcorn → watch → fall asleep."
   },
   // ─── Colors & Patterns ────────────────────────────
@@ -2051,9 +2051,9 @@ export const puzzles = [
     category: "Colors & Patterns",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🟡"],
+    sequence: ["🔴", "🟡"],
     answer: "🟢",
-    options: ["🟢","🔵","🟠","⚫"],
+    options: ["🟢", "🔵", "🟠", "⚫"],
     explanation: "Traffic light sequence: Red (stop) → Yellow (caution) → Green (go)."
   },
   {
@@ -2061,9 +2061,9 @@ export const puzzles = [
     category: "Colors & Patterns",
     difficulty: 1,
     type: "emoji",
-    sequence: ["⬛","🩶"],
+    sequence: ["⬛", "🩶"],
     answer: "⬜",
-    options: ["⬜","🟦","🟥","🟫"],
+    options: ["⬜", "🟦", "🟥", "🟫"],
     explanation: "Greyscale from dark to light: Black → Grey → White."
   },
   {
@@ -2071,9 +2071,9 @@ export const puzzles = [
     category: "Colors & Patterns",
     difficulty: 2,
     type: "text",
-    sequence: ["Red + Blue = Purple","Red + Yellow = Orange"],
+    sequence: ["Red + Blue = Purple", "Red + Yellow = Orange"],
     answer: "Blue + Yellow = Green",
-    options: ["Blue + Yellow = Green","Red + Green = Brown","Blue + Red = Pink","Yellow + Green = Lime"],
+    options: ["Blue + Yellow = Green", "Red + Green = Brown", "Blue + Red = Pink", "Yellow + Green = Lime"],
     explanation: "Primary color mixing: Red+Blue=Purple, Red+Yellow=Orange, Blue+Yellow=Green."
   },
   {
@@ -2081,9 +2081,9 @@ export const puzzles = [
     category: "Colors & Patterns",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🔴","🟡","🔵","🔴","🟡"],
+    sequence: ["🔴", "🟡", "🔵", "🔴", "🟡"],
     answer: "🔵",
-    options: ["🔵","🔴","🟡","🟢"],
+    options: ["🔵", "🔴", "🟡", "🟢"],
     explanation: "Repeating pattern of three: Red, Yellow, Blue, Red, Yellow, Blue..."
   },
   // ─── Creative & Mixed ─────────────────────────────
@@ -2092,9 +2092,9 @@ export const puzzles = [
     category: "Creative & Mixed",
     difficulty: 1,
     type: "emoji",
-    sequence: ["✏️","🖍️","🖌️"],
+    sequence: ["✏️", "🖍️", "🖌️"],
     answer: "🎨",
-    options: ["🎨","📏","✂️","📐"],
+    options: ["🎨", "📏", "✂️", "📐"],
     explanation: "Art supplies progression: pencil sketch → crayon color → paint brush → palette (masterpiece)."
   },
   {
@@ -2102,9 +2102,9 @@ export const puzzles = [
     category: "Creative & Mixed",
     difficulty: 1,
     type: "emoji",
-    sequence: ["😐","🙂","😊"],
+    sequence: ["😐", "🙂", "😊"],
     answer: "😄",
-    options: ["😄","😢","😡","😐"],
+    options: ["😄", "😢", "😡", "😐"],
     explanation: "Increasing happiness: neutral → slightly happy → happy → very happy."
   },
   {
@@ -2112,9 +2112,9 @@ export const puzzles = [
     category: "Creative & Mixed",
     difficulty: 2,
     type: "text",
-    sequence: ["Setup","Conflict","Climax"],
+    sequence: ["Setup", "Conflict", "Climax"],
     answer: "Resolution",
-    options: ["Resolution","Sequel","Prologue","Epilogue"],
+    options: ["Resolution", "Sequel", "Prologue", "Epilogue"],
     explanation: "Classic story structure: Setup → Conflict → Climax → Resolution."
   },
   {
@@ -2122,9 +2122,9 @@ export const puzzles = [
     category: "Creative & Mixed",
     difficulty: 2,
     type: "emoji",
-    sequence: ["📐","🧱","🪵"],
+    sequence: ["📐", "🧱", "🪵"],
     answer: "🏠",
-    options: ["🏠","🏗️","🔨","🧰"],
+    options: ["🏠", "🏗️", "🔨", "🧰"],
     explanation: "Building a house: blueprint → bricks → wood framing → finished house."
   },
   // ─── Flags ────────────────────────────────────────
@@ -2133,9 +2133,9 @@ export const puzzles = [
     category: "Flags",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🇺🇸","🇬🇧","🇦🇺"],
+    sequence: ["🇺🇸", "🇬🇧", "🇦🇺"],
     answer: "🇨🇦",
-    options: ["🇨🇦","🇫🇷","🇩🇪","🇯🇵"],
+    options: ["🇨🇦", "🇫🇷", "🇩🇪", "🇯🇵"],
     explanation: "Major English-speaking countries: USA → UK → Australia → Canada."
   },
   {
@@ -2143,9 +2143,9 @@ export const puzzles = [
     category: "Flags",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🇳🇴","🇸🇪","🇩🇰"],
+    sequence: ["🇳🇴", "🇸🇪", "🇩🇰"],
     answer: "🇫🇮",
-    options: ["🇫🇮","🇩🇪","🇵🇱","🇳🇱"],
+    options: ["🇫🇮", "🇩🇪", "🇵🇱", "🇳🇱"],
     explanation: "Nordic countries: Norway → Sweden → Denmark → Finland."
   },
   {
@@ -2153,9 +2153,9 @@ export const puzzles = [
     category: "Flags",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🇧🇷","🇦🇷","🇨🇱"],
+    sequence: ["🇧🇷", "🇦🇷", "🇨🇱"],
     answer: "🇨🇴",
-    options: ["🇨🇴","🇲🇽","🇪🇸","🇵🇹"],
+    options: ["🇨🇴", "🇲🇽", "🇪🇸", "🇵🇹"],
     explanation: "South American countries by population: Brazil → Argentina → Chile → Colombia."
   },
   // ─── Pop Culture ──────────────────────────────────
@@ -2164,9 +2164,9 @@ export const puzzles = [
     category: "Pop Culture",
     difficulty: 1,
     type: "text",
-    sequence: ["G","PG","PG-13"],
+    sequence: ["G", "PG", "PG-13"],
     answer: "R",
-    options: ["R","NC-17","X","AA"],
+    options: ["R", "NC-17", "X", "AA"],
     explanation: "US movie ratings from least to most restrictive: G → PG → PG-13 → R."
   },
   {
@@ -2174,9 +2174,9 @@ export const puzzles = [
     category: "Pop Culture",
     difficulty: 1,
     type: "emoji",
-    sequence: ["📸","❤️","💬"],
+    sequence: ["📸", "❤️", "💬"],
     answer: "🔄",
-    options: ["🔄","🗑️","📵","🔇"],
+    options: ["🔄", "🗑️", "📵", "🔇"],
     explanation: "Social media engagement: post photo → like → comment → share/repost."
   },
   {
@@ -2184,9 +2184,9 @@ export const puzzles = [
     category: "Pop Culture",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🟢","🟡","🟠"],
+    sequence: ["🟢", "🟡", "🟠"],
     answer: "🔴",
-    options: ["🔴","🟣","⚫","⚪"],
+    options: ["🔴", "🟣", "⚫", "⚪"],
     explanation: "Game difficulty levels: Easy (green) → Medium (yellow) → Hard (orange) → Expert (red)."
   },
   // ─── Visual & Spatial ─────────────────────────────
@@ -2195,9 +2195,9 @@ export const puzzles = [
     category: "Visual & Spatial",
     difficulty: 1,
     type: "text",
-    sequence: ["▲","■","⬠"],
+    sequence: ["▲", "■", "⬠"],
     answer: "⬡",
-    options: ["⬡","●","★","◆"],
+    options: ["⬡", "●", "★", "◆"],
     explanation: "Shapes with increasing sides: triangle (3) → square (4) → pentagon (5) → hexagon (6)."
   },
   {
@@ -2205,9 +2205,9 @@ export const puzzles = [
     category: "Visual & Spatial",
     difficulty: 1,
     type: "text",
-    sequence: ["→","↓","←"],
+    sequence: ["→", "↓", "←"],
     answer: "↑",
-    options: ["↑","↗","↙","⟳"],
+    options: ["↑", "↗", "↙", "⟳"],
     explanation: "Arrow rotating 90° clockwise: right → down → left → up."
   },
   {
@@ -2215,9 +2215,9 @@ export const puzzles = [
     category: "Visual & Spatial",
     difficulty: 1,
     type: "text",
-    sequence: ["·","··","···"],
+    sequence: ["·", "··", "···"],
     answer: "····",
-    options: ["····","·····","··","·"],
+    options: ["····", "·····", "··", "·"],
     explanation: "Adding one dot each time: 1 dot, 2 dots, 3 dots, 4 dots."
   },
   // ─── Letter & Word Patterns ───────────────────────
@@ -2226,9 +2226,9 @@ export const puzzles = [
     category: "Letter & Word Patterns",
     difficulty: 1,
     type: "text",
-    sequence: ["ABC","DEF","GHI"],
+    sequence: ["ABC", "DEF", "GHI"],
     answer: "JKL",
-    options: ["JKL","KLM","HIJ","MNO"],
+    options: ["JKL", "KLM", "HIJ", "MNO"],
     explanation: "Alphabet in groups of 3: ABC, DEF, GHI, JKL."
   },
   {
@@ -2236,9 +2236,9 @@ export const puzzles = [
     category: "Letter & Word Patterns",
     difficulty: 1,
     type: "text",
-    sequence: ["I","am","the"],
+    sequence: ["I", "am", "the"],
     answer: "best",
-    options: ["best","go","a","me"],
+    options: ["best", "go", "a", "me"],
     explanation: "Words with increasing letter count: I (1) → am (2) → the (3) → best (4)."
   },
   {
@@ -2246,9 +2246,9 @@ export const puzzles = [
     category: "Letter & Word Patterns",
     difficulty: 2,
     type: "text",
-    sequence: ["B","C","D","F"],
+    sequence: ["B", "C", "D", "F"],
     answer: "G",
-    options: ["G","E","H","J"],
+    options: ["G", "E", "H", "J"],
     explanation: "Consonants in order, skipping vowels: B, C, D, F, G."
   },
 ];

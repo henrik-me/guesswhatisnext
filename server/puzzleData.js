@@ -2986,9 +2986,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Paris","Berlin","Madrid"],
+    sequence: ["Paris", "Berlin", "Madrid"],
     answer: "Rome",
-    options: ["Rome","Milan","Barcelona","Munich"],
+    options: ["Rome", "Milan", "Barcelona", "Munich"],
     explanation: "Capital cities of France, Germany, Spain — next is Italy's capital: Rome."
   },
   {
@@ -2996,9 +2996,9 @@ module.exports = [
     category: "Geography",
     difficulty: 1,
     type: "text",
-    sequence: ["Asia","Africa","North America"],
+    sequence: ["Asia", "Africa", "North America"],
     answer: "South America",
-    options: ["Europe","South America","Antarctica","Australia"],
+    options: ["Europe", "South America", "Antarctica", "Australia"],
     explanation: "Continents ordered by area from largest to smallest: Asia → Africa → N. America → S. America."
   },
   {
@@ -3006,9 +3006,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Pacific","Atlantic","Indian"],
+    sequence: ["Pacific", "Atlantic", "Indian"],
     answer: "Southern",
-    options: ["Arctic","Southern","Mediterranean","Caribbean"],
+    options: ["Arctic", "Southern", "Mediterranean", "Caribbean"],
     explanation: "Oceans ordered by size: Pacific → Atlantic → Indian → Southern → Arctic."
   },
   {
@@ -3016,9 +3016,9 @@ module.exports = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Nile","Amazon","Yangtze"],
+    sequence: ["Nile", "Amazon", "Yangtze"],
     answer: "Mississippi",
-    options: ["Mississippi","Thames","Danube","Rhine"],
+    options: ["Mississippi", "Thames", "Danube", "Rhine"],
     explanation: "World's longest rivers in order: Nile → Amazon → Yangtze → Mississippi."
   },
   {
@@ -3026,9 +3026,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Russia","Canada","USA"],
+    sequence: ["Russia", "Canada", "USA"],
     answer: "China",
-    options: ["India","China","Brazil","Australia"],
+    options: ["India", "China", "Brazil", "Australia"],
     explanation: "Largest countries by area: Russia → Canada → USA → China."
   },
   {
@@ -3036,9 +3036,9 @@ module.exports = [
     category: "Geography",
     difficulty: 1,
     type: "text",
-    sequence: ["North","East","South"],
+    sequence: ["North", "East", "South"],
     answer: "West",
-    options: ["West","Northeast","Down","Center"],
+    options: ["West", "Northeast", "Down", "Center"],
     explanation: "The four cardinal compass directions clockwise: North → East → South → West."
   },
   {
@@ -3046,9 +3046,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Tokyo","Beijing","Seoul"],
+    sequence: ["Tokyo", "Beijing", "Seoul"],
     answer: "Bangkok",
-    options: ["Bangkok","Shanghai","Osaka","Taipei"],
+    options: ["Bangkok", "Shanghai", "Osaka", "Taipei"],
     explanation: "Capital cities of Japan, China, South Korea — next is Thailand's capital: Bangkok."
   },
   {
@@ -3056,9 +3056,9 @@ module.exports = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Brasília","Buenos Aires","Santiago"],
+    sequence: ["Brasília", "Buenos Aires", "Santiago"],
     answer: "Lima",
-    options: ["Lima","São Paulo","Bogotá","Rio de Janeiro"],
+    options: ["Lima", "São Paulo", "Bogotá", "Rio de Janeiro"],
     explanation: "Capitals of Brazil, Argentina, Chile — next is Peru's capital: Lima."
   },
   {
@@ -3066,9 +3066,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Crust","Mantle","Outer Core"],
+    sequence: ["Crust", "Mantle", "Outer Core"],
     answer: "Inner Core",
-    options: ["Inner Core","Magma","Bedrock","Lithosphere"],
+    options: ["Inner Core", "Magma", "Bedrock", "Lithosphere"],
     explanation: "Earth's layers from outside in: Crust → Mantle → Outer Core → Inner Core."
   },
   {
@@ -3076,9 +3076,9 @@ module.exports = [
     category: "Geography",
     difficulty: 1,
     type: "text",
-    sequence: ["Alabama","Alaska","Arizona"],
+    sequence: ["Alabama", "Alaska", "Arizona"],
     answer: "Arkansas",
-    options: ["Arkansas","California","Colorado","Connecticut"],
+    options: ["Arkansas", "California", "Colorado", "Connecticut"],
     explanation: "US states in alphabetical order: Alabama → Alaska → Arizona → Arkansas."
   },
   {
@@ -3086,9 +3086,9 @@ module.exports = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Everest","K2","Kangchenjunga"],
+    sequence: ["Everest", "K2", "Kangchenjunga"],
     answer: "Lhotse",
-    options: ["Lhotse","Denali","Kilimanjaro","Mont Blanc"],
+    options: ["Lhotse", "Denali", "Kilimanjaro", "Mont Blanc"],
     explanation: "World's highest mountains: Everest → K2 → Kangchenjunga → Lhotse."
   },
   {
@@ -3096,9 +3096,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["India","China","USA"],
+    sequence: ["India", "China", "USA"],
     answer: "Indonesia",
-    options: ["Indonesia","Brazil","Japan","Mexico"],
+    options: ["Indonesia", "Brazil", "Japan", "Mexico"],
     explanation: "Most populous countries: India → China → USA → Indonesia."
   },
   {
@@ -3106,9 +3106,9 @@ module.exports = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Cairo","Nairobi","Abuja"],
+    sequence: ["Cairo", "Nairobi", "Abuja"],
     answer: "Pretoria",
-    options: ["Pretoria","Lagos","Addis Ababa","Casablanca"],
+    options: ["Pretoria", "Lagos", "Addis Ababa", "Casablanca"],
     explanation: "Capitals of Egypt, Kenya, Nigeria — next is South Africa's capital: Pretoria."
   },
   {
@@ -3116,9 +3116,9 @@ module.exports = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Sahara","Arabian","Gobi"],
+    sequence: ["Sahara", "Arabian", "Gobi"],
     answer: "Kalahari",
-    options: ["Kalahari","Mojave","Gobi","Atacama"],
+    options: ["Kalahari", "Mojave", "Gobi", "Atacama"],
     explanation: "Largest hot deserts by area: Sahara → Arabian → Gobi → Kalahari."
   },
   {
@@ -3126,9 +3126,9 @@ module.exports = [
     category: "Geography",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🇫🇷","🇮🇹","🇮🇪"],
+    sequence: ["🇫🇷", "🇮🇹", "🇮🇪"],
     answer: "🇧🇪",
-    options: ["🇧🇪","🇯🇵","🇧🇷","🇨🇭"],
+    options: ["🇧🇪", "🇯🇵", "🇧🇷", "🇨🇭"],
     explanation: "Flags with vertical tricolor stripes: France → Italy → Ireland → Belgium."
   },
   {
@@ -3136,9 +3136,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Japan","Philippines","Indonesia"],
+    sequence: ["Japan", "Philippines", "Indonesia"],
     answer: "Madagascar",
-    options: ["Madagascar","Brazil","India","Egypt"],
+    options: ["Madagascar", "Brazil", "India", "Egypt"],
     explanation: "Large island nations from east to west: Japan → Philippines → Indonesia → Madagascar."
   },
   {
@@ -3146,9 +3146,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["Superior","Michigan","Huron"],
+    sequence: ["Superior", "Michigan", "Huron"],
     answer: "Erie",
-    options: ["Erie","Tahoe","Ontario","Victoria"],
+    options: ["Erie", "Tahoe", "Ontario", "Victoria"],
     explanation: "The Great Lakes by surface area: Superior → Michigan → Huron → Erie → Ontario."
   },
   {
@@ -3156,9 +3156,9 @@ module.exports = [
     category: "Geography",
     difficulty: 3,
     type: "text",
-    sequence: ["Burj Khalifa","Merdeka 118","Shanghai Tower"],
+    sequence: ["Burj Khalifa", "Merdeka 118", "Shanghai Tower"],
     answer: "Abraj Al-Bait",
-    options: ["Abraj Al-Bait","Empire State","Eiffel Tower","CN Tower"],
+    options: ["Abraj Al-Bait", "Empire State", "Eiffel Tower", "CN Tower"],
     explanation: "Tallest buildings in the world: Burj Khalifa → Merdeka 118 → Shanghai Tower → Abraj Al-Bait."
   },
   // ─── History ──────────────────────────────────────
@@ -3167,9 +3167,9 @@ module.exports = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Mesopotamia","Egypt","Greece"],
+    sequence: ["Mesopotamia", "Egypt", "Greece"],
     answer: "Rome",
-    options: ["Rome","Aztec","Viking","Mongol"],
+    options: ["Rome", "Aztec", "Viking", "Mongol"],
     explanation: "Major ancient civilizations in chronological order of rise: Mesopotamia → Egypt → Greece → Rome."
   },
   {
@@ -3177,9 +3177,9 @@ module.exports = [
     category: "History",
     difficulty: 1,
     type: "text",
-    sequence: ["1914","1918","1939"],
+    sequence: ["1914", "1918", "1939"],
     answer: "1945",
-    options: ["1945","1950","1941","1942"],
+    options: ["1945", "1950", "1941", "1942"],
     explanation: "WWI: 1914–1918, WWII: 1939–1945. The pattern shows start/end dates of both world wars."
   },
   {
@@ -3187,9 +3187,9 @@ module.exports = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Washington","Adams","Jefferson"],
+    sequence: ["Washington", "Adams", "Jefferson"],
     answer: "Madison",
-    options: ["Madison","Monroe","Lincoln","Hamilton"],
+    options: ["Madison", "Monroe", "Lincoln", "Hamilton"],
     explanation: "First US presidents in order: Washington → Adams → Jefferson → Madison."
   },
   {
@@ -3197,9 +3197,9 @@ module.exports = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Sputnik 1957","Gagarin 1961","Apollo 11 1969"],
+    sequence: ["Sputnik 1957", "Gagarin 1961", "Apollo 11 1969"],
     answer: "Skylab 1973",
-    options: ["Skylab 1973","Hubble 1990","ISS 1998","Viking 1976"],
+    options: ["Skylab 1973", "Hubble 1990", "ISS 1998", "Viking 1976"],
     explanation: "Space race milestones: Sputnik → Gagarin → Moon landing → Skylab space station."
   },
   {
@@ -3207,9 +3207,9 @@ module.exports = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["Old Kingdom","Middle Kingdom","New Kingdom"],
+    sequence: ["Old Kingdom", "Middle Kingdom", "New Kingdom"],
     answer: "Late Period",
-    options: ["Late Period","Early Period","Bronze Age","Iron Age"],
+    options: ["Late Period", "Early Period", "Bronze Age", "Iron Age"],
     explanation: "Egyptian historical periods: Old Kingdom → Middle Kingdom → New Kingdom → Late Period."
   },
   {
@@ -3217,9 +3217,9 @@ module.exports = [
     category: "History",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔥","🏹","⚙️"],
+    sequence: ["🔥", "🏹", "⚙️"],
     answer: "💡",
-    options: ["💡","🔥","🗡️","🏰"],
+    options: ["💡", "🔥", "🗡️", "🏰"],
     explanation: "Major inventions through history: fire → bow & arrow → mechanical wheel/gear → light bulb."
   },
   {
@@ -3227,9 +3227,9 @@ module.exports = [
     category: "History",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🐴","🚂","🚗"],
+    sequence: ["🐴", "🚂", "🚗"],
     answer: "✈️",
-    options: ["✈️","🚲","🛶","🐴"],
+    options: ["✈️", "🚲", "🛶", "🐴"],
     explanation: "Transportation evolution: horse → train → car → airplane."
   },
   {
@@ -3237,9 +3237,9 @@ module.exports = [
     category: "History",
     difficulty: 1,
     type: "emoji",
-    sequence: ["✉️","📞","💻"],
+    sequence: ["✉️", "📞", "💻"],
     answer: "📱",
-    options: ["📱","📺","📻","✉️"],
+    options: ["📱", "📺", "📻", "✉️"],
     explanation: "Communication evolution: letter → telephone → computer → smartphone."
   },
   {
@@ -3247,9 +3247,9 @@ module.exports = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["Kingdom","Republic","Empire"],
+    sequence: ["Kingdom", "Republic", "Empire"],
     answer: "Fall",
-    options: ["Fall","Democracy","Renaissance","Feudalism"],
+    options: ["Fall", "Democracy", "Renaissance", "Feudalism"],
     explanation: "Phases of Roman civilization: Kingdom → Republic → Empire → Fall (476 AD)."
   },
   {
@@ -3257,9 +3257,9 @@ module.exports = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Renaissance","Reformation","Enlightenment"],
+    sequence: ["Renaissance", "Reformation", "Enlightenment"],
     answer: "Industrial Revolution",
-    options: ["Industrial Revolution","Dark Ages","Bronze Age","Cold War"],
+    options: ["Industrial Revolution", "Dark Ages", "Bronze Age", "Cold War"],
     explanation: "European historical periods: Renaissance → Reformation → Enlightenment → Industrial Revolution."
   },
   {
@@ -3267,9 +3267,9 @@ module.exports = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["Cuneiform","Hieroglyphs","Greek Alphabet"],
+    sequence: ["Cuneiform", "Hieroglyphs", "Greek Alphabet"],
     answer: "Latin Alphabet",
-    options: ["Latin Alphabet","Binary","Morse Code","Braille"],
+    options: ["Latin Alphabet", "Binary", "Morse Code", "Braille"],
     explanation: "Writing systems in order of development: Cuneiform → Hieroglyphs → Greek → Latin alphabet."
   },
   {
@@ -3277,9 +3277,9 @@ module.exports = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Stone Age","Bronze Age","Iron Age"],
+    sequence: ["Stone Age", "Bronze Age", "Iron Age"],
     answer: "Classical Age",
-    options: ["Classical Age","Digital Age","Space Age","Ice Age"],
+    options: ["Classical Age", "Digital Age", "Space Age", "Ice Age"],
     explanation: "Ages of human civilization: Stone → Bronze → Iron → Classical."
   },
   {
@@ -3287,9 +3287,9 @@ module.exports = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["NATO formed 1949","Korean War 1950","Cuban Missile Crisis 1962"],
+    sequence: ["NATO formed 1949", "Korean War 1950", "Cuban Missile Crisis 1962"],
     answer: "Moon Landing 1969",
-    options: ["Moon Landing 1969","Vietnam War 1955","Berlin Wall 1961","Sputnik 1957"],
+    options: ["Moon Landing 1969", "Vietnam War 1955", "Berlin Wall 1961", "Sputnik 1957"],
     explanation: "Cold War milestones: NATO → Korean War → Cuban Missile Crisis → Moon Landing."
   },
   {
@@ -3297,9 +3297,9 @@ module.exports = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["Victoria","Edward VII","George V"],
+    sequence: ["Victoria", "Edward VII", "George V"],
     answer: "Edward VIII",
-    options: ["Edward VIII","George IV","Elizabeth I","Henry VIII"],
+    options: ["Edward VIII", "George IV", "Elizabeth I", "Henry VIII"],
     explanation: "British monarchs in order: Victoria → Edward VII → George V → Edward VIII."
   },
   {
@@ -3307,9 +3307,9 @@ module.exports = [
     category: "History",
     difficulty: 3,
     type: "text",
-    sequence: ["Han","Tang","Song"],
+    sequence: ["Han", "Tang", "Song"],
     answer: "Ming",
-    options: ["Ming","Qin","Zhou","Shang"],
+    options: ["Ming", "Qin", "Zhou", "Shang"],
     explanation: "Major Chinese dynasties in chronological order: Han → Tang → Song → Ming."
   },
   {
@@ -3317,9 +3317,9 @@ module.exports = [
     category: "History",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🐚","🪙","💵"],
+    sequence: ["🐚", "🪙", "💵"],
     answer: "💳",
-    options: ["💳","🪙","🏦","💰"],
+    options: ["💳", "🪙", "🏦", "💰"],
     explanation: "Evolution of money: shells → coins → paper bills → credit cards."
   },
   {
@@ -3327,9 +3327,9 @@ module.exports = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Socrates","Plato","Aristotle"],
+    sequence: ["Socrates", "Plato", "Aristotle"],
     answer: "Alexander",
-    options: ["Alexander","Homer","Pythagoras","Herodotus"],
+    options: ["Alexander", "Homer", "Pythagoras", "Herodotus"],
     explanation: "Each taught the next: Socrates → Plato → Aristotle → Alexander the Great."
   },
   // ─── Technology ───────────────────────────────────
@@ -3338,9 +3338,9 @@ module.exports = [
     category: "Technology",
     difficulty: 1,
     type: "emoji",
-    sequence: ["💾","💿","🔌"],
+    sequence: ["💾", "💿", "🔌"],
     answer: "☁️",
-    options: ["☁️","💾","📼","🖨️"],
+    options: ["☁️", "💾", "📼", "🖨️"],
     explanation: "Storage evolution: floppy disk → CD → USB drive → cloud storage."
   },
   {
@@ -3348,9 +3348,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["Web 1.0","Web 2.0","Web 3.0"],
+    sequence: ["Web 1.0", "Web 2.0", "Web 3.0"],
     answer: "Web 4.0",
-    options: ["Web 4.0","Web 2.5","Web 5.0","Internet 2"],
+    options: ["Web 4.0", "Web 2.5", "Web 5.0", "Internet 2"],
     explanation: "Web evolution: static pages (1.0) → social/interactive (2.0) → decentralized (3.0) → AI-driven (4.0)."
   },
   {
@@ -3358,9 +3358,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["Machine Code","Assembly","C"],
+    sequence: ["Machine Code", "Assembly", "C"],
     answer: "Python",
-    options: ["Python","Binary","HTML","Punch Cards"],
+    options: ["Python", "Binary", "HTML", "Punch Cards"],
     explanation: "Programming language generations from low to high level: Machine Code → Assembly → C → Python."
   },
   {
@@ -3368,9 +3368,9 @@ module.exports = [
     category: "Technology",
     difficulty: 1,
     type: "text",
-    sequence: ["2G","3G","4G"],
+    sequence: ["2G", "3G", "4G"],
     answer: "5G",
-    options: ["5G","6G","4.5G","WiFi"],
+    options: ["5G", "6G", "4.5G", "WiFi"],
     explanation: "Mobile network generations: 2G → 3G → 4G → 5G."
   },
   {
@@ -3378,9 +3378,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["iPod","iPhone","iPad"],
+    sequence: ["iPod", "iPhone", "iPad"],
     answer: "Apple Watch",
-    options: ["Apple Watch","iMac","MacBook","iTunes"],
+    options: ["Apple Watch", "iMac", "MacBook", "iTunes"],
     explanation: "Apple's major product launches in order: iPod (2001) → iPhone (2007) → iPad (2010) → Apple Watch (2015)."
   },
   {
@@ -3388,9 +3388,9 @@ module.exports = [
     category: "Technology",
     difficulty: 1,
     type: "text",
-    sequence: ["Byte","Kilobyte","Megabyte"],
+    sequence: ["Byte", "Kilobyte", "Megabyte"],
     answer: "Gigabyte",
-    options: ["Gigabyte","Terabyte","Bit","Nibble"],
+    options: ["Gigabyte", "Terabyte", "Bit", "Nibble"],
     explanation: "Data units in ascending order: Byte → Kilobyte → Megabyte → Gigabyte."
   },
   {
@@ -3398,9 +3398,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["MySpace","Facebook","Twitter"],
+    sequence: ["MySpace", "Facebook", "Twitter"],
     answer: "Instagram",
-    options: ["Instagram","Friendster","LinkedIn","AOL"],
+    options: ["Instagram", "Friendster", "LinkedIn", "AOL"],
     explanation: "Major social media platforms by launch: MySpace (2003) → Facebook (2004) → Twitter (2006) → Instagram (2010)."
   },
   {
@@ -3408,9 +3408,9 @@ module.exports = [
     category: "Technology",
     difficulty: 1,
     type: "emoji",
-    sequence: ["⌨️","🖱️","🎤"],
+    sequence: ["⌨️", "🖱️", "🎤"],
     answer: "👆",
-    options: ["👆","🖨️","📷","🔊"],
+    options: ["👆", "🖨️", "📷", "🔊"],
     explanation: "Computer input evolution: keyboard → mouse → voice → touch screen."
   },
   {
@@ -3418,9 +3418,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["Atari","NES","PlayStation"],
+    sequence: ["Atari", "NES", "PlayStation"],
     answer: "Xbox",
-    options: ["Xbox","Sega","Commodore","Pong"],
+    options: ["Xbox", "Sega", "Commodore", "Pong"],
     explanation: "Landmark gaming consoles: Atari (1977) → NES (1985) → PlayStation (1994) → Xbox (2001)."
   },
   {
@@ -3428,9 +3428,9 @@ module.exports = [
     category: "Technology",
     difficulty: 3,
     type: "text",
-    sequence: ["HTTP","HTTPS","HTTP/2"],
+    sequence: ["HTTP", "HTTPS", "HTTP/2"],
     answer: "HTTP/3",
-    options: ["HTTP/3","HTTP/4","FTP","TCP"],
+    options: ["HTTP/3", "HTTP/4", "FTP", "TCP"],
     explanation: "Web protocol evolution: HTTP → HTTPS → HTTP/2 → HTTP/3 (QUIC)."
   },
   {
@@ -3438,9 +3438,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["480p","720p","1080p"],
+    sequence: ["480p", "720p", "1080p"],
     answer: "4K",
-    options: ["4K","8K","360p","HD"],
+    options: ["4K", "8K", "360p", "HD"],
     explanation: "Display resolution progression: 480p → 720p → 1080p → 4K (2160p)."
   },
   {
@@ -3448,9 +3448,9 @@ module.exports = [
     category: "Technology",
     difficulty: 3,
     type: "text",
-    sequence: ["Deep Blue 1997","Watson 2011","AlphaGo 2016"],
+    sequence: ["Deep Blue 1997", "Watson 2011", "AlphaGo 2016"],
     answer: "ChatGPT 2022",
-    options: ["ChatGPT 2022","Siri 2011","Alexa 2014","Cortana 2014"],
+    options: ["ChatGPT 2022", "Siri 2011", "Alexa 2014", "Cortana 2014"],
     explanation: "AI milestones: Deep Blue beat chess → Watson beat Jeopardy → AlphaGo beat Go → ChatGPT launched."
   },
   {
@@ -3458,9 +3458,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["MS-DOS","Windows 95","Windows XP"],
+    sequence: ["MS-DOS", "Windows 95", "Windows XP"],
     answer: "Windows 10",
-    options: ["Windows 10","Windows ME","Windows 3.1","Linux"],
+    options: ["Windows 10", "Windows ME", "Windows 3.1", "Linux"],
     explanation: "Major Windows releases: MS-DOS → Windows 95 → Windows XP → Windows 10."
   },
   {
@@ -3468,9 +3468,9 @@ module.exports = [
     category: "Technology",
     difficulty: 3,
     type: "text",
-    sequence: ["Bluetooth 2.0","Bluetooth 3.0","Bluetooth 4.0"],
+    sequence: ["Bluetooth 2.0", "Bluetooth 3.0", "Bluetooth 4.0"],
     answer: "Bluetooth 5.0",
-    options: ["Bluetooth 5.0","Bluetooth 4.5","WiFi 6","NFC 2.0"],
+    options: ["Bluetooth 5.0", "Bluetooth 4.5", "WiFi 6", "NFC 2.0"],
     explanation: "Bluetooth version progression: 2.0 → 3.0 → 4.0 → 5.0."
   },
   {
@@ -3478,9 +3478,9 @@ module.exports = [
     category: "Technology",
     difficulty: 1,
     type: "text",
-    sequence: ["1","2","4","8"],
+    sequence: ["1", "2", "4", "8"],
     answer: "16",
-    options: ["16","10","12","15"],
+    options: ["16", "10", "12", "15"],
     explanation: "Powers of 2 (fundamental in computing): 1, 2, 4, 8, 16, 32, 64..."
   },
   {
@@ -3488,9 +3488,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["CRT","LCD","LED"],
+    sequence: ["CRT", "LCD", "LED"],
     answer: "OLED",
-    options: ["OLED","Plasma","VGA","DLP"],
+    options: ["OLED", "Plasma", "VGA", "DLP"],
     explanation: "Display technology evolution: CRT → LCD → LED → OLED."
   },
   {
@@ -3498,9 +3498,9 @@ module.exports = [
     category: "Technology",
     difficulty: 2,
     type: "text",
-    sequence: ["USB 1.0","USB 2.0","USB 3.0"],
+    sequence: ["USB 1.0", "USB 2.0", "USB 3.0"],
     answer: "USB 4.0",
-    options: ["USB 4.0","USB 3.5","Thunderbolt","FireWire"],
+    options: ["USB 4.0", "USB 3.5", "Thunderbolt", "FireWire"],
     explanation: "USB standard progression: 1.0 → 2.0 → 3.0 → 4.0."
   },
   // ─── Art & Design ─────────────────────────────────
@@ -3509,9 +3509,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🔵"],
+    sequence: ["🔴", "🔵"],
     answer: "🟡",
-    options: ["🟡","🟢","🟠","🟣"],
+    options: ["🟡", "🟢", "🟠", "🟣"],
     explanation: "The three primary colors in traditional color theory: Red, Blue, Yellow."
   },
   {
@@ -3519,9 +3519,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🟠","🟡","🟢"],
+    sequence: ["🔴", "🟠", "🟡", "🟢"],
     answer: "🔵",
-    options: ["🔵","🟣","⚪","🟤"],
+    options: ["🔵", "🟣", "⚪", "🟤"],
     explanation: "Rainbow order (ROYGBIV): Red → Orange → Yellow → Green → Blue."
   },
   {
@@ -3529,9 +3529,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 2,
     type: "text",
-    sequence: ["Renaissance","Baroque","Impressionism"],
+    sequence: ["Renaissance", "Baroque", "Impressionism"],
     answer: "Cubism",
-    options: ["Cubism","Gothic","Romanticism","Prehistoric"],
+    options: ["Cubism", "Gothic", "Romanticism", "Prehistoric"],
     explanation: "Art movements in chronological order: Renaissance → Baroque → Impressionism → Cubism."
   },
   {
@@ -3539,9 +3539,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🟠"],
+    sequence: ["🔴", "🟠"],
     answer: "🟡",
-    options: ["🟡","🔵","🟣","🟤"],
+    options: ["🟡", "🔵", "🟣", "🟤"],
     explanation: "Warm colors on the color wheel progress: Red → Orange → Yellow."
   },
   {
@@ -3549,9 +3549,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 2,
     type: "text",
-    sequence: ["2H","H","HB"],
+    sequence: ["2H", "H", "HB"],
     answer: "B",
-    options: ["B","2B","F","3H"],
+    options: ["B", "2B", "F", "3H"],
     explanation: "Pencil hardness grades from hard to soft: 2H → H → HB → B."
   },
   {
@@ -3559,9 +3559,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 2,
     type: "text",
-    sequence: ["Da Vinci","Rembrandt","Monet"],
+    sequence: ["Da Vinci", "Rembrandt", "Monet"],
     answer: "Picasso",
-    options: ["Picasso","Michelangelo","Raphael","Vermeer"],
+    options: ["Picasso", "Michelangelo", "Raphael", "Vermeer"],
     explanation: "Famous painters in chronological order: Da Vinci (1500s) → Rembrandt (1600s) → Monet (1800s) → Picasso (1900s)."
   },
   {
@@ -3569,9 +3569,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 3,
     type: "text",
-    sequence: ["Greek Classical","Roman","Gothic"],
+    sequence: ["Greek Classical", "Roman", "Gothic"],
     answer: "Renaissance",
-    options: ["Renaissance","Prehistoric","Modern","Baroque"],
+    options: ["Renaissance", "Prehistoric", "Modern", "Baroque"],
     explanation: "Sculpture style evolution: Greek Classical → Roman → Gothic → Renaissance."
   },
   {
@@ -3579,9 +3579,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 2,
     type: "emoji",
-    sequence: ["📷","🎞️","📸"],
+    sequence: ["📷", "🎞️", "📸"],
     answer: "🤳",
-    options: ["🤳","🖼️","🎨","📹"],
+    options: ["🤳", "🖼️", "🎨", "📹"],
     explanation: "Photography evolution: early camera → film camera → digital camera → selfie/smartphone camera."
   },
   {
@@ -3589,9 +3589,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 3,
     type: "text",
-    sequence: ["Egyptian","Greek","Roman"],
+    sequence: ["Egyptian", "Greek", "Roman"],
     answer: "Gothic",
-    options: ["Gothic","Modern","Art Deco","Baroque"],
+    options: ["Gothic", "Modern", "Art Deco", "Baroque"],
     explanation: "Architectural styles in chronological order: Egyptian → Greek → Roman → Gothic."
   },
   {
@@ -3599,9 +3599,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 2,
     type: "text",
-    sequence: ["Line","Shape","Form"],
+    sequence: ["Line", "Shape", "Form"],
     answer: "Texture",
-    options: ["Texture","Paragraph","Margin","Pixel"],
+    options: ["Texture", "Paragraph", "Margin", "Pixel"],
     explanation: "Elements of art: Line → Shape → Form → Texture → Value → Space → Color."
   },
   {
@@ -3609,9 +3609,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 2,
     type: "text",
-    sequence: ["A1","A2","A3"],
+    sequence: ["A1", "A2", "A3"],
     answer: "A4",
-    options: ["A4","A0","B5","A10"],
+    options: ["A4", "A0", "B5", "A10"],
     explanation: "Standard paper sizes getting smaller: A1 → A2 → A3 → A4."
   },
   {
@@ -3619,9 +3619,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🎨","🎭","🎵"],
+    sequence: ["🎨", "🎭", "🎵"],
     answer: "🎬",
-    options: ["🎬","📚","🎪","🏛️"],
+    options: ["🎬", "📚", "🎪", "🏛️"],
     explanation: "Art forms through history: visual art → theater → music → cinema."
   },
   {
@@ -3629,9 +3629,9 @@ module.exports = [
     category: "Art & Design",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🟡","🟢"],
+    sequence: ["🔴", "🟡", "🟢"],
     answer: "🔵",
-    options: ["🔵","🟠","🟤","⚫"],
+    options: ["🔵", "🟠", "🟤", "⚫"],
     explanation: "Color temperature transition from warm to cool: Red → Yellow → Green → Blue."
   },
   // ─── Language & Grammar ───────────────────────────
@@ -3640,9 +3640,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 1,
     type: "text",
-    sequence: ["A","E","I"],
+    sequence: ["A", "E", "I"],
     answer: "O",
-    options: ["O","U","B","Y"],
+    options: ["O", "U", "B", "Y"],
     explanation: "English vowels in order: A, E, I, O, U."
   },
   {
@@ -3650,9 +3650,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Past","Present"],
+    sequence: ["Past", "Present"],
     answer: "Future",
-    options: ["Future","Perfect","Pluperfect","Conditional"],
+    options: ["Future", "Perfect", "Pluperfect", "Conditional"],
     explanation: "The three basic tenses: Past → Present → Future."
   },
   {
@@ -3660,9 +3660,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 1,
     type: "text",
-    sequence: ["Subject","Verb"],
+    sequence: ["Subject", "Verb"],
     answer: "Object",
-    options: ["Object","Adjective","Comma","Period"],
+    options: ["Object", "Adjective", "Comma", "Period"],
     explanation: "Basic English sentence structure: Subject → Verb → Object (SVO)."
   },
   {
@@ -3670,9 +3670,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Noun","Verb","Adjective"],
+    sequence: ["Noun", "Verb", "Adjective"],
     answer: "Adverb",
-    options: ["Adverb","Sentence","Paragraph","Syllable"],
+    options: ["Adverb", "Sentence", "Paragraph", "Syllable"],
     explanation: "Common parts of speech: Noun → Verb → Adjective → Adverb."
   },
   {
@@ -3680,9 +3680,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Alpha","Beta","Gamma"],
+    sequence: ["Alpha", "Beta", "Gamma"],
     answer: "Delta",
-    options: ["Delta","Epsilon","Omega","Sigma"],
+    options: ["Delta", "Epsilon", "Omega", "Sigma"],
     explanation: "First four letters of the Greek alphabet: Alpha → Beta → Gamma → Delta."
   },
   {
@@ -3690,9 +3690,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 1,
     type: "text",
-    sequence: ["I","II","III"],
+    sequence: ["I", "II", "III"],
     answer: "IV",
-    options: ["IV","IIII","V","VI"],
+    options: ["IV", "IIII", "V", "VI"],
     explanation: "Roman numerals: I (1), II (2), III (3), IV (4)."
   },
   {
@@ -3700,9 +3700,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Alpha","Bravo","Charlie"],
+    sequence: ["Alpha", "Bravo", "Charlie"],
     answer: "Delta",
-    options: ["Delta","Echo","Dog","David"],
+    options: ["Delta", "Echo", "Dog", "David"],
     explanation: "NATO phonetic alphabet: Alpha → Bravo → Charlie → Delta."
   },
   {
@@ -3710,9 +3710,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Period","Comma","Semicolon"],
+    sequence: ["Period", "Comma", "Semicolon"],
     answer: "Colon",
-    options: ["Colon","Dash","Paragraph","Space"],
+    options: ["Colon", "Dash", "Paragraph", "Space"],
     explanation: "Common punctuation marks: Period → Comma → Semicolon → Colon."
   },
   {
@@ -3720,9 +3720,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["micro","milli","centi"],
+    sequence: ["micro", "milli", "centi"],
     answer: "deci",
-    options: ["deci","kilo","mega","nano"],
+    options: ["deci", "kilo", "mega", "nano"],
     explanation: "Metric prefixes from smallest to largest: micro → milli → centi → deci."
   },
   {
@@ -3730,9 +3730,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 1,
     type: "text",
-    sequence: ["Letter","Word","Sentence"],
+    sequence: ["Letter", "Word", "Sentence"],
     answer: "Paragraph",
-    options: ["Paragraph","Chapter","Page","Syllable"],
+    options: ["Paragraph", "Chapter", "Page", "Syllable"],
     explanation: "Text units from smallest to largest: Letter → Word → Sentence → Paragraph."
   },
   {
@@ -3740,9 +3740,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["uno","dos","tres"],
+    sequence: ["uno", "dos", "tres"],
     answer: "cuatro",
-    options: ["cuatro","cinco","quattro","quatro"],
+    options: ["cuatro", "cinco", "quattro", "quatro"],
     explanation: "Counting in Spanish: uno (1), dos (2), tres (3), cuatro (4)."
   },
   {
@@ -3750,9 +3750,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["un","deux","trois"],
+    sequence: ["un", "deux", "trois"],
     answer: "quatre",
-    options: ["quatre","cinq","quatro","fünf"],
+    options: ["quatre", "cinq", "quatro", "fünf"],
     explanation: "Counting in French: un (1), deux (2), trois (3), quatre (4)."
   },
   {
@@ -3760,9 +3760,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 3,
     type: "text",
-    sequence: ["ichi","ni","san"],
+    sequence: ["ichi", "ni", "san"],
     answer: "shi",
-    options: ["shi","go","roku","hachi"],
+    options: ["shi", "go", "roku", "hachi"],
     explanation: "Counting in Japanese: ichi (1), ni (2), san (3), shi (4)."
   },
   {
@@ -3770,9 +3770,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🪶","✒️","✏️"],
+    sequence: ["🪶", "✒️", "✏️"],
     answer: "🖊️",
-    options: ["🖊️","📱","🖨️","📋"],
+    options: ["🖊️", "📱", "🖨️", "📋"],
     explanation: "Evolution of writing tools: quill → fountain pen → pencil → ballpoint pen."
   },
   {
@@ -3780,9 +3780,9 @@ module.exports = [
     category: "Language & Grammar",
     difficulty: 2,
     type: "text",
-    sequence: ["Poetry","Drama","Novel"],
+    sequence: ["Poetry", "Drama", "Novel"],
     answer: "Short Story",
-    options: ["Short Story","Alphabet","Dictionary","Grammar"],
+    options: ["Short Story", "Alphabet", "Dictionary", "Grammar"],
     explanation: "Literary forms in historical order of development: Poetry → Drama → Novel → Short Story."
   },
   // ─── Science ──────────────────────────────────────
@@ -3791,9 +3791,9 @@ module.exports = [
     category: "Science",
     difficulty: 1,
     type: "text",
-    sequence: ["Mercury","Venus","Earth"],
+    sequence: ["Mercury", "Venus", "Earth"],
     answer: "Mars",
-    options: ["Mars","Jupiter","Saturn","Moon"],
+    options: ["Mars", "Jupiter", "Saturn", "Moon"],
     explanation: "Planets from the Sun: Mercury → Venus → Earth → Mars."
   },
   {
@@ -3801,9 +3801,9 @@ module.exports = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Hydrogen","Helium","Lithium"],
+    sequence: ["Hydrogen", "Helium", "Lithium"],
     answer: "Beryllium",
-    options: ["Beryllium","Carbon","Boron","Nitrogen"],
+    options: ["Beryllium", "Carbon", "Boron", "Nitrogen"],
     explanation: "First elements of the periodic table: Hydrogen (1) → Helium (2) → Lithium (3) → Beryllium (4)."
   },
   {
@@ -3811,9 +3811,9 @@ module.exports = [
     category: "Science",
     difficulty: 1,
     type: "text",
-    sequence: ["Solid","Liquid"],
+    sequence: ["Solid", "Liquid"],
     answer: "Gas",
-    options: ["Gas","Plasma","Vapor","Ice"],
+    options: ["Gas", "Plasma", "Vapor", "Ice"],
     explanation: "States of matter by increasing energy: Solid → Liquid → Gas."
   },
   {
@@ -3821,9 +3821,9 @@ module.exports = [
     category: "Science",
     difficulty: 3,
     type: "text",
-    sequence: ["Interphase","Prophase","Metaphase"],
+    sequence: ["Interphase", "Prophase", "Metaphase"],
     answer: "Anaphase",
-    options: ["Anaphase","Telophase","Cytokinesis","G1 Phase"],
+    options: ["Anaphase", "Telophase", "Cytokinesis", "G1 Phase"],
     explanation: "Phases of the cell cycle during cell division: Interphase → Prophase → Metaphase → Anaphase → Telophase."
   },
   {
@@ -3831,9 +3831,9 @@ module.exports = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Radio","Microwave","Infrared"],
+    sequence: ["Radio", "Microwave", "Infrared"],
     answer: "Visible Light",
-    options: ["Visible Light","X-ray","Gamma","Sound"],
+    options: ["Visible Light", "X-ray", "Gamma", "Sound"],
     explanation: "EM spectrum by wavelength: Radio → Microwave → Infrared → Visible Light."
   },
   {
@@ -3841,9 +3841,9 @@ module.exports = [
     category: "Science",
     difficulty: 3,
     type: "text",
-    sequence: ["Kingdom","Phylum","Class"],
+    sequence: ["Kingdom", "Phylum", "Class"],
     answer: "Order",
-    options: ["Order","Species","Domain","Genus"],
+    options: ["Order", "Species", "Domain", "Genus"],
     explanation: "Taxonomy hierarchy: Kingdom → Phylum → Class → Order → Family → Genus → Species."
   },
   {
@@ -3851,9 +3851,9 @@ module.exports = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Igneous","Sedimentary"],
+    sequence: ["Igneous", "Sedimentary"],
     answer: "Metamorphic",
-    options: ["Metamorphic","Calcium","Volcanic","Crystal"],
+    options: ["Metamorphic", "Calcium", "Volcanic", "Crystal"],
     explanation: "The three main rock types in the rock cycle: Igneous → Sedimentary → Metamorphic."
   },
   {
@@ -3861,9 +3861,9 @@ module.exports = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Skeletal","Muscular","Circulatory"],
+    sequence: ["Skeletal", "Muscular", "Circulatory"],
     answer: "Nervous",
-    options: ["Nervous","Battery","Mechanical","Digital"],
+    options: ["Nervous", "Battery", "Mechanical", "Digital"],
     explanation: "Major body systems: Skeletal → Muscular → Circulatory → Nervous."
   },
   {
@@ -3871,9 +3871,9 @@ module.exports = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Acid","Neutral"],
+    sequence: ["Acid", "Neutral"],
     answer: "Base",
-    options: ["Base","Salt","Water","Ion"],
+    options: ["Base", "Salt", "Water", "Ion"],
     explanation: "The pH scale goes from Acid (0-6) → Neutral (7) → Base (8-14)."
   },
   {
@@ -3881,9 +3881,9 @@ module.exports = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Jupiter","Saturn"],
+    sequence: ["Jupiter", "Saturn"],
     answer: "Uranus",
-    options: ["Uranus","Mars","Venus","Pluto"],
+    options: ["Uranus", "Mars", "Venus", "Pluto"],
     explanation: "Outer planets in order: Jupiter → Saturn → Uranus → Neptune."
   },
   {
@@ -3891,9 +3891,9 @@ module.exports = [
     category: "Science",
     difficulty: 1,
     type: "text",
-    sequence: ["Question","Hypothesis","Experiment"],
+    sequence: ["Question", "Hypothesis", "Experiment"],
     answer: "Conclusion",
-    options: ["Conclusion","Guess","Theory","Law"],
+    options: ["Conclusion", "Guess", "Theory", "Law"],
     explanation: "The scientific method: Question → Hypothesis → Experiment → Conclusion."
   },
   {
@@ -3901,9 +3901,9 @@ module.exports = [
     category: "Science",
     difficulty: 3,
     type: "text",
-    sequence: ["Adenine","Thymine","Guanine"],
+    sequence: ["Adenine", "Thymine", "Guanine"],
     answer: "Cytosine",
-    options: ["Cytosine","Uracil","Ribose","Amino"],
+    options: ["Cytosine", "Uracil", "Ribose", "Amino"],
     explanation: "The four DNA bases: Adenine, Thymine, Guanine, Cytosine. They pair A-T and G-C."
   },
   {
@@ -3911,9 +3911,9 @@ module.exports = [
     category: "Science",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🐌","🚶","🚗"],
+    sequence: ["🐌", "🚶", "🚗"],
     answer: "✈️",
-    options: ["✈️","🚲","🐇","🚂"],
+    options: ["✈️", "🚲", "🐇", "🚂"],
     explanation: "Increasing speed: snail → walking → car → airplane."
   },
   {
@@ -3921,9 +3921,9 @@ module.exports = [
     category: "Science",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔬","🧪","⚗️"],
+    sequence: ["🔬", "🧪", "⚗️"],
     answer: "🧫",
-    options: ["🧫","🔭","📐","🖩"],
+    options: ["🧫", "🔭", "📐", "🖩"],
     explanation: "Common laboratory equipment: microscope, test tube, flask, then petri dish."
   },
   {
@@ -3931,9 +3931,9 @@ module.exports = [
     category: "Science",
     difficulty: 3,
     type: "text",
-    sequence: ["Inertia","F=ma"],
+    sequence: ["Inertia", "F=ma"],
     answer: "Action-Reaction",
-    options: ["Action-Reaction","Gravity","Friction","Momentum"],
+    options: ["Action-Reaction", "Gravity", "Friction", "Momentum"],
     explanation: "Newton's three laws of motion: 1st (Inertia) → 2nd (F=ma) → 3rd (Action-Reaction)."
   },
   // ─── Sports ───────────────────────────────────────
@@ -3942,9 +3942,9 @@ module.exports = [
     category: "Sports",
     difficulty: 2,
     type: "text",
-    sequence: ["London 2012","Rio 2016","Tokyo 2020"],
+    sequence: ["London 2012", "Rio 2016", "Tokyo 2020"],
     answer: "Paris 2024",
-    options: ["Paris 2024","Beijing 2024","LA 2024","Sydney 2024"],
+    options: ["Paris 2024", "Beijing 2024", "LA 2024", "Sydney 2024"],
     explanation: "Recent Summer Olympic host cities: London → Rio → Tokyo → Paris."
   },
   {
@@ -3952,9 +3952,9 @@ module.exports = [
     category: "Sports",
     difficulty: 3,
     type: "text",
-    sequence: ["Brazil 2014","Russia 2018","Qatar 2022"],
+    sequence: ["Brazil 2014", "Russia 2018", "Qatar 2022"],
     answer: "USA/Canada/Mexico 2026",
-    options: ["USA/Canada/Mexico 2026","Japan 2026","Australia 2026","England 2026"],
+    options: ["USA/Canada/Mexico 2026", "Japan 2026", "Australia 2026", "England 2026"],
     explanation: "Recent FIFA World Cup hosts: Brazil → Russia → Qatar → USA/Canada/Mexico."
   },
   {
@@ -3962,9 +3962,9 @@ module.exports = [
     category: "Sports",
     difficulty: 2,
     type: "text",
-    sequence: ["Australian Open","French Open","Wimbledon"],
+    sequence: ["Australian Open", "French Open", "Wimbledon"],
     answer: "US Open",
-    options: ["US Open","Indian Wells","ATP Finals","Davis Cup"],
+    options: ["US Open", "Indian Wells", "ATP Finals", "Davis Cup"],
     explanation: "Tennis Grand Slams in calendar order: Australian Open → French Open → Wimbledon → US Open."
   },
   {
@@ -3972,9 +3972,9 @@ module.exports = [
     category: "Sports",
     difficulty: 1,
     type: "text",
-    sequence: ["100m","200m","400m"],
+    sequence: ["100m", "200m", "400m"],
     answer: "800m",
-    options: ["800m","500m","1000m","300m"],
+    options: ["800m", "500m", "1000m", "300m"],
     explanation: "Standard Olympic track events: 100m → 200m → 400m → 800m (each roughly doubling)."
   },
   {
@@ -3982,9 +3982,9 @@ module.exports = [
     category: "Sports",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥇","🥈"],
+    sequence: ["🥇", "🥈"],
     answer: "🥉",
-    options: ["🥉","🏅","🎖️","⭐"],
+    options: ["🥉", "🏅", "🎖️", "⭐"],
     explanation: "Olympic medal order: Gold 🥇 → Silver 🥈 → Bronze 🥉."
   },
   {
@@ -3992,9 +3992,9 @@ module.exports = [
     category: "Sports",
     difficulty: 2,
     type: "text",
-    sequence: ["White","Yellow","Orange"],
+    sequence: ["White", "Yellow", "Orange"],
     answer: "Green",
-    options: ["Green","Black","Red","Blue"],
+    options: ["Green", "Black", "Red", "Blue"],
     explanation: "Karate belt progression: White → Yellow → Orange → Green."
   },
   {
@@ -4002,9 +4002,9 @@ module.exports = [
     category: "Sports",
     difficulty: 1,
     type: "text",
-    sequence: ["Home","First","Second"],
+    sequence: ["Home", "First", "Second"],
     answer: "Third",
-    options: ["Third","Pitcher","Outfield","Dugout"],
+    options: ["Third", "Pitcher", "Outfield", "Dugout"],
     explanation: "Baseball base running order: Home → First → Second → Third."
   },
   {
@@ -4012,9 +4012,9 @@ module.exports = [
     category: "Sports",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🏊","🚴"],
+    sequence: ["🏊", "🚴"],
     answer: "🏃",
-    options: ["🏃","🏇","⛷️","🤸"],
+    options: ["🏃", "🏇", "⛷️", "🤸"],
     explanation: "Triathlon events in order: Swim 🏊 → Bike 🚴 → Run 🏃."
   },
   {
@@ -4022,9 +4022,9 @@ module.exports = [
     category: "Sports",
     difficulty: 2,
     type: "text",
-    sequence: ["Eagle","Birdie","Par"],
+    sequence: ["Eagle", "Birdie", "Par"],
     answer: "Bogey",
-    options: ["Bogey","Hole-in-one","Albatross","Double Eagle"],
+    options: ["Bogey", "Hole-in-one", "Albatross", "Double Eagle"],
     explanation: "Golf scores relative to par: Eagle (-2) → Birdie (-1) → Par (0) → Bogey (+1)."
   },
   {
@@ -4032,9 +4032,9 @@ module.exports = [
     category: "Sports",
     difficulty: 3,
     type: "text",
-    sequence: ["Pawn (1)","Knight (3)","Bishop (3)"],
+    sequence: ["Pawn (1)", "Knight (3)", "Bishop (3)"],
     answer: "Rook (5)",
-    options: ["Rook (5)","Queen (9)","King (∞)","Pawn (2)"],
+    options: ["Rook (5)", "Queen (9)", "King (∞)", "Pawn (2)"],
     explanation: "Chess piece values: Pawn (1) → Knight (3) → Bishop (3) → Rook (5)."
   },
   {
@@ -4042,9 +4042,9 @@ module.exports = [
     category: "Sports",
     difficulty: 1,
     type: "text",
-    sequence: ["Goalkeeper","Defender","Midfielder"],
+    sequence: ["Goalkeeper", "Defender", "Midfielder"],
     answer: "Forward",
-    options: ["Forward","Referee","Coach","Substitute"],
+    options: ["Forward", "Referee", "Coach", "Substitute"],
     explanation: "Soccer positions from back to front: Goalkeeper → Defender → Midfielder → Forward."
   },
   {
@@ -4052,9 +4052,9 @@ module.exports = [
     category: "Sports",
     difficulty: 2,
     type: "text",
-    sequence: ["Butterfly","Backstroke","Breaststroke"],
+    sequence: ["Butterfly", "Backstroke", "Breaststroke"],
     answer: "Freestyle",
-    options: ["Freestyle","Doggy Paddle","Sidestroke","Float"],
+    options: ["Freestyle", "Doggy Paddle", "Sidestroke", "Float"],
     explanation: "Individual medley swimming order: Butterfly → Backstroke → Breaststroke → Freestyle."
   },
   // ─── Food ─────────────────────────────────────────
@@ -4063,9 +4063,9 @@ module.exports = [
     category: "Food",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥗","🍜","🥩"],
+    sequence: ["🥗", "🍜", "🥩"],
     answer: "🍰",
-    options: ["🍰","🥗","🍞","🧃"],
+    options: ["🍰", "🥗", "🍞", "🧃"],
     explanation: "Formal dinner courses: salad → soup → main course → dessert."
   },
   {
@@ -4073,9 +4073,9 @@ module.exports = [
     category: "Food",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🫑","🌶️","🌶️🌶️"],
+    sequence: ["🫑", "🌶️", "🌶️🌶️"],
     answer: "🌶️🌶️🌶️",
-    options: ["🌶️🌶️🌶️","🍅","🥒","🧊"],
+    options: ["🌶️🌶️🌶️", "🍅", "🥒", "🧊"],
     explanation: "Increasing spice levels: bell pepper (mild) → one chili → two chilies → three chilies (hot!)."
   },
   {
@@ -4083,9 +4083,9 @@ module.exports = [
     category: "Food",
     difficulty: 2,
     type: "text",
-    sequence: ["Decaf","Americano","Latte"],
+    sequence: ["Decaf", "Americano", "Latte"],
     answer: "Espresso",
-    options: ["Espresso","Water","Tea","Milk"],
+    options: ["Espresso", "Water", "Tea", "Milk"],
     explanation: "Coffee drinks by strength: Decaf → Americano → Latte → Espresso."
   },
   {
@@ -4093,9 +4093,9 @@ module.exports = [
     category: "Food",
     difficulty: 1,
     type: "text",
-    sequence: ["Mix","Knead","Rise"],
+    sequence: ["Mix", "Knead", "Rise"],
     answer: "Bake",
-    options: ["Bake","Freeze","Fry","Grill"],
+    options: ["Bake", "Freeze", "Fry", "Grill"],
     explanation: "Bread making steps: Mix ingredients → Knead dough → Let it Rise → Bake."
   },
   {
@@ -4103,9 +4103,9 @@ module.exports = [
     category: "Food",
     difficulty: 1,
     type: "text",
-    sequence: ["Raw","Soft-boiled","Medium-boiled"],
+    sequence: ["Raw", "Soft-boiled", "Medium-boiled"],
     answer: "Hard-boiled",
-    options: ["Hard-boiled","Scrambled","Poached","Fried"],
+    options: ["Hard-boiled", "Scrambled", "Poached", "Fried"],
     explanation: "Egg doneness by cooking time: Raw → Soft-boiled → Medium-boiled → Hard-boiled."
   },
   {
@@ -4113,9 +4113,9 @@ module.exports = [
     category: "Food",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🍚","🥢","🐟"],
+    sequence: ["🍚", "🥢", "🐟"],
     answer: "🍣",
-    options: ["🍣","🍕","🍔","🌮"],
+    options: ["🍣", "🍕", "🍔", "🌮"],
     explanation: "Making sushi: rice → chopsticks → fish → sushi roll!"
   },
   {
@@ -4123,9 +4123,9 @@ module.exports = [
     category: "Food",
     difficulty: 1,
     type: "text",
-    sequence: ["White","Rosé"],
+    sequence: ["White", "Rosé"],
     answer: "Red",
-    options: ["Red","Blue","Green","Purple"],
+    options: ["Red", "Blue", "Green", "Purple"],
     explanation: "Wine categories by color depth: White → Rosé → Red."
   },
   {
@@ -4133,9 +4133,9 @@ module.exports = [
     category: "Food",
     difficulty: 2,
     type: "text",
-    sequence: ["Orzo","Penne","Rigatoni"],
+    sequence: ["Orzo", "Penne", "Rigatoni"],
     answer: "Lasagna",
-    options: ["Lasagna","Angel Hair","Couscous","Rice"],
+    options: ["Lasagna", "Angel Hair", "Couscous", "Rice"],
     explanation: "Pasta types from smallest to largest: Orzo → Penne → Rigatoni → Lasagna sheets."
   },
   {
@@ -4143,9 +4143,9 @@ module.exports = [
     category: "Food",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🍓","🍑","🍎"],
+    sequence: ["🍓", "🍑", "🍎"],
     answer: "🍊",
-    options: ["🍊","🍓","🍇","🍉"],
+    options: ["🍊", "🍓", "🍇", "🍉"],
     explanation: "Seasonal fruits: Strawberry (spring) → Peach (summer) → Apple (fall) → Orange (winter)."
   },
   {
@@ -4153,9 +4153,9 @@ module.exports = [
     category: "Food",
     difficulty: 3,
     type: "text",
-    sequence: ["White","Green","Oolong"],
+    sequence: ["White", "Green", "Oolong"],
     answer: "Black",
-    options: ["Black","Herbal","Chamomile","Mint"],
+    options: ["Black", "Herbal", "Chamomile", "Mint"],
     explanation: "Tea types by oxidation level: White (least) → Green → Oolong → Black (most)."
   },
   {
@@ -4163,9 +4163,9 @@ module.exports = [
     category: "Food",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🫓","🍅","🧀"],
+    sequence: ["🫓", "🍅", "🧀"],
     answer: "🍕",
-    options: ["🍕","🥖","🌮","🍝"],
+    options: ["🍕", "🥖", "🌮", "🍝"],
     explanation: "Making pizza: dough → tomato sauce → cheese → pizza is ready!"
   },
   // ─── Animals ──────────────────────────────────────
@@ -4174,9 +4174,9 @@ module.exports = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🐜","🐁","🐈"],
+    sequence: ["🐜", "🐁", "🐈"],
     answer: "🐕",
-    options: ["🐕","🦠","🐛","🐜"],
+    options: ["🐕", "🦠", "🐛", "🐜"],
     explanation: "Land animals by size: ant → mouse → cat → dog."
   },
   {
@@ -4184,9 +4184,9 @@ module.exports = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥚","🐛","🫘"],
+    sequence: ["🥚", "🐛", "🫘"],
     answer: "🦋",
-    options: ["🦋","🐝","🐞","🪲"],
+    options: ["🦋", "🐝", "🐞", "🪲"],
     explanation: "Butterfly life cycle: egg → caterpillar → chrysalis → butterfly."
   },
   {
@@ -4194,9 +4194,9 @@ module.exports = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🥚","〰️","🧒"],
+    sequence: ["🥚", "〰️", "🧒"],
     answer: "🐸",
-    options: ["🐸","🐍","🦎","🐢"],
+    options: ["🐸", "🐍", "🦎", "🐢"],
     explanation: "Frog life cycle: egg → tadpole → froglet → adult frog (🐸)."
   },
   {
@@ -4204,9 +4204,9 @@ module.exports = [
     category: "Animals",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🐢","🐇","🐎"],
+    sequence: ["🐢", "🐇", "🐎"],
     answer: "🐆",
-    options: ["🐆","🐌","🐘","🦥"],
+    options: ["🐆", "🐌", "🐘", "🦥"],
     explanation: "Animals by speed: turtle → rabbit → horse → cheetah (fastest land animal)."
   },
   {
@@ -4214,9 +4214,9 @@ module.exports = [
     category: "Animals",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🦐","🐟","🐬"],
+    sequence: ["🦐", "🐟", "🐬"],
     answer: "🐋",
-    options: ["🐋","🦑","🐙","🦀"],
+    options: ["🐋", "🦑", "🐙", "🦀"],
     explanation: "Ocean creatures by size: shrimp → fish → dolphin → whale."
   },
   {
@@ -4224,9 +4224,9 @@ module.exports = [
     category: "Animals",
     difficulty: 3,
     type: "emoji",
-    sequence: ["🐕","🐑","🐄"],
+    sequence: ["🐕", "🐑", "🐄"],
     answer: "🐔",
-    options: ["🐔","🦁","🐻","🦊"],
+    options: ["🐔", "🦁", "🐻", "🦊"],
     explanation: "Animals by approximate domestication order: dog → sheep → cattle → chicken."
   },
   {
@@ -4234,9 +4234,9 @@ module.exports = [
     category: "Animals",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🐦","🦆","🦢"],
+    sequence: ["🐦", "🦆", "🦢"],
     answer: "🦅",
-    options: ["🦅","🐣","🐧","🦜"],
+    options: ["🦅", "🐣", "🐧", "🦜"],
     explanation: "Birds by size: sparrow → duck → swan → eagle."
   },
   {
@@ -4244,9 +4244,9 @@ module.exports = [
     category: "Animals",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🌿","🐁","🐍"],
+    sequence: ["🌿", "🐁", "🐍"],
     answer: "🦅",
-    options: ["🦅","🐜","🐛","🐸"],
+    options: ["🦅", "🐜", "🐛", "🐸"],
     explanation: "Food chain: grass → mouse → snake → eagle."
   },
   {
@@ -4254,9 +4254,9 @@ module.exports = [
     category: "Animals",
     difficulty: 3,
     type: "emoji",
-    sequence: ["🪰","🐁","🐕"],
+    sequence: ["🪰", "🐁", "🐕"],
     answer: "🐘",
-    options: ["🐘","🐈","🐇","🐓"],
+    options: ["🐘", "🐈", "🐇", "🐓"],
     explanation: "Animals by lifespan: fly (days) → mouse (2yr) → dog (13yr) → elephant (70yr)."
   },
   {
@@ -4264,9 +4264,9 @@ module.exports = [
     category: "Animals",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🐛","🐟","🦎"],
+    sequence: ["🐛", "🐟", "🦎"],
     answer: "🐒",
-    options: ["🐒","🪱","🦠","🐚"],
+    options: ["🐒", "🪱", "🦠", "🐚"],
     explanation: "Increasing complexity: insect → fish → reptile → primate."
   },
   // ─── Music ────────────────────────────────────────
@@ -4275,9 +4275,9 @@ module.exports = [
     category: "Music",
     difficulty: 2,
     type: "text",
-    sequence: ["Whole","Half","Quarter"],
+    sequence: ["Whole", "Half", "Quarter"],
     answer: "Eighth",
-    options: ["Eighth","Third","Fifth","Double"],
+    options: ["Eighth", "Third", "Fifth", "Double"],
     explanation: "Musical note durations, each half the previous: Whole → Half → Quarter → Eighth."
   },
   {
@@ -4285,9 +4285,9 @@ module.exports = [
     category: "Music",
     difficulty: 1,
     type: "text",
-    sequence: ["Do","Re","Mi"],
+    sequence: ["Do", "Re", "Mi"],
     answer: "Fa",
-    options: ["Fa","Sol","La","Ti"],
+    options: ["Fa", "Sol", "La", "Ti"],
     explanation: "Solfège scale: Do, Re, Mi, Fa, Sol, La, Ti, Do."
   },
   {
@@ -4295,9 +4295,9 @@ module.exports = [
     category: "Music",
     difficulty: 2,
     type: "text",
-    sequence: ["Strings","Woodwinds","Brass"],
+    sequence: ["Strings", "Woodwinds", "Brass"],
     answer: "Percussion",
-    options: ["Percussion","Electronic","Vocals","Piano"],
+    options: ["Percussion", "Electronic", "Vocals", "Piano"],
     explanation: "Orchestra instrument families: Strings → Woodwinds → Brass → Percussion."
   },
   {
@@ -4305,9 +4305,9 @@ module.exports = [
     category: "Music",
     difficulty: 2,
     type: "text",
-    sequence: ["pianissimo","piano","mezzo-piano"],
+    sequence: ["pianissimo", "piano", "mezzo-piano"],
     answer: "mezzo-forte",
-    options: ["mezzo-forte","fortissimo","forte","sforzando"],
+    options: ["mezzo-forte", "fortissimo", "forte", "sforzando"],
     explanation: "Musical dynamics from quiet to loud: pp → p → mp → mf."
   },
   {
@@ -4315,9 +4315,9 @@ module.exports = [
     category: "Music",
     difficulty: 2,
     type: "text",
-    sequence: ["Jazz (1920s)","Rock (1960s)","Disco (1970s)"],
+    sequence: ["Jazz (1920s)", "Rock (1960s)", "Disco (1970s)"],
     answer: "Hip-Hop (1980s)",
-    options: ["Hip-Hop (1980s)","Classical (1990s)","Opera (2000s)","Blues (1980s)"],
+    options: ["Hip-Hop (1980s)", "Classical (1990s)", "Opera (2000s)", "Blues (1980s)"],
     explanation: "Dominant music genres by decade: Jazz → Rock → Disco → Hip-Hop."
   },
   {
@@ -4325,9 +4325,9 @@ module.exports = [
     category: "Music",
     difficulty: 2,
     type: "text",
-    sequence: ["Violin","Viola","Cello"],
+    sequence: ["Violin", "Viola", "Cello"],
     answer: "Double Bass",
-    options: ["Double Bass","Guitar","Harp","Banjo"],
+    options: ["Double Bass", "Guitar", "Harp", "Banjo"],
     explanation: "String family from highest to lowest pitch: Violin → Viola → Cello → Double Bass."
   },
   {
@@ -4335,9 +4335,9 @@ module.exports = [
     category: "Music",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🎸","🥁","🎤"],
+    sequence: ["🎸", "🥁", "🎤"],
     answer: "🎵",
-    options: ["🎵","🎹","📻","📢"],
+    options: ["🎵", "🎹", "📻", "📢"],
     explanation: "Forming a band: guitar → drums → vocals → music! A band makes music together."
   },
   {
@@ -4345,9 +4345,9 @@ module.exports = [
     category: "Music",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔈","🔉","🔊"],
+    sequence: ["🔈", "🔉", "🔊"],
     answer: "📢",
-    options: ["📢","🔇","🔕","🔈"],
+    options: ["📢", "🔇", "🔕", "🔈"],
     explanation: "Getting louder (crescendo): quiet → medium → loud → maximum volume."
   },
   // ─── Math & Numbers ───────────────────────────────
@@ -4356,9 +4356,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 1,
     type: "text",
-    sequence: ["1","4","9","16"],
+    sequence: ["1", "4", "9", "16"],
     answer: "25",
-    options: ["25","20","24","36"],
+    options: ["25", "20", "24", "36"],
     explanation: "Perfect squares: 1², 2², 3², 4², 5² = 1, 4, 9, 16, 25."
   },
   {
@@ -4366,9 +4366,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["1","8","27"],
+    sequence: ["1", "8", "27"],
     answer: "64",
-    options: ["64","36","81","100"],
+    options: ["64", "36", "81", "100"],
     explanation: "Perfect cubes: 1³=1, 2³=8, 3³=27, 4³=64."
   },
   {
@@ -4376,9 +4376,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["1","3","6","10"],
+    sequence: ["1", "3", "6", "10"],
     answer: "15",
-    options: ["15","12","14","20"],
+    options: ["15", "12", "14", "20"],
     explanation: "Triangular numbers: 1, 3, 6, 10, 15. Each adds one more than the previous gap."
   },
   {
@@ -4386,9 +4386,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 1,
     type: "text",
-    sequence: ["10","100","1000"],
+    sequence: ["10", "100", "1000"],
     answer: "10000",
-    options: ["10000","5000","10001","2000"],
+    options: ["10000", "5000", "10001", "2000"],
     explanation: "Powers of 10: 10¹, 10², 10³, 10⁴ = 10, 100, 1000, 10000."
   },
   {
@@ -4396,9 +4396,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 1,
     type: "text",
-    sequence: ["3","2","1","0"],
+    sequence: ["3", "2", "1", "0"],
     answer: "-1",
-    options: ["-1","-2","00","0.5"],
+    options: ["-1", "-2", "00", "0.5"],
     explanation: "Counting down by 1: 3, 2, 1, 0, -1."
   },
   {
@@ -4406,9 +4406,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["1","1/2","1/4"],
+    sequence: ["1", "1/2", "1/4"],
     answer: "1/8",
-    options: ["1/8","1/3","1/6","1/16"],
+    options: ["1/8", "1/3", "1/6", "1/16"],
     explanation: "Each fraction is half the previous: 1 → 1/2 → 1/4 → 1/8."
   },
   {
@@ -4416,9 +4416,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 3,
     type: "text",
-    sequence: ["3","1","4","1"],
+    sequence: ["3", "1", "4", "1"],
     answer: "5",
-    options: ["5","6","2","9"],
+    options: ["5", "6", "2", "9"],
     explanation: "Digits of Pi: 3.1415926... The fifth digit is 5."
   },
   {
@@ -4426,9 +4426,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 1,
     type: "text",
-    sequence: ["3","6","12","24"],
+    sequence: ["3", "6", "12", "24"],
     answer: "48",
-    options: ["48","36","30","42"],
+    options: ["48", "36", "30", "42"],
     explanation: "Each number doubles: 3 × 2 = 6, 6 × 2 = 12, 12 × 2 = 24, 24 × 2 = 48."
   },
   {
@@ -4436,9 +4436,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 1,
     type: "text",
-    sequence: ["7","14","21"],
+    sequence: ["7", "14", "21"],
     answer: "28",
-    options: ["28","27","35","30"],
+    options: ["28", "27", "35", "30"],
     explanation: "Multiples of 7: 7, 14, 21, 28."
   },
   {
@@ -4446,9 +4446,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["5","8","13","21"],
+    sequence: ["5", "8", "13", "21"],
     answer: "34",
-    options: ["34","29","32","40"],
+    options: ["34", "29", "32", "40"],
     explanation: "Fibonacci sequence: each number is the sum of the two before. 13+21=34."
   },
   {
@@ -4456,9 +4456,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 3,
     type: "text",
-    sequence: ["L","C","D"],
+    sequence: ["L", "C", "D"],
     answer: "M",
-    options: ["M","X","E","G"],
+    options: ["M", "X", "E", "G"],
     explanation: "Large Roman numerals: L (50), C (100), D (500), M (1000)."
   },
   {
@@ -4466,9 +4466,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["1","-2","3","-4"],
+    sequence: ["1", "-2", "3", "-4"],
     answer: "5",
-    options: ["5","-5","4","6"],
+    options: ["5", "-5", "4", "6"],
     explanation: "Alternating sign pattern: +1, -2, +3, -4, +5. Absolute values increase, signs alternate."
   },
   {
@@ -4476,9 +4476,9 @@ module.exports = [
     category: "Math & Numbers",
     difficulty: 2,
     type: "text",
-    sequence: ["11","13","17","19"],
+    sequence: ["11", "13", "17", "19"],
     answer: "23",
-    options: ["23","21","25","27"],
+    options: ["23", "21", "25", "27"],
     explanation: "Prime numbers after 10: 11, 13, 17, 19, 23. Each is divisible only by 1 and itself."
   },
   // ─── Logic Sequences ──────────────────────────────
@@ -4487,9 +4487,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 3,
     type: "text",
-    sequence: ["AZ","BY","CX"],
+    sequence: ["AZ", "BY", "CX"],
     answer: "DW",
-    options: ["DW","DE","EV","DA"],
+    options: ["DW", "DE", "EV", "DA"],
     explanation: "First letter goes forward A→B→C→D, second goes backward Z→Y→X→W."
   },
   {
@@ -4497,9 +4497,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 1,
     type: "text",
-    sequence: ["A","C","E","G"],
+    sequence: ["A", "C", "E", "G"],
     answer: "I",
-    options: ["I","H","J","F"],
+    options: ["I", "H", "J", "F"],
     explanation: "Every other letter of the alphabet: A, C, E, G, I (skipping B, D, F, H)."
   },
   {
@@ -4507,9 +4507,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 2,
     type: "text",
-    sequence: ["AA","BB","CC"],
+    sequence: ["AA", "BB", "CC"],
     answer: "DD",
-    options: ["DD","EE","AB","CD"],
+    options: ["DD", "EE", "AB", "CD"],
     explanation: "Each letter doubled in alphabetical order: AA → BB → CC → DD."
   },
   {
@@ -4517,9 +4517,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 1,
     type: "text",
-    sequence: ["Z","Y","X","W"],
+    sequence: ["Z", "Y", "X", "W"],
     answer: "V",
-    options: ["V","U","A","T"],
+    options: ["V", "U", "A", "T"],
     explanation: "Alphabet in reverse: Z → Y → X → W → V."
   },
   {
@@ -4527,9 +4527,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 1,
     type: "text",
-    sequence: ["Triangle","Square","Pentagon"],
+    sequence: ["Triangle", "Square", "Pentagon"],
     answer: "Hexagon",
-    options: ["Hexagon","Circle","Octagon","Rectangle"],
+    options: ["Hexagon", "Circle", "Octagon", "Rectangle"],
     explanation: "Polygons with increasing sides: Triangle (3) → Square (4) → Pentagon (5) → Hexagon (6)."
   },
   {
@@ -4537,9 +4537,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 2,
     type: "text",
-    sequence: ["2","6","18"],
+    sequence: ["2", "6", "18"],
     answer: "54",
-    options: ["54","36","48","72"],
+    options: ["54", "36", "48", "72"],
     explanation: "Each number is multiplied by 3: 2 × 3 = 6, 6 × 3 = 18, 18 × 3 = 54."
   },
   {
@@ -4547,9 +4547,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 2,
     type: "text",
-    sequence: ["2","3","5","8"],
+    sequence: ["2", "3", "5", "8"],
     answer: "12",
-    options: ["12","11","13","10"],
+    options: ["12", "11", "13", "10"],
     explanation: "Add increasing amounts: +1, +2, +3, +4. So 2→3→5→8→12."
   },
   {
@@ -4557,9 +4557,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 3,
     type: "text",
-    sequence: ["001","010","011"],
+    sequence: ["001", "010", "011"],
     answer: "100",
-    options: ["100","110","101","111"],
+    options: ["100", "110", "101", "111"],
     explanation: "Binary counting: 001 (1), 010 (2), 011 (3), 100 (4)."
   },
   {
@@ -4567,9 +4567,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 2,
     type: "text",
-    sequence: ["A","B","E","F"],
+    sequence: ["A", "B", "E", "F"],
     answer: "I",
-    options: ["I","G","H","J"],
+    options: ["I", "G", "H", "J"],
     explanation: "Alternating vowels and consonants (first of each): A, B, E, F, I."
   },
   {
@@ -4577,9 +4577,9 @@ module.exports = [
     category: "Logic Sequences",
     difficulty: 3,
     type: "text",
-    sequence: ["1A","2B","3C"],
+    sequence: ["1A", "2B", "3C"],
     answer: "4D",
-    options: ["4D","5E","3D","4C"],
+    options: ["4D", "5E", "3D", "4C"],
     explanation: "Numbers increment (1,2,3,4) and letters increment (A,B,C,D): 1A → 2B → 3C → 4D."
   },
   // ─── General Knowledge ────────────────────────────
@@ -4588,9 +4588,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Monday","Tuesday","Wednesday"],
+    sequence: ["Monday", "Tuesday", "Wednesday"],
     answer: "Thursday",
-    options: ["Thursday","Friday","Sunday","Saturday"],
+    options: ["Thursday", "Friday", "Sunday", "Saturday"],
     explanation: "Days of the week: Monday → Tuesday → Wednesday → Thursday."
   },
   {
@@ -4598,9 +4598,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["January","February","March"],
+    sequence: ["January", "February", "March"],
     answer: "April",
-    options: ["April","May","June","December"],
+    options: ["April", "May", "June", "December"],
     explanation: "Months in order: January → February → March → April."
   },
   {
@@ -4608,9 +4608,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 2,
     type: "text",
-    sequence: ["Aries","Taurus","Gemini"],
+    sequence: ["Aries", "Taurus", "Gemini"],
     answer: "Cancer",
-    options: ["Cancer","Leo","Virgo","Pisces"],
+    options: ["Cancer", "Leo", "Virgo", "Pisces"],
     explanation: "Zodiac signs in order: Aries → Taurus → Gemini → Cancer."
   },
   {
@@ -4618,9 +4618,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Jack","Queen","King"],
+    sequence: ["Jack", "Queen", "King"],
     answer: "Ace",
-    options: ["Ace","Joker","10","2"],
+    options: ["Ace", "Joker", "10", "2"],
     explanation: "Playing card face values: Jack → Queen → King → Ace."
   },
   {
@@ -4628,9 +4628,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["1980s","1990s","2000s"],
+    sequence: ["1980s", "1990s", "2000s"],
     answer: "2010s",
-    options: ["2010s","2020s","1970s","2050s"],
+    options: ["2010s", "2020s", "1970s", "2050s"],
     explanation: "Consecutive decades: 1980s → 1990s → 2000s → 2010s."
   },
   {
@@ -4638,9 +4638,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "emoji",
-    sequence: ["👶","🧒","🧑"],
+    sequence: ["👶", "🧒", "🧑"],
     answer: "🧓",
-    options: ["🧓","👶","🧒","🦴"],
+    options: ["🧓", "👶", "🧒", "🦴"],
     explanation: "Human life stages: baby → child → adult → elderly."
   },
   {
@@ -4648,9 +4648,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Breakfast","Lunch"],
+    sequence: ["Breakfast", "Lunch"],
     answer: "Dinner",
-    options: ["Dinner","Brunch","Snack","Midnight Feast"],
+    options: ["Dinner", "Brunch", "Snack", "Midnight Feast"],
     explanation: "Daily meals in order: Breakfast → Lunch → Dinner."
   },
   {
@@ -4658,9 +4658,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Elementary","Middle School","High School"],
+    sequence: ["Elementary", "Middle School", "High School"],
     answer: "College",
-    options: ["College","Preschool","Daycare","Kindergarten"],
+    options: ["College", "Preschool", "Daycare", "Kindergarten"],
     explanation: "Education progression: Elementary → Middle School → High School → College."
   },
   {
@@ -4668,9 +4668,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Second","Minute","Hour"],
+    sequence: ["Second", "Minute", "Hour"],
     answer: "Day",
-    options: ["Day","Week","Month","Millisecond"],
+    options: ["Day", "Week", "Month", "Millisecond"],
     explanation: "Time units from smallest to largest: Second → Minute → Hour → Day."
   },
   {
@@ -4678,9 +4678,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "emoji",
-    sequence: ["☝️","✌️","🤟","🖖"],
+    sequence: ["☝️", "✌️", "🤟", "🖖"],
     answer: "🖐️",
-    options: ["🖐️","👊","👋","👍"],
+    options: ["🖐️", "👊", "👋", "👍"],
     explanation: "Counting on fingers: one ☝️ → two ✌️ → three 🤟 → four 🖖 → five (open hand) 🖐️."
   },
   // ─── Emoji Sequences ──────────────────────────────
@@ -4689,9 +4689,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["⏰","🚿","👔"],
+    sequence: ["⏰", "🚿", "👔"],
     answer: "🚗",
-    options: ["🚗","😴","🍳","🛏️"],
+    options: ["🚗", "😴", "🍳", "🛏️"],
     explanation: "Morning routine: alarm → shower → get dressed → drive to work."
   },
   {
@@ -4699,9 +4699,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🛒","🔪","🍳"],
+    sequence: ["🛒", "🔪", "🍳"],
     answer: "🍽️",
-    options: ["🍽️","🗑️","🛒","🔥"],
+    options: ["🍽️", "🗑️", "🛒", "🔥"],
     explanation: "Cooking process: shop → chop → cook → serve/eat."
   },
   {
@@ -4709,9 +4709,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🌧️","🌱","🌿"],
+    sequence: ["🌧️", "🌱", "🌿"],
     answer: "🌻",
-    options: ["🌻","🍂","🌵","🪨"],
+    options: ["🌻", "🍂", "🌵", "🪨"],
     explanation: "Plant growth: rain → sprout → leaves → flower."
   },
   {
@@ -4719,9 +4719,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🌍","🚀","🌙"],
+    sequence: ["🌍", "🚀", "🌙"],
     answer: "⭐",
-    options: ["⭐","🌍","☀️","🛸"],
+    options: ["⭐", "🌍", "☀️", "🛸"],
     explanation: "Space journey: Earth → launch → Moon → stars (going further into space)."
   },
   {
@@ -4729,9 +4729,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🌅","☀️","🌤️"],
+    sequence: ["🌅", "☀️", "🌤️"],
     answer: "🌆",
-    options: ["🌆","🌃","⛈️","🌅"],
+    options: ["🌆", "🌃", "⛈️", "🌅"],
     explanation: "A day's weather: sunrise → sunny → partly cloudy → sunset."
   },
   {
@@ -4739,9 +4739,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🎈","🎂","🕯️"],
+    sequence: ["🎈", "🎂", "🕯️"],
     answer: "🎉",
-    options: ["🎉","😢","🎈","🍕"],
+    options: ["🎉", "😢", "🎈", "🍕"],
     explanation: "Birthday party: balloons → cake → blow candles → celebration!"
   },
   {
@@ -4749,9 +4749,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🎬","🍿","📺"],
+    sequence: ["🎬", "🍿", "📺"],
     answer: "😴",
-    options: ["😴","🎮","📖","🎬"],
+    options: ["😴", "🎮", "📖", "🎬"],
     explanation: "Movie night: pick a movie → popcorn → watch → fall asleep."
   },
   {
@@ -4759,9 +4759,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🏋️","🏃","💦"],
+    sequence: ["🏋️", "🏃", "💦"],
     answer: "💪",
-    options: ["💪","🍕","😴","🛋️"],
+    options: ["💪", "🍕", "😴", "🛋️"],
     explanation: "Workout routine: lift weights → run → sweat → get strong!"
   },
   {
@@ -4769,9 +4769,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["☁️","🌧️","☂️"],
+    sequence: ["☁️", "🌧️", "☂️"],
     answer: "🌈",
-    options: ["🌈","⛈️","❄️","☁️"],
+    options: ["🌈", "⛈️", "❄️", "☁️"],
     explanation: "Rainy day sequence: clouds → rain → umbrella → rainbow appears after."
   },
   // ─── Colors & Patterns ────────────────────────────
@@ -4780,9 +4780,9 @@ module.exports = [
     category: "Colors & Patterns",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🟡"],
+    sequence: ["🔴", "🟡"],
     answer: "🟢",
-    options: ["🟢","🔵","🟠","⚫"],
+    options: ["🟢", "🔵", "🟠", "⚫"],
     explanation: "Traffic light sequence: Red (stop) → Yellow (caution) → Green (go)."
   },
   {
@@ -4790,9 +4790,9 @@ module.exports = [
     category: "Colors & Patterns",
     difficulty: 2,
     type: "text",
-    sequence: ["Red + Blue = Purple","Red + Yellow = Orange"],
+    sequence: ["Red + Blue = Purple", "Red + Yellow = Orange"],
     answer: "Blue + Yellow = Green",
-    options: ["Blue + Yellow = Green","Red + Green = Brown","Blue + Red = Pink","Yellow + Green = Lime"],
+    options: ["Blue + Yellow = Green", "Red + Green = Brown", "Blue + Red = Pink", "Yellow + Green = Lime"],
     explanation: "Primary color mixing: Red+Blue=Purple, Red+Yellow=Orange, Blue+Yellow=Green."
   },
   {
@@ -4800,9 +4800,9 @@ module.exports = [
     category: "Colors & Patterns",
     difficulty: 1,
     type: "emoji",
-    sequence: ["⬛","🩶"],
+    sequence: ["⬛", "🩶"],
     answer: "⬜",
-    options: ["⬜","🟦","🟥","🟫"],
+    options: ["⬜", "🟦", "🟥", "🟫"],
     explanation: "Greyscale from dark to light: Black → Grey → White."
   },
   {
@@ -4810,9 +4810,9 @@ module.exports = [
     category: "Colors & Patterns",
     difficulty: 3,
     type: "text",
-    sequence: ["Red↔Green","Blue↔Orange"],
+    sequence: ["Red↔Green", "Blue↔Orange"],
     answer: "Yellow↔Purple",
-    options: ["Yellow↔Purple","Red↔Blue","Green↔Orange","White↔Black"],
+    options: ["Yellow↔Purple", "Red↔Blue", "Green↔Orange", "White↔Black"],
     explanation: "Complementary color pairs: Red↔Green, Blue↔Orange, Yellow↔Purple."
   },
   {
@@ -4820,9 +4820,9 @@ module.exports = [
     category: "Colors & Patterns",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔴","🔵","🔴","🔵"],
+    sequence: ["🔴", "🔵", "🔴", "🔵"],
     answer: "🔴",
-    options: ["🔴","🔵","🟡","🟢"],
+    options: ["🔴", "🔵", "🟡", "🟢"],
     explanation: "Simple alternating pattern: Red, Blue, Red, Blue, Red..."
   },
   {
@@ -4830,9 +4830,9 @@ module.exports = [
     category: "Colors & Patterns",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🔴","🟡","🔵","🔴","🟡"],
+    sequence: ["🔴", "🟡", "🔵", "🔴", "🟡"],
     answer: "🔵",
-    options: ["🔵","🔴","🟡","🟢"],
+    options: ["🔵", "🔴", "🟡", "🟢"],
     explanation: "Repeating pattern of three: Red, Yellow, Blue, Red, Yellow, Blue..."
   },
   // ─── Creative & Mixed ─────────────────────────────
@@ -4841,9 +4841,9 @@ module.exports = [
     category: "Creative & Mixed",
     difficulty: 2,
     type: "text",
-    sequence: ["Setup","Conflict","Climax"],
+    sequence: ["Setup", "Conflict", "Climax"],
     answer: "Resolution",
-    options: ["Resolution","Sequel","Prologue","Epilogue"],
+    options: ["Resolution", "Sequel", "Prologue", "Epilogue"],
     explanation: "Classic story structure: Setup → Conflict → Climax → Resolution."
   },
   {
@@ -4851,9 +4851,9 @@ module.exports = [
     category: "Creative & Mixed",
     difficulty: 1,
     type: "emoji",
-    sequence: ["✏️","🖍️","🖌️"],
+    sequence: ["✏️", "🖍️", "🖌️"],
     answer: "🎨",
-    options: ["🎨","📏","✂️","📐"],
+    options: ["🎨", "📏", "✂️", "📐"],
     explanation: "Art supplies progression: pencil sketch → crayon color → paint brush → palette (masterpiece)."
   },
   {
@@ -4861,9 +4861,9 @@ module.exports = [
     category: "Creative & Mixed",
     difficulty: 1,
     type: "emoji",
-    sequence: ["😐","🙂","😊"],
+    sequence: ["😐", "🙂", "😊"],
     answer: "😄",
-    options: ["😄","😢","😡","😐"],
+    options: ["😄", "😢", "😡", "😐"],
     explanation: "Increasing happiness: neutral → slightly happy → happy → very happy."
   },
   {
@@ -4871,9 +4871,9 @@ module.exports = [
     category: "Creative & Mixed",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🌷","🏖️","🍁"],
+    sequence: ["🌷", "🏖️", "🍁"],
     answer: "⛷️",
-    options: ["⛷️","🎄","🌸","🏊"],
+    options: ["⛷️", "🎄", "🌸", "🏊"],
     explanation: "Seasonal activities: spring flowers → summer beach → fall leaves → winter skiing."
   },
   {
@@ -4881,9 +4881,9 @@ module.exports = [
     category: "Creative & Mixed",
     difficulty: 2,
     type: "emoji",
-    sequence: ["📐","🧱","🪵"],
+    sequence: ["📐", "🧱", "🪵"],
     answer: "🏠",
-    options: ["🏠","🏗️","🔨","🧰"],
+    options: ["🏠", "🏗️", "🔨", "🧰"],
     explanation: "Building a house: blueprint → bricks → wood framing → finished house."
   },
   {
@@ -4891,9 +4891,9 @@ module.exports = [
     category: "Creative & Mixed",
     difficulty: 2,
     type: "emoji",
-    sequence: ["💡","📝","🔨"],
+    sequence: ["💡", "📝", "🔨"],
     answer: "🏆",
-    options: ["🏆","💤","💡","❌"],
+    options: ["🏆", "💤", "💡", "❌"],
     explanation: "From idea to achievement: idea → plan → build → success."
   },
   // ─── Flags ────────────────────────────────────────
@@ -4902,9 +4902,9 @@ module.exports = [
     category: "Flags",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🇳🇴","🇸🇪","🇩🇰"],
+    sequence: ["🇳🇴", "🇸🇪", "🇩🇰"],
     answer: "🇫🇮",
-    options: ["🇫🇮","🇩🇪","🇵🇱","🇳🇱"],
+    options: ["🇫🇮", "🇩🇪", "🇵🇱", "🇳🇱"],
     explanation: "Nordic countries: Norway → Sweden → Denmark → Finland."
   },
   {
@@ -4912,9 +4912,9 @@ module.exports = [
     category: "Flags",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🇺🇸","🇬🇧","🇦🇺"],
+    sequence: ["🇺🇸", "🇬🇧", "🇦🇺"],
     answer: "🇨🇦",
-    options: ["🇨🇦","🇫🇷","🇩🇪","🇯🇵"],
+    options: ["🇨🇦", "🇫🇷", "🇩🇪", "🇯🇵"],
     explanation: "Major English-speaking countries: USA → UK → Australia → Canada."
   },
   {
@@ -4922,9 +4922,9 @@ module.exports = [
     category: "Flags",
     difficulty: 3,
     type: "emoji",
-    sequence: ["🇧🇷","🇷🇺","🇮🇳"],
+    sequence: ["🇧🇷", "🇷🇺", "🇮🇳"],
     answer: "🇨🇳",
-    options: ["🇨🇳","🇯🇵","🇰🇷","🇲🇽"],
+    options: ["🇨🇳", "🇯🇵", "🇰🇷", "🇲🇽"],
     explanation: "BRICS nations: Brazil → Russia → India → China → South Africa."
   },
   {
@@ -4932,9 +4932,9 @@ module.exports = [
     category: "Flags",
     difficulty: 3,
     type: "emoji",
-    sequence: ["🇹🇭","🇻🇳","🇲🇾"],
+    sequence: ["🇹🇭", "🇻🇳", "🇲🇾"],
     answer: "🇸🇬",
-    options: ["🇸🇬","🇨🇳","🇯🇵","🇰🇷"],
+    options: ["🇸🇬", "🇨🇳", "🇯🇵", "🇰🇷"],
     explanation: "Southeast Asian nations: Thailand → Vietnam → Malaysia → Singapore."
   },
   {
@@ -4942,9 +4942,9 @@ module.exports = [
     category: "Flags",
     difficulty: 2,
     type: "emoji",
-    sequence: ["🇧🇷","🇦🇷","🇨🇱"],
+    sequence: ["🇧🇷", "🇦🇷", "🇨🇱"],
     answer: "🇨🇴",
-    options: ["🇨🇴","🇲🇽","🇪🇸","🇵🇹"],
+    options: ["🇨🇴", "🇲🇽", "🇪🇸", "🇵🇹"],
     explanation: "South American countries by population: Brazil → Argentina → Chile → Colombia."
   },
   // ─── Pop Culture ──────────────────────────────────
@@ -4953,9 +4953,9 @@ module.exports = [
     category: "Pop Culture",
     difficulty: 1,
     type: "text",
-    sequence: ["G","PG","PG-13"],
+    sequence: ["G", "PG", "PG-13"],
     answer: "R",
-    options: ["R","NC-17","X","AA"],
+    options: ["R", "NC-17", "X", "AA"],
     explanation: "US movie ratings from least to most restrictive: G → PG → PG-13 → R."
   },
   {
@@ -4963,9 +4963,9 @@ module.exports = [
     category: "Pop Culture",
     difficulty: 1,
     type: "emoji",
-    sequence: ["📸","❤️","💬"],
+    sequence: ["📸", "❤️", "💬"],
     answer: "🔄",
-    options: ["🔄","🗑️","📵","🔇"],
+    options: ["🔄", "🗑️", "📵", "🔇"],
     explanation: "Social media engagement: post photo → like → comment → share/repost."
   },
   {
@@ -4973,9 +4973,9 @@ module.exports = [
     category: "Pop Culture",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🟢","🟡","🟠"],
+    sequence: ["🟢", "🟡", "🟠"],
     answer: "🔴",
-    options: ["🔴","🟣","⚫","⚪"],
+    options: ["🔴", "🟣", "⚫", "⚪"],
     explanation: "Game difficulty levels: Easy (green) → Medium (yellow) → Hard (orange) → Expert (red)."
   },
   {
@@ -4983,9 +4983,9 @@ module.exports = [
     category: "Pop Culture",
     difficulty: 2,
     type: "text",
-    sequence: ["VHS","DVD","Blu-ray"],
+    sequence: ["VHS", "DVD", "Blu-ray"],
     answer: "Streaming",
-    options: ["Streaming","Betamax","LaserDisc","Film Reel"],
+    options: ["Streaming", "Betamax", "LaserDisc", "Film Reel"],
     explanation: "Home entertainment evolution: VHS → DVD → Blu-ray → Streaming."
   },
   {
@@ -4993,9 +4993,9 @@ module.exports = [
     category: "Pop Culture",
     difficulty: 1,
     type: "emoji",
-    sequence: ["☎️","📟","📱"],
+    sequence: ["☎️", "📟", "📱"],
     answer: "⌚",
-    options: ["⌚","📞","📺","💻"],
+    options: ["⌚", "📞", "📺", "💻"],
     explanation: "Personal communication devices: rotary phone → pager → smartphone → smartwatch."
   },
   // ─── Visual & Spatial ─────────────────────────────
@@ -5004,9 +5004,9 @@ module.exports = [
     category: "Visual & Spatial",
     difficulty: 1,
     type: "text",
-    sequence: ["▲","■","⬠"],
+    sequence: ["▲", "■", "⬠"],
     answer: "⬡",
-    options: ["⬡","●","★","◆"],
+    options: ["⬡", "●", "★", "◆"],
     explanation: "Shapes with increasing sides: triangle (3) → square (4) → pentagon (5) → hexagon (6)."
   },
   {
@@ -5014,9 +5014,9 @@ module.exports = [
     category: "Visual & Spatial",
     difficulty: 1,
     type: "text",
-    sequence: ["→","↓","←"],
+    sequence: ["→", "↓", "←"],
     answer: "↑",
-    options: ["↑","↗","↙","⟳"],
+    options: ["↑", "↗", "↙", "⟳"],
     explanation: "Arrow rotating 90° clockwise: right → down → left → up."
   },
   {
@@ -5024,9 +5024,9 @@ module.exports = [
     category: "Visual & Spatial",
     difficulty: 1,
     type: "text",
-    sequence: ["·","··","···"],
+    sequence: ["·", "··", "···"],
     answer: "····",
-    options: ["····","·····","··","·"],
+    options: ["····", "·····", "··", "·"],
     explanation: "Adding one dot each time: 1 dot, 2 dots, 3 dots, 4 dots."
   },
   {
@@ -5034,9 +5034,9 @@ module.exports = [
     category: "Visual & Spatial",
     difficulty: 2,
     type: "text",
-    sequence: ["()","(())","((()))"],
+    sequence: ["()", "(())", "((()))"],
     answer: "(((())))",
-    options: ["(((())))","()()","((()))","(()())"],
+    options: ["(((())))", "()()", "((()))", "(()())"],
     explanation: "Each step adds another layer of nesting: () → (()) → ((())) → (((())))"
   },
   {
@@ -5044,9 +5044,9 @@ module.exports = [
     category: "Visual & Spatial",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🔹","🔷","💎"],
+    sequence: ["🔹", "🔷", "💎"],
     answer: "💠",
-    options: ["💠","🔸","🔹","⬛"],
+    options: ["💠", "🔸", "🔹", "⬛"],
     explanation: "Diamond shapes getting larger: small diamond → medium diamond → gem → large diamond."
   },
   // ─── Letter & Word Patterns ───────────────────────
@@ -5055,9 +5055,9 @@ module.exports = [
     category: "Letter & Word Patterns",
     difficulty: 1,
     type: "text",
-    sequence: ["ABC","DEF","GHI"],
+    sequence: ["ABC", "DEF", "GHI"],
     answer: "JKL",
-    options: ["JKL","KLM","HIJ","MNO"],
+    options: ["JKL", "KLM", "HIJ", "MNO"],
     explanation: "Alphabet in groups of 3: ABC, DEF, GHI, JKL."
   },
   {
@@ -5065,9 +5065,9 @@ module.exports = [
     category: "Letter & Word Patterns",
     difficulty: 1,
     type: "text",
-    sequence: ["I","am","the"],
+    sequence: ["I", "am", "the"],
     answer: "best",
-    options: ["best","go","a","me"],
+    options: ["best", "go", "a", "me"],
     explanation: "Words with increasing letter count: I (1) → am (2) → the (3) → best (4)."
   },
   {
@@ -5075,9 +5075,9 @@ module.exports = [
     category: "Letter & Word Patterns",
     difficulty: 3,
     type: "text",
-    sequence: ["a","aba","abcba"],
+    sequence: ["a", "aba", "abcba"],
     answer: "abcdcba",
-    options: ["abcdcba","abcba","abcabc","aabbcc"],
+    options: ["abcdcba", "abcba", "abcabc", "aabbcc"],
     explanation: "Growing palindromes: a → aba → abcba → abcdcba. Each adds a new letter in the center."
   },
   {
@@ -5085,9 +5085,9 @@ module.exports = [
     category: "Letter & Word Patterns",
     difficulty: 2,
     type: "text",
-    sequence: ["B","C","D","F"],
+    sequence: ["B", "C", "D", "F"],
     answer: "G",
-    options: ["G","E","H","J"],
+    options: ["G", "E", "H", "J"],
     explanation: "Consonants in order, skipping vowels: B, C, D, F, G."
   },
   {
@@ -5095,9 +5095,9 @@ module.exports = [
     category: "Letter & Word Patterns",
     difficulty: 2,
     type: "text",
-    sequence: ["AA","BB","CC","DD"],
+    sequence: ["AA", "BB", "CC", "DD"],
     answer: "EE",
-    options: ["EE","FF","AB","DE"],
+    options: ["EE", "FF", "AB", "DE"],
     explanation: "Double-letter pairs in alphabetical order: AA → BB → CC → DD → EE."
   },
   // ─── Geography ────────────────────────────────────
@@ -5106,9 +5106,9 @@ module.exports = [
     category: "Geography",
     difficulty: 2,
     type: "text",
-    sequence: ["UTC-5 (New York)","UTC+0 (London)","UTC+3 (Moscow)"],
+    sequence: ["UTC-5 (New York)", "UTC+0 (London)", "UTC+3 (Moscow)"],
     answer: "UTC+8 (Beijing)",
-    options: ["UTC+8 (Beijing)","UTC-8 (LA)","UTC+1 (Paris)","UTC+12 (Auckland)"],
+    options: ["UTC+8 (Beijing)", "UTC-8 (LA)", "UTC+1 (Paris)", "UTC+12 (Auckland)"],
     explanation: "Major cities moving east through time zones: New York → London → Moscow → Beijing."
   },
   // ─── History ──────────────────────────────────────
@@ -5117,9 +5117,9 @@ module.exports = [
     category: "History",
     difficulty: 2,
     type: "text",
-    sequence: ["Steam Engine","Telegraph","Telephone"],
+    sequence: ["Steam Engine", "Telegraph", "Telephone"],
     answer: "Radio",
-    options: ["Radio","Wheel","Printing Press","Compass"],
+    options: ["Radio", "Wheel", "Printing Press", "Compass"],
     explanation: "Major inventions of the industrial era: Steam Engine → Telegraph → Telephone → Radio."
   },
   // ─── Technology ───────────────────────────────────
@@ -5128,9 +5128,9 @@ module.exports = [
     category: "Technology",
     difficulty: 3,
     type: "text",
-    sequence: ["Variable","Function","Class"],
+    sequence: ["Variable", "Function", "Class"],
     answer: "Module",
-    options: ["Module","Bit","Pixel","Wire"],
+    options: ["Module", "Bit", "Pixel", "Wire"],
     explanation: "Programming concepts by abstraction level: Variable → Function → Class → Module."
   },
   // ─── Science ──────────────────────────────────────
@@ -5139,10 +5139,10 @@ module.exports = [
     category: "Science",
     difficulty: 2,
     type: "text",
-    sequence: ["Mercury (rocky)","Jupiter (gas giant)","Uranus (ice giant)"],
+    sequence: ["Mercury (rocky)", "Jupiter (gas giant)", "Uranus (ice giant)"],
     answer: "Sun (star)",
-    options: ["Sun (star)","Moon (satellite)","Pluto (dwarf)","Ceres (asteroid)"],
-    explanation: "Celestial body types by size: rocky planet → gas giant → ice giant → star."
+    options: ["Sun (star)", "Moon (satellite)", "Pluto (dwarf)", "Ceres (asteroid)"],
+    explanation: "Celestial body types in increasing scale: rocky planet → gas giant → ice giant → star."
   },
   // ─── General Knowledge ────────────────────────────
   {
@@ -5150,9 +5150,9 @@ module.exports = [
     category: "General Knowledge",
     difficulty: 1,
     type: "text",
-    sequence: ["Penny","Nickel","Dime"],
+    sequence: ["Penny", "Nickel", "Dime"],
     answer: "Quarter",
-    options: ["Quarter","Dollar","Half Dollar","Cent"],
+    options: ["Quarter", "Dollar", "Half Dollar", "Cent"],
     explanation: "US coins by value: Penny (1¢) → Nickel (5¢) → Dime (10¢) → Quarter (25¢)."
   },
   // ─── Emoji Sequences ──────────────────────────────
@@ -5161,9 +5161,9 @@ module.exports = [
     category: "Emoji Sequences",
     difficulty: 1,
     type: "emoji",
-    sequence: ["🦷","📖","🛏️"],
+    sequence: ["🦷", "📖", "🛏️"],
     answer: "😴",
-    options: ["😴","☀️","🏃","📱"],
+    options: ["😴", "☀️", "🏃", "📱"],
     explanation: "Bedtime routine: brush teeth → read a book → get in bed → sleep."
   },
   // ─── Music ────────────────────────────────────────
@@ -5172,9 +5172,9 @@ module.exports = [
     category: "Music",
     difficulty: 3,
     type: "text",
-    sequence: ["Largo","Adagio","Andante"],
+    sequence: ["Largo", "Adagio", "Andante"],
     answer: "Allegro",
-    options: ["Allegro","Presto","Forte","Piano"],
+    options: ["Allegro", "Presto", "Forte", "Piano"],
     explanation: "Musical tempo markings from slow to fast: Largo → Adagio → Andante → Allegro."
   },
 ];
