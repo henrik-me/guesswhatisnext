@@ -271,25 +271,26 @@ jobs:
             exit 1
           fi
 
-      - name: Switch traffic to new revision
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
-            echo "Switching 100% traffic to $NEW_REV"
-            az containerapp ingress traffic set \
-              --name gwn-staging --resource-group gwn-rg \
-              --revision-weight "$NEW_REV=100"
-
       - name: Drain old revision DB connection
         if: steps.deploy.outputs.current-fqdn != ''
         run: |
           CURRENT_FQDN="${{ steps.deploy.outputs.current-fqdn }}"
           echo "Draining old revision at https://$CURRENT_FQDN ..."
-          DRAIN_RESULT=$(curl -sk -w '\n%{http_code}' --max-time 45 \
-            -X POST "https://$CURRENT_FQDN/api/admin/drain" \
-            -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || echo "failed")
-          echo "Drain result: $DRAIN_RESULT"
+          for i in 1 2 3; do
+            RESPONSE=$(curl -sk -w '\n%{http_code}' --max-time 45 \
+              -X POST "https://$CURRENT_FQDN/api/admin/drain" \
+              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || echo -e "\n000")
+            HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+            echo "Drain attempt $i: HTTP $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "Old revision drained successfully"
+              break
+            fi
+            sleep 5
+          done
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::warning::Drain failed (HTTP $HTTP_STATUS) — proceeding anyway (old revision may be already stopped)"
+          fi
           echo "Waiting for SMB lock release..."
           sleep 10
 
@@ -313,6 +314,16 @@ jobs:
             echo "::error::Failed to initialize DB on new revision"
             exit 1
           fi
+
+      - name: Switch traffic to new revision
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            echo "Switching 100% traffic to $NEW_REV"
+            az containerapp ingress traffic set \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision-weight "$NEW_REV=100"
 
       - name: Verify staging deployment
         run: |

@@ -27,12 +27,13 @@ function createServer() {
   const app = express();
   const server = http.createServer(app);
 
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
 
   // DB state tracking for orchestrated deploys
   let dbInitialized = false;
   let draining = false;
   let activeRequests = 0;
+  const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 
   // Middleware
   app.use(express.json());
@@ -42,25 +43,34 @@ function createServer() {
 
   // Request tracking middleware — gates API access on DB readiness
   app.use((req, res, next) => {
-    // healthz and admin endpoints always pass through
     if (req.path === '/healthz' || req.path.startsWith('/api/admin/')) return next();
 
-    if (draining) return res.status(503).json({ error: 'Server is draining', retryAfter: 5 });
+    if (draining) {
+      return res.status(503).json({ error: 'Server is draining', retryAfter: 5 });
+    }
 
-    // Auto-init DB on first API request if not yet initialized
     if (!dbInitialized && req.path.startsWith('/api/')) {
+      // In Azure environments, DB is initialized only via /api/admin/init-db
+      // to prevent race conditions during orchestrated deploys
+      if (isAzure) {
+        return res.status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
+      }
+      // In non-Azure (dev/test), auto-init on first request for convenience
       try {
         initDb();
         dbInitialized = true;
         console.log('📦 Database initialized (on first request)');
       } catch (err) {
-        console.error('❌ Database initialization failed:', err.message);
+        console.error('❌ Database auto-init failed:', err.message);
         return res.status(503).json({ error: 'Database not ready', retryAfter: 5 });
       }
     }
 
     activeRequests++;
-    res.on('finish', () => { activeRequests--; });
+    let counted = true;
+    res.on('close', () => {
+      if (counted) { activeRequests = Math.max(0, activeRequests - 1); counted = false; }
+    });
     next();
   });
 
@@ -142,25 +152,31 @@ function createServer() {
   // Admin: drain DB connections (for orchestrated deploys)
   app.post('/api/admin/drain', requireSystem, (_req, res) => {
     draining = true;
+    let responded = false;
 
-    const timeout = setTimeout(() => {
+    const finish = (result) => {
+      if (responded) return;
+      responded = true;
       closeDb();
       dbInitialized = false;
-      console.warn('⚠️ Drain timeout — force-closed DB with', activeRequests, 'active requests');
-      res.json({ status: 'drained', activeRequests, forced: true });
+      console.log(`🔌 Database connection closed (drain: ${result.status})`);
+      res.json(result);
+    };
+
+    const timeout = setTimeout(() => {
+      finish({ status: 'drained', activeRequests, forced: true });
     }, 30000);
 
-    const checkDrained = () => {
+    const poll = () => {
+      if (responded) return;
       if (activeRequests <= 0) {
         clearTimeout(timeout);
-        closeDb();
-        dbInitialized = false;
-        console.log('🔌 Database connection closed (drain complete)');
-        return res.json({ status: 'drained', activeRequests: 0 });
+        finish({ status: 'drained', activeRequests: 0 });
+        return;
       }
-      setTimeout(checkDrained, 500);
+      setTimeout(poll, 500);
     };
-    checkDrained();
+    poll();
   });
 
   // Admin: initialize DB connection (for orchestrated deploys)
@@ -183,7 +199,6 @@ function createServer() {
   });
 
   // In non-Azure environments, init DB eagerly for local dev convenience
-  const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
   if (!isAzure) {
     try {
       initDb();
