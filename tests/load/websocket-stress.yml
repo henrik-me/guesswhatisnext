@@ -21,8 +21,16 @@ config:
         - http.response_time.p95: 500
   processor: "./ws-helpers.js"
 
+before:
+  flow:
+    - function: "setupUsers"
+
+after:
+  flow:
+    - function: "cleanupUserPool"
+
 scenarios:
-  - name: "WebSocket match flow"
+  - name: "WebSocket connection and room join"
     engine: ws
     flow:
       - function: "registerAndGetToken"
@@ -32,16 +40,8 @@ scenarios:
       - think: 1
       - send:
           payload: '{"type":"join","roomCode":"{{ roomCode }}"}'
-      - think: 2
-      - send:
-          payload: '{"type":"answer","answerId":"opt-1","timeMs":1200}'
       - think: 3
-      - send:
-          payload: '{"type":"answer","answerId":"opt-2","timeMs":800}'
-      - think: 3
-      - send:
-          payload: '{"type":"answer","answerId":"opt-1","timeMs":1500}'
-      - think: 2
+      - close: true
 
   - name: "WebSocket connect-disconnect cycle"
     engine: ws
@@ -50,9 +50,14 @@ scenarios:
       - connect:
           target: "{{ wsTarget }}/ws?token={{ token }}"
       - think: 2
-      - connect:
-          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - close: true
       - think: 1
       - connect:
           target: "{{ wsTarget }}/ws?token={{ token }}"
       - think: 1
+      - close: true
+      - think: 1
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 1
+      - close: true

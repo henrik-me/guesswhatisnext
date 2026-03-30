@@ -30,11 +30,14 @@ function httpRequest(baseUrl, method, urlPath, body, headers = {}) {
 
     const options = {
       hostname: url.hostname,
-      port: url.port,
       path: url.pathname + url.search,
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
     };
+
+    if (url.port) {
+      options.port = url.port;
+    }
 
     const req = lib.request(options, (res) => {
       let data = '';
@@ -92,12 +95,11 @@ async function setupUsers(context, _events, done) {
   const pool = [];
   console.log(`[setup] Pre-registering ${count} users at ${baseUrl}...`);
 
-  let registered = 0;
+  while (pool.length < count) {
+    const batchEnd = Math.min(pool.length + batchSize, count);
+    const targetCount = batchEnd;
 
-  while (registered < count) {
-    const batchEnd = Math.min(registered + batchSize, count);
-
-    for (let i = registered; i < batchEnd; i++) {
+    while (pool.length < targetCount) {
       userCounter++;
       const username = `load_${Date.now()}_${userCounter}`;
       const password = 'LoadTest123!';
@@ -111,20 +113,17 @@ async function setupUsers(context, _events, done) {
         if (res.statusCode === 201 && res.body.token) {
           pool.push({ username, password, token: res.body.token });
         } else if (res.statusCode === 429) {
-          console.log(`[setup] Rate limited at user ${i + 1}, waiting for window reset...`);
+          console.log(`[setup] Rate limited at ${pool.length} users, waiting for window reset...`);
           await new Promise((r) => setTimeout(r, windowMs));
-          i--; // retry this user
         } else {
           console.error(`[setup] Registration failed (${res.statusCode}):`, res.body);
         }
       } catch (err) {
-        console.error(`[setup] Error registering user ${i + 1}:`, err.message);
+        console.error(`[setup] Error registering user:`, err.message);
       }
     }
 
-    registered = batchEnd;
-
-    if (registered < count) {
+    if (pool.length < count) {
       console.log(`[setup] Registered ${pool.length}/${count}, waiting for rate limit window...`);
       await new Promise((r) => setTimeout(r, windowMs));
     }

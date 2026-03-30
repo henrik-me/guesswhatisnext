@@ -30,7 +30,7 @@ after:
     - function: "cleanupUserPool"
 
 scenarios:
-  - name: "Auth flow — register + login"
+  - name: "Auth flow — register"
     weight: 10
     flow:
       - function: "generateUniqueUser"
