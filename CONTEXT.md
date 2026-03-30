@@ -2,11 +2,11 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-03-27
+> **Last updated:** 2026-03-30
 
 ---
 
-## Project Status: ✅ Phases 1–5 Complete (39/39) — Phases 6–9 Planned
+## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Mostly Done — Phases 7/9 Planned
 
 ### Development Workflow
 
@@ -104,8 +104,8 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 40 | Remove debug logging | ⬜ Pending | — | Strip console.log('[rematch]') from client code |
-| 41 | Environment variables | ⬜ Pending | — | JWT secret, API key, DB path → env vars with startup validation |
+| 40 | Remove debug logging | ✅ Done | — | Stripped debug console.log from client code (PR #14) |
+| 41 | Environment variables | ✅ Done | — | server/config.js centralizes env vars with startup validation (PR #14) |
 | 42 | HTTPS & secure cookies | ⬜ Pending | 41 | TLS enforcement, WSS, secure headers |
 
 ## Phase 7 — Quality & Testing
@@ -119,9 +119,9 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 45 | Mobile PWA | ⬜ Pending | — | manifest.json, service worker, offline fallback |
-| 46 | Share links | ⬜ Pending | — | Deep link ?room=CODE, copy-link button |
-| 47 | Multiplayer sound effects | ⬜ Pending | — | Opponent answered, countdown, win/loss fanfare |
+| 45 | Mobile PWA | ✅ Done | — | manifest.json, service worker, offline fallback (PR #15) |
+| 46 | Share links | ✅ Done | — | Deep link ?room=CODE, copy-link button (PR #15) |
+| 47 | Multiplayer sound effects | ✅ Done | — | Opponent answered, countdown, win/loss fanfare (PR #15) |
 | 48 | Spectator mode | ⬜ Pending | 42 | Read-only WS, spectator count in lobby |
 
 ## Phase 9 — Content & Growth
@@ -131,7 +131,7 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
 | 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 are independent. Phase 9 can start anytime. Phase 10 can start independently.
+**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. Phase 10 task 56 is the only remaining item.
 
 ## Phase 10 — CI/CD Pipeline Rework
 
@@ -141,7 +141,7 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 52 | Slim down PR CI checks | ✅ Done | 51 | New ci.yml with parallel lint + test only; no Docker build in PR checks |
 | 53 | Remove push-to-main deploy pipeline | ✅ Done | 52 | ci-cd.yml gutted to disabled placeholder; push to main no longer triggers any deployment |
 | 54 | Staging deploy on merge | ✅ Done | 53 | New staging-deploy.yml: triggers on push to main, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, fast-forwards release/staging, then (with manual approval) deploys to Azure staging |
-| 55 | Manual production deploy workflow | ⬜ Pending | 54 | New prod-deploy.yml: workflow_dispatch triggered manually from release/staging branch. Requires staging environment to be green. Deploys same image to production, verifies, auto-rollback on failure |
+| 55 | Manual production deploy workflow | ✅ Done | 54 | prod-deploy.yml: workflow_dispatch from release/staging, requires staging green, deploys same image, verifies, auto-rollback (PR #21) |
 | 56 | Unified infra setup script | ⬜ Pending | 55 | Merge deploy.sh + setup-github.sh into one script: auto-generates secrets, creates Azure service principal, sets all GitHub secrets/variables, runs verification health check |
 
 **Parallelism:** Tasks 51–56 are sequential. Phase 10 is independent of Phases 6–9.
