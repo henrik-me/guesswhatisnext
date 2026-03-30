@@ -293,12 +293,10 @@ function generateUniqueUser(context, _events, done) {
  * so there is no risk of deleting files while workers are still running.
  */
 function cleanupUserPool(_context, _events, done) {
+  const tmpFile = USER_POOL_FILE + '.tmp';
   try {
-    if (fs.existsSync(USER_POOL_FILE)) {
-      fs.unlinkSync(USER_POOL_FILE);
-    }
-    if (fs.existsSync(LOCK_FILE)) {
-      fs.unlinkSync(LOCK_FILE);
+    for (const f of [USER_POOL_FILE, LOCK_FILE, tmpFile]) {
+      if (fs.existsSync(f)) fs.unlinkSync(f);
     }
   } catch {
     // Ignore cleanup errors
