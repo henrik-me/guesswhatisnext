@@ -125,9 +125,17 @@ limiting works correctly under load.
 
 ## Thresholds
 
+### API Stress Test
+
 | Metric | Threshold | Meaning |
 |---|---|---|
-| `http.response_time.p95` | < 500ms | 95th percentile response time must be under 500ms |
+| `http.response_time.p95` | < 500ms | 95th percentile HTTP response time must be under 500ms |
+
+### WebSocket Stress Test
+
+| Metric | Threshold | Meaning |
+|---|---|---|
+| `http.response_time.p95` | < 500ms | Applies to HTTP setup calls (registration, room creation) made by processor functions. WebSocket connect/message latency is tracked separately by Artillery's `ws` engine metrics (`websocket.send_rate`, `websocket.messages_sent/received`). |
 
 If thresholds are breached, Artillery exits with a non-zero code.
 
