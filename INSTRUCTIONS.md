@@ -476,7 +476,7 @@ the folder name is just a stable slot.
 
 **Worktree root folder naming convention:**
 
-The worktree root folder is derived from the current working directory to ensure
+The worktree root folder is derived from the clone folder name to ensure
 multiple clones of the same repo can coexist without collisions:
 
 ```
@@ -484,8 +484,8 @@ gwn<suffix>-worktrees
 ```
 
 Where `<suffix>` is the remaining text after removing the repo name from the clone
-folder name (including any separator like `_`). If the folder name matches the repo
-name exactly, `<suffix>` is empty.
+folder name (including any separator like `_`). If the clone folder name matches
+the repo name exactly, `<suffix>` is empty.
 
 | Clone folder | Repo name | Suffix | Worktree root |
 |---|---|---|---|

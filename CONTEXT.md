@@ -182,7 +182,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
                                                       └───────────────────────┘
 
   Manual trigger (prod-deploy.yml)
-         │  (requires staging green)
+         │  (convention: only deploy images validated in staging)
          ▼
   ┌──────────────────────────────────────────────────────────────────────┐
   │  Production Pipeline                                                │
@@ -193,7 +193,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
                                              ▼
                                   ┌───────────────────────┐
                                   │  PRODUCTION           │
-                                  │  gwn-prod             │
+                                  │  gwn-production       │
                                   │  Container Apps       │
                                   │  Auto-rollback on fail│
                                   └───────────────────────┘
