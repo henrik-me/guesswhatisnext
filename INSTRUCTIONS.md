@@ -496,7 +496,7 @@ the repo name exactly, `<suffix>` is empty.
 This keeps each agent's worktrees isolated even when multiple Copilot sessions
 work on the same repo simultaneously.
 
-```bash
+```powershell
 # One-time setup: create worktree directory alongside the main repo
 # (replace <suffix> per the naming convention above)
 mkdir C:\src\gwn<suffix>-worktrees
@@ -512,7 +512,7 @@ git worktree list
 ```
 
 **Recycling a slot for a new task:**
-```bash
+```powershell
 cd C:\src\guesswhatisnext<suffix>
 
 # Remove the old branch from the slot (keeps the folder)
@@ -536,7 +536,7 @@ git worktree add -b feat/new-task C:\src\gwn<suffix>-worktrees\wt-1 main
 Every worktree is a full code checkout but lacks `node_modules/` and `data/`.
 Agents must bootstrap their worktree before working:
 
-```bash
+```powershell
 cd C:\src\gwn<suffix>-worktrees\wt-X
 
 # Install dependencies
@@ -613,7 +613,7 @@ Agent in wt-Y (if main has moved since branch creation):
 Every PR must be reviewed by GitHub Copilot before merging. This is part of the standard workflow.
 
 **Requesting review (requires gh CLI ≥ 2.88.0):**
-```bash
+```powershell
 gh pr edit <PR#> --add-reviewer "@copilot"
 ```
 
@@ -641,7 +641,7 @@ gh pr edit <PR#> --add-reviewer "@copilot"
 - **Never run in parallel**: tasks that modify the same function body
 
 **6. Worktree slot cleanup (between task batches):**
-```bash
+```powershell
 # Remove all worktrees but keep the folder structure for reuse
 git worktree remove C:\src\gwn<suffix>-worktrees\wt-1 --force
 git worktree remove C:\src\gwn<suffix>-worktrees\wt-2 --force
