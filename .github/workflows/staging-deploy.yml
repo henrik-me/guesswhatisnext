@@ -312,20 +312,46 @@ jobs:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
             echo "Waiting for revision $NEW_REV to reach Running state..."
-            for i in 1 2 3 4 5 6 7 8 9 10; do
+            for i in $(seq 1 10); do
               STATE=$(az containerapp revision show \
                 --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" \
                 --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
               echo "Attempt $i: state=$STATE"
               if [ "$STATE" = "Running" ]; then
-                echo "✅ Staging deployment verified — revision is running"
-                exit 0
+                break
               fi
               sleep 10
             done
-            echo "::error::Revision $NEW_REV not Running after 100s (last state: $STATE)"
-            exit 1
+            if [ "$STATE" != "Running" ]; then
+              echo "::error::Revision $NEW_REV not Running after 100s (state: $STATE)"
+              exit 1
+            fi
+            echo "Revision is running — verifying DB initialization via application logs..."
+            DB_CONFIRMED=0
+            for i in $(seq 1 12); do
+              LOGS=$(az containerapp logs show \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$NEW_REV" \
+                --type console --tail 100 2>&1)
+              LOG_EXIT=$?
+              if [ $LOG_EXIT -ne 0 ]; then
+                echo "Log query failed (exit $LOG_EXIT), retrying..."
+                sleep 5
+                continue
+              fi
+              if echo "$LOGS" | grep -qE "Database (self-initialized|initialized)"; then
+                echo "✅ Staging deployment verified — DB initialization confirmed in logs"
+                DB_CONFIRMED=1
+                break
+              fi
+              echo "DB init not confirmed yet (attempt $i/12)..."
+              sleep 5
+            done
+            if [ "$DB_CONFIRMED" -ne 1 ]; then
+              echo "::error::DB initialization not confirmed in application logs after 60s"
+              exit 1
+            fi
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''
@@ -345,7 +371,9 @@ jobs:
                 --revision "$NEW_REV" || true
               sleep 10
             fi
-            # Reactivate old revision (self-init will initialize DB on startup)
+            # Reactivate old revision — if it includes self-init, DB initializes
+            # automatically. Pre-self-init revisions will need manual
+            # POST /api/admin/init-db to resume API service (one-time transition risk).
             az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
               --revision "$CURRENT_REV" || true
             # Switch traffic back to old revision with retries
