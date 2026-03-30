@@ -39,6 +39,7 @@ afterEach(() => {
   }
   delete process.env.GWN_DB_PATH;
   delete process.env.NODE_ENV;
+  delete process.env.GWN_EXCLUSIVE_LOCKING;
 });
 
 describe('WAL cleanup in getDb()', () => {
@@ -125,5 +126,28 @@ describe('WAL cleanup in getDb()', () => {
     // After closeDb + getDb, we should get a working new instance
     const row = db2.prepare('SELECT 1 AS val').get();
     expect(row.val).toBe(1);
+  });
+
+  test('sets EXCLUSIVE locking mode in staging environment', () => {
+    process.env.NODE_ENV = 'staging';
+    clearModuleCache();
+    const { getDb, setDraining } = require('../server/db/connection');
+
+    setDraining(false);
+    const db = getDb();
+    const lockingMode = db.pragma('locking_mode', { simple: true });
+    expect(lockingMode).toBe('exclusive');
+  });
+
+  test('skips EXCLUSIVE locking when GWN_EXCLUSIVE_LOCKING=false', () => {
+    process.env.NODE_ENV = 'staging';
+    process.env.GWN_EXCLUSIVE_LOCKING = 'false';
+    clearModuleCache();
+    const { getDb, setDraining } = require('../server/db/connection');
+
+    setDraining(false);
+    const db = getDb();
+    const lockingMode = db.pragma('locking_mode', { simple: true });
+    expect(lockingMode).toBe('normal');
   });
 });

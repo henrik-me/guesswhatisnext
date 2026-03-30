@@ -194,8 +194,49 @@ function createServer() {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   });
 
-  // In non-Azure environments, init DB eagerly for local dev convenience
-  if (!isAzure) {
+  if (isAzure) {
+    // Self-initialize DB in the background with retries. The server starts
+    // immediately so /healthz responds to Azure health probes. API endpoints
+    // return 503 until initialization succeeds. Old revisions may briefly hold
+    // the EXCLUSIVE lock; retries succeed once they are deactivated.
+    const SELF_INIT_INTERVAL_MS = 5000;
+    const SELF_INIT_MAX_ATTEMPTS = 30;
+    let selfInitAttempt = 0;
+
+    const attemptSelfInit = () => {
+      if (dbInitialized) return;
+      selfInitAttempt++;
+      try {
+        setDraining(false);
+        const database = getDb();
+        // Use short busy_timeout so each attempt blocks the event loop for at
+        // most 2 s, keeping /healthz responsive to Azure health probes.
+        database.pragma('busy_timeout = 2000');
+        initDb(1);
+        database.pragma('busy_timeout = 30000');
+        draining = false;
+        dbInitialized = true;
+        console.log(`📦 Database self-initialized on attempt ${selfInitAttempt}`);
+      } catch (err) {
+        closeDb();
+        setDraining(true);
+        if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
+          console.warn(
+            `⏳ Self-init attempt ${selfInitAttempt}/${SELF_INIT_MAX_ATTEMPTS} failed: ${err.message}. ` +
+            `Retrying in ${SELF_INIT_INTERVAL_MS / 1000}s...`
+          );
+          setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
+        } else {
+          console.error(
+            `❌ Self-init failed after ${SELF_INIT_MAX_ATTEMPTS} attempts. ` +
+            'Call POST /api/admin/init-db to initialize manually.'
+          );
+        }
+      }
+    };
+
+    setTimeout(attemptSelfInit, 2000);
+  } else {
     try {
       initDb();
       dbInitialized = true;
