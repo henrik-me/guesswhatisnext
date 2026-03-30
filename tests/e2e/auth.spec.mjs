@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 
 /** Generate a unique username for test isolation. */
 function uniqueUser() {
-  return `e2e${Date.now().toString(36)}`;
+  return `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
 test.describe('Authentication', () => {

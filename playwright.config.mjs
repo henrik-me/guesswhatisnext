@@ -7,7 +7,13 @@ import fs from 'fs';
 // globalTeardown cleans this up after each run.
 const tmpDir = path.join(os.tmpdir(), 'gwn-e2e');
 fs.mkdirSync(tmpDir, { recursive: true });
-const dbPath = path.join(tmpDir, 'test.db');
+
+// Clean stale DB files from any previous crashed run
+const dbBasePath = path.join(tmpDir, 'test.db');
+for (const suffix of ['', '-wal', '-shm']) {
+  try { fs.unlinkSync(dbBasePath + suffix); } catch { /* ignore */ }
+}
+const dbPath = dbBasePath;
 
 export default defineConfig({
   testDir: './tests/e2e',
