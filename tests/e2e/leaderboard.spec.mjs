@@ -45,14 +45,19 @@ test.describe('Leaderboard', () => {
     await page.locator('.category-btn').first().click();
     await expect(page.locator('[data-screen="game"]')).toHaveClass(/active/);
 
-    // Play all rounds
+    // Play all rounds; listen for score submission during the game
+    const scoreSubmitted = page.waitForResponse(
+      (resp) => resp.url().includes('/api/scores') && resp.request().method() === 'POST',
+      { timeout: 30_000 },
+    );
     for (let i = 0; i < 10; i++) {
       const done = await playOneRound(page);
       if (done) break;
     }
     await expect(page.locator('[data-screen="gameover"]')).toHaveClass(/active/);
+    await scoreSubmitted;
 
-    // Score is auto-submitted since we're logged in — go to leaderboard
+    // Go to leaderboard
     await page.locator('[data-screen="gameover"] [data-action="go-home"]').click();
     await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
     await page.click('[data-action="show-leaderboard"]');

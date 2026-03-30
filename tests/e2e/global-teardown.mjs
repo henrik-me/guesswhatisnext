@@ -2,18 +2,14 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-/** Clean up temp DB files created during E2E tests. */
+/** Clean up the temp DB directory created during E2E tests. */
 export default function globalTeardown() {
-  const tmpBase = os.tmpdir();
-  const entries = fs.readdirSync(tmpBase);
-  for (const entry of entries) {
-    if (entry.startsWith('gwn-e2e-')) {
-      const fullPath = path.join(tmpBase, entry);
-      try {
-        fs.rmSync(fullPath, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
+  const tmpDir = path.join(os.tmpdir(), 'gwn-e2e');
+  if (fs.existsSync(tmpDir)) {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
     }
   }
 }

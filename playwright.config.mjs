@@ -3,7 +3,10 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-e2e-'));
+// Use a fixed temp directory so leftover dirs don't accumulate.
+// globalTeardown cleans this up after each run.
+const tmpDir = path.join(os.tmpdir(), 'gwn-e2e');
+fs.mkdirSync(tmpDir, { recursive: true });
 const dbPath = path.join(tmpDir, 'test.db');
 
 export default defineConfig({
@@ -32,6 +35,8 @@ export default defineConfig({
       PORT: '3011',
       NODE_ENV: 'test',
       GWN_DB_PATH: dbPath,
+      JWT_SECRET: 'test-jwt-secret',
+      SYSTEM_API_KEY: 'test-system-api-key',
     },
     timeout: 15_000,
   },
