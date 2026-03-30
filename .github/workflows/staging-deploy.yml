@@ -329,8 +329,11 @@ jobs:
               exit 1
             fi
             echo "Revision is running — verifying DB initialization via application logs..."
+            # Self-init budget: 2s initial delay + up to 30 × (2s busy_timeout + 5s
+            # interval) ≈ 212s, plus Azure log propagation latency (~30s).
+            # 60 × 5s = 300s gives comfortable slack beyond that ceiling.
             DB_CONFIRMED=0
-            for i in $(seq 1 30); do
+            for i in $(seq 1 60); do
               if ! LOGS=$(az containerapp logs show \
                 --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" \
@@ -344,11 +347,11 @@ jobs:
                 DB_CONFIRMED=1
                 break
               fi
-              echo "DB init not confirmed yet (attempt $i/30)..."
+              echo "DB init not confirmed yet (attempt $i/60)..."
               sleep 5
             done
             if [ "$DB_CONFIRMED" -ne 1 ]; then
-              echo "::error::DB initialization not confirmed in application logs after 150s"
+              echo "::error::DB initialization not confirmed in application logs after 300s"
               exit 1
             fi
 
