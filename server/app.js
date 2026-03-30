@@ -8,7 +8,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const { config } = require('./config');
-const { initDb, getDb, closeDb, isDbInitialized } = require('./db/connection');
+const { initDb, getDb, closeDb, isDbInitialized, setDraining } = require('./db/connection');
 const { requireSystem } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const scoreRoutes = require('./routes/scores');
@@ -154,6 +154,7 @@ function createServer() {
   // Admin: drain DB connections (for orchestrated deploys)
   app.post('/api/admin/drain', requireSystem, (_req, res) => {
     draining = true;
+    setDraining(true);
     let responded = false;
 
     const finish = (result) => {
@@ -184,6 +185,7 @@ function createServer() {
   // Admin: initialize DB connection (for orchestrated deploys)
   app.post('/api/admin/init-db', requireSystem, (_req, res) => {
     try {
+      setDraining(false);
       draining = false;
       initDb();
       dbInitialized = true;

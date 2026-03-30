@@ -112,6 +112,33 @@ describe('POST /api/admin/init-db', () => {
   });
 });
 
+describe('GET /api/health (not_initialized state)', () => {
+  test('reports not_initialized for database after drain', async () => {
+    // Ensure DB is initialized first
+    await getAgent()
+      .post('/api/admin/init-db')
+      .set('X-API-Key', SYSTEM_KEY);
+
+    // Drain DB
+    const drainRes = await getAgent()
+      .post('/api/admin/drain')
+      .set('X-API-Key', SYSTEM_KEY);
+    expect(drainRes.status).toBe(200);
+
+    // Health check should show not_initialized for database
+    const healthRes = await getAgent()
+      .get('/api/health')
+      .set('X-API-Key', SYSTEM_KEY);
+    expect(healthRes.status).toBe(200);
+    expect(healthRes.body.checks.database.status).toBe('not_initialized');
+
+    // Restore state
+    await getAgent()
+      .post('/api/admin/init-db')
+      .set('X-API-Key', SYSTEM_KEY);
+  });
+});
+
 describe('GET /healthz', () => {
   test('returns 200 even when drained', async () => {
     // Drain

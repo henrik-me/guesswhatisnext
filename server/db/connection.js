@@ -10,6 +10,12 @@ const { config } = require('../config');
 
 const DB_PATH = config.GWN_DB_PATH;
 let db = null;
+let _draining = false;
+
+/** Set the draining flag to block new connections via getDb(). */
+function setDraining(value) {
+  _draining = !!value;
+}
 
 /** Check if an error is a SQLite lock/busy error. */
 function isSqliteLockError(err) {
@@ -20,6 +26,9 @@ function isSqliteLockError(err) {
 
 /** Get the database instance (lazy init). */
 function getDb() {
+  if (_draining) {
+    throw new Error('Database is draining — connections blocked');
+  }
   if (!db) {
     // Ensure data/ directory exists
     const dir = path.dirname(DB_PATH);
@@ -138,4 +147,4 @@ function isDbInitialized() {
   return db !== null;
 }
 
-module.exports = { getDb, initDb, closeDb, isDbInitialized };
+module.exports = { getDb, initDb, closeDb, isDbInitialized, setDraining };

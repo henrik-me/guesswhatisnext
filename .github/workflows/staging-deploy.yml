@@ -275,6 +275,16 @@ jobs:
             exit 1
           fi
 
+      - name: Switch traffic to new revision
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            echo "Switching 100% traffic to $NEW_REV"
+            az containerapp ingress traffic set \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision-weight "$NEW_REV=100"
+
       - name: Drain old revision DB connection
         if: steps.deploy.outputs.current-fqdn != ''
         run: |
@@ -318,16 +328,6 @@ jobs:
             echo "::error::Failed to initialize DB on new revision"
             exit 1
           fi
-
-      - name: Switch traffic to new revision
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
-            echo "Switching 100% traffic to $NEW_REV"
-            az containerapp ingress traffic set \
-              --name gwn-staging --resource-group gwn-rg \
-              --revision-weight "$NEW_REV=100"
 
       - name: Verify staging deployment
         run: |
