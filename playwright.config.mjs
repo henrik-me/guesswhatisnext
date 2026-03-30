@@ -8,12 +8,16 @@ import fs from 'fs';
 const tmpDir = path.join(os.tmpdir(), 'gwn-e2e');
 fs.mkdirSync(tmpDir, { recursive: true });
 
-// Clean stale DB files from any previous crashed run
-const dbBasePath = path.join(tmpDir, 'test.db');
-for (const suffix of ['', '-wal', '-shm']) {
-  try { fs.unlinkSync(dbBasePath + suffix); } catch { /* ignore */ }
+// Ensure each E2E run starts from a clean DB by removing the temp dir entirely.
+// On Windows, individual file unlinkSync can fail with EBUSY if the DB is still
+// locked by a prior server process. Removing the parent dir is more reliable.
+try {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+} catch {
+  // Best-effort cleanup; the webServer will create a fresh DB if the path is new.
 }
-const dbPath = dbBasePath;
+fs.mkdirSync(tmpDir, { recursive: true });
+const dbPath = path.join(tmpDir, 'test.db');
 
 export default defineConfig({
   testDir: './tests/e2e',
