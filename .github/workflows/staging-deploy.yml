@@ -206,7 +206,15 @@ jobs:
               --name gwn-staging \
               --resource-group gwn-rg \
               --min-replicas 1 \
-              --yaml /tmp/deploy-template.yaml \
+              --yaml /tmp/deploy-template.yaml
+
+      - name: Set staging environment variables
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp update \
+              --name gwn-staging \
+              --resource-group gwn-rg \
               --set-env-vars \
                 NODE_ENV=staging \
                 PORT=3000 \
