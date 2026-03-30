@@ -67,13 +67,12 @@ describe('WAL cleanup in getDb()', () => {
 
   test('opens DB on Azure even when stale WAL/SHM files are present', () => {
     process.env.NODE_ENV = 'staging';
-    const dbPath = process.env.GWN_DB_PATH;
 
     // Create dummy WAL/SHM files that would be left by a crashed WAL-mode session
-    fs.writeFileSync(dbPath + '-wal', 'stale-wal-data');
-    fs.writeFileSync(dbPath + '-shm', 'stale-shm-data');
-    expect(fs.existsSync(dbPath + '-wal')).toBe(true);
-    expect(fs.existsSync(dbPath + '-shm')).toBe(true);
+    fs.writeFileSync(process.env.GWN_DB_PATH + '-wal', 'stale-wal-data');
+    fs.writeFileSync(process.env.GWN_DB_PATH + '-shm', 'stale-shm-data');
+    expect(fs.existsSync(process.env.GWN_DB_PATH + '-wal')).toBe(true);
+    expect(fs.existsSync(process.env.GWN_DB_PATH + '-shm')).toBe(true);
 
     clearModuleCache();
     const { getDb } = require('../server/db/connection');
@@ -86,12 +85,14 @@ describe('WAL cleanup in getDb()', () => {
     expect(row.val).toBe(1);
   });
 
-  test('non-Azure environments do not attempt WAL cleanup on error', () => {
+  test('non-Azure environments do not clean up WAL files on error', () => {
     process.env.NODE_ENV = 'test';
-    const dbPath = process.env.GWN_DB_PATH;
 
-    // Place DB file in a directory, then make the path point to a directory
-    // so Database() throws a non-lock error. getDb() should propagate it.
+    // Create WAL/SHM files alongside the DB path
+    fs.writeFileSync(process.env.GWN_DB_PATH + '-wal', 'wal-data');
+    fs.writeFileSync(process.env.GWN_DB_PATH + '-shm', 'shm-data');
+
+    // Point DB path to a directory so Database() throws a non-lock error
     const badPath = path.join(tmpDir, 'subdir');
     fs.mkdirSync(badPath);
     process.env.GWN_DB_PATH = badPath;
@@ -100,6 +101,10 @@ describe('WAL cleanup in getDb()', () => {
     const { getDb } = require('../server/db/connection');
 
     expect(() => getDb()).toThrow();
+
+    // WAL/SHM files from original path should still exist (no cleanup attempted)
+    expect(fs.existsSync(path.join(tmpDir, 'test.db-wal'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'test.db-shm'))).toBe(true);
   });
 
   test('closeDb() resets singleton so next getDb() creates a new instance', () => {
