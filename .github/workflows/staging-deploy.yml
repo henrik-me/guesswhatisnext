@@ -362,18 +362,35 @@ jobs:
               exit 1
             fi
             echo "::warning::Rolling back to $CURRENT_REV"
-            # Deactivate failed new revision first to release any DB locks
+            # Reactivate old revision first so there's always at least one
+            # active revision. Pre-self-init revisions will need manual
+            # POST /api/admin/init-db to resume API service (one-time transition risk).
+            az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
+              --revision "$CURRENT_REV" || true
+            # Wait for old revision to reach Running state before proceeding
+            ROLLBACK_READY=0
+            for attempt in 1 2 3 4 5; do
+              STATE=$(az containerapp revision show \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$CURRENT_REV" \
+                --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
+              echo "::notice::Rollback target $CURRENT_REV state=$STATE (attempt $attempt/5)"
+              if [ "$STATE" = "Running" ]; then
+                ROLLBACK_READY=1
+                break
+              fi
+              sleep 10
+            done
+            if [ "$ROLLBACK_READY" -ne 1 ]; then
+              echo "::warning::Rollback target $CURRENT_REV not Running yet — proceeding anyway"
+            fi
+            # Now deactivate the failed new revision to release any DB locks
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
             if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "None" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
               az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" || true
               sleep 10
             fi
-            # Reactivate old revision — if it includes self-init, DB initializes
-            # automatically. Pre-self-init revisions will need manual
-            # POST /api/admin/init-db to resume API service (one-time transition risk).
-            az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
-              --revision "$CURRENT_REV" || true
             # Switch traffic back to old revision with retries
             TRAFFIC_SET=0
             for attempt in 1 2 3; do
