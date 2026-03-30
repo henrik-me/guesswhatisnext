@@ -366,10 +366,16 @@ jobs:
             # Reactivate old revision
             az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
               --revision "$CURRENT_REV" || true
-            # Switch traffic back to old revision (minimize downtime first)
-            az containerapp ingress traffic set \
-              --name gwn-staging --resource-group gwn-rg \
-              --revision-weight "$CURRENT_REV=100"
+            # Switch traffic back to old revision (minimize downtime first), with retries
+            for attempt in 1 2 3; do
+              if az containerapp ingress traffic set \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision-weight "$CURRENT_REV=100"; then
+                break
+              fi
+              echo "::warning::Failed to set ingress traffic to $CURRENT_REV (attempt $attempt/3); retrying in 10s..."
+              sleep 10
+            done
             # Deactivate failed new revision to release SQLite lock
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
             if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "None" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
