@@ -34,11 +34,13 @@ function isSqliteLockError(err) {
  *
  * @param {Object} [options] - Optional configuration for the connection.
  * @param {number|string} [options.busyTimeout=30000] - SQLite busy timeout in milliseconds.
+ *   Only honored when the singleton database connection is first created.
  *   Configures the `busy_timeout` pragma used to wait for locked database
  *   operations before failing with SQLITE_BUSY/SQLITE_LOCKED. Parsed with
  *   parseInt — leading numeric portions of strings are accepted (e.g. '2000ms'
  *   becomes 2000). Completely non-numeric values fall back to the default (30000),
- *   and negative values are clamped to zero.
+ *   and negative values are clamped to zero. Passing a different busyTimeout
+ *   after the connection already exists does not reconfigure the pragma.
  * @returns {import('better-sqlite3').Database} The initialized Database instance.
  * @throws {Error} Throws `"Database is not available — waiting for initialization"`
  *   when `_draining` is true and no connection has been opened yet. In Azure
