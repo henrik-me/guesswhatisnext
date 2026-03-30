@@ -358,6 +358,10 @@ jobs:
         with:
           inlineScript: |
             CURRENT_REV="${{ steps.deploy.outputs.current-revision }}"
+            if [ -z "$CURRENT_REV" ] || [ "$CURRENT_REV" = "None" ]; then
+              echo "::error::CURRENT_REV is invalid ('$CURRENT_REV') — cannot rollback safely"
+              exit 1
+            fi
             echo "::warning::Rolling back to $CURRENT_REV"
             # Reactivate old revision
             az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
@@ -365,10 +369,10 @@ jobs:
             # Switch traffic back to old revision (minimize downtime first)
             az containerapp ingress traffic set \
               --name gwn-staging --resource-group gwn-rg \
-              --revision-weight "$CURRENT_REV=100" || true
+              --revision-weight "$CURRENT_REV=100"
             # Deactivate failed new revision to release SQLite lock
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
-            if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
+            if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "None" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
               az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" || true
             fi
