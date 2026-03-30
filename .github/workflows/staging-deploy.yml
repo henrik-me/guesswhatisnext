@@ -304,53 +304,49 @@ jobs:
             sleep 15
 
       - name: Initialize DB on new revision
-        run: |
-          STAGING_URL="${{ vars.STAGING_URL }}"
-          STAGING_URL="${STAGING_URL%/}"
-          if [ -z "$STAGING_URL" ]; then
-            echo "::error::STAGING_URL is not set"
-            exit 1
-          fi
-          echo "Initializing DB via app URL: $STAGING_URL ..."
-          for i in 1 2 3 4 5 6 7 8; do
-            RESPONSE=$(curl -sS -w '\n%{http_code}' --max-time 30 \
-              -X POST "$STAGING_URL/api/admin/init-db" \
-              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || echo -e "\n000")
-            HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
-            BODY=$(echo "$RESPONSE" | sed '$d')
-            echo "Init attempt $i: HTTP $HTTP_STATUS — $BODY"
-            if [ "$HTTP_STATUS" = "200" ]; then
-              echo "DB initialized successfully!"
-              break
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            echo "Initializing DB inside container via az containerapp exec..."
+            for i in 1 2 3 4 5 6 7 8; do
+              RESULT=$(az containerapp exec \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$NEW_REV" \
+                --command "sh -lc 'curl -sS --fail --max-time 30 -X POST http://localhost:3000/api/admin/init-db -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
+                2>&1) || true
+              echo "Init attempt $i: $RESULT"
+              if echo "$RESULT" | grep -q '"status":"initialized"'; then
+                echo "DB initialized successfully!"
+                break
+              fi
+              sleep 15
+            done
+            if ! echo "$RESULT" | grep -q '"status":"initialized"'; then
+              echo "::error::Failed to initialize DB on new revision"
+              exit 1
             fi
-            sleep 15
-          done
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "::error::Failed to initialize DB on new revision"
-            exit 1
-          fi
 
       - name: Verify staging deployment
-        run: |
-          STAGING_URL="${{ vars.STAGING_URL }}"
-          STAGING_URL="${STAGING_URL%/}"
-          if [ -z "$STAGING_URL" ]; then
-            echo "::error::STAGING_URL is not set"
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            for i in 1 2 3 4 5; do
+              RESULT=$(az containerapp exec \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$NEW_REV" \
+                --command "sh -lc 'curl -sS --fail --max-time 30 http://localhost:3000/api/health -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
+                2>&1) || true
+              echo "Health check attempt $i: $RESULT"
+              if echo "$RESULT" | grep -q '"status":"ok"'; then
+                echo "Staging deployment healthy!"
+                exit 0
+              fi
+              sleep 15
+            done
+            echo "::error::Staging health check failed after 5 attempts"
             exit 1
-          fi
-          for i in 1 2 3 4 5; do
-            HTTP_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
-              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
-              "$STAGING_URL/api/health" || true)
-            echo "Health check attempt $i: $HTTP_STATUS"
-            if [ "$HTTP_STATUS" = "200" ]; then
-              echo "Staging deployment healthy!"
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "::error::Staging health check failed after 5 attempts"
-          exit 1
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''
@@ -390,14 +386,12 @@ jobs:
             fi
             # Wait for lock release
             sleep 15
-            # Try to re-init DB on old revision via app URL
-            STAGING_URL="${{ vars.STAGING_URL }}"
-            STAGING_URL="${STAGING_URL%/}"
-            if [ -n "$STAGING_URL" ]; then
-              curl -sS --max-time 30 -X POST \
-                "$STAGING_URL/api/admin/init-db" \
-                -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" || true
-            fi
+            # Try to re-init DB on old revision via exec
+            az containerapp exec \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision "$CURRENT_REV" \
+              --command "sh -lc 'curl -sS --fail --max-time 30 -X POST http://localhost:3000/api/admin/init-db -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
+              2>&1 || true
 
       - name: Tag deployment
         uses: azure/cli@v2
