@@ -43,7 +43,7 @@ function createServer() {
 
   // Request tracking middleware — gates API access on DB readiness
   app.use((req, res, next) => {
-    if (req.path === '/healthz' || req.path.startsWith('/api/admin/')) return next();
+    if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/')) return next();
 
     if (draining) {
       return res.status(503).json({ error: 'Server is draining', retryAfter: 5 });
@@ -67,10 +67,12 @@ function createServer() {
     }
 
     activeRequests++;
-    let counted = true;
-    res.on('close', () => {
-      if (counted) { activeRequests = Math.max(0, activeRequests - 1); counted = false; }
-    });
+    let decremented = false;
+    const decrement = () => {
+      if (!decremented) { decremented = true; activeRequests = Math.max(0, activeRequests - 1); }
+    };
+    res.on('finish', decrement);
+    res.on('close', decrement);
     next();
   });
 

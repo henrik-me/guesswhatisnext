@@ -188,9 +188,13 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
-            # Get current active revision for rollback
+            # Find the revision currently receiving traffic (not just the latest-created one)
             CURRENT_REV=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
-              --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+              --query "properties.configuration.ingress.traffic[?weight > \`0\`] | [0].revisionName" -o tsv 2>/dev/null || echo "")
+            if [ -z "$CURRENT_REV" ] || [ "$CURRENT_REV" = "None" ]; then
+              CURRENT_REV=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
+                --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+            fi
             echo "current-revision=$CURRENT_REV" >> "$GITHUB_OUTPUT"
             echo "Current revision (rollback target): $CURRENT_REV"
 
