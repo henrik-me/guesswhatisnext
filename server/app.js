@@ -220,6 +220,8 @@ function createServer() {
       } catch (err) {
         closeDb();
         setDraining(true);
+        draining = true;
+        dbInitialized = false;
         if (!isSqliteLockError(err)) {
           console.error(`❌ Self-init failed with non-retryable error: ${err.message}`);
           console.error('Call POST /api/admin/init-db after fixing the underlying issue.');
@@ -249,7 +251,7 @@ function createServer() {
       process.exit(1);
     }
   }
-  initWebSocket(server, () => dbInitialized);
+  initWebSocket(server, () => dbInitialized && !draining);
 
   return { app, server };
 }
