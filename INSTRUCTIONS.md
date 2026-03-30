@@ -480,10 +480,12 @@ The worktree root folder is derived from the current working directory to ensure
 multiple clones of the same repo can coexist without collisions:
 
 ```
-gwn_<suffix>-worktrees
+gwn<suffix>-worktrees
 ```
 
-Where `<suffix>` is the part of the current folder name *after* the repo name.
+Where `<suffix>` is the remaining text after removing the repo name from the clone
+folder name (including any separator like `_`). If the folder name matches the repo
+name exactly, `<suffix>` is empty.
 
 | Clone folder | Repo name | Suffix | Worktree root |
 |---|---|---|---|
@@ -535,7 +537,7 @@ Every worktree is a full code checkout but lacks `node_modules/` and `data/`.
 Agents must bootstrap their worktree before working:
 
 ```bash
-cd C:\src\gwn-worktrees\wt-X
+cd C:\src\gwn<suffix>-worktrees\wt-X
 
 # Install dependencies
 npm install
@@ -641,8 +643,8 @@ gh pr edit <PR#> --add-reviewer "@copilot"
 **6. Worktree slot cleanup (between task batches):**
 ```bash
 # Remove all worktrees but keep the folder structure for reuse
-git worktree remove C:\src\gwn-worktrees\wt-1 --force
-git worktree remove C:\src\gwn-worktrees\wt-2 --force
+git worktree remove C:\src\gwn<suffix>-worktrees\wt-1 --force
+git worktree remove C:\src\gwn<suffix>-worktrees\wt-2 --force
 # ... etc
 
 # Delete merged branches

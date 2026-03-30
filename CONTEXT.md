@@ -13,8 +13,8 @@ This file tracks the current state of the project: what's been done, what's next
 Parallel work uses **fixed worktree slots** (`wt-1` through `wt-4`) with task-specific branch names.
 Each agent pushes its branch to origin and merges to main remotely. The main agent pulls after each merge.
 
-Worktree root folders are named `gwn_<suffix>-worktrees` where `<suffix>` is derived from the
-clone folder name minus the repo name (see INSTRUCTIONS.md § Parallel Agent Workflow for details).
+Worktree root folders are named `gwn<suffix>-worktrees` where `<suffix>` is the remaining text
+after removing the repo name from the clone folder (see INSTRUCTIONS.md § Parallel Agent Workflow).
 
 | Slot | Path | Port | Status |
 |---|---|---|---|
@@ -134,7 +134,7 @@ clone folder name minus the repo name (see INSTRUCTIONS.md § Parallel Agent Wor
 | 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
 | 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
+**Parallelism:** Phase 6 is sequential. Phase 7 can start now; its dependencies (40 and 41) are done. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
 
 ## Phase 10 — CI/CD Pipeline Rework
 
@@ -144,7 +144,7 @@ clone folder name minus the repo name (see INSTRUCTIONS.md § Parallel Agent Wor
 | 52 | Slim down PR CI checks | ✅ Done | 51 | New ci.yml with parallel lint + test only; no Docker build in PR checks |
 | 53 | Remove push-to-main deploy pipeline | ✅ Done | 52 | ci-cd.yml gutted to disabled placeholder; push to main no longer triggers any deployment |
 | 54 | Staging deploy on merge | ✅ Done | 53 | New staging-deploy.yml: triggers on push to main, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, fast-forwards release/staging, then (with manual approval) deploys to Azure staging |
-| 55 | Manual production deploy workflow | ✅ Done | 54 | prod-deploy.yml: workflow_dispatch from release/staging, requires staging green, deploys same image, verifies, auto-rollback (PR #21) |
+| 55 | Manual production deploy workflow | ✅ Done | 54 | prod-deploy.yml: manual workflow_dispatch with image tag + confirmation, validates image exists in GHCR, deploys to production environment (with approval gate), runs health verification, auto-rollback on failure (PR #21) |
 | 56 | Unified infra setup script | ⬜ Pending | 55 | Merge deploy.sh + setup-github.sh into one script: auto-generates secrets, creates Azure service principal, sets all GitHub secrets/variables, runs verification health check |
 
 **Parallelism:** Tasks 51–56 are sequential. Phase 10 is independent of Phases 6–9.
