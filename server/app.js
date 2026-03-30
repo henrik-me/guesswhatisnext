@@ -229,8 +229,7 @@ function createServer() {
         } else if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
           // Retryable SQLite lock error: keep serving non-DB traffic and retry later.
           console.warn(
-            `⏳ Self-init attempt ${selfInitAttempt}/${SELF_INIT_MAX_ATTEMPTS} failed: ${err.message}. ` +
-            `Retrying in ${SELF_INIT_INTERVAL_MS / 1000}s...`
+            `⏳ Self-init attempt ${selfInitAttempt}/${SELF_INIT_MAX_ATTEMPTS} failed: ${err.message}. Retrying in ${SELF_INIT_INTERVAL_MS / 1000}s...`
           );
           setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
         } else {
@@ -238,8 +237,7 @@ function createServer() {
           setDraining(true);
           draining = true;
           console.error(
-            `❌ Self-init failed after ${SELF_INIT_MAX_ATTEMPTS} attempts. ` +
-            'Call POST /api/admin/init-db to initialize manually.'
+            `❌ Self-init failed after ${SELF_INIT_MAX_ATTEMPTS} attempts. Call POST /api/admin/init-db to initialize manually.`
           );
         }
       }
