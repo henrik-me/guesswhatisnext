@@ -9,8 +9,13 @@ const fs = require('fs');
 const { config } = require('../config');
 
 const DB_PATH = config.GWN_DB_PATH;
+const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 let db = null;
-let _draining = false;
+
+// In Azure environments, DB access is blocked until /api/admin/init-db runs.
+// This prevents WebSocket handlers (which bypass the API middleware gate)
+// from opening the DB before the orchestrated deploy flow is ready.
+let _draining = isAzure;
 
 /** Set the draining flag to block new connections via getDb(). */
 function setDraining(value) {
@@ -26,8 +31,8 @@ function isSqliteLockError(err) {
 
 /** Get the database instance (lazy init). */
 function getDb() {
-  if (_draining) {
-    throw new Error('Database is draining — connections blocked');
+  if (_draining && !db) {
+    throw new Error('Database is not available — waiting for initialization');
   }
   if (!db) {
     // Ensure data/ directory exists

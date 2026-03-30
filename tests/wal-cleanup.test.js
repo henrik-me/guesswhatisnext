@@ -57,8 +57,10 @@ describe('WAL cleanup in getDb()', () => {
   test('opens DB normally on Azure when no WAL artifacts exist', () => {
     process.env.NODE_ENV = 'staging';
     clearModuleCache();
-    const { getDb } = require('../server/db/connection');
+    const { getDb, setDraining } = require('../server/db/connection');
 
+    // In Azure envs, _draining starts true; clear it like init-db would
+    setDraining(false);
     const db = getDb();
     expect(db).toBeDefined();
     const row = db.prepare('SELECT 1 AS val').get();
@@ -75,8 +77,10 @@ describe('WAL cleanup in getDb()', () => {
     expect(fs.existsSync(process.env.GWN_DB_PATH + '-shm')).toBe(true);
 
     clearModuleCache();
-    const { getDb } = require('../server/db/connection');
+    const { getDb, setDraining } = require('../server/db/connection');
 
+    // In Azure envs, _draining starts true; clear it like init-db would
+    setDraining(false);
     // getDb() should succeed — either the open works directly (better-sqlite3
     // handles the dummy files) or the catch path cleans them up and retries.
     const db = getDb();
