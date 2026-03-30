@@ -167,7 +167,7 @@ During staging deployment testing, we discovered that SQLite on Azure Files (SMB
 - WebSocket connections bypass Express middleware — need explicit `isReady` guard
 - Self-init only retries SQLite lock errors; fails fast on permanent errors
 
-**PR #41 review status:** 12 rounds of Copilot review addressed, round 13 pending. Latest commit: `0ebe5f2`.
+**PR #41 review status (as of 2026-03-30):** Copilot review in progress; latest raised issues have been addressed.
 
 **Staging environment state:** Container app stopped, game.db deleted from Azure Files. Ready for fresh deploy.
 
