@@ -188,7 +188,7 @@ jobs:
         with:
           inlineScript: |
             trap 'rm -f /tmp/deploy-template.yaml' EXIT
-            cat > /tmp/deploy-template.yaml <<'YAMLEOF'
+            cat > /tmp/deploy-template.yaml <<YAMLEOF
             properties:
               template:
                 volumes:
@@ -198,6 +198,18 @@ jobs:
                 containers:
                   - name: gwn-staging
                     image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+                    env:
+                      - name: NODE_ENV
+                        value: staging
+                      - name: PORT
+                        value: "3000"
+                      - name: JWT_SECRET
+                        value: "${JWT_SECRET}"
+                      - name: SYSTEM_API_KEY
+                        value: "${SYSTEM_API_KEY}"
+                    resources:
+                      cpu: 0.5
+                      memory: 1Gi
                     volumeMounts:
                       - volumeName: data-volume
                         mountPath: /app/data
@@ -207,19 +219,9 @@ jobs:
               --resource-group gwn-rg \
               --min-replicas 1 \
               --yaml /tmp/deploy-template.yaml
-
-      - name: Set staging environment variables
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            az containerapp update \
-              --name gwn-staging \
-              --resource-group gwn-rg \
-              --set-env-vars \
-                NODE_ENV=staging \
-                PORT=3000 \
-                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
-                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
 
       - name: Deactivate old revisions
         uses: azure/cli@v2

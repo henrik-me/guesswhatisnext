@@ -30,8 +30,29 @@ function getDb() {
   return db;
 }
 
-/** Initialize database with schema. */
-function initDb() {
+/** Initialize database with schema. Retries on lock errors (Azure Files/SMB). */
+function initDb(maxRetries = 5) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return _initDbOnce();
+    } catch (err) {
+      const isLockError = err.message && (
+        err.message.includes('database is locked') ||
+        err.message.includes('SQLITE_BUSY')
+      );
+      if (!isLockError || attempt === maxRetries) throw err;
+      const delay = 1000 * attempt;
+      console.warn(
+        `⏳ Database init attempt ${attempt}/${maxRetries} failed: ${err.message}. ` +
+        `Retrying in ${delay}ms...`
+      );
+      closeDb();
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+    }
+  }
+}
+
+function _initDbOnce() {
   const database = getDb();
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf-8');
