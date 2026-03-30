@@ -313,16 +313,16 @@ jobs:
               RESULT=$(az containerapp exec \
                 --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" \
-                --command "curl -sS -X POST http://localhost:3000/api/admin/init-db -H 'X-API-Key: ${{ secrets.SYSTEM_API_KEY }}'" \
+                --command "sh -lc 'curl -sS --fail --max-time 30 -X POST http://localhost:3000/api/admin/init-db -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
                 2>&1) || true
               echo "Init attempt $i: $RESULT"
-              if echo "$RESULT" | grep -q '"status":"ok"'; then
+              if echo "$RESULT" | grep -q '"status":"initialized"'; then
                 echo "DB initialized successfully!"
                 break
               fi
               sleep 15
             done
-            if ! echo "$RESULT" | grep -q '"status":"ok"'; then
+            if ! echo "$RESULT" | grep -q '"status":"initialized"'; then
               echo "::error::Failed to initialize DB on new revision"
               exit 1
             fi
@@ -336,7 +336,7 @@ jobs:
               RESULT=$(az containerapp exec \
                 --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" \
-                --command "curl -sS http://localhost:3000/api/health -H 'X-API-Key: ${{ secrets.SYSTEM_API_KEY }}'" \
+                --command "sh -lc 'curl -sS --fail --max-time 30 http://localhost:3000/api/health -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
                 2>&1) || true
               echo "Health check attempt $i: $RESULT"
               if echo "$RESULT" | grep -q '"status":"ok"'; then
@@ -390,7 +390,7 @@ jobs:
             az containerapp exec \
               --name gwn-staging --resource-group gwn-rg \
               --revision "$CURRENT_REV" \
-              --command "curl -sS -X POST http://localhost:3000/api/admin/init-db -H 'X-API-Key: ${{ secrets.SYSTEM_API_KEY }}'" \
+              --command "sh -lc 'curl -sS --fail --max-time 30 -X POST http://localhost:3000/api/admin/init-db -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
               2>&1 || true
 
       - name: Tag deployment
