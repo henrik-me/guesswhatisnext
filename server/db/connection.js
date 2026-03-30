@@ -11,6 +11,13 @@ const { config } = require('../config');
 const DB_PATH = config.GWN_DB_PATH;
 let db = null;
 
+/** Check if an error is a SQLite lock/busy error. */
+function isSqliteLockError(err) {
+  return err.code === 'SQLITE_BUSY' ||
+    err.code === 'SQLITE_LOCKED' ||
+    err.code === 'SQLITE_BUSY_SNAPSHOT';
+}
+
 /** Get the database instance (lazy init). */
 function getDb() {
   if (!db) {
@@ -27,10 +34,7 @@ function getDb() {
     try {
       db = new Database(DB_PATH);
     } catch (openErr) {
-      const isLockError = openErr.code === 'SQLITE_BUSY' ||
-        openErr.code === 'SQLITE_LOCKED' ||
-        openErr.code === 'SQLITE_BUSY_SNAPSHOT';
-      if (isAzure && isLockError) {
+      if (isAzure && isSqliteLockError(openErr)) {
         // Previous revision may have left WAL/SHM artifacts on Azure Files (SMB).
         // SQLite's WAL recovery requires shared memory which doesn't work on SMB.
         for (const ext of ['-wal', '-shm']) {
@@ -62,10 +66,7 @@ function initDb(maxRetries = 5) {
     try {
       return _initDbOnce();
     } catch (err) {
-      const isLockError = err.code === 'SQLITE_BUSY' ||
-        err.code === 'SQLITE_LOCKED' ||
-        err.code === 'SQLITE_BUSY_SNAPSHOT';
-      if (!isLockError || attempt === maxRetries) throw err;
+      if (!isSqliteLockError(err) || attempt === maxRetries) throw err;
       const delay = 1000 * attempt;
       console.warn(
         `⏳ Database init attempt ${attempt}/${maxRetries} failed (${err.code}): ${err.message}. ` +

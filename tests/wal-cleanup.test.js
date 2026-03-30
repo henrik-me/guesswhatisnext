@@ -2,7 +2,7 @@
  * Tests for WAL/SHM cleanup logic in getDb().
  *
  * Verifies that getDb() opens normally when no stale WAL artifacts exist,
- * and that the retry-on-lock-error path removes stale files on Azure.
+ * and that it can open the DB when Azure-style stale WAL/SHM files are present.
  */
 
 const path = require('path');
@@ -87,24 +87,24 @@ describe('WAL cleanup in getDb()', () => {
 
   test('non-Azure environments do not clean up WAL files on error', () => {
     process.env.NODE_ENV = 'test';
+    const dbPath = process.env.GWN_DB_PATH;
 
     // Create WAL/SHM files alongside the DB path
-    fs.writeFileSync(process.env.GWN_DB_PATH + '-wal', 'wal-data');
-    fs.writeFileSync(process.env.GWN_DB_PATH + '-shm', 'shm-data');
+    fs.writeFileSync(dbPath + '-wal', 'wal-data');
+    fs.writeFileSync(dbPath + '-shm', 'shm-data');
 
-    // Point DB path to a directory so Database() throws a non-lock error
-    const badPath = path.join(tmpDir, 'subdir');
-    fs.mkdirSync(badPath);
-    process.env.GWN_DB_PATH = badPath;
+    // Make the DB path itself a directory so Database() throws a non-lock error
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    fs.mkdirSync(dbPath);
 
     clearModuleCache();
     const { getDb } = require('../server/db/connection');
 
     expect(() => getDb()).toThrow();
 
-    // WAL/SHM files from original path should still exist (no cleanup attempted)
-    expect(fs.existsSync(path.join(tmpDir, 'test.db-wal'))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'test.db-shm'))).toBe(true);
+    // WAL/SHM files should still exist — non-Azure path doesn't attempt cleanup
+    expect(fs.existsSync(dbPath + '-wal')).toBe(true);
+    expect(fs.existsSync(dbPath + '-shm')).toBe(true);
   });
 
   test('closeDb() resets singleton so next getDb() creates a new instance', () => {
