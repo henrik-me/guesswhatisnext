@@ -45,6 +45,12 @@ function rewriteParams(sqlStr, params = []) {
     }
   }
 
+  if (idx !== params.length) {
+    throw new Error(
+      `Parameter count mismatch: query has ${idx} placeholder(s) but ${params.length} value(s) were supplied`
+    );
+  }
+
   return { sql: rewritten, inputs };
 }
 
@@ -177,7 +183,11 @@ class MssqlAdapter extends BaseAdapter {
       await transaction.commit();
       return result;
     } catch (err) {
-      await transaction.rollback();
+      try {
+        await transaction.rollback();
+      } catch (rollbackErr) {
+        err.rollbackError = rollbackErr;
+      }
       throw err;
     }
   }

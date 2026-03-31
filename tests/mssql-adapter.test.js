@@ -108,6 +108,16 @@ describe('rewriteParams', () => {
     expect(result.sql).toBe("SELECT '?' AS q, @p1 AS v");
     expect(result.inputs).toEqual([{ name: 'p1', value: 99 }]);
   });
+
+  it('throws when more placeholders than params', () => {
+    expect(() => rewriteParams('SELECT ? AND ?', [1]))
+      .toThrow('Parameter count mismatch: query has 2 placeholder(s) but 1 value(s) were supplied');
+  });
+
+  it('throws when more params than placeholders', () => {
+    expect(() => rewriteParams('SELECT ?', [1, 2]))
+      .toThrow('Parameter count mismatch: query has 1 placeholder(s) but 2 value(s) were supplied');
+  });
 });
 
 describe('MssqlAdapter', () => {
@@ -251,6 +261,26 @@ describe('MssqlAdapter', () => {
       expect(mockSql._tx.begin).toHaveBeenCalled();
       expect(mockSql._tx.rollback).toHaveBeenCalled();
       expect(mockSql._tx.commit).not.toHaveBeenCalled();
+    });
+
+    it('preserves original error when rollback also fails', async () => {
+      const failingTx = makeMockTransaction();
+      failingTx.rollback.mockRejectedValue(new Error('rollback failed'));
+      const failingSql = makeMockSql({ transaction: failingTx });
+      adapter = new MssqlAdapter('Server=test;', { mssql: failingSql });
+      adapter._pool = failingSql._pool;
+
+      const original = new Error('original');
+      const fn = vi.fn().mockRejectedValue(original);
+
+      await expect(adapter._transaction(fn)).rejects.toThrow('original');
+      // The rollback error is attached for diagnostics
+      try {
+        await adapter._transaction(fn);
+      } catch (err) {
+        expect(err.rollbackError).toBeDefined();
+        expect(err.rollbackError.message).toBe('rollback failed');
+      }
     });
   });
 
