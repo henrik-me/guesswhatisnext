@@ -223,10 +223,24 @@ jobs:
               --query "properties.runningStatus" -o tsv 2>/dev/null || echo "Unknown")
             echo "Container app state: $APP_STATE"
             if [ "$APP_STATE" != "Running" ]; then
-              echo "Container app is not running — starting it..."
-              az containerapp start --name gwn-staging --resource-group gwn-rg || true
+              echo "Container app is not running — starting via REST API..."
+              SUB_ID=$(az account show --query "id" -o tsv)
+              az rest --method POST \
+                --url "/subscriptions/$SUB_ID/resourceGroups/gwn-rg/providers/Microsoft.App/containerApps/gwn-staging/start?api-version=2024-03-01"
               echo "Waiting for container app to start..."
-              sleep 15
+              for i in $(seq 1 12); do
+                APP_STATE=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
+                  --query "properties.runningStatus" -o tsv 2>/dev/null || echo "Unknown")
+                echo "Start attempt $i/12: state=$APP_STATE"
+                if [ "$APP_STATE" = "Running" ]; then
+                  break
+                fi
+                sleep 10
+              done
+              if [ "$APP_STATE" != "Running" ]; then
+                echo "::error::Container app failed to start after 120s (state: $APP_STATE)"
+                exit 1
+              fi
             fi
 
             # Find the revision currently receiving traffic (not just the latest-created one)
