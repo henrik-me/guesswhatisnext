@@ -347,12 +347,12 @@ jobs:
                 --revision "$NEW_REV" \
                 --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
               echo "Attempt $i: state=$STATE"
-              if [ "$STATE" = "Running" ]; then
+              if echo "$STATE" | grep -qiE "^Running"; then
                 break
               fi
               sleep 10
             done
-            if [ "$STATE" != "Running" ]; then
+            if ! echo "$STATE" | grep -qiE "^Running"; then
               echo "::error::Revision $NEW_REV not Running after 100s (state: $STATE)"
               exit 1
             fi
@@ -407,7 +407,7 @@ jobs:
                 --revision "$CURRENT_REV" \
                 --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
               echo "::notice::Rollback target $CURRENT_REV state=$STATE (attempt $attempt/5)"
-              if [ "$STATE" = "Running" ]; then
+              if echo "$STATE" | grep -qiE "^Running"; then
                 ROLLBACK_READY=1
                 break
               fi
