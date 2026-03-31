@@ -280,6 +280,8 @@ jobs:
                         value: "${JWT_SECRET}"
                       - name: SYSTEM_API_KEY
                         value: "${SYSTEM_API_KEY}"
+                      - name: GWN_DB_PATH
+                        value: /tmp/game.db
                     resources:
                       cpu: 0.5
                       memory: 1Gi
