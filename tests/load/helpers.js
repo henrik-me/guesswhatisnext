@@ -388,10 +388,6 @@ async function registerWithRetry(context, events) {
       emitCounter('auth.duplicate_username');
       return;
     }
-    if (result.statusCode >= 500) {
-      emitCounter('auth.unexpected_error');
-      throw new Error(`${label}: unexpected status ${result.statusCode}`);
-    }
     emitCounter('auth.unexpected_error');
     throw new Error(`${label}: unexpected status ${result.statusCode}`);
   }
@@ -416,10 +412,8 @@ async function registerWithRetry(context, events) {
       return null;
     }
 
-    // Step 2: Respect Retry-After, then retry
-    const retryAfterSource = immediateResult.statusCode === 429
-      ? immediateResult : triggerResult;
-    const retryAfter = parseInt(retryAfterSource.headers['retry-after'], 10);
+    // Step 2: Respect Retry-After from the immediate 429, then retry
+    const retryAfter = parseInt(immediateResult.headers['retry-after'], 10);
     const waitSeconds = (Number.isFinite(retryAfter) && retryAfter > 0)
       ? retryAfter : 1;
     emitHistogram('auth.retry_after_seconds', waitSeconds);
@@ -476,6 +470,7 @@ async function registerWithRetry(context, events) {
       emitCounter('auth.register_success');
       if (extraResult.body.token) {
         context.vars.token = extraResult.body.token;
+        context.vars.username = extraUsername;
       }
       continue;
     }
