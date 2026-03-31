@@ -8,7 +8,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 const { config } = require('./config');
-const { initDb, getDb, closeDb, isDbInitialized, setDraining } = require('./db/connection');
+const { initDb, getDb, closeDb, isDbInitialized, setDraining, isSqliteLockError } = require('./db/connection');
 const { requireSystem } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const scoreRoutes = require('./routes/scores');
@@ -179,7 +179,8 @@ function createServer() {
       console.log('📦 Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
     } catch (err) {
-      // Restore draining state so DB stays blocked after failed init
+      // Close stale connection to release SMB file handle before restoring draining state
+      closeDb();
       setDraining(true);
       draining = true;
       dbInitialized = false;
@@ -193,8 +194,57 @@ function createServer() {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   });
 
-  // In non-Azure environments, init DB eagerly for local dev convenience
-  if (!isAzure) {
+  if (isAzure) {
+    // Self-initialize DB in the background with retries. The server starts
+    // immediately so /healthz responds to Azure health probes. API endpoints
+    // return 503 until initialization succeeds. Old revisions may briefly hold
+    // the EXCLUSIVE lock; retries succeed once they are deactivated.
+    const SELF_INIT_INTERVAL_MS = 5000;
+    const SELF_INIT_MAX_ATTEMPTS = 30;
+    let selfInitAttempt = 0;
+
+    const attemptSelfInit = () => {
+      if (draining || dbInitialized) return;
+      selfInitAttempt++;
+      try {
+        setDraining(false);
+        // Short busy_timeout so each attempt blocks the event loop for at most
+        // 2 s, keeping /healthz responsive to Azure health probes. The timeout
+        // is passed to getDb() so it's in effect before any lock-acquiring pragmas.
+        getDb({ busyTimeout: 2000 });
+        initDb(1);
+        getDb().pragma('busy_timeout = 30000');
+        draining = false;
+        dbInitialized = true;
+        console.log(`📦 Database self-initialized on attempt ${selfInitAttempt}`);
+      } catch (err) {
+        closeDb();
+        dbInitialized = false;
+        if (!isSqliteLockError(err)) {
+          // Non-retryable error: put the app into draining mode until manual intervention.
+          setDraining(true);
+          draining = true;
+          console.error(`❌ Self-init failed with non-retryable error: ${err.message}`);
+          console.error('Call POST /api/admin/init-db after fixing the underlying issue.');
+        } else if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
+          // Retryable SQLite lock error: keep serving non-DB traffic and retry later.
+          console.warn(
+            `⏳ Self-init attempt ${selfInitAttempt}/${SELF_INIT_MAX_ATTEMPTS} failed: ${err.message}. Retrying in ${SELF_INIT_INTERVAL_MS / 1000}s...`
+          );
+          setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
+        } else {
+          // Retries exhausted: mark the app as draining and require manual init.
+          setDraining(true);
+          draining = true;
+          console.error(
+            `❌ Self-init failed after ${SELF_INIT_MAX_ATTEMPTS} attempts. Call POST /api/admin/init-db to initialize manually.`
+          );
+        }
+      }
+    };
+
+    setTimeout(attemptSelfInit, 2000);
+  } else {
     try {
       initDb();
       dbInitialized = true;
@@ -204,7 +254,7 @@ function createServer() {
       process.exit(1);
     }
   }
-  initWebSocket(server);
+  initWebSocket(server, () => dbInitialized && !draining);
 
   return { app, server };
 }

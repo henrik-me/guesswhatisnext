@@ -24,6 +24,7 @@ permissions:
 jobs:
   build-and-push:
     name: Build & Push Docker Image
+    if: github.event_name == 'workflow_dispatch' || vars.STAGING_AUTO_DEPLOY == 'true'
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.sha }}
@@ -76,23 +77,29 @@ jobs:
           --health-retries 10
           --health-start-period 15s
     steps:
-      - name: Initialize database
+      - name: Wait for database self-initialization
         run: |
-          # NODE_ENV=staging blocks DB access until init-db is called
-          RESPONSE=$(curl -s -w '\n%{http_code}' \
-            -X POST "http://localhost:3000/api/admin/init-db" \
-            -H "X-API-Key: ephemeral-smoke-test-key")
-          HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
-          echo "Init-db status: $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "::error::Database initialization failed with status $HTTP_STATUS"
-            echo "$RESPONSE" | sed '$d'
-            exit 1
-          fi
+          echo "Waiting for database self-initialization..."
+          for i in $(seq 1 30); do
+            DB_STATUS="unreachable"
+            if RESPONSE=$(curl -sf --connect-timeout 5 --max-time 10 \
+              -H "X-API-Key: ephemeral-smoke-test-key" \
+              "http://localhost:3000/api/health"); then
+              DB_STATUS=$(printf '%s' "$RESPONSE" | jq -r '.checks.database.status' 2>/dev/null || echo "unreachable")
+            fi
+            echo "Attempt $i: database status = $DB_STATUS"
+            if [ "$DB_STATUS" = "ok" ]; then
+              echo "Database ready!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Database not ready after ~60 seconds"
+          exit 1
 
       - name: Health check
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
             -H "X-API-Key: ephemeral-smoke-test-key" \
             "http://localhost:3000/api/health")
           echo "Health check status: $HTTP_STATUS"
@@ -303,50 +310,53 @@ jobs:
             echo "Waiting for old replicas to shut down and release SMB lock..."
             sleep 15
 
-      - name: Initialize DB on new revision
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
-            echo "Initializing DB inside container via az containerapp exec..."
-            for i in 1 2 3 4 5 6 7 8; do
-              RESULT=$(az containerapp exec \
-                --name gwn-staging --resource-group gwn-rg \
-                --revision "$NEW_REV" \
-                --command "sh -lc 'curl -sS --fail --max-time 30 -X POST http://localhost:3000/api/admin/init-db -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
-                2>&1) || true
-              echo "Init attempt $i: $RESULT"
-              if echo "$RESULT" | grep -q '"status":"initialized"'; then
-                echo "DB initialized successfully!"
-                break
-              fi
-              sleep 15
-            done
-            if ! echo "$RESULT" | grep -q '"status":"initialized"'; then
-              echo "::error::Failed to initialize DB on new revision"
-              exit 1
-            fi
-
       - name: Verify staging deployment
         uses: azure/cli@v2
         with:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
-            for i in 1 2 3 4 5; do
-              RESULT=$(az containerapp exec \
+            echo "Waiting for revision $NEW_REV to reach Running state..."
+            for i in $(seq 1 10); do
+              STATE=$(az containerapp revision show \
                 --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" \
-                --command "sh -lc 'curl -sS --fail --max-time 30 http://localhost:3000/api/health -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
-                2>&1) || true
-              echo "Health check attempt $i: $RESULT"
-              if echo "$RESULT" | grep -q '"status":"ok"'; then
-                echo "Staging deployment healthy!"
-                exit 0
+                --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
+              echo "Attempt $i: state=$STATE"
+              if [ "$STATE" = "Running" ]; then
+                break
               fi
-              sleep 15
+              sleep 10
             done
-            echo "::error::Staging health check failed after 5 attempts"
-            exit 1
+            if [ "$STATE" != "Running" ]; then
+              echo "::error::Revision $NEW_REV not Running after 100s (state: $STATE)"
+              exit 1
+            fi
+            echo "Revision is running — verifying DB initialization via application logs..."
+            # Self-init budget: 2s initial delay + up to 30 × (2s busy_timeout + 5s
+            # interval) ≈ 212s, plus Azure log propagation latency (~30s).
+            # 60 × 5s = 300s gives comfortable slack beyond that ceiling.
+            DB_CONFIRMED=0
+            for i in $(seq 1 60); do
+              if ! LOGS=$(az containerapp logs show \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$NEW_REV" \
+                --type console --tail 100 2>&1); then
+                echo "Log query failed, retrying..."
+                sleep 5
+                continue
+              fi
+              if echo "$LOGS" | grep -qE "Database (self-initialized|initialized)"; then
+                echo "✅ Staging deployment verified — DB initialization confirmed in logs"
+                DB_CONFIRMED=1
+                break
+              fi
+              echo "DB init not confirmed yet (attempt $i/60)..."
+              sleep 5
+            done
+            if [ "$DB_CONFIRMED" -ne 1 ]; then
+              echo "::error::DB initialization not confirmed in application logs after 300s"
+              exit 1
+            fi
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''
@@ -359,10 +369,31 @@ jobs:
               exit 1
             fi
             echo "::warning::Rolling back to $CURRENT_REV"
-            # Reactivate old revision
+            # Reactivate old revision first so there's always at least one
+            # active revision. Pre-self-init revisions will need manual
+            # POST /api/admin/init-db to resume API service (one-time transition risk).
             az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
               --revision "$CURRENT_REV" || true
-            # Switch traffic back to old revision (minimize downtime first), with retries
+            # Wait for old revision to reach Running state before proceeding
+            ROLLBACK_READY=0
+            for attempt in 1 2 3 4 5; do
+              STATE=$(az containerapp revision show \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$CURRENT_REV" \
+                --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
+              echo "::notice::Rollback target $CURRENT_REV state=$STATE (attempt $attempt/5)"
+              if [ "$STATE" = "Running" ]; then
+                ROLLBACK_READY=1
+                break
+              fi
+              sleep 10
+            done
+            if [ "$ROLLBACK_READY" -ne 1 ]; then
+              echo "::warning::Rollback target $CURRENT_REV not Running yet — proceeding anyway"
+            fi
+            # --- Step 1: Switch traffic away from the failed revision first ---
+            # This must happen BEFORE deactivating the new revision, otherwise
+            # ingress would briefly point at an inactive revision (downtime).
             TRAFFIC_SET=0
             for attempt in 1 2 3; do
               if az containerapp ingress traffic set \
@@ -371,27 +402,21 @@ jobs:
                 TRAFFIC_SET=1
                 break
               fi
-              echo "::warning::Failed to set ingress traffic to $CURRENT_REV (attempt $attempt/3); retrying in 10s..."
+              echo "::warning::Failed to set traffic to $CURRENT_REV (attempt $attempt/3); retrying in 10s..."
               sleep 10
             done
             if [ "$TRAFFIC_SET" -ne 1 ]; then
-              echo "::error::Failed to set ingress traffic to $CURRENT_REV after 3 attempts; aborting rollback"
+              echo "::error::Failed to set traffic to $CURRENT_REV after 3 attempts"
               exit 1
             fi
-            # Deactivate failed new revision to release SQLite lock
+            # Allow Azure ingress routing to propagate before deactivating
+            sleep 10
+            # --- Step 2: Deactivate the failed new revision to release DB locks ---
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
             if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "None" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
               az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
                 --revision "$NEW_REV" || true
             fi
-            # Wait for lock release
-            sleep 15
-            # Try to re-init DB on old revision via exec
-            az containerapp exec \
-              --name gwn-staging --resource-group gwn-rg \
-              --revision "$CURRENT_REV" \
-              --command "sh -lc 'curl -sS --fail --max-time 30 -X POST http://localhost:3000/api/admin/init-db -H \"X-API-Key: \$SYSTEM_API_KEY\"'" \
-              2>&1 || true
 
       - name: Tag deployment
         uses: azure/cli@v2

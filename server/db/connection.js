@@ -29,8 +29,34 @@ function isSqliteLockError(err) {
     err.code === 'SQLITE_BUSY_SNAPSHOT';
 }
 
-/** Get the database instance (lazy init). */
-function getDb() {
+/**
+ * Get the singleton database instance (lazy init).
+ *
+ * @param {Object} [options] - Optional configuration for the connection.
+ * @param {number|string} [options.busyTimeout=30000] - SQLite busy timeout in milliseconds.
+ *   Only honored when the singleton database connection is first created.
+ *   Configures the `busy_timeout` pragma used to wait for locked database
+ *   operations before failing with SQLITE_BUSY/SQLITE_LOCKED. Parsed with
+ *   parseInt — leading numeric portions of strings are accepted (e.g. '2000ms'
+ *   becomes 2000). Completely non-numeric values fall back to the default (30000),
+ *   and negative values are clamped to zero. Passing a different busyTimeout
+ *   after the connection already exists does not reconfigure the pragma.
+ * @returns {import('better-sqlite3').Database} The initialized Database instance.
+ * @throws {Error} Throws `"Database is not available — waiting for initialization"`
+ *   when `_draining` is true and no connection has been opened yet. In Azure
+ *   (staging/production) environments, `_draining` starts as true and is typically
+ *   cleared either by the `/api/admin/init-db` endpoint calling
+ *   {@link setDraining|setDraining(false)} or by the background self-initialization logic in
+ *   `createServer()` before it begins attempting database initialization. That
+ *   background path keeps `_draining` cleared across retryable initialization
+ *   failures; only if initialization encounters a fatal condition and gives up
+ *   may other code choose to re-enable draining, causing subsequent `getDb()`
+ *   calls to throw again until initialization is retried or completed. Callers
+ *   such as WebSocket handlers that run outside the API middleware gate should
+ *   be prepared to catch this error and surface a "service unavailable" response
+ *   while initialization is pending or has failed.
+ */
+function getDb({ busyTimeout = 30000 } = {}) {
   if (_draining && !db) {
     throw new Error('Database is not available — waiting for initialization');
   }
@@ -65,9 +91,20 @@ function getDb() {
         throw openErr;
       }
     }
+    // Set busy_timeout first — journal_mode and locking_mode can acquire locks.
+    const bt = parseInt(busyTimeout, 10);
+    db.pragma(`busy_timeout = ${Number.isNaN(bt) ? 30000 : Math.max(0, bt)}`);
     db.pragma(isAzure ? 'journal_mode = DELETE' : 'journal_mode = WAL');
-    db.pragma('busy_timeout = 30000');
     db.pragma('foreign_keys = ON');
+    if (isAzure && process.env.GWN_EXCLUSIVE_LOCKING !== 'false') {
+      // Azure Files (SMB) handles file locking poorly — the normal SQLite
+      // lock/unlock cycle causes SQLITE_BUSY even with a single process.
+      // EXCLUSIVE mode grabs the lock once and holds it for the connection
+      // lifetime, avoiding repeated SMB lock negotiations.
+      // Requires maxReplicas=1 — multiple replicas cannot share an exclusive lock.
+      // Set GWN_EXCLUSIVE_LOCKING=false to disable for multi-replica setups.
+      db.pragma('locking_mode = EXCLUSIVE');
+    }
   }
   return db;
 }
@@ -150,4 +187,4 @@ function isDbInitialized() {
   return db !== null;
 }
 
-module.exports = { getDb, initDb, closeDb, isDbInitialized, setDraining };
+module.exports = { getDb, initDb, closeDb, isDbInitialized, setDraining, isSqliteLockError };
