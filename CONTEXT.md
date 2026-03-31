@@ -307,15 +307,23 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
 | 60 | Azure Files cleanup | ✅ Done | 59 | Remove dead SMB references from all files. PR #49 merged. |
-| 60v | Validate staging (post-cleanup) | ⬜ Pending | 60 | Trigger staging deploy, verify app starts, DB self-inits, smoke tests pass. Confirms volume mount removal didn't break deployment. |
-| 61 | Database abstraction layer | ⬜ Pending | 60v | Adapter interface, SQLite + mssql adapters, migration system. |
-| 62 | Convert routes to async | ⬜ Pending | 61 | All DB-touching handlers use `await db.get/all/run()`. |
-| 63 | Update tests for async | ⬜ Pending | 62 | Async test helpers. All 81+ tests pass with SQLite adapter. |
-| 63v | Validate staging (post-async) | ⬜ Pending | 63 | Trigger staging deploy, verify async DB layer works end-to-end in Azure. Critical checkpoint before provisioning Azure SQL. |
+| 60v | Validate staging (post-cleanup) | ✅ Done | 60 | Staging deploy + smoke tests all passed. DB self-init, user reg, score submit, puzzles all working. Run #23809714266. |
+| 61a | Adapter interface + factory | ⬜ Pending | 60v | `base-adapter.js`, `index.js` factory, config changes. Defines the async API all consumers use. |
+| 61b | SQLite adapter + migrations | ⬜ Pending | 61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–003`), `seed.js`. Parallel in wt-1. |
+| 61c | mssql adapter | ⬜ Pending | 61a | `mssql-adapter.js`. Parallel in wt-2. Not used until Task 64. |
+| 62 | Convert routes to async | ⬜ Pending | 61a | All DB-touching handlers use `await db.get/all/run()`. Parallel in wt-3. |
+| 63 | Update tests for async | ⬜ Pending | 61b, 62 | Async test helpers. All 81+ tests pass with SQLite adapter. Runs in wt-3 after 61b merges. |
+| 63v | Validate staging (post-async) | ⬜ Pending | 63 | Trigger staging deploy, verify async DB layer works end-to-end in Azure. |
 | 64 | Provision Azure SQL | ⬜ Pending | 63v | Free-tier serverless DB. Firewall. GitHub secret. |
 | 65 | Production deploy | ⬜ Pending | 64 | Update prod-deploy.yml. First deploy + verify. |
 
-**Parallelism:** Phase 11 is sequential. Tasks 60–65 form a dependency chain with staging validation gates at 60v and 63v.
+**Parallelism:** After 61a merges, three parallel tracks start:
+```
+Main: 61a → merge → signal workers → orchestrate merges → 63v → 64 → 65
+  wt-1: 61b (SQLite adapter + migrations)
+  wt-2: 61c (mssql adapter)
+  wt-3: 62 (route conversion) → pull 61b when merged → 63 (test updates)
+```
 
 ## Phase 12 — Test Infrastructure Integration
 
