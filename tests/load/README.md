@@ -124,8 +124,10 @@ The server applies per-IP rate limiting on auth endpoints:
 - **Hourly**: 20 registrations/hour
 - **Daily**: 50 registrations/day
 
-All limiters use `standardHeaders: true`, which sends `RateLimit-*` headers and
-a `Retry-After` header on 429 responses.
+The **burst registration** and **login** limiters use `standardHeaders: true`,
+which sends `RateLimit-*` headers and a `Retry-After` header on 429 responses.
+The **hourly** and **daily** registration limiters do **not** send these headers
+to avoid header clobbering; in practice the burst limiter triggers first.
 
 For **local/dev or same-host runs** where the load test process
 can access the server's SQLite database file and `JWT_SECRET`, the `before` hook
