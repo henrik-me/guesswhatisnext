@@ -67,44 +67,30 @@ function getDb({ busyTimeout = 30000 } = {}) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // WAL mode requires shared memory which Azure Files (SMB) doesn't support.
+    // Azure Files (SMB) doesn't support shared memory, so WAL mode is unusable.
     // Use DELETE journal mode in production/staging, WAL locally for performance.
-    try {
-      db = new Database(DB_PATH);
-    } catch (openErr) {
-      if (isAzure && isSqliteLockError(openErr)) {
-        // Previous revision may have left WAL/SHM artifacts on Azure Files (SMB).
-        // SQLite's WAL recovery requires shared memory which doesn't work on SMB.
-        for (const ext of ['-wal', '-shm']) {
-          const staleFile = DB_PATH + ext;
-          if (fs.existsSync(staleFile)) {
-            console.warn(`🧹 Removing stale WAL artifact after open failure (${openErr.code}): ${staleFile}`);
-            try {
-              fs.unlinkSync(staleFile);
-            } catch (unlinkErr) {
-              console.warn(`⚠️ Failed to remove ${staleFile}: ${unlinkErr.message}`);
-            }
-          }
+    // Always remove stale WAL/SHM artifacts before opening — a previous
+    // revision may have left them and they break SMB-based opens.
+    if (isAzure) {
+      for (const ext of ['-wal', '-shm']) {
+        const staleFile = DB_PATH + ext;
+        if (fs.existsSync(staleFile)) {
+          console.warn(`🧹 Removing stale WAL artifact: ${staleFile}`);
+          try { fs.unlinkSync(staleFile); } catch { /* best-effort */ }
         }
-        db = new Database(DB_PATH);
-      } else {
-        throw openErr;
       }
     }
-    // Set busy_timeout first — journal_mode and locking_mode can acquire locks.
+    db = new Database(DB_PATH);
+    // Set busy_timeout first — journal_mode can acquire locks.
     const bt = parseInt(busyTimeout, 10);
     db.pragma(`busy_timeout = ${Number.isNaN(bt) ? 30000 : Math.max(0, bt)}`);
     db.pragma(isAzure ? 'journal_mode = DELETE' : 'journal_mode = WAL');
     db.pragma('foreign_keys = ON');
-    if (isAzure && process.env.GWN_EXCLUSIVE_LOCKING !== 'false') {
-      // Azure Files (SMB) handles file locking poorly — the normal SQLite
-      // lock/unlock cycle causes SQLITE_BUSY even with a single process.
-      // EXCLUSIVE mode grabs the lock once and holds it for the connection
-      // lifetime, avoiding repeated SMB lock negotiations.
-      // Requires maxReplicas=1 — multiple replicas cannot share an exclusive lock.
-      // Set GWN_EXCLUSIVE_LOCKING=false to disable for multi-replica setups.
-      db.pragma('locking_mode = EXCLUSIVE');
-    }
+    // NOTE: EXCLUSIVE locking mode is intentionally NOT used. Azure Files (SMB)
+    // byte-range locks are unreliable — even a single process on a fresh file
+    // gets SQLITE_BUSY with EXCLUSIVE mode. Concurrent access is prevented at
+    // the infrastructure level: maxReplicas=1 + deploy deactivates old revisions
+    // before the new one starts DB init. DELETE journal avoids WAL/SHM issues.
   }
   return db;
 }

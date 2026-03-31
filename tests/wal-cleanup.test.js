@@ -128,20 +128,8 @@ describe('WAL cleanup in getDb()', () => {
     expect(row.val).toBe(1);
   });
 
-  test('sets EXCLUSIVE locking mode in staging environment', () => {
+  test('uses NORMAL locking mode in staging environment (EXCLUSIVE is disabled for SMB)', () => {
     process.env.NODE_ENV = 'staging';
-    clearModuleCache();
-    const { getDb, setDraining } = require('../server/db/connection');
-
-    setDraining(false);
-    const db = getDb();
-    const lockingMode = db.pragma('locking_mode', { simple: true });
-    expect(lockingMode).toBe('exclusive');
-  });
-
-  test('skips EXCLUSIVE locking when GWN_EXCLUSIVE_LOCKING=false', () => {
-    process.env.NODE_ENV = 'staging';
-    process.env.GWN_EXCLUSIVE_LOCKING = 'false';
     clearModuleCache();
     const { getDb, setDraining } = require('../server/db/connection');
 
@@ -149,5 +137,16 @@ describe('WAL cleanup in getDb()', () => {
     const db = getDb();
     const lockingMode = db.pragma('locking_mode', { simple: true });
     expect(lockingMode).toBe('normal');
+  });
+
+  test('uses DELETE journal mode in staging environment', () => {
+    process.env.NODE_ENV = 'staging';
+    clearModuleCache();
+    const { getDb, setDraining } = require('../server/db/connection');
+
+    setDraining(false);
+    const db = getDb();
+    const journalMode = db.pragma('journal_mode', { simple: true });
+    expect(journalMode).toBe('delete');
   });
 });
