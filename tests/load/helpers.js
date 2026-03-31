@@ -239,7 +239,8 @@ async function setupUsers(context, _events, done) {
         'SELECT id, username, role FROM users WHERE username = ?',
       );
 
-      const pool = [];
+      // Seed users inside a transaction, collect metadata for JWT signing
+      const users = [];
       const seedAll = db.transaction(() => {
         for (let i = 0; i < count; i++) {
           const username = `loadtest${String(i + 1).padStart(3, '0')}`;
@@ -251,16 +252,21 @@ async function setupUsers(context, _events, done) {
               'Aborting to avoid minting tokens for a non-load-test account.',
             );
           }
-          const token = jwt.sign(
-            { id: user.id, username: user.username, role: 'user' },
-            jwtSecret,
-            { expiresIn: '7d' },
-          );
-          pool.push({ username, token });
+          users.push({ id: user.id, username: user.username });
         }
       });
 
       seedAll();
+
+      // Sign JWTs outside the transaction to minimize DB lock duration
+      const pool = users.map((user) => ({
+        username: user.username,
+        token: jwt.sign(
+          { id: user.id, username: user.username, role: 'user' },
+          jwtSecret,
+          { expiresIn: '7d' },
+        ),
+      }));
 
       const elapsed = Date.now() - startTime;
       console.log(`[setup] Seeded ${pool.length} users in ${elapsed}ms`);
