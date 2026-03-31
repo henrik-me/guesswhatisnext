@@ -109,8 +109,8 @@ npx artillery run tests/load/api-stress.yml --target https://your-staging-url.co
 
 | Scenario | Description |
 |---|---|
-| Connection and room join | Authenticate → create room → connect WS → join room → close |
-| Connect-disconnect cycle | Authenticate → connect → close → reconnect ×3 |
+| Connection and room join | Authenticate → create room → connect WS → join room → emit metrics → close |
+| Sustained connection | Authenticate → connect → hold 5s → emit metrics → close |
 
 **Load profile:**
 - **Ramp up**: 1 → 5 virtual users/sec over 30 seconds
@@ -119,8 +119,15 @@ npx artillery run tests/load/api-stress.yml --target https://your-staging-url.co
 
 ## Rate Limiting & User Pool
 
-The server applies per-IP rate limiting on auth endpoints (5 registrations/min,
-10 logins/min). For **local/dev or same-host runs** where the load test process
+The server applies per-IP rate limiting on auth endpoints:
+- **Burst**: 5 registrations/minute, 10 logins/minute
+- **Hourly**: 20 registrations/hour
+- **Daily**: 50 registrations/day
+
+All limiters use `standardHeaders: true`, which sends `RateLimit-*` headers and
+a `Retry-After` header on 429 responses.
+
+For **local/dev or same-host runs** where the load test process
 can access the server's SQLite database file and `JWT_SECRET`, the `before` hook
 seeds users **directly into the database** using `better-sqlite3` and signs JWTs
 locally with `jsonwebtoken`. This completes in under 1 second (vs ~4 minutes
@@ -141,9 +148,12 @@ secret directly from your local machine. In those cases, either:
 Tokens are persisted to `.user-pool.json` and scenario VUs pick users from
 this pool in round-robin.
 
-The auth scenario (10% weight) tests direct registration and will naturally
-experience some 429 responses — this is expected and validates that rate
-limiting works correctly under load.
+The auth scenario (10% weight) tests direct registration and gracefully handles
+rate-limit (429) responses. When a 429 is received, the `registerWithRetry`
+helper reads the `Retry-After` header, waits, and retries with a new username.
+This validates that rate limiting works correctly without failing the VU. Custom
+metrics (`auth.rate_limited`, `auth.retry_after_seconds`) are emitted for
+observability.
 
 ## Thresholds
 
@@ -152,16 +162,30 @@ limiting works correctly under load.
 | Metric | Threshold | Meaning |
 |---|---|---|
 | `http.response_time.p95` | < 500ms | 95th percentile HTTP response time must be under 500ms |
+| `vusers.failed` | == 0 | All VUs must complete successfully |
+
+The CI workflow also runs a separate validation step that checks the report JSON
+and fails the job if any unexpected VU failures are detected.
 
 ### WebSocket Stress Test
 
-The WebSocket test does not enforce automated thresholds. HTTP setup calls
-(registration, room creation) use a custom Node.js helper and are not captured
-in Artillery's `http.response_time` metrics. Review the Artillery summary
-output manually for WebSocket-specific metrics (`websocket.send_rate`,
-`websocket.messages_sent/received`).
+The WebSocket test emits custom metrics via `beforeScenario` / `afterScenario` hooks:
 
-If API test thresholds are breached, Artillery exits with a non-zero code.
+| Metric | Type | Description |
+|---|---|---|
+| `ws.session_duration` | histogram | Total scenario duration from connect setup to completion |
+| `ws.connect_time` | histogram | Time from connect setup start to WebSocket open |
+
+> **Note:** Artillery's WS engine `connect.function` handlers receive
+> `(wsArgs, context, done)` — they do **not** receive an event emitter.
+> Per-message round-trip timing is also not possible because the WS engine
+> does not provide per-message response hooks. The `afterScenario` hook
+> (which does receive `events`) is used to emit the collected timestamps
+> as histogram metrics that appear in the Artillery report with p50/p95/p99.
+
+HTTP setup calls (registration, room creation) use a custom Node.js helper and
+are not captured in Artillery's `http.response_time` metrics. Review the
+Artillery summary output for WebSocket-specific metrics.
 
 ## Interpreting Results
 

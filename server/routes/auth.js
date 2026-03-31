@@ -10,10 +10,26 @@ const { generateToken, requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-const registerLimiter = rateLimit({
+const registerBurstLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 5,
   message: { error: 'Too many registration attempts, try again in a minute' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const registerHourlyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  message: { error: 'Hourly registration limit reached, try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const registerDailyLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 50,
+  message: { error: 'Daily registration limit reached, try again tomorrow' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -27,7 +43,7 @@ const loginLimiter = rateLimit({
 });
 
 /** POST /api/auth/register */
-router.post('/register', registerLimiter, (req, res) => {
+router.post('/register', registerDailyLimiter, registerHourlyLimiter, registerBurstLimiter, (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {

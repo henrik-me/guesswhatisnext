@@ -19,6 +19,9 @@ config:
     ensure:
       thresholds:
         - http.response_time.p95: 500
+      conditions:
+        - expression: "vusers.failed == 0"
+          strict: true
   processor: "./helpers.js"
 
 before:
@@ -34,18 +37,7 @@ scenarios:
     weight: 10
     flow:
       - function: "generateUniqueUser"
-      - post:
-          url: "/api/auth/register"
-          json:
-            username: "{{ username }}"
-            password: "{{ password }}"
-          capture:
-            - json: "$.token"
-              as: "token"
-          expect:
-            - statusCode:
-                - 201
-                - 429
+      - function: "registerWithRetry"
       - think: 1
 
   - name: "Score submission burst"

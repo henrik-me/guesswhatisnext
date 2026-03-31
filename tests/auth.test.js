@@ -49,6 +49,25 @@ describe('POST /api/auth/register', () => {
 
     expect(res.status).toBe(400);
   });
+
+  test('rate-limits after 5 registrations in a burst', async () => {
+    // Use unique names to avoid 409 conflicts (alice already registered above)
+    for (let i = 0; i < 4; i++) {
+      await getAgent()
+        .post('/api/auth/register')
+        .send({ username: `burst${i}xx`, password: 'password123' });
+    }
+
+    // 6th request (alice + burst0-3 = 5 already) should be rate-limited
+    const res = await getAgent()
+      .post('/api/auth/register')
+      .send({ username: 'burst4xx', password: 'password123' });
+
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBeDefined();
+    // standardHeaders: true sends Retry-After header
+    expect(res.headers['retry-after']).toBeDefined();
+  });
 });
 
 describe('POST /api/auth/login', () => {

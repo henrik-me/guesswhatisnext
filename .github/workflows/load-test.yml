@@ -154,37 +154,114 @@ jobs:
               const counters = agg.counters || {};
               const summaries = agg.summaries || {};
 
+              // --- Total run duration ---
+              const firstTs = agg.firstCounterAt || agg.firstHistogramAt;
+              const lastTs = agg.lastCounterAt || agg.lastHistogramAt;
+              let durationStr = 'N/A';
+              if (firstTs && lastTs) {
+                const durMs = new Date(lastTs).getTime() - new Date(firstTs).getTime();
+                const durSec = Math.round(durMs / 1000);
+                const mins = Math.floor(durSec / 60);
+                const secs = durSec % 60;
+                durationStr = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
+              }
+
+              // --- Error rate ---
+              const vusCreated = counters['vusers.created'] || 0;
+              const vusFailed = counters['vusers.failed'] || 0;
+              const vusCompleted = counters['vusers.completed'] || 0;
+              const errorRate = vusCreated > 0 ? ((vusFailed / vusCreated) * 100).toFixed(1) : '0.0';
+
+              // --- Response time metrics ---
               const p95 = summaries['http.response_time']?.p95
                 ?? summaries['plugins.metrics-by-endpoint.response_time./api/scores/leaderboard']?.p95
                 ?? 'N/A';
               const p99 = summaries['http.response_time']?.p99 ?? 'N/A';
               const median = summaries['http.response_time']?.median ?? 'N/A';
 
+              // --- HTTP status codes ---
               const codes = Object.entries(counters)
                 .filter(([k]) => k.startsWith('http.codes.'))
                 .map(([k, v]) => k.replace('http.codes.', '') + ': ' + v)
                 .join(', ') || 'N/A';
 
-              const vusCreated = counters['vusers.created'] ?? 'N/A';
-              const vusCompleted = counters['vusers.completed'] ?? 'N/A';
-              const vusFailed = counters['vusers.failed'] ?? 0;
               const reqTotal = counters['http.requests'] ?? counters['http.responses'] ?? 'N/A';
               const errors = Object.entries(counters)
                 .filter(([k]) => k.startsWith('errors.'))
                 .map(([k, v]) => k.replace('errors.', '') + ': ' + v)
                 .join(', ');
 
+              // --- Overview table ---
+              console.log('**Overview**');
+              console.log('');
               console.log('| Metric | Value |');
               console.log('|--------|-------|');
-              console.log('| Response time p95 | ' + p95 + ' ms |');
-              console.log('| Response time p99 | ' + p99 + ' ms |');
-              console.log('| Response time median | ' + median + ' ms |');
-              console.log('| HTTP status codes | ' + codes + ' |');
-              console.log('| Total requests | ' + reqTotal + ' |');
+              console.log('| Total run duration | ' + durationStr + ' |');
               console.log('| VUs created | ' + vusCreated + ' |');
               console.log('| VUs completed | ' + vusCompleted + ' |');
               console.log('| VUs failed | ' + vusFailed + ' |');
+              console.log('| Error rate | ' + errorRate + '% |');
+              console.log('| Total requests | ' + reqTotal + ' |');
+              console.log('| HTTP status codes | ' + codes + ' |');
+              console.log('| Response time p95 | ' + p95 + ' ms |');
+              console.log('| Response time p99 | ' + p99 + ' ms |');
+              console.log('| Response time median | ' + median + ' ms |');
               if (errors) console.log('| Errors | ' + errors + ' |');
+              console.log('');
+
+              // --- Per-scenario breakdown ---
+              const scenarioCounters = Object.entries(counters)
+                .filter(([k]) => k.startsWith('vusers.created_by_name.'));
+              if (scenarioCounters.length > 0) {
+                console.log('**Per-scenario breakdown**');
+                console.log('');
+                console.log('| Scenario | Created | Completed | Failed |');
+                console.log('|----------|---------|-----------|--------|');
+                for (const [k, created] of scenarioCounters) {
+                  const name = k.replace('vusers.created_by_name.', '');
+                  const completed = counters['vusers.completed_by_name.' + name] || 0;
+                  const failed = counters['vusers.failed_by_name.' + name] || 0;
+                  console.log('| ' + name + ' | ' + created + ' | ' + completed + ' | ' + failed + ' |');
+                }
+                console.log('');
+              }
+
+              // --- WS-specific metrics (for websocket reports) ---
+              const wsMsgSent = counters['websocket.messages_sent'] ?? null;
+              const wsSessionLen = summaries['websocket.session_length']?.p95 ?? null;
+              const wsConnectTime = summaries['ws.connect_time']?.p95 ?? null;
+              const wsSessionDuration = summaries['ws.session_duration']?.p95 ?? null;
+
+              if (wsMsgSent !== null || wsSessionLen !== null) {
+                console.log('**WebSocket metrics**');
+                console.log('');
+                console.log('| Metric | Value |');
+                console.log('|--------|-------|');
+                if (wsMsgSent !== null) console.log('| Messages sent | ' + wsMsgSent + ' |');
+                if (wsSessionLen !== null) console.log('| Session length p95 | ' + wsSessionLen + ' ms |');
+                if (wsConnectTime !== null) console.log('| Connect time p95 | ' + wsConnectTime + ' ms |');
+                if (wsSessionDuration !== null) console.log('| Session duration p95 | ' + wsSessionDuration + ' ms |');
+                const wsSessionP99 = summaries['ws.session_duration']?.p99 ?? null;
+                if (wsSessionP99 !== null) console.log('| Session duration p99 | ' + wsSessionP99 + ' ms |');
+                console.log('');
+              }
+
+              // --- Custom auth metrics (if present) ---
+              const authRateLimited = counters['auth.rate_limited'] ?? null;
+              const authRetrySuccess = counters['auth.retry_success'] ?? null;
+              const authRegisterSuccess = counters['auth.register_success'] ?? null;
+              if (authRateLimited !== null || authRetrySuccess !== null || authRegisterSuccess !== null) {
+                console.log('**Auth rate-limit metrics**');
+                console.log('');
+                console.log('| Metric | Value |');
+                console.log('|--------|-------|');
+                if (authRegisterSuccess !== null) console.log('| Registrations (direct) | ' + authRegisterSuccess + ' |');
+                if (authRateLimited !== null) console.log('| Rate-limited (429) | ' + authRateLimited + ' |');
+                if (authRetrySuccess !== null) console.log('| Retry successes | ' + authRetrySuccess + ' |');
+                const retryP95 = summaries['auth.retry_after_seconds']?.p95 ?? null;
+                if (retryP95 !== null) console.log('| Retry-After p95 | ' + retryP95 + 's |');
+                console.log('');
+              }
             " >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "_Could not parse report._" >> "$GITHUB_STEP_SUMMARY"
 
             echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -192,6 +269,29 @@ jobs:
         env:
           TARGET_URL: ${{ steps.target.outputs.url }}
           TEST_SUITE: ${{ steps.suite.outputs.suite }}
+
+      - name: Validate pass rate
+        if: always()
+        run: |
+          FAILED=0
+          for f in reports/*.json; do
+            [ -f "$f" ] || continue
+            SUITE_NAME=$(basename "$f" .json | sed 's/-report//')
+            VU_FAILED=$(node -e "
+              const data = JSON.parse(require('fs').readFileSync('$f', 'utf8'));
+              console.log((data.aggregate?.counters?.['vusers.failed'] || 0));
+            " 2>/dev/null || echo "0")
+            if [ "$VU_FAILED" -gt 0 ] 2>/dev/null; then
+              echo "::error::${SUITE_NAME}: ${VU_FAILED} VUs failed"
+              FAILED=1
+            else
+              echo "✅ ${SUITE_NAME}: 0 VU failures"
+            fi
+          done
+          if [ "$FAILED" = "1" ]; then
+            echo "::error::One or more test suites had VU failures"
+            exit 1
+          fi
 
       - name: Upload Artillery reports
         if: always()

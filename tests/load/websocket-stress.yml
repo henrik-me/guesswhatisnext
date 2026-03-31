@@ -33,6 +33,8 @@ after:
 scenarios:
   - name: "WebSocket connection and room join"
     engine: ws
+    beforeScenario: "markScenarioStart"
+    afterScenario: "emitWsMetrics"
     flow:
       - connect:
           function: "connectWithTokenAndRoom"
@@ -43,6 +45,8 @@ scenarios:
 
   - name: "WebSocket sustained connection"
     engine: ws
+    beforeScenario: "markScenarioStart"
+    afterScenario: "emitWsMetrics"
     flow:
       - connect:
           function: "connectWithToken"
