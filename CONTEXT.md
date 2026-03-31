@@ -306,14 +306,16 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 60 | Azure Files cleanup | ⬜ Pending | 59 | Remove dead SMB references from all files. Delete Azure storage resources. |
-| 61 | Database abstraction layer | ⬜ Pending | 60 | Adapter interface, SQLite + mssql adapters, migration system. |
+| 60 | Azure Files cleanup | ✅ Done | 59 | Remove dead SMB references from all files. PR #49 merged. |
+| 60v | Validate staging (post-cleanup) | ⬜ Pending | 60 | Trigger staging deploy, verify app starts, DB self-inits, smoke tests pass. Confirms volume mount removal didn't break deployment. |
+| 61 | Database abstraction layer | ⬜ Pending | 60v | Adapter interface, SQLite + mssql adapters, migration system. |
 | 62 | Convert routes to async | ⬜ Pending | 61 | All DB-touching handlers use `await db.get/all/run()`. |
-| 63 | Update tests for async | ⬜ Pending | 62 | Async test helpers. All 83+ tests pass with SQLite adapter. |
-| 64 | Provision Azure SQL | ⬜ Pending | 63 | Free-tier serverless DB. Firewall. GitHub secret. |
+| 63 | Update tests for async | ⬜ Pending | 62 | Async test helpers. All 81+ tests pass with SQLite adapter. |
+| 63v | Validate staging (post-async) | ⬜ Pending | 63 | Trigger staging deploy, verify async DB layer works end-to-end in Azure. Critical checkpoint before provisioning Azure SQL. |
+| 64 | Provision Azure SQL | ⬜ Pending | 63v | Free-tier serverless DB. Firewall. GitHub secret. |
 | 65 | Production deploy | ⬜ Pending | 64 | Update prod-deploy.yml. First deploy + verify. |
 
-**Parallelism:** Phase 11 is sequential. Tasks 60-65 form a dependency chain.
+**Parallelism:** Phase 11 is sequential. Tasks 60–65 form a dependency chain with staging validation gates at 60v and 63v.
 
 ## Phase 12 — Test Infrastructure Integration
 
@@ -486,7 +488,7 @@ These should be kept in mind throughout Phase 1 development:
 
 ## Blockers / Open Questions
 
-- **Azure Files storage cleanup**: `gwn-storage-staging` and `gwn-storage-production` file shares are dead weight — need to be removed from workflows, infra scripts, and Azure resources.
+- **Azure Files storage cleanup**: ✅ Done (PR #49). Azure storage resources (`gwn-storage-staging`, `gwn-storage-production`) still exist in Azure and should be deleted manually.
 - **Staging auto-deploy disabled**: Must manually trigger `workflow_dispatch` after merging to main. Re-enable once Phase 11 is stable.
 - **Production not yet deployed**: Depends on Azure SQL migration (Phase 11b-c) since Azure Files SMB is broken for SQLite.
 - **Azure SQL free tier limit**: 1 free DB per subscription. Production gets the free DB; staging uses ephemeral local SQLite.
