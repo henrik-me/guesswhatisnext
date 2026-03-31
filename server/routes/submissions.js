@@ -208,7 +208,8 @@ router.put('/:id/review', requireSystem, (req, res) => {
       if (err && err.message === 'ALREADY_REVIEWED') {
         return res.status(409).json({ error: 'Submission has already been reviewed' });
       }
-      throw err;
+      console.error('Error while approving submission %s:', id, err);
+      return res.status(500).json({ error: 'Internal server error' });
     }
 
     return res.json({ id, status, message: `Submission ${status}`, puzzleId });
