@@ -54,13 +54,15 @@ router.post('/', requireAuth, (req, res) => {
     return res.status(401).json({ error: 'User not found — please log in again' });
   }
 
+  const trimmedAnswer = typeof answer === 'string' ? answer.trim() : String(answer);
+
   const result = db.prepare(
     `INSERT INTO puzzle_submissions (user_id, sequence, answer, explanation, difficulty, category)
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(
     req.user.id,
     JSON.stringify(sequence),
-    String(answer),
+    trimmedAnswer,
     explanation.trim(),
     Number(difficulty),
     category
@@ -119,6 +121,14 @@ router.put('/:id/review', requireSystem, (req, res) => {
     return res.status(400).json({ error: 'status must be approved or rejected' });
   }
 
+  if (reviewerNotes !== undefined && reviewerNotes !== null && typeof reviewerNotes !== 'string') {
+    return res.status(400).json({ error: 'reviewerNotes must be a string' });
+  }
+
+  const notes = typeof reviewerNotes === 'string' && reviewerNotes.trim().length > 0
+    ? reviewerNotes.trim()
+    : null;
+
   const db = getDb();
   const submission = db.prepare('SELECT * FROM puzzle_submissions WHERE id = ?').get(req.params.id);
 
@@ -133,7 +143,7 @@ router.put('/:id/review', requireSystem, (req, res) => {
     `UPDATE puzzle_submissions
      SET status = ?, reviewer_notes = ?, reviewed_at = CURRENT_TIMESTAMP
      WHERE id = ? AND status = 'pending'`
-  ).run(status, reviewerNotes || null, req.params.id);
+  ).run(status, notes, req.params.id);
 
   if (result.changes === 0) {
     return res.status(409).json({ error: 'Submission has already been reviewed' });
