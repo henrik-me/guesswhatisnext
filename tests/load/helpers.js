@@ -3,10 +3,12 @@
 /**
  * Artillery helper functions for load test scenarios.
  *
- * The server applies per-IP rate limiting on auth endpoints (5 reg/min,
- * 10 login/min). To work around this during load testing, we pre-register
- * a pool of users in `setupUsers` (before hook), persist them to a JSON file,
- * and VUs load them via `assignUser`.
+ * The `setupUsers` before-hook seeds a pool of users directly into the SQLite
+ * database (using better-sqlite3, bcryptjs, and jsonwebtoken) and writes
+ * signed JWTs to `.user-pool.json`. This avoids the HTTP rate limiter
+ * entirely, cutting setup from ~4 minutes to under 1 second.
+ *
+ * VUs load pre-seeded users via `assignUser` (round-robin).
  */
 
 const http = require('http');
@@ -101,9 +103,12 @@ function loadUserPool() {
 
 /**
  * Called once before the test run via top-level `before`.
- * Registers users in batches of 4 (staying under the 5/min rate limit),
- * waiting for the rate limit window between batches. Persists to a JSON file
+ * Seeds users directly into the SQLite database and signs JWTs locally,
+ * bypassing the HTTP rate limiter entirely. Persists tokens to a JSON file
  * so scenario workers can access the pool.
+ *
+ * Requires env vars: GWN_DB_PATH (path to the server's SQLite DB) and
+ * JWT_SECRET (must match the running server's secret).
  */
 async function setupUsers(context, _events, done) {
   const setupTimeoutMs =
@@ -172,81 +177,73 @@ async function setupUsers(context, _events, done) {
       throw err;
     }
 
-    const batchSize = 4; // stay under 5/min rate limit
-    const windowMs = 61000; // slightly over 60s rate limit window
-    const maxAttempts = count * 10;
-    const non429BackoffMs = 500;
-    const startTime = Date.now();
-    let attempts = 0;
-    let shouldAbort = false;
-    const pool = [];
-    console.log(`[setup] Pre-registering ${count} users at ${baseUrl}...`);
+    // Direct DB seeding — bypasses HTTP rate limits entirely
+    const Database = require('better-sqlite3');
+    const bcrypt = require('bcryptjs');
+    const jwt = require('jsonwebtoken');
 
-    while (pool.length < count && !shouldAbort) {
-      const batchEnd = Math.min(pool.length + batchSize, count);
-      const targetCount = batchEnd;
+    const dbPath = process.env.GWN_DB_PATH
+      || path.join(__dirname, '..', '..', 'data', 'game.db');
+    const jwtSecret = process.env.JWT_SECRET;
 
-      while (pool.length < targetCount && !shouldAbort) {
-        const username = makeUsername('l');
-        const password = 'LoadTest123!';
-        attempts++;
-
-        try {
-          const res = await httpRequest(baseUrl, 'POST', '/api/auth/register', {
-            username,
-            password,
-          });
-
-          if (res.statusCode === 201 && res.body.token) {
-            pool.push({ username, token: res.body.token });
-          } else if (res.statusCode === 429) {
-            console.log(`[setup] Rate limited at ${pool.length} users, waiting for window reset...`);
-            await new Promise((r) => setTimeout(r, windowMs));
-          } else {
-            console.error(`[setup] Registration failed (${res.statusCode}):`, res.body);
-            await new Promise((r) => setTimeout(r, non429BackoffMs));
-          }
-        } catch (err) {
-          console.error(`[setup] Error registering user:`, err.message);
-          await new Promise((r) => setTimeout(r, non429BackoffMs));
-        }
-
-        const elapsed = Date.now() - startTime;
-        if (elapsed > setupTimeoutMs) {
-          console.error(
-            `[setup] Aborting: exceeded max duration (${setupTimeoutMs}ms) with ${pool.length}/${count} users`,
-          );
-          shouldAbort = true;
-        } else if (attempts >= maxAttempts && pool.length < count) {
-          console.error(
-            `[setup] Aborting: exceeded max attempts (${maxAttempts}) with ${pool.length}/${count} users`,
-          );
-          shouldAbort = true;
-        }
-      }
-
-      if (!shouldAbort && pool.length < count) {
-        console.log(`[setup] Registered ${pool.length}/${count}, waiting for rate limit window...`);
-        await new Promise((r) => setTimeout(r, windowMs));
-      }
-    }
-
-    if (pool.length < count) {
+    if (!jwtSecret) {
       const err = new Error(
-        `[setup] Failed to prepare user pool: created ${pool.length}/${count} users before hitting limits`,
+        '[setup] JWT_SECRET env var is required for direct DB seeding',
       );
       console.error(err.message);
       if (typeof done === 'function') return done(err);
       throw err;
     }
 
-    // Persist tokens only (not passwords) with restrictive permissions
-    // Write to temp file first, then rename for atomic visibility
-    const poolData = { baseUrl, users: pool };
-    const tmpFile = USER_POOL_FILE + '.tmp';
-    fs.writeFileSync(tmpFile, JSON.stringify(poolData, null, 2), { mode: 0o600 });
-    fs.renameSync(tmpFile, USER_POOL_FILE);
-    console.log(`[setup] Registered ${pool.length} users, saved to ${USER_POOL_FILE}`);
+    console.log(`[setup] Seeding ${count} users directly into DB at ${dbPath}...`);
+    const startTime = Date.now();
+
+    const db = new Database(dbPath);
+    db.pragma('busy_timeout = 5000');
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+
+    try {
+      // Hash once, reuse for all users (same cost factor as the server)
+      const hash = bcrypt.hashSync('LoadTest123!', 10);
+
+      const insertStmt = db.prepare(
+        "INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?, ?, 'user')",
+      );
+      const selectStmt = db.prepare(
+        'SELECT id, username, role FROM users WHERE username = ?',
+      );
+
+      const pool = [];
+      const seedAll = db.transaction(() => {
+        for (let i = 0; i < count; i++) {
+          const username = `loadtest${String(i + 1).padStart(3, '0')}`;
+          insertStmt.run(username, hash);
+          const user = selectStmt.get(username);
+          const token = jwt.sign(
+            { id: user.id, username: user.username, role: user.role || 'user' },
+            jwtSecret,
+            { expiresIn: '7d' },
+          );
+          pool.push({ username, token });
+        }
+      });
+
+      seedAll();
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[setup] Seeded ${pool.length} users in ${elapsed}ms`);
+
+      // Persist tokens only (not passwords) with restrictive permissions
+      // Write to temp file first, then rename for atomic visibility
+      const poolData = { baseUrl, users: pool };
+      const tmpFile = USER_POOL_FILE + '.tmp';
+      fs.writeFileSync(tmpFile, JSON.stringify(poolData, null, 2), { mode: 0o600 });
+      fs.renameSync(tmpFile, USER_POOL_FILE);
+      console.log(`[setup] Saved user pool to ${USER_POOL_FILE}`);
+    } finally {
+      db.close();
+    }
   } finally {
     // Release lock
     if (lockFd !== undefined) {
