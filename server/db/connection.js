@@ -61,28 +61,14 @@ function getDb({ busyTimeout = 30000 } = {}) {
     throw new Error('Database is not available — waiting for initialization');
   }
   if (!db) {
-    // Ensure data/ directory exists
+    // Ensure parent directory exists
     const dir = path.dirname(DB_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // Azure Files (SMB) doesn't support shared memory, so WAL mode is unusable.
-    // Use DELETE journal mode in production/staging, WAL locally for performance.
-    // Always remove stale WAL/SHM artifacts before opening — a previous
-    // revision may have left them and they break SMB-based opens.
-    if (isAzure) {
-      for (const ext of ['-wal', '-shm']) {
-        const staleFile = DB_PATH + ext;
-        if (fs.existsSync(staleFile)) {
-          console.warn(`🧹 Removing stale WAL artifact: ${staleFile}`);
-          try { fs.unlinkSync(staleFile); } catch { /* best-effort */ }
-        }
-      }
-    }
-    // In Azure deployments, configure GWN_DB_PATH to a local (non-SMB) path so
-    // SQLite operates on the container's own filesystem where locking works.
-    // The Azure Files mount can then be used for backup/restore workflows.
+    // Use DELETE journal mode in production/staging for safety,
+    // WAL locally for performance.
     db = new Database(DB_PATH);
     const bt = parseInt(busyTimeout, 10);
     db.pragma(`busy_timeout = ${Number.isNaN(bt) ? 30000 : Math.max(0, bt)}`);
@@ -92,7 +78,7 @@ function getDb({ busyTimeout = 30000 } = {}) {
   return db;
 }
 
-/** Initialize database with schema. Retries on lock errors (Azure Files/SMB). */
+/** Initialize database with schema. Retries on lock errors. */
 function initDb(maxRetries = 5) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {

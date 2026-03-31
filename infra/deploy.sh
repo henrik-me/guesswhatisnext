@@ -10,9 +10,6 @@ set -euo pipefail
 RESOURCE_GROUP="gwn-rg"
 LOCATION="eastus"
 ENVIRONMENT="gwn-env"
-STORAGE_ACCOUNT="gwnstorage${RANDOM_SUFFIX:-$(az account show --query id -o tsv | cut -c1-8)}"
-SHARE_NAME_STAGING="gwn-data-staging"
-SHARE_NAME_PRODUCTION="gwn-data-production"
 REGISTRY="ghcr.io"
 IMAGE_NAME="ghcr.io/henrik-me/guesswhatisnext"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
@@ -56,76 +53,6 @@ else
   echo "  Environment already exists, skipping."
 fi
 
-# ─── Azure Storage for SQLite persistence ────────────────────────────────────
-# Each environment gets its own file share so staging data never touches production.
-# The app uses CREATE TABLE IF NOT EXISTS and only seeds when tables are empty,
-# so deployments never overwrite existing data. Schema changes are additive
-# (ALTER TABLE ADD COLUMN) and applied on startup.
-#
-# MIGRATION NOTE: If upgrading from the old shared gwn-data share, copy data first:
-#   azcopy copy "https://<account>.file.core.windows.net/gwn-data/*" \
-#               "https://<account>.file.core.windows.net/gwn-data-production/" --recursive
-
-echo "→ Setting up persistent storage..."
-
-# Find or create storage account (names must be globally unique)
-EXISTING_STORAGE=$(az storage account list \
-  --resource-group "$RESOURCE_GROUP" \
-  --query "[?starts_with(name, 'gwnstorage')].name | [0]" \
-  -o tsv)
-
-if [ -n "$EXISTING_STORAGE" ] && [ "$EXISTING_STORAGE" != "None" ]; then
-  STORAGE_ACCOUNT="$EXISTING_STORAGE"
-  echo "  Using existing storage account: $STORAGE_ACCOUNT"
-else
-  # Generate a unique name
-  STORAGE_ACCOUNT="gwnstorage$(date +%s | tail -c 9)"
-  echo "  Creating storage account: $STORAGE_ACCOUNT"
-  az storage account create \
-    --name "$STORAGE_ACCOUNT" \
-    --resource-group "$RESOURCE_GROUP" \
-    --location "$LOCATION" \
-    --sku Standard_LRS \
-    --output none
-fi
-
-STORAGE_KEY=$(az storage account keys list \
-  --resource-group "$RESOURCE_GROUP" \
-  --account-name "$STORAGE_ACCOUNT" \
-  --query "[0].value" \
-  -o tsv)
-
-# Create separate file shares for staging and production
-for SHARE in "$SHARE_NAME_STAGING" "$SHARE_NAME_PRODUCTION"; do
-  echo "  Creating file share: $SHARE"
-  az storage share create \
-    --name "$SHARE" \
-    --account-name "$STORAGE_ACCOUNT" \
-    --account-key "$STORAGE_KEY" \
-    --output none 2>/dev/null || true
-done
-
-# Register storage mounts in Container Apps environment (one per share)
-az containerapp env storage set \
-  --name "$ENVIRONMENT" \
-  --resource-group "$RESOURCE_GROUP" \
-  --storage-name gwn-storage-staging \
-  --azure-file-account-name "$STORAGE_ACCOUNT" \
-  --azure-file-account-key "$STORAGE_KEY" \
-  --azure-file-share-name "$SHARE_NAME_STAGING" \
-  --access-mode ReadWrite \
-  --output none 2>/dev/null || true
-
-az containerapp env storage set \
-  --name "$ENVIRONMENT" \
-  --resource-group "$RESOURCE_GROUP" \
-  --storage-name gwn-storage-production \
-  --azure-file-account-name "$STORAGE_ACCOUNT" \
-  --azure-file-account-key "$STORAGE_KEY" \
-  --azure-file-share-name "$SHARE_NAME_PRODUCTION" \
-  --access-mode ReadWrite \
-  --output none 2>/dev/null || true
-
 # ─── Deploy Staging ──────────────────────────────────────────────────────────
 
 echo "→ Deploying staging container app..."
@@ -144,6 +71,7 @@ if ! az containerapp show --name gwn-staging --resource-group "$RESOURCE_GROUP" 
     --env-vars \
       NODE_ENV=staging \
       PORT=3000 \
+      GWN_DB_PATH=/tmp/game.db \
       JWT_SECRET="$JWT_SECRET" \
       SYSTEM_API_KEY="$SYSTEM_API_KEY" \
     --output none
@@ -155,33 +83,12 @@ else
     --set-env-vars \
       NODE_ENV=staging \
       PORT=3000 \
+      GWN_DB_PATH=/tmp/game.db \
       JWT_SECRET="$JWT_SECRET" \
       SYSTEM_API_KEY="$SYSTEM_API_KEY" \
     --output none
   echo "  Staging app updated."
 fi
-
-# Add volume mount to staging — preserve the currently deployed image
-STAGING_CURRENT_IMAGE=$(az containerapp show --name gwn-staging --resource-group "$RESOURCE_GROUP" \
-  --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
-STAGING_CURRENT_IMAGE="${STAGING_CURRENT_IMAGE:-$PLACEHOLDER_IMAGE}"
-az containerapp update \
-  --name gwn-staging \
-  --resource-group "$RESOURCE_GROUP" \
-  --yaml /dev/stdin <<EOF 2>/dev/null || echo "  Volume mount may need manual config via Azure Portal."
-properties:
-  template:
-    volumes:
-      - name: data-volume
-        storageName: gwn-storage-staging
-        storageType: AzureFile
-    containers:
-      - name: gwn-staging
-        image: $STAGING_CURRENT_IMAGE
-        volumeMounts:
-          - volumeName: data-volume
-            mountPath: /app/data
-EOF
 
 # ─── Deploy Production ───────────────────────────────────────────────────────
 
@@ -201,6 +108,7 @@ if ! az containerapp show --name gwn-production --resource-group "$RESOURCE_GROU
     --env-vars \
       NODE_ENV=production \
       PORT=3000 \
+      GWN_DB_PATH=/tmp/game.db \
       JWT_SECRET="$JWT_SECRET" \
       SYSTEM_API_KEY="$SYSTEM_API_KEY" \
     --output none
@@ -212,33 +120,12 @@ else
     --set-env-vars \
       NODE_ENV=production \
       PORT=3000 \
+      GWN_DB_PATH=/tmp/game.db \
       JWT_SECRET="$JWT_SECRET" \
       SYSTEM_API_KEY="$SYSTEM_API_KEY" \
     --output none
   echo "  Production app updated."
 fi
-
-# Add volume mount to production — preserve the currently deployed image
-PROD_CURRENT_IMAGE=$(az containerapp show --name gwn-production --resource-group "$RESOURCE_GROUP" \
-  --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
-PROD_CURRENT_IMAGE="${PROD_CURRENT_IMAGE:-$PLACEHOLDER_IMAGE}"
-az containerapp update \
-  --name gwn-production \
-  --resource-group "$RESOURCE_GROUP" \
-  --yaml /dev/stdin <<EOF 2>/dev/null || echo "  Volume mount may need manual config via Azure Portal."
-properties:
-  template:
-    volumes:
-      - name: data-volume
-        storageName: gwn-storage-production
-        storageType: AzureFile
-    containers:
-      - name: gwn-production
-        image: $PROD_CURRENT_IMAGE
-        volumeMounts:
-          - volumeName: data-volume
-            mountPath: /app/data
-EOF
 
 # ─── Output URLs ─────────────────────────────────────────────────────────────
 

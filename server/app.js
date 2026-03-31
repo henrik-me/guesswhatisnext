@@ -183,7 +183,7 @@ function createServer() {
       console.log('📦 Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
     } catch (err) {
-      // Close stale connection to release SMB file handle before restoring draining state
+      // Close stale connection before restoring draining state
       closeDb();
       setDraining(true);
       draining = true;
@@ -228,9 +228,8 @@ function createServer() {
           console.error(`❌ Self-init failed with non-retryable error: ${err.message}`);
           console.error('Call POST /api/admin/init-db after fixing the underlying issue.');
         } else if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
-          // Retryable SQLite lock error: do NOT close the connection — SMB
-          // doesn't release file locks promptly after close, so close/reopen
-          // cycles cause SQLITE_BUSY against our own stale handle.
+          // Retryable SQLite lock error: keep the connection open to avoid
+          // close/reopen cycles that can cause SQLITE_BUSY against stale handles.
           console.warn(
             `⏳ Self-init attempt ${selfInitAttempt}/${SELF_INIT_MAX_ATTEMPTS} failed: ${err.message}. Retrying in ${SELF_INIT_INTERVAL_MS / 1000}s...`
           );
