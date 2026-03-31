@@ -14,8 +14,9 @@ module.exports = {
         "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' " +
         "CHECK(role IN ('user', 'system', 'admin'))"
       );
-    } catch (_err) {
-      // Column already exists — safe to ignore
+    } catch (err) {
+      const msg = err && err.message ? err.message : '';
+      if (!/duplicate column|already exists/i.test(msg)) throw err;
     }
   },
 };

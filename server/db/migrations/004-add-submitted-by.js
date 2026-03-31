@@ -10,8 +10,9 @@ module.exports = {
   async up(db) {
     try {
       await db.exec('ALTER TABLE puzzles ADD COLUMN submitted_by TEXT');
-    } catch (_err) {
-      // Column already exists — safe to ignore
+    } catch (err) {
+      const msg = err && err.message ? err.message : '';
+      if (!/duplicate column|already exists/i.test(msg)) throw err;
     }
   },
 };

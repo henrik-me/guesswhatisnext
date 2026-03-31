@@ -13,8 +13,9 @@ module.exports = {
       await db.exec('ALTER TABLE matches ADD COLUMN max_players INTEGER NOT NULL DEFAULT 2');
       await db.exec('ALTER TABLE matches ADD COLUMN host_user_id INTEGER REFERENCES users(id)');
       await db.exec('UPDATE matches SET host_user_id = created_by WHERE host_user_id IS NULL');
-    } catch (_err) {
-      // Columns already exist — safe to ignore
+    } catch (err) {
+      const msg = err && err.message ? err.message : '';
+      if (!/duplicate column|already exists/i.test(msg)) throw err;
     }
   },
 };

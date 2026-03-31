@@ -22,6 +22,7 @@ class SqliteAdapter extends BaseAdapter {
     this._dbPath = dbPath;
     this._options = options;
     this._db = null;
+    this._txLock = null;
   }
 
   /* ── Abstract method implementations ──────────────────────────────── */
@@ -71,8 +72,20 @@ class SqliteAdapter extends BaseAdapter {
    * async callbacks. We use manual BEGIN/COMMIT/ROLLBACK instead.
    * The callback receives `this` because all operations on a single SQLite
    * connection share the transaction context.
+   *
+   * An internal mutex prevents concurrent transactions from interleaving
+   * on the shared connection — if another transaction is in progress the
+   * caller waits until it completes.
    */
   async _transaction(fn) {
+    // Serialize transactions so concurrent async callers don't interleave
+    while (this._txLock) {
+      await this._txLock;
+    }
+
+    let releaseLock;
+    this._txLock = new Promise((resolve) => { releaseLock = resolve; });
+
     this._db.exec('BEGIN');
     try {
       const result = await fn(this);
@@ -81,6 +94,9 @@ class SqliteAdapter extends BaseAdapter {
     } catch (err) {
       this._db.exec('ROLLBACK');
       throw err;
+    } finally {
+      this._txLock = null;
+      releaseLock();
     }
   }
 
