@@ -348,7 +348,7 @@ function generateUniqueUser(context, _events, done) {
  * 4. Emits custom metrics: auth.rate_limited counter, auth.retry_after_seconds histogram
  * 5. Never fails the VU for expected rate-limit responses
  */
-async function registerWithRetry(context, events, done) {
+async function registerWithRetry(context, events) {
   const baseUrl = getBaseUrl(context);
   const username = context.vars.username;
   const password = context.vars.password;
@@ -365,67 +365,74 @@ async function registerWithRetry(context, events, done) {
     }
   }
 
+  let result;
   try {
-    const result = await httpRequestWithHeaders(
+    result = await httpRequestWithHeaders(
       baseUrl, 'POST', '/api/auth/register',
       { username, password },
     );
+  } catch (err) {
+    emitCounter('auth.network_error');
+    throw err;
+  }
 
-    if (result.statusCode === 201 && result.body.token) {
-      context.vars.token = result.body.token;
-      emitCounter('auth.register_success');
-      return done();
-    }
+  if (result.statusCode === 201 && result.body.token) {
+    context.vars.token = result.body.token;
+    emitCounter('auth.register_success');
+    return;
+  }
 
-    if (result.statusCode === 429) {
-      emitCounter('auth.rate_limited');
+  if (result.statusCode === 429) {
+    emitCounter('auth.rate_limited');
 
-      const retryAfter = parseInt(result.headers['retry-after'], 10);
-      const waitSeconds = (Number.isFinite(retryAfter) && retryAfter > 0) ? retryAfter : 1;
-      emitHistogram('auth.retry_after_seconds', waitSeconds);
+    const retryAfter = parseInt(result.headers['retry-after'], 10);
+    const waitSeconds = (Number.isFinite(retryAfter) && retryAfter > 0) ? retryAfter : 1;
+    emitHistogram('auth.retry_after_seconds', waitSeconds);
 
-      // Cap the wait to avoid excessively long VU durations
-      const cappedWait = Math.min(waitSeconds, 10);
-      await new Promise((r) => setTimeout(r, cappedWait * 1000));
+    // Cap the wait to avoid excessively long VU durations
+    const cappedWait = Math.min(waitSeconds, 10);
+    await new Promise((r) => setTimeout(r, cappedWait * 1000));
 
-      // Retry with a new unique username to avoid duplicate conflicts
-      const retryUsername = makeUsername('r');
-      const retry = await httpRequestWithHeaders(
+    // Retry with a new unique username to avoid duplicate conflicts
+    let retry;
+    const retryUsername = makeUsername('r');
+    try {
+      retry = await httpRequestWithHeaders(
         baseUrl, 'POST', '/api/auth/register',
         { username: retryUsername, password },
       );
-
-      if (retry.statusCode === 201 && retry.body.token) {
-        context.vars.token = retry.body.token;
-        context.vars.username = retryUsername;
-        emitCounter('auth.retry_success');
-        return done();
-      }
-
-      if (retry.statusCode === 429) {
-        // Rate limiter is working correctly — mark as expected
-        emitCounter('auth.retry_rate_limited');
-        return done();
-      }
-
-      // Unexpected status on retry
-      emitCounter('auth.retry_unexpected_error');
-      return done(new Error(`Unexpected retry status: ${retry.statusCode}`));
+    } catch (err) {
+      emitCounter('auth.network_error');
+      throw err;
     }
 
-    if (result.statusCode === 409) {
-      // Duplicate username — treat as non-fatal for this VU
-      emitCounter('auth.duplicate_username');
-      return done();
+    if (retry.statusCode === 201 && retry.body.token) {
+      context.vars.token = retry.body.token;
+      context.vars.username = retryUsername;
+      emitCounter('auth.retry_success');
+      return;
     }
 
-    // Unexpected status
-    emitCounter('auth.unexpected_error');
-    return done(new Error(`Unexpected register status: ${result.statusCode}`));
-  } catch (err) {
-    emitCounter('auth.network_error');
-    return done(err);
+    if (retry.statusCode === 429) {
+      // Rate limiter is working correctly — mark as expected
+      emitCounter('auth.retry_rate_limited');
+      return;
+    }
+
+    // Unexpected status on retry
+    emitCounter('auth.retry_unexpected_error');
+    throw new Error(`Unexpected retry status: ${retry.statusCode}`);
   }
+
+  if (result.statusCode === 409) {
+    // Duplicate username — treat as non-fatal for this VU
+    emitCounter('auth.duplicate_username');
+    return;
+  }
+
+  // Unexpected status
+  emitCounter('auth.unexpected_error');
+  throw new Error(`Unexpected register status: ${result.statusCode}`);
 }
 
 /**
