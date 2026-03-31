@@ -2,7 +2,7 @@
  * Base database adapter — defines the async interface used by all routes.
  *
  * Concrete adapters (SQLite, mssql) extend this class and implement
- * the abstract _get, _all, _run, _exec, _transaction, and _close methods.
+ * the abstract _connect, _get, _all, _run, _exec, _transaction, and _close methods.
  *
  * Routes use only the public API: get(), all(), run(), exec(), transaction().
  * They never import better-sqlite3 or mssql directly.

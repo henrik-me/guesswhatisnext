@@ -14,6 +14,7 @@
 const { config } = require('../config');
 
 let _instance = null;
+let _instancePromise = null;
 
 /**
  * Create and connect a database adapter.
@@ -29,19 +30,41 @@ async function createDb(opts = {}) {
   const backend = opts.backend || config.DB_BACKEND;
 
   if (backend === 'mssql') {
-    const MssqlAdapter = require('./mssql-adapter');
+    let MssqlAdapter;
+    try {
+      MssqlAdapter = require('./mssql-adapter');
+    } catch {
+      throw new Error(
+        'MSSQL database backend is not yet available. ' +
+          'Remove DB_BACKEND=mssql / DATABASE_URL or wait for the mssql-adapter module.'
+      );
+    }
     const adapter = new MssqlAdapter(opts.connectionString || config.DATABASE_URL);
     await adapter.connect();
     return adapter;
   }
 
-  const SqliteAdapter = require('./sqlite-adapter');
-  const adapter = new SqliteAdapter(
-    opts.sqlitePath || config.GWN_DB_PATH,
-    opts.sqliteOptions
+  if (!backend || backend === 'sqlite') {
+    let SqliteAdapter;
+    try {
+      SqliteAdapter = require('./sqlite-adapter');
+    } catch {
+      throw new Error(
+        'SQLite database backend is not yet available. ' +
+          'The sqlite-adapter module has not been added yet.'
+      );
+    }
+    const adapter = new SqliteAdapter(
+      opts.sqlitePath || config.GWN_DB_PATH,
+      opts.sqliteOptions
+    );
+    await adapter.connect();
+    return adapter;
+  }
+
+  throw new Error(
+    `Unsupported database backend "${backend}". Expected "sqlite" or "mssql".`
   );
-  await adapter.connect();
-  return adapter;
 }
 
 /**
@@ -53,10 +76,16 @@ async function createDb(opts = {}) {
  * @returns {Promise<import('./base-adapter')>}
  */
 async function getDbAdapter(opts) {
-  if (!_instance) {
-    _instance = await createDb(opts);
+  if (!_instancePromise) {
+    _instancePromise = createDb(opts).then((adapter) => {
+      _instance = adapter;
+      return adapter;
+    }).catch((err) => {
+      _instancePromise = null;
+      throw err;
+    });
   }
-  return _instance;
+  return _instancePromise;
 }
 
 /**
@@ -67,6 +96,7 @@ async function closeDbAdapter() {
   if (_instance) {
     await _instance.close();
     _instance = null;
+    _instancePromise = null;
   }
 }
 
