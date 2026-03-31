@@ -1,0 +1,188 @@
+name: Load Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: >
+          Target URL for load tests (leave empty to start a local server)
+        required: false
+        type: string
+        default: ''
+      test_suite:
+        description: 'Test suite to run'
+        required: true
+        type: choice
+        options:
+          - all
+          - api
+          - websocket
+        default: all
+  schedule:
+    # Weekly on Sundays at 03:00 UTC
+    - cron: '0 3 * * 0'
+
+concurrency:
+  group: load-test
+  cancel-in-progress: true
+
+jobs:
+  load-test:
+    name: Artillery Load Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      NODE_ENV: production
+      JWT_SECRET: ci-load-test-secret
+      SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Lockfile generated on Windows lacks Linux-specific optional deps
+      - run: rm -f package-lock.json && npm install
+
+      - name: Determine target URL
+        id: target
+        run: |
+          if [ -n "${{ inputs.target_url }}" ]; then
+            echo "url=${{ inputs.target_url }}" >> "$GITHUB_OUTPUT"
+            echo "local=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=http://localhost:3000" >> "$GITHUB_OUTPUT"
+            echo "local=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Start local server
+        if: steps.target.outputs.local == 'true'
+        run: |
+          node server/index.js &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+
+          # Wait for the server to be ready (up to 30s)
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Server is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Server failed to start within 30 seconds"
+          exit 1
+        env:
+          PORT: 3000
+          DATABASE_URL: ':memory:'
+
+      - name: Determine test suite
+        id: suite
+        run: |
+          SUITE="${{ inputs.test_suite || 'all' }}"
+          echo "suite=$SUITE" >> "$GITHUB_OUTPUT"
+
+      - name: Run API load tests
+        if: steps.suite.outputs.suite == 'api' || steps.suite.outputs.suite == 'all'
+        run: |
+          npx artillery run \
+            --output reports/api-stress-report.json \
+            tests/load/api-stress.yml
+        env:
+          LOAD_TEST_TARGET: ${{ steps.target.outputs.url }}
+
+      - name: Run WebSocket load tests
+        if: steps.suite.outputs.suite == 'websocket' || steps.suite.outputs.suite == 'all'
+        run: |
+          npx artillery run \
+            --output reports/websocket-stress-report.json \
+            tests/load/websocket-stress.yml
+        env:
+          LOAD_TEST_TARGET: ${{ steps.target.outputs.url }}
+
+      - name: Generate HTML reports
+        if: always()
+        run: |
+          for f in reports/*.json; do
+            [ -f "$f" ] && npx artillery report --output "${f%.json}.html" "$f" || true
+          done
+
+      - name: Create job summary
+        if: always()
+        run: |
+          echo "## 🔫 Load Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Setting | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Target | \`${{ steps.target.outputs.url }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Suite | \`${{ steps.suite.outputs.suite }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Trigger | \`${{ github.event_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          for f in reports/*.json; do
+            [ -f "$f" ] || continue
+            SUITE_NAME=$(basename "$f" .json | sed 's/-report//')
+            echo "### 📊 ${SUITE_NAME}" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+
+            # Extract metrics via Node for reliable JSON parsing
+            node -e "
+              const fs = require('fs');
+              const data = JSON.parse(fs.readFileSync('$f', 'utf8'));
+              const agg = data.aggregate || {};
+              const counters = agg.counters || {};
+              const summaries = agg.summaries || {};
+
+              const p95 = summaries['http.response_time']?.p95
+                ?? summaries['plugins.metrics-by-endpoint.response_time./api/scores/leaderboard']?.p95
+                ?? 'N/A';
+              const p99 = summaries['http.response_time']?.p99 ?? 'N/A';
+              const median = summaries['http.response_time']?.median ?? 'N/A';
+
+              const codes = Object.entries(counters)
+                .filter(([k]) => k.startsWith('http.codes.'))
+                .map(([k, v]) => k.replace('http.codes.', '') + ': ' + v)
+                .join(', ') || 'N/A';
+
+              const vusCreated = counters['vusers.created'] ?? 'N/A';
+              const vusCompleted = counters['vusers.completed'] ?? 'N/A';
+              const vusFailed = counters['vusers.failed'] ?? 0;
+              const reqTotal = counters['http.requests'] ?? counters['http.responses'] ?? 'N/A';
+              const errors = Object.entries(counters)
+                .filter(([k]) => k.startsWith('errors.'))
+                .map(([k, v]) => k.replace('errors.', '') + ': ' + v)
+                .join(', ');
+
+              console.log('| Metric | Value |');
+              console.log('|--------|-------|');
+              console.log('| Response time p95 | ' + p95 + ' ms |');
+              console.log('| Response time p99 | ' + p99 + ' ms |');
+              console.log('| Response time median | ' + median + ' ms |');
+              console.log('| HTTP status codes | ' + codes + ' |');
+              console.log('| Total requests | ' + reqTotal + ' |');
+              console.log('| VUs created | ' + vusCreated + ' |');
+              console.log('| VUs completed | ' + vusCompleted + ' |');
+              console.log('| VUs failed | ' + vusFailed + ' |');
+              if (errors) console.log('| Errors | ' + errors + ' |');
+            " >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "_Could not parse report._" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload Artillery reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artillery-reports
+          path: reports/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Stop local server
+        if: always() && steps.target.outputs.local == 'true'
+        run: |
+          if [ -n "$SERVER_PID" ]; then
+            kill "$SERVER_PID" 2>/dev/null || true
+          fi
