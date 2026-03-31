@@ -472,6 +472,14 @@ function init() {
           showScreen('auth');
         }
         break;
+      case 'show-submit-puzzle':
+        if (isLoggedIn()) {
+          showScreen('submit-puzzle');
+          resetSubmitPuzzleForm();
+        } else {
+          showScreen('auth');
+        }
+        break;
       case 'leaderboard-mode': {
         const mode = e.target.dataset.mode;
         if (mode) {
@@ -601,6 +609,9 @@ function init() {
 
   // Apply saved settings on load
   applySettings();
+
+  // Wire community puzzle submission form
+  initSubmitPuzzleForm();
 
   // Handle ?room=CODE deep links
   const urlParams = new URLSearchParams(window.location.search);
@@ -2173,6 +2184,68 @@ function renderMatchHistory(history) {
       <div class="history-date">${dateStr}</div>
     </div>`;
   }).join('');
+}
+
+/* ===========================
+   Community Puzzle Submissions
+   =========================== */
+
+/** Reset the submit-puzzle form and status message. */
+function resetSubmitPuzzleForm() {
+  const form = document.getElementById('submit-puzzle-form');
+  if (form) form.reset();
+  const status = document.querySelector('[data-bind="submit-puzzle-status"]');
+  if (status) { status.textContent = ''; status.className = 'submit-puzzle-status'; }
+}
+
+/** Wire submit-puzzle form handler inside init (called once). */
+function initSubmitPuzzleForm() {
+  const form = document.getElementById('submit-puzzle-form');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = document.querySelector('[data-bind="submit-puzzle-status"]');
+    const sequenceRaw = document.getElementById('sp-sequence').value.trim();
+    const answer = document.getElementById('sp-answer').value.trim();
+    const explanation = document.getElementById('sp-explanation').value.trim();
+    const difficulty = parseInt(document.getElementById('sp-difficulty').value, 10);
+    const category = document.getElementById('sp-category').value;
+
+    const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
+    if (sequence.length < 3) {
+      if (status) { status.textContent = 'Sequence must have at least 3 items.'; status.className = 'submit-puzzle-status error'; }
+      return;
+    }
+    if (!answer) {
+      if (status) { status.textContent = 'Answer is required.'; status.className = 'submit-puzzle-status error'; }
+      return;
+    }
+    if (!explanation) {
+      if (status) { status.textContent = 'Explanation is required.'; status.className = 'submit-puzzle-status error'; }
+      return;
+    }
+    if (!category) {
+      if (status) { status.textContent = 'Please select a category.'; status.className = 'submit-puzzle-status error'; }
+      return;
+    }
+
+    try {
+      const res = await apiFetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sequence, answer, explanation, difficulty, category }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (status) { status.textContent = 'Puzzle submitted for review!'; status.className = 'submit-puzzle-status success'; }
+        form.reset();
+      } else {
+        if (status) { status.textContent = data.error || 'Submission failed.'; status.className = 'submit-puzzle-status error'; }
+      }
+    } catch {
+      if (status) { status.textContent = 'Network error — please try again.'; status.className = 'submit-puzzle-status error'; }
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);

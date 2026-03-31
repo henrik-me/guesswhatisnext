@@ -84,6 +84,21 @@ CREATE TABLE IF NOT EXISTS puzzles (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS puzzle_submissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  sequence TEXT NOT NULL,       -- JSON array
+  answer TEXT NOT NULL,
+  explanation TEXT NOT NULL,
+  difficulty INTEGER NOT NULL CHECK(difficulty BETWEEN 1 AND 3),
+  category TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+  reviewer_notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  reviewed_at DATETIME,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_scores_user ON scores(user_id);
 CREATE INDEX IF NOT EXISTS idx_scores_mode_date ON scores(mode, played_at);
@@ -94,3 +109,5 @@ CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_
 CREATE INDEX IF NOT EXISTS idx_puzzles_category ON puzzles(category);
 CREATE INDEX IF NOT EXISTS idx_puzzles_difficulty ON puzzles(difficulty);
 CREATE INDEX IF NOT EXISTS idx_puzzles_active ON puzzles(active);
+CREATE INDEX IF NOT EXISTS idx_submissions_user ON puzzle_submissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_status ON puzzle_submissions(status);
