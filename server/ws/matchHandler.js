@@ -346,7 +346,7 @@ async function startMatch(roomCode) {
   });
 
   // Start the first round after a brief delay
-  setTimeout(() => sendRound(roomCode), 1000);
+  setTimeout(() => sendRound(roomCode).catch(() => {}), 1000);
 }
 
 /** Send the current round's puzzle to all players. */
@@ -469,9 +469,9 @@ function resolveRound(roomCode) {
 
   // Check if match is over
   if (room.round >= room.totalRounds) {
-    setTimeout(() => endMatch(roomCode), NEXT_ROUND_DELAY_MS);
+    setTimeout(() => endMatch(roomCode).catch(() => {}), NEXT_ROUND_DELAY_MS);
   } else {
-    setTimeout(() => sendRound(roomCode), NEXT_ROUND_DELAY_MS);
+    setTimeout(() => sendRound(roomCode).catch(() => {}), NEXT_ROUND_DELAY_MS);
   }
 }
 
@@ -656,41 +656,43 @@ async function handleDisconnect(ws) {
 
     const dcKey = `${ws.user.id}:${roomCode}`;
     const forfeitTimer = setTimeout(async () => {
-      disconnected.delete(dcKey);
-      // Player didn't reconnect — they stay as dropped.
+      try {
+        disconnected.delete(dcKey);
+        // Player didn't reconnect — they stay as dropped.
 
-      // Host transfer if the disconnected player was host
-      const currentRoom = rooms.get(roomCode);
-      if (currentRoom && currentRoom.started && ws.user.id === currentRoom.hostId && currentRoom.players.size > 0) {
-        const [[newHostId]] = [...currentRoom.players.entries()];
-        currentRoom.hostId = newHostId;
-        try {
-          const db = await getDbAdapter();
-          await db.run('UPDATE matches SET host_user_id = ? WHERE room_code = ?', [newHostId, roomCode]);
-        } catch { /* non-fatal */ }
-        broadcastToRoom(roomCode, {
-          type: 'host-transferred',
-          newHost: currentRoom.players.get(newHostId).user.username,
-        });
-      }
-
-      // Notify remaining players that the player has been removed
-      if (currentRoom && currentRoom.started) {
-        broadcastToRoom(roomCode, {
-          type: 'player-forfeited',
-          username: ws.user.username,
-          remainingCount: currentRoom.players.size,
-        });
-      }
-
-      // Check if we still have enough players
-      if (currentRoom && currentRoom.started && currentRoom.players.size <= 1) {
-        if (currentRoom.players.size === 1) {
-          await handleForfeit(roomCode, ws.user.id, ws.user.username);
-        } else {
-          cleanupRoom(roomCode);
+        // Host transfer if the disconnected player was host
+        const currentRoom = rooms.get(roomCode);
+        if (currentRoom && currentRoom.started && ws.user.id === currentRoom.hostId && currentRoom.players.size > 0) {
+          const [[newHostId]] = [...currentRoom.players.entries()];
+          currentRoom.hostId = newHostId;
+          try {
+            const db = await getDbAdapter();
+            await db.run('UPDATE matches SET host_user_id = ? WHERE room_code = ?', [newHostId, roomCode]);
+          } catch { /* non-fatal */ }
+          broadcastToRoom(roomCode, {
+            type: 'host-transferred',
+            newHost: currentRoom.players.get(newHostId).user.username,
+          });
         }
-      }
+
+        // Notify remaining players that the player has been removed
+        if (currentRoom && currentRoom.started) {
+          broadcastToRoom(roomCode, {
+            type: 'player-forfeited',
+            username: ws.user.username,
+            remainingCount: currentRoom.players.size,
+          });
+        }
+
+        // Check if we still have enough players
+        if (currentRoom && currentRoom.started && currentRoom.players.size <= 1) {
+          if (currentRoom.players.size === 1) {
+            await handleForfeit(roomCode, ws.user.id, ws.user.username);
+          } else {
+            cleanupRoom(roomCode);
+          }
+        }
+      } catch { /* non-fatal */ }
     }, RECONNECT_WINDOW_MS);
 
     disconnected.set(dcKey, {

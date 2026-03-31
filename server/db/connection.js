@@ -1,6 +1,12 @@
 /**
- * Database connection and initialization.
+ * Database connection and initialization (LEGACY).
  * Uses better-sqlite3 for synchronous SQLite access.
+ *
+ * @deprecated All new code should use the async adapter from './index.js' instead.
+ * This module is kept only for backward compatibility with load tests that
+ * construct their own better-sqlite3 Database instances. The initDb() function
+ * is no longer safe to call because seedAchievements() and seedPuzzles() are
+ * now async — use the adapter's initializeDatabase() flow in app.js instead.
  */
 
 const Database = require('better-sqlite3');

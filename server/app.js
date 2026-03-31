@@ -145,8 +145,8 @@ function createServer() {
       let activeConnections = 0;
       for (const room of rooms.values()) {
         if (room.players) {
-          for (const p of room.players) {
-            if (p.ws && p.ws.readyState === 1) activeConnections++;
+          for (const ws of room.players.values()) {
+            if (ws && ws.readyState === 1) activeConnections++;
           }
         }
       }
@@ -244,6 +244,8 @@ function createServer() {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   });
 
+  let dbReadyPromise;
+
   if (isAzure) {
     // Self-initialize DB in the background with retries. The server starts
     // immediately so /healthz responds to Azure health probes. API endpoints
@@ -286,9 +288,10 @@ function createServer() {
     };
 
     setTimeout(attemptSelfInit, 2000);
+    dbReadyPromise = null; // Azure: no single promise to wait on
   } else {
-    // Non-Azure: initialize synchronously via an async IIFE
-    (async () => {
+    // Non-Azure: initialize via an async IIFE, expose promise for tests
+    dbReadyPromise = (async () => {
       try {
         await initializeDatabase();
         dbInitialized = true;
@@ -301,7 +304,7 @@ function createServer() {
   }
   initWebSocket(server, () => dbInitialized && !draining);
 
-  return { app, server };
+  return { app, server, dbReady: dbReadyPromise };
 }
 
 module.exports = { createServer };

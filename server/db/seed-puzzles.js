@@ -27,13 +27,20 @@ async function seedPuzzles() {
 // Run directly
 if (require.main === module) {
   (async () => {
-    const migrations = require('./migrations');
-    const db = await getDbAdapter();
-    await db.migrate(migrations);
-    await seedPuzzles();
-    const { closeDbAdapter } = require('./index');
-    await closeDbAdapter();
-    process.exit(0);
+    try {
+      const migrations = require('./migrations');
+      const db = await getDbAdapter();
+      await db.migrate(migrations);
+      await seedPuzzles();
+    } catch (err) {
+      console.error('❌ Seed failed:', err.message);
+      process.exitCode = 1;
+    } finally {
+      try {
+        const { closeDbAdapter } = require('./index');
+        await closeDbAdapter();
+      } catch { /* ignore */ }
+    }
   })();
 }
 
