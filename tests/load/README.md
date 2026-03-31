@@ -150,12 +150,40 @@ secret directly from your local machine. In those cases, either:
 Tokens are persisted to `.user-pool.json` and scenario VUs pick users from
 this pool in round-robin.
 
-The auth scenario (10% weight) tests direct registration and gracefully handles
-rate-limit (429) responses. When a 429 is received, the `registerWithRetry`
-helper reads the `Retry-After` header, waits, and retries with a new username.
-This validates that rate limiting works correctly without failing the VU. Custom
-metrics (`auth.rate_limited`, `auth.retry_after_seconds`) are emitted for
-observability.
+The auth scenario (10% weight) tests direct registration and implements a
+**rate-limit dance** that thoroughly validates the server's rate limiter. The
+dance pattern is:
+
+1. **Register** — attempt with a unique username. If 201, continue.
+2. **Hit 429** — emit `auth.rate_limited`.
+3. **Immediate retry** (no wait) — expect 429 again, confirming the limiter is
+   enforced even without respecting `Retry-After` (`auth.immediate_retry_blocked`).
+4. **Respect Retry-After** — wait the header-specified time (capped at 15 s),
+   then retry. Expect 201 (`auth.retry_after_success`), though a 429 may occur
+   if the window hasn't fully reset (`auth.retry_after_still_limited`).
+5. **Perform a bounded burst of extra registrations** until another 429 is hit
+   (or the helper's max extra attempts is reached), then run the dance sequence
+   at most one more time and stop.
+
+All 429 responses in this flow are **expected** — they validate that the rate
+limiter works correctly. The VU never throws an error for a 429. VU failures
+only occur on truly unexpected responses (HTTP statuses other than the expected
+201/409/429 in this flow) or on network failures.
+
+Custom metrics emitted:
+
+| Metric | Type | Meaning |
+|---|---|---|
+| `auth.register_success` | counter | Successful registration (201) |
+| `auth.rate_limited` | counter | Hit rate limit (429) — expected |
+| `auth.immediate_retry_blocked` | counter | Immediate retry got 429 — limiter enforced ✓ |
+| `auth.immediate_retry_leaked` | counter | Immediate retry got 201 — limiter may be broken |
+| `auth.retry_after_success` | counter | Registration succeeded after respecting Retry-After |
+| `auth.retry_after_still_limited` | counter | Still limited after waiting — window hasn't reset |
+| `auth.retry_after_seconds` | histogram | Value of the Retry-After header (seconds) |
+| `auth.duplicate_username` | counter | Got 409 — username already taken |
+| `auth.network_error` | counter | Network/timeout error |
+| `auth.unexpected_error` | counter | Unexpected HTTP status (500, etc.) |
 
 ## Thresholds
 

@@ -111,7 +111,7 @@ jobs:
           LOAD_TEST_TARGET: ${{ steps.target.outputs.url }}
 
       - name: Run WebSocket load tests
-        if: steps.suite.outputs.suite == 'websocket' || steps.suite.outputs.suite == 'all'
+        if: always() && (steps.suite.outputs.suite == 'websocket' || steps.suite.outputs.suite == 'all')
         run: |
           npx artillery run \
             --target "$TARGET_URL" \
@@ -246,18 +246,29 @@ jobs:
                 console.log('');
               }
 
+              // --- 429 annotation ---
+              const has429 = counters['http.codes.429'] > 0;
+              if (has429) {
+                console.log('> **Note:** 429 responses are expected from rate-limit validation in the auth dance scenario.');
+                console.log('');
+              }
+
               // --- Custom auth metrics (if present) ---
               const authRateLimited = counters['auth.rate_limited'] ?? null;
-              const authRetrySuccess = counters['auth.retry_success'] ?? null;
+              const authRetrySuccess = counters['auth.retry_after_success'] ?? null;
               const authRegisterSuccess = counters['auth.register_success'] ?? null;
+              const authImmediateBlocked = counters['auth.immediate_retry_blocked'] ?? null;
+              const authImmediateLeaked = counters['auth.immediate_retry_leaked'] ?? null;
               if (authRateLimited !== null || authRetrySuccess !== null || authRegisterSuccess !== null) {
-                console.log('**Auth rate-limit metrics**');
+                console.log('**Auth rate-limit dance metrics**');
                 console.log('');
                 console.log('| Metric | Value |');
                 console.log('|--------|-------|');
                 if (authRegisterSuccess !== null) console.log('| Registrations (direct) | ' + authRegisterSuccess + ' |');
                 if (authRateLimited !== null) console.log('| Rate-limited (429) | ' + authRateLimited + ' |');
-                if (authRetrySuccess !== null) console.log('| Retry successes | ' + authRetrySuccess + ' |');
+                if (authImmediateBlocked !== null) console.log('| Immediate retry blocked (expected) | ' + authImmediateBlocked + ' |');
+                if (authImmediateLeaked !== null) console.log('| Immediate retry leaked (unexpected) | ' + authImmediateLeaked + ' |');
+                if (authRetrySuccess !== null) console.log('| Retry-After successes | ' + authRetrySuccess + ' |');
                 const retryP95 = summaries['auth.retry_after_seconds']?.p95 ?? null;
                 if (retryP95 !== null) console.log('| Retry-After p95 | ' + retryP95 + 's |');
                 console.log('');
@@ -277,22 +288,37 @@ jobs:
           for f in reports/*.json; do
             [ -f "$f" ] || continue
             SUITE_NAME=$(basename "$f" .json | sed 's/-report//')
-            if ! VU_FAILED=$(node -e "
+            if ! RESULT=$(node -e "
               const data = JSON.parse(require('fs').readFileSync('$f', 'utf8'));
-              console.log((data.aggregate?.counters?.['vusers.failed'] || 0));
+              const c = data.aggregate?.counters || {};
+              const vuFailed = c['vusers.failed'] || 0;
+              const vuCreated = c['vusers.created'] || 0;
+              const vuCompleted = c['vusers.completed'] || 0;
+              // Scenario-level failure details
+              const failedScenarios = Object.entries(c)
+                .filter(([k, v]) => k.startsWith('vusers.failed_by_name.') && v > 0)
+                .map(([k, v]) => k.replace('vusers.failed_by_name.', '') + '=' + v);
+              console.log(JSON.stringify({ vuFailed, vuCreated, vuCompleted, failedScenarios }));
             "); then
               echo "::error::Failed to read or parse report: $f"
-              exit 1
+              FAILED=1
+              continue
             fi
+
+            VU_FAILED=$(echo "$RESULT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.vuFailed)")
+            VU_CREATED=$(echo "$RESULT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.vuCreated)")
+            VU_COMPLETED=$(echo "$RESULT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.vuCompleted)")
+            FAILED_SCENARIOS=$(echo "$RESULT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); console.log(d.failedScenarios.join(', ') || 'none')")
+
             if [ "$VU_FAILED" -gt 0 ] 2>/dev/null; then
-              echo "::error::${SUITE_NAME}: ${VU_FAILED} VUs failed"
+              echo "::error::${SUITE_NAME}: ${VU_FAILED}/${VU_CREATED} VUs failed (completed: ${VU_COMPLETED}, failed scenarios: ${FAILED_SCENARIOS})"
               FAILED=1
             else
-              echo "✅ ${SUITE_NAME}: 0 VU failures"
+              echo "✅ ${SUITE_NAME}: ${VU_COMPLETED}/${VU_CREATED} VUs completed, 0 failures"
             fi
           done
           if [ "$FAILED" = "1" ]; then
-            echo "::error::One or more test suites had VU failures"
+            echo "::error::One or more test suites had VU failures — see above for details"
             exit 1
           fi
 
