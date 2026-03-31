@@ -2344,6 +2344,13 @@ body::before {
 /* ===========================
    Reduced Motion
    =========================== */
+.puzzle-credit {
+  font-size: 0.8rem;
+  color: #888;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

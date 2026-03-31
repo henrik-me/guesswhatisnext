@@ -133,6 +133,13 @@ function _initDbOnce() {
     database.exec("UPDATE matches SET host_user_id = created_by WHERE host_user_id IS NULL");
   }
 
+  // Migration: add submitted_by column to puzzles if missing
+  try {
+    database.prepare("SELECT submitted_by FROM puzzles LIMIT 0").get();
+  } catch {
+    database.exec("ALTER TABLE puzzles ADD COLUMN submitted_by TEXT");
+  }
+
   // Seed system account if it doesn't exist
   const SYSTEM_API_KEY = config.SYSTEM_API_KEY;
   const existing = database.prepare('SELECT id FROM users WHERE username = ?').get('system');
@@ -141,6 +148,19 @@ function _initDbOnce() {
     const hash = bcrypt.hashSync(SYSTEM_API_KEY, 10);
     database.prepare("INSERT INTO users (username, password_hash, role) VALUES ('system', ?, 'system')").run(hash);
     console.log('🔑 System account seeded');
+  }
+
+  // Bootstrap: promote ADMIN_USERNAME to admin if set AND the system API key
+  // is explicitly configured to a non-default value. This prevents rogue
+  // registration from hijacking the configured username in dev.
+  const adminUsername = process.env.ADMIN_USERNAME;
+  const keyExplicitlySet = !!process.env.SYSTEM_API_KEY && process.env.SYSTEM_API_KEY !== 'gwn-dev-system-key';
+  if (adminUsername && keyExplicitlySet) {
+    const adminUser = database.prepare('SELECT id, role FROM users WHERE username = ?').get(adminUsername);
+    if (adminUser && adminUser.role === 'user') {
+      database.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(adminUser.id);
+      console.log(`👑 Auto-promoted ${adminUsername} to admin`);
+    }
   }
 
   // Seed achievement definitions

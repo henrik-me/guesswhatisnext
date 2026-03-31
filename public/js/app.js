@@ -122,6 +122,14 @@ const ui = {
     mystery.style.setProperty('--seq-i', puzzle.sequence.length);
     seqContainer.appendChild(mystery);
 
+    // Puzzle credit (community submissions)
+    const creditEl = document.querySelector('[data-bind="puzzle-credit"]');
+    if (creditEl) {
+      creditEl.textContent = puzzle.submitted_by
+        ? `\u{1F4DD} Submitted by: ${puzzle.submitted_by}`
+        : '';
+    }
+
     // Options grid
     const optContainer = document.querySelector('[data-bind="options"]');
     optContainer.innerHTML = '';
@@ -393,13 +401,23 @@ function init() {
       if (res.status === 401 || res.status === 403) {
         authToken = null;
         authUsername = null;
+        authRole = null;
         try {
           localStorage.removeItem('gwn_auth_token');
           localStorage.removeItem('gwn_auth_username');
+          localStorage.removeItem('gwn_auth_role');
         } catch {
           // Ignore storage errors during startup token cleanup
         }
         updateHomeAuthDisplay();
+      } else if (res.ok) {
+        return res.json().then(data => {
+          if (data.user && data.user.role) {
+            authRole = data.user.role;
+            localStorage.setItem('gwn_auth_role', authRole);
+            updateHomeAuthDisplay();
+          }
+        });
       }
     }).catch(() => {
       // Network error — keep token, will validate on next API call
@@ -470,6 +488,20 @@ function init() {
           fetchAchievements();
         } else {
           showScreen('auth');
+        }
+        break;
+      case 'show-submit-puzzle':
+        if (isLoggedIn()) {
+          showScreen('submit-puzzle');
+          resetSubmitPuzzleForm();
+        } else {
+          showScreen('auth');
+        }
+        break;
+      case 'show-moderation':
+        if (isLoggedIn() && (authRole === 'admin' || authRole === 'system')) {
+          showScreen('moderation');
+          loadModerationSubmissions();
         }
         break;
       case 'leaderboard-mode': {
@@ -601,6 +633,12 @@ function init() {
 
   // Apply saved settings on load
   applySettings();
+
+  // Wire community puzzle submission form
+  initSubmitPuzzleForm();
+
+  // Wire admin moderation screen
+  initModerationScreen();
 
   // Handle ?room=CODE deep links
   const urlParams = new URLSearchParams(window.location.search);
@@ -865,6 +903,7 @@ function showAchievementToasts(achievements) {
 let ws = null;
 let authToken = localStorage.getItem('gwn_auth_token');
 let authUsername = localStorage.getItem('gwn_auth_username');
+let authRole = localStorage.getItem('gwn_auth_role');
 let matchState = {
   roomCode: null,
   players: [],
@@ -888,12 +927,18 @@ function isLoggedIn() {
 function updateHomeAuthDisplay() {
   const row = document.querySelector('[data-bind="home-user-display"]');
   const label = document.querySelector('[data-bind="home-user-label"]');
+  const submitBtn = document.querySelector('[data-bind="submit-puzzle-btn"]');
+  const modBtn = document.querySelector('[data-bind="moderation-btn"]');
   if (!row) return;
   if (isLoggedIn() && authUsername) {
     if (label) label.textContent = `👤 Logged in as ${authUsername}`;
     row.style.display = '';
+    if (submitBtn) submitBtn.style.display = '';
+    if (modBtn) modBtn.style.display = (authRole === 'admin' || authRole === 'system') ? '' : 'none';
   } else {
     row.style.display = 'none';
+    if (submitBtn) submitBtn.style.display = 'none';
+    if (modBtn) modBtn.style.display = 'none';
   }
 }
 
@@ -901,8 +946,10 @@ function updateHomeAuthDisplay() {
 function logout() {
   authToken = null;
   authUsername = null;
+  authRole = null;
   localStorage.removeItem('gwn_auth_token');
   localStorage.removeItem('gwn_auth_username');
+  localStorage.removeItem('gwn_auth_role');
   if (ws) { disconnectWebSocket(); }
   updateHomeAuthDisplay();
   showScreen('home');
@@ -1033,8 +1080,10 @@ async function authAction(action) {
 
     authToken = data.token;
     authUsername = data.user.username;
+    authRole = data.user.role || 'user';
     localStorage.setItem('gwn_auth_token', authToken);
     localStorage.setItem('gwn_auth_username', authUsername);
+    localStorage.setItem('gwn_auth_role', authRole);
 
     // Clear form
     usernameInput.value = '';
@@ -1391,6 +1440,14 @@ function onRound(msg) {
   mystery.textContent = '?';
   mystery.style.setProperty('--seq-i', puzzle.sequence.length);
   seqContainer.appendChild(mystery);
+
+  // Puzzle credit (community submissions)
+  const creditEl = document.querySelector('[data-bind="match-puzzle-credit"]');
+  if (creditEl) {
+    creditEl.textContent = puzzle.submitted_by
+      ? `\u{1F4DD} Submitted by: ${puzzle.submitted_by}`
+      : '';
+  }
 
   // Options
   const optContainer = document.querySelector('[data-bind="match-options"]');
@@ -2173,6 +2230,232 @@ function renderMatchHistory(history) {
       <div class="history-date">${dateStr}</div>
     </div>`;
   }).join('');
+}
+
+/* ===========================
+   Community Puzzle Submissions
+   =========================== */
+
+/** Reset the submit-puzzle form and status message. */
+function resetSubmitPuzzleForm() {
+  const form = document.getElementById('submit-puzzle-form');
+  if (form) form.reset();
+  const status = document.querySelector('[data-bind="submit-puzzle-status"]');
+  if (status) { status.textContent = ''; status.className = 'submit-puzzle-status'; }
+}
+
+/** Wire submit-puzzle form handler inside init (called once). */
+function initSubmitPuzzleForm() {
+  const form = document.getElementById('submit-puzzle-form');
+  if (!form) return;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = document.querySelector('[data-bind="submit-puzzle-status"]');
+    const sequenceRaw = document.getElementById('sp-sequence').value.trim();
+    const answer = document.getElementById('sp-answer').value.trim();
+    const explanation = document.getElementById('sp-explanation').value.trim();
+    const difficulty = parseInt(document.getElementById('sp-difficulty').value, 10);
+    const category = document.getElementById('sp-category').value;
+
+    const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
+    if (sequence.length < 3) {
+      if (status) { status.textContent = 'Sequence must have at least 3 items.'; status.className = 'submit-puzzle-status error'; }
+      return;
+    }
+    if (!answer) {
+      if (status) { status.textContent = 'Answer is required.'; status.className = 'submit-puzzle-status error'; }
+      return;
+    }
+    if (!explanation) {
+      if (status) { status.textContent = 'Explanation is required.'; status.className = 'submit-puzzle-status error'; }
+      return;
+    }
+    if (!category) {
+      if (status) { status.textContent = 'Please select a category.'; status.className = 'submit-puzzle-status error'; }
+      return;
+    }
+
+    try {
+      const res = await apiFetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sequence, answer, explanation, difficulty, category }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (status) { status.textContent = 'Puzzle submitted for review!'; status.className = 'submit-puzzle-status success'; }
+        form.reset();
+      } else {
+        if (status) { status.textContent = data.error || 'Submission failed.'; status.className = 'submit-puzzle-status error'; }
+      }
+    } catch {
+      if (status) { status.textContent = 'Network error — please try again.'; status.className = 'submit-puzzle-status error'; }
+    }
+  });
+}
+
+/* ====================
+   Admin Moderation UI
+   ==================== */
+
+/** Initialize moderation tab switching. */
+function initModerationTabs() {
+  document.querySelectorAll('[data-mod-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.modTab;
+      document.querySelectorAll('[data-mod-tab]').forEach(b => {
+        b.classList.toggle('active', b.dataset.modTab === tab);
+        b.setAttribute('aria-selected', b.dataset.modTab === tab ? 'true' : 'false');
+      });
+      document.querySelectorAll('[data-mod-panel]').forEach(p => {
+        p.style.display = p.dataset.modPanel === tab ? '' : 'none';
+      });
+      if (tab === 'users') loadUserManagement();
+      if (tab === 'submissions') loadModerationSubmissions();
+    });
+  });
+}
+
+/** Fetch and display pending submissions in the moderation panel. */
+async function loadModerationSubmissions() {
+  const container = document.querySelector('[data-bind="moderation-list"]');
+  if (!container) return;
+  container.innerHTML = '<p class="moderation-loading">Loading submissions…</p>';
+
+  try {
+    const res = await apiFetch('/api/submissions/pending');
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<p class="moderation-error">${escapeHTML(data.error || 'Failed to load')}</p>`;
+      return;
+    }
+    const submissions = data.submissions || [];
+    if (submissions.length === 0) {
+      container.innerHTML = '<p class="moderation-empty">No pending submissions.</p>';
+      return;
+    }
+    container.innerHTML = submissions.map(s => `
+      <div class="moderation-card" data-submission-id="${s.id}">
+        <div class="mod-card-header">
+          <span class="mod-badge mod-badge-${s.difficulty === 1 ? 'easy' : s.difficulty === 2 ? 'medium' : 'hard'}">${s.difficulty === 1 ? 'Easy' : s.difficulty === 2 ? 'Medium' : 'Hard'}</span>
+          <span class="mod-category">${escapeHTML(s.category)}</span>
+          <span class="mod-author">by ${escapeHTML(s.submitted_by)}</span>
+        </div>
+        <div class="mod-card-body">
+          <p><strong>Sequence:</strong> ${Array.isArray(s.sequence) ? s.sequence.map(item => escapeHTML(String(item))).join(', ') : escapeHTML(String(s.sequence))}</p>
+          <p><strong>Answer:</strong> ${escapeHTML(String(s.answer))}</p>
+          <p><strong>Explanation:</strong> ${escapeHTML(s.explanation)}</p>
+        </div>
+        <div class="mod-card-actions">
+          <button class="btn btn-approve" data-mod-action="approved" data-mod-id="${s.id}">✅ Approve</button>
+          <button class="btn btn-reject" data-mod-action="rejected" data-mod-id="${s.id}">❌ Reject</button>
+        </div>
+      </div>
+    `).join('');
+  } catch {
+    container.innerHTML = '<p class="moderation-error">Network error — please try again.</p>';
+  }
+}
+
+/** Handle approve/reject actions on submissions. */
+async function handleModerationAction(id, status) {
+  const statusEl = document.querySelector('[data-bind="moderation-status"]');
+  let reviewerNotes = null;
+  if (status === 'rejected') {
+    reviewerNotes = prompt('Reviewer notes (optional):');
+    if (reviewerNotes === null) return; // cancelled
+  }
+
+  try {
+    const body = { status };
+    if (reviewerNotes) body.reviewerNotes = reviewerNotes;
+    const res = await apiFetch(`/api/submissions/${id}/review`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (statusEl) { statusEl.textContent = data.message || `Submission ${status}`; statusEl.className = 'moderation-status success'; }
+      loadModerationSubmissions();
+    } else {
+      if (statusEl) { statusEl.textContent = data.error || `Failed to ${status}`; statusEl.className = 'moderation-status error'; }
+    }
+  } catch {
+    if (statusEl) { statusEl.textContent = 'Network error — please try again.'; statusEl.className = 'moderation-status error'; }
+  }
+}
+
+/** Fetch and display users for admin management. */
+async function loadUserManagement() {
+  const container = document.querySelector('[data-bind="user-management-list"]');
+  if (!container) return;
+  container.innerHTML = '<p class="moderation-loading">Loading users…</p>';
+
+  try {
+    const res = await apiFetch('/api/users');
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<p class="moderation-error">${escapeHTML(data.error || 'Failed to load users')}</p>`;
+      return;
+    }
+    const users = data.users || [];
+    container.innerHTML = users.map(u => {
+      const isSystem = u.role === 'system';
+      const isSelf = u.username === authUsername;
+      const toggleLabel = u.role === 'admin' ? 'Demote to User' : 'Promote to Admin';
+      const toggleRole = u.role === 'admin' ? 'user' : 'admin';
+      const disabled = isSystem || isSelf ? 'disabled' : '';
+      return `
+        <div class="moderation-card user-card">
+          <div class="mod-card-header">
+            <span class="mod-username">${escapeHTML(u.username)}</span>
+            <span class="mod-badge mod-badge-${u.role}">${u.role}</span>
+          </div>
+          <div class="mod-card-actions">
+            <button class="btn btn-secondary btn-sm" data-role-action="${toggleRole}" data-user-id="${u.id}" ${disabled}>${toggleLabel}</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch {
+    container.innerHTML = '<p class="moderation-error">Network error — please try again.</p>';
+  }
+}
+
+/** Handle role change action. */
+async function handleRoleChange(userId, newRole) {
+  const statusEl = document.querySelector('[data-bind="moderation-status"]');
+  try {
+    const res = await apiFetch(`/api/users/${userId}/role`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: newRole }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (statusEl) { statusEl.textContent = data.message || 'Role updated'; statusEl.className = 'moderation-status success'; }
+      loadUserManagement();
+    } else {
+      if (statusEl) { statusEl.textContent = data.error || 'Failed to update role'; statusEl.className = 'moderation-status error'; }
+    }
+  } catch {
+    if (statusEl) { statusEl.textContent = 'Network error — please try again.'; statusEl.className = 'moderation-status error'; }
+  }
+}
+
+/** Wire moderation screen event delegation. */
+function initModerationScreen() {
+  initModerationTabs();
+  document.addEventListener('click', (e) => {
+    const modAction = e.target.dataset.modAction;
+    if (modAction && e.target.dataset.modId) {
+      handleModerationAction(e.target.dataset.modId, modAction);
+    }
+    const roleAction = e.target.dataset.roleAction;
+    if (roleAction && e.target.dataset.userId) {
+      handleRoleChange(e.target.dataset.userId, roleAction);
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);

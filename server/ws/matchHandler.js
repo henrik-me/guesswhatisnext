@@ -378,6 +378,7 @@ function sendRound(roomCode) {
       sequence: puzzle.sequence,
       options: puzzle.options,
       type: puzzle.type,
+      submitted_by: puzzle.submitted_by || null,
     },
     totalRounds: room.totalRounds,
   });

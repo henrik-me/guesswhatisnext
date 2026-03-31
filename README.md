@@ -93,6 +93,26 @@ For development with auto-reload:
 npm run dev
 ```
 
+### Admin Bootstrapping
+
+The first admin user must be bootstrapped. Two options:
+
+1. **Environment variable (recommended):** Set both `SYSTEM_API_KEY` (to a non-default value) and `ADMIN_USERNAME` to auto-promote a registered user to admin on server startup:
+   ```bash
+   SYSTEM_API_KEY=my-secret-key ADMIN_USERNAME=myuser npm start
+   ```
+2. **API key:** Use the system API key to promote a user via the admin API:
+   ```bash
+   # Find the user's ID
+   curl -H "X-API-Key: $SYSTEM_API_KEY" http://localhost:3000/api/users
+
+   # Promote to admin
+   curl -X PUT -H "X-API-Key: $SYSTEM_API_KEY" -H "Content-Type: application/json" \
+     -d '{"role":"admin"}' http://localhost:3000/api/users/<USER_ID>/role
+   ```
+
+Once promoted, admin users can manage other users' roles from the **🛡️ Moderation** screen in the UI. Note: after a role change, the user must log out and log back in for the new role to take effect (the role is stored in their JWT token).
+
 ### Running with Docker
 
 ```bash
