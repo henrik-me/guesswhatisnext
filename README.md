@@ -111,7 +111,7 @@ The first admin user must be bootstrapped. Two options:
      -d '{"role":"admin"}' http://localhost:3000/api/users/<USER_ID>/role
    ```
 
-Once promoted, admin users can manage other users' roles from the **🛡️ Moderation** screen in the UI.
+Once promoted, admin users can manage other users' roles from the **🛡️ Moderation** screen in the UI. Note: after a role change, the user must log out and log back in for the new role to take effect (the role is stored in their JWT token).
 
 ### Running with Docker
 

@@ -2326,7 +2326,7 @@ async function loadModerationSubmissions() {
           <span class="mod-author">by ${escapeHTML(s.submitted_by)}</span>
         </div>
         <div class="mod-card-body">
-          <p><strong>Sequence:</strong> ${Array.isArray(s.sequence) ? s.sequence.map(escapeHtml).join(', ') : escapeHTML(String(s.sequence))}</p>
+          <p><strong>Sequence:</strong> ${Array.isArray(s.sequence) ? s.sequence.map(item => escapeHTML(String(item))).join(', ') : escapeHTML(String(s.sequence))}</p>
           <p><strong>Answer:</strong> ${escapeHTML(String(s.answer))}</p>
           <p><strong>Explanation:</strong> ${escapeHTML(s.explanation)}</p>
         </div>
