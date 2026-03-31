@@ -232,7 +232,7 @@ jobs:
               const wsConnectTime = summaries['ws.connect_time']?.p95 ?? null;
               const wsSessionDuration = summaries['ws.session_duration']?.p95 ?? null;
 
-              if (wsMsgSent !== null || wsSessionLen !== null) {
+              if (wsMsgSent !== null || wsSessionLen !== null || wsConnectTime !== null || wsSessionDuration !== null) {
                 console.log('**WebSocket metrics**');
                 console.log('');
                 console.log('| Metric | Value |');
@@ -277,10 +277,13 @@ jobs:
           for f in reports/*.json; do
             [ -f "$f" ] || continue
             SUITE_NAME=$(basename "$f" .json | sed 's/-report//')
-            VU_FAILED=$(node -e "
+            if ! VU_FAILED=$(node -e "
               const data = JSON.parse(require('fs').readFileSync('$f', 'utf8'));
               console.log((data.aggregate?.counters?.['vusers.failed'] || 0));
-            " 2>/dev/null || echo "0")
+            "); then
+              echo "::error::Failed to read or parse report: $f"
+              exit 1
+            fi
             if [ "$VU_FAILED" -gt 0 ] 2>/dev/null; then
               echo "::error::${SUITE_NAME}: ${VU_FAILED} VUs failed"
               FAILED=1

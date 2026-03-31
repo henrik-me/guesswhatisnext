@@ -17,9 +17,10 @@
  * directly emit histogram metrics (p50/p95/p99) from WS hooks.
  *
  * Workaround: We store timestamps in context.vars and emit timing metrics
- * from the `afterResponse` / `afterScenario` hooks where the event emitter
- * is available. For connect time, we measure the duration inside the
- * connect.function handler and store it in context.vars for later emission.
+ * from the `afterScenario` hooks where the event emitter is available.
+ * For connect time, we record the start timestamp in the connect.function
+ * handler and the end timestamp in a later step (e.g. markConnectComplete),
+ * then compute and emit the duration from the afterScenario hook.
  *
  * For message round-trip time, Artillery's WS engine does not provide
  * per-message response hooks. The best available approach is to track
@@ -147,7 +148,7 @@ function emitWsMetrics(context, events, done) {
 /**
  * beforeScenario hook: record scenario start time.
  */
-function markScenarioStart(context, events, done) {
+function markScenarioStart(context, _events, done) {
   context.vars._scenarioStart = Date.now();
   return done();
 }

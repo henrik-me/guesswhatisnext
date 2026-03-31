@@ -22,7 +22,7 @@ const registerHourlyLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20,
   message: { error: 'Hourly registration limit reached, try again later' },
-  standardHeaders: true,
+  standardHeaders: false,
   legacyHeaders: false,
 });
 
@@ -30,7 +30,7 @@ const registerDailyLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours
   max: 50,
   message: { error: 'Daily registration limit reached, try again tomorrow' },
-  standardHeaders: true,
+  standardHeaders: false,
   legacyHeaders: false,
 });
 
