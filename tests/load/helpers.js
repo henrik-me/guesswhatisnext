@@ -347,7 +347,8 @@ function generateUniqueUser(context, _events, done) {
  *    (validates the limiter is enforced).
  * 3. Read Retry-After, wait the specified time, then retry → expect 201
  *    (validates the limiter resets correctly).
- * 4. Continue sending until 429s repeat, then do the dance again.
+ * 4. Perform a bounded burst of extra registrations (up to 5) until 429
+ *    repeats, then do the dance one more time.
  *
  * Every 429 in this flow is EXPECTED and never causes a VU failure.
  * Any other unexpected HTTP status (including 4xx other than 409/429)
@@ -396,7 +397,7 @@ async function registerWithRetry(context, events) {
   // respect Retry-After (expect 201).
   // Returns the captured token if registration succeeds, or null.
   // Also updates context.vars.username when a new username succeeds.
-  async function performDance(triggerResult) {
+  async function performDance() {
     // Step 1: Immediate retry WITHOUT waiting — should get 429
     const immediateUsername = makeUsername('d');
     const immediateResult = await doRegister(immediateUsername);
@@ -447,7 +448,7 @@ async function registerWithRetry(context, events) {
     // Fall through to phase 4 to keep testing the limiter
   } else if (result.statusCode === 429) {
     emitCounter('auth.rate_limited');
-    const token = await performDance(result);
+    const token = await performDance();
     if (token) {
       context.vars.token = token;
     }
@@ -477,7 +478,7 @@ async function registerWithRetry(context, events) {
 
     if (extraResult.statusCode === 429) {
       emitCounter('auth.rate_limited');
-      const dancedToken = await performDance(extraResult);
+      const dancedToken = await performDance();
       if (dancedToken) {
         context.vars.token = dancedToken;
       }
