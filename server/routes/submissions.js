@@ -149,7 +149,34 @@ router.put('/:id/review', requireSystem, (req, res) => {
     return res.status(409).json({ error: 'Submission has already been reviewed' });
   }
 
-  res.json({ id: Number(req.params.id), status, message: `Submission ${status}` });
+  const response = { id: Number(req.params.id), status, message: `Submission ${status}` };
+
+  // Promotion: auto-add approved puzzles to the live pool
+  if (status === 'approved') {
+    const submitter = db.prepare('SELECT username FROM users WHERE id = ?').get(submission.user_id);
+    const puzzleId = `community-${req.params.id}`;
+    const sequence = submission.sequence; // already JSON string from DB
+    const answer = submission.answer;
+    const options = JSON.stringify([answer]); // minimal options; game engine augments at runtime
+
+    db.prepare(
+      `INSERT INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active, submitted_by)
+       VALUES (?, ?, ?, 'emoji', ?, ?, ?, ?, 1, ?)`
+    ).run(
+      puzzleId,
+      submission.category,
+      submission.difficulty,
+      sequence,
+      answer,
+      options,
+      submission.explanation,
+      submitter ? submitter.username : null
+    );
+
+    response.puzzleId = puzzleId;
+  }
+
+  res.json(response);
 });
 
 module.exports = router;

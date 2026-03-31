@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS puzzles (
   options TEXT NOT NULL,   -- JSON array
   explanation TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1,
+  submitted_by TEXT,       -- username of community submitter (NULL for seeded puzzles)
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

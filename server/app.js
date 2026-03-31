@@ -16,6 +16,7 @@ const matchRoutes = require('./routes/matches');
 const puzzleRoutes = require('./routes/puzzles');
 const achievementRoutes = require('./routes/achievements');
 const submissionRoutes = require('./routes/submissions');
+const userRoutes = require('./routes/users');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const pkg = require('../package.json');
@@ -71,6 +72,7 @@ function createServer() {
   app.use('/api/puzzles', puzzleRoutes);
   app.use('/api/achievements', achievementRoutes);
   app.use('/api/submissions', submissionRoutes);
+  app.use('/api/users', userRoutes);
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, (req, res) => {

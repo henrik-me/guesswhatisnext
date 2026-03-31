@@ -30,6 +30,7 @@
         <button class="btn btn-secondary" data-action="show-leaderboard" aria-label="View Leaderboard">🏆 Leaderboard</button>
         <button class="btn btn-secondary" data-action="show-achievements" aria-label="View Achievements">🏅 Achievements</button>
         <button class="btn btn-secondary" data-action="show-submit-puzzle" data-bind="submit-puzzle-btn" aria-label="Submit a Puzzle" style="display:none">📝 Submit Puzzle</button>
+        <button class="btn btn-secondary" data-action="show-moderation" data-bind="moderation-btn" aria-label="Review Submissions" style="display:none">🛡️ Moderation</button>
         <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
       <footer class="home-stats">
@@ -427,7 +428,33 @@
       <button class="btn btn-back" data-action="go-home">← Back</button>
     </section>
 
-    <!-- Reconnection Overlay -->
+    <!-- Admin Moderation Screen -->
+    <section id="screen-moderation" class="screen" data-screen="moderation" aria-label="Moderation">
+      <header class="screen-header">
+        <h2>🛡️ Moderation</h2>
+        <p class="screen-description">Review community puzzle submissions</p>
+      </header>
+
+      <div class="moderation-tabs" role="tablist">
+        <button class="btn btn-secondary active" data-mod-tab="submissions" role="tab" aria-selected="true">📝 Pending Submissions</button>
+        <button class="btn btn-secondary" data-mod-tab="users" role="tab" aria-selected="false">👥 User Management</button>
+      </div>
+
+      <div id="mod-submissions-panel" data-mod-panel="submissions">
+        <div class="moderation-list" data-bind="moderation-list" aria-label="Pending submissions">
+          <p class="moderation-loading">Loading submissions…</p>
+        </div>
+      </div>
+
+      <div id="mod-users-panel" data-mod-panel="users" style="display:none">
+        <div class="moderation-list" data-bind="user-management-list" aria-label="User list">
+          <p class="moderation-loading">Loading users…</p>
+        </div>
+      </div>
+
+      <p class="moderation-status" data-bind="moderation-status" role="status" aria-live="polite"></p>
+      <button class="btn btn-back" data-action="go-home">← Back</button>
+    </section>
     <div id="reconnect-overlay" class="reconnect-overlay" style="display:none" aria-live="assertive">
       <div class="reconnect-content">
         <div class="reconnect-spinner" aria-hidden="true"></div>
