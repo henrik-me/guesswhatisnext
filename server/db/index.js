@@ -34,7 +34,7 @@ async function createDb(opts = {}) {
     try {
       MssqlAdapter = require('./mssql-adapter');
     } catch (err) {
-      if (err.code === 'MODULE_NOT_FOUND') {
+      if (err.code === 'MODULE_NOT_FOUND' && err.message.includes("'./mssql-adapter'")) {
         throw new Error(
           'MSSQL database backend is not yet available because the mssql-adapter module is missing. ' +
             'To use SQLite instead, remove DATABASE_URL from the environment or do not pass opts.backend = "mssql".',
@@ -53,7 +53,7 @@ async function createDb(opts = {}) {
     try {
       SqliteAdapter = require('./sqlite-adapter');
     } catch (err) {
-      if (err.code === 'MODULE_NOT_FOUND') {
+      if (err.code === 'MODULE_NOT_FOUND' && err.message.includes("'./sqlite-adapter'")) {
         throw new Error(
           'SQLite database backend is not yet available. ' +
             'The sqlite-adapter module has not been added yet.',
