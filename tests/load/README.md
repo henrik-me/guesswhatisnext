@@ -159,7 +159,8 @@ dance pattern is:
 3. **Immediate retry** (no wait) — expect 429 again, confirming the limiter is
    enforced even without respecting `Retry-After` (`auth.immediate_retry_blocked`).
 4. **Respect Retry-After** — wait the header-specified time (capped at 15 s),
-   then retry. Expect 201 (`auth.retry_after_success`).
+   then retry. Expect 201 (`auth.retry_after_success`), though a 429 may occur
+   if the window hasn't fully reset (`auth.retry_after_still_limited`).
 5. **Perform a bounded burst of extra registrations** until another 429 is hit
    (or the helper's max extra attempts is reached), then run the dance sequence
    at most one more time and stop.
