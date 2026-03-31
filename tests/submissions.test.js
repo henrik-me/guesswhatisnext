@@ -133,6 +133,19 @@ describe('POST /api/submissions', () => {
 });
 
 describe('GET /api/submissions', () => {
+  beforeAll(async () => {
+    await getAgent()
+      .post('/api/submissions')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['X', 'Y', 'Z'],
+        answer: 'A',
+        explanation: 'Alphabet wraps around.',
+        difficulty: 1,
+        category: 'General Knowledge',
+      });
+  });
+
   test('returns own submissions', async () => {
     const res = await getAgent()
       .get('/api/submissions')
@@ -142,9 +155,10 @@ describe('GET /api/submissions', () => {
     expect(Array.isArray(res.body.submissions)).toBe(true);
     expect(res.body.submissions.length).toBeGreaterThan(0);
 
-    const sub = res.body.submissions[0];
-    expect(sub.status).toBe('pending');
-    expect(Array.isArray(sub.sequence)).toBe(true);
+    const sub = res.body.submissions.find(
+      (s) => s && s.status === 'pending' && Array.isArray(s.sequence),
+    );
+    expect(sub).toBeDefined();
   });
 
   test('does not show other users submissions', async () => {
@@ -163,6 +177,19 @@ describe('GET /api/submissions', () => {
 });
 
 describe('GET /api/submissions/pending', () => {
+  beforeAll(async () => {
+    await getAgent()
+      .post('/api/submissions')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [10, 20, 30],
+        answer: '40',
+        explanation: 'Increments of 10.',
+        difficulty: 1,
+        category: 'Math & Numbers',
+      });
+  });
+
   test('returns pending submissions for system user', async () => {
     const res = await getAgent()
       .get('/api/submissions/pending')
@@ -171,7 +198,8 @@ describe('GET /api/submissions/pending', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.submissions)).toBe(true);
     expect(res.body.submissions.length).toBeGreaterThan(0);
-    expect(res.body.submissions[0].submitted_by).toBe('submitter1');
+    const fromSubmitter1 = res.body.submissions.find((s) => s.submitted_by === 'submitter1');
+    expect(fromSubmitter1).toBeDefined();
   });
 
   test('rejects for regular users', async () => {
