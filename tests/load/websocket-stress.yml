@@ -25,35 +25,25 @@ after:
   flow:
     - function: "cleanupUserPool"
 
+# Artillery's WS engine only reads the `connect` config from the FIRST step in
+# the flow and opens the socket BEFORE running any other steps. We therefore
+# use `connect.function` handlers that acquire a token and set wsArgs.target
+# to the fully-qualified ws:// URL before the handshake.
+
 scenarios:
   - name: "WebSocket connection and room join"
     engine: ws
     flow:
-      - function: "registerAndGetToken"
-      - function: "createMatchRoom"
       - connect:
-          target: "{{ wsTarget }}/ws?token={{ token }}"
+          function: "connectWithTokenAndRoom"
       - think: 1
       - send:
           payload: '{"type":"join","roomCode":"{{ roomCode }}"}'
       - think: 3
-      - close: true
 
-  - name: "WebSocket connect-disconnect cycle"
+  - name: "WebSocket sustained connection"
     engine: ws
     flow:
-      - function: "registerAndGetToken"
       - connect:
-          target: "{{ wsTarget }}/ws?token={{ token }}"
-      - think: 2
-      - close: true
-      - think: 1
-      - connect:
-          target: "{{ wsTarget }}/ws?token={{ token }}"
-      - think: 1
-      - close: true
-      - think: 1
-      - connect:
-          target: "{{ wsTarget }}/ws?token={{ token }}"
-      - think: 1
-      - close: true
+          function: "connectWithToken"
+      - think: 5
