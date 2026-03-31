@@ -40,6 +40,10 @@ tests/load/.user-pool.json
 tests/load/.user-pool.json.tmp
 tests/load/.user-pool.lock
 
+# Playwright
+test-results/
+playwright-report/
+
 # Logs
 logs/
 *.log

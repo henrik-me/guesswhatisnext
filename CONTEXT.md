@@ -2,24 +2,27 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-03-27
+> **Last updated:** 2026-03-30
 
 ---
 
-## Project Status: ✅ Phases 1–5 Complete (39/39) — Phases 6–9 Planned
+## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Mostly Done — Phase 10b Planned, Phase 11 Planned
 
 ### Development Workflow
 
 Parallel work uses **fixed worktree slots** (`wt-1` through `wt-4`) with task-specific branch names.
 Each agent pushes its branch to origin and merges to main remotely. The main agent pulls after each merge.
 
+Worktree root folders are named `gwn<suffix>-worktrees` where `<suffix>` is the remaining text
+after removing the repo name from the clone folder (see INSTRUCTIONS.md § Parallel Agent Workflow).
+
 | Slot | Path | Port | Status |
 |---|---|---|---|
-| main | `C:\src\guesswhatisnext` | 3000 | Orchestration, sequential work |
-| wt-1 | `C:\src\gwn-worktrees\wt-1` | 3001 | Available |
-| wt-2 | `C:\src\gwn-worktrees\wt-2` | 3002 | Available |
-| wt-3 | `C:\src\gwn-worktrees\wt-3` | 3003 | Available |
-| wt-4 | `C:\src\gwn-worktrees\wt-4` | 3004 | Available |
+| main | `C:\src\guesswhatisnext<suffix>` | 3000 | Orchestration, sequential work |
+| wt-1 | `C:\src\gwn<suffix>-worktrees\wt-1` | 3001 | Available |
+| wt-2 | `C:\src\gwn<suffix>-worktrees\wt-2` | 3002 | Available |
+| wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Available |
+| wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Available |
 
 **Current workflow (pre-branch-protection):** Agent pushes branch → merges to main on remote → pushes main.
 **Future workflow (post-branch-protection):** Agent pushes branch → creates PR → CI + review → merge via GH UI.
@@ -104,8 +107,8 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 40 | Remove debug logging | ⬜ Pending | — | Strip console.log('[rematch]') from client code |
-| 41 | Environment variables | ⬜ Pending | — | JWT secret, API key, DB path → env vars with startup validation |
+| 40 | Remove debug logging | ✅ Done | — | Stripped debug console.log from client code (PR #14) |
+| 41 | Environment variables | ✅ Done | — | server/config.js centralizes env vars with startup validation (PR #14) |
 | 42 | HTTPS & secure cookies | ⬜ Pending | 41 | TLS enforcement, WSS, secure headers |
 
 ## Phase 7 — Quality & Testing
@@ -119,9 +122,9 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 45 | Mobile PWA | ⬜ Pending | — | manifest.json, service worker, offline fallback |
-| 46 | Share links | ⬜ Pending | — | Deep link ?room=CODE, copy-link button |
-| 47 | Multiplayer sound effects | ⬜ Pending | — | Opponent answered, countdown, win/loss fanfare |
+| 45 | Mobile PWA | ✅ Done | — | manifest.json, service worker, offline fallback (PR #15) |
+| 46 | Share links | ✅ Done | — | Deep link ?room=CODE, copy-link button (PR #15) |
+| 47 | Multiplayer sound effects | ✅ Done | — | Opponent answered, countdown, win/loss fanfare (PR #15) |
 | 48 | Spectator mode | ⬜ Pending | 42 | Read-only WS, spectator count in lobby |
 
 ## Phase 9 — Content & Growth
@@ -131,7 +134,7 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
 | 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 depends on 6. Phase 8 tasks 45–47 are independent. Phase 9 can start anytime. Phase 10 can start independently.
+**Parallelism:** Phase 6 is sequential. Phase 7 can start now; its dependencies (40 and 41) are done. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
 
 ## Phase 10 — CI/CD Pipeline Rework
 
@@ -141,10 +144,34 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
 | 52 | Slim down PR CI checks | ✅ Done | 51 | New ci.yml with parallel lint + test only; no Docker build in PR checks |
 | 53 | Remove push-to-main deploy pipeline | ✅ Done | 52 | ci-cd.yml gutted to disabled placeholder; push to main no longer triggers any deployment |
 | 54 | Staging deploy on merge | ✅ Done | 53 | New staging-deploy.yml: triggers on push to main, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, fast-forwards release/staging, then (with manual approval) deploys to Azure staging |
-| 55 | Manual production deploy workflow | ⬜ Pending | 54 | New prod-deploy.yml: workflow_dispatch triggered manually from release/staging branch. Requires staging environment to be green. Deploys same image to production, verifies, auto-rollback on failure |
+| 55 | Manual production deploy workflow | ✅ Done | 54 | prod-deploy.yml: manual workflow_dispatch with image tag + confirmation, validates image exists in GHCR, deploys to production environment (with approval gate), runs health verification, auto-rollback on failure (PR #21) |
 | 56 | Unified infra setup script | ⬜ Pending | 55 | Merge deploy.sh + setup-github.sh into one script: auto-generates secrets, creates Azure service principal, sets all GitHub secrets/variables, runs verification health check |
 
-**Parallelism:** Tasks 51–56 are sequential. Phase 10 is independent of Phases 6–9.
+### Phase 10b — Orchestrated Deploy (SQLite/SMB Fix)
+
+During staging deployment testing, we discovered that SQLite on Azure Files (SMB) cannot handle concurrent access during Azure Container Apps revision transitions. Both old and new revisions access the DB simultaneously, causing `SQLITE_BUSY` errors. Phase 10b orchestrates deploys so only one revision touches the DB at a time.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 57 | Lazy DB init + admin endpoints | ⬜ Pending | 54 | Defer initDb() to first request instead of startup. Add POST /api/admin/drain (close DB on old revision) and POST /api/admin/init-db (init DB on new revision). Fix trust proxy for express-rate-limit. |
+| 58 | Orchestrated deploy workflow | ⬜ Pending | 57 | Rewrite staging-deploy.yml: deploy at 0% traffic, switch traffic, drain old revision via FQDN, init-db on new revision via FQDN, verify health, deactivate old. Rollback on failure. |
+| 59 | Validate staging + first prod deploy | ⬜ Pending | 58 | Deactivate crash-looping revisions, deploy with orchestrated workflow, verify end-to-end. Then first production deploy. |
+
+**Parallelism:** Tasks 51–56 are sequential. Phase 10 is independent of Phases 6–9. Phase 10b addresses SQLite/SMB deployment issues discovered during staging testing.
+
+## Phase 11 — Azure SQL Database Migration
+
+Replace SQLite + Azure Files with Azure SQL Database (free tier) to permanently eliminate SMB locking issues and enable true zero-downtime deploys. The free tier provides 10 serverless databases per subscription with auto-pause, 32 GB storage, and 100K vCore-seconds/month.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 60 | Provision Azure SQL free tier | ⬜ Pending | 59 | Create Azure SQL logical server + 2 free-tier serverless databases (gwn-staging, gwn-production). Configure firewall rules. Store connection strings as GitHub secrets. |
+| 61 | Migrate schema SQLite to T-SQL | ⬜ Pending | 60 | Convert schema.sql: AUTOINCREMENT to IDENTITY, TEXT to NVARCHAR, datetime functions. Write migration script. |
+| 62 | Rewrite DB layer for mssql | ⬜ Pending | 61 | Replace better-sqlite3 (sync) with mssql driver (async). Convert all route handlers to async. Add connection pooling. |
+| 63 | Update deploy workflows | ⬜ Pending | 62 | Remove Azure Files volume mounts. Add DATABASE_URL env var. Simplify deploy back to standard (no orchestration needed). |
+| 64 | Test and deploy | ⬜ Pending | 63 | Update all tests for async DB. Integration test against Azure SQL. Deploy to staging, verify. Deploy to production. |
+
+**Parallelism:** Phase 11 is sequential and depends on Phase 10b completing first.
 
 ### Deployment Architecture
 
@@ -178,8 +205,8 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
                                                       │  Scale-to-zero ($0)   │
                                                       └───────────────────────┘
 
-  Manual trigger (prod-deploy.yml — planned)
-         │  (requires staging green)
+  Manual trigger (prod-deploy.yml)
+         │  (convention: only deploy images validated in staging)
          ▼
   ┌──────────────────────────────────────────────────────────────────────┐
   │  Production Pipeline                                                │
@@ -190,7 +217,7 @@ Each agent pushes its branch to origin and merges to main remotely. The main age
                                              ▼
                                   ┌───────────────────────┐
                                   │  PRODUCTION           │
-                                  │  gwn-prod             │
+                                  │  gwn-production       │
                                   │  Container Apps       │
                                   │  Auto-rollback on fail│
                                   └───────────────────────┘

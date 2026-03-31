@@ -127,7 +127,7 @@ jobs:
         with:
           inlineScript: |
             trap 'rm -f /tmp/deploy-template.yaml' EXIT
-            cat > /tmp/deploy-template.yaml <<'YAMLEOF'
+            cat > /tmp/deploy-template.yaml <<YAMLEOF
             properties:
               template:
                 volumes:
@@ -137,6 +137,18 @@ jobs:
                 containers:
                   - name: gwn-production
                     image: ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}
+                    env:
+                      - name: NODE_ENV
+                        value: production
+                      - name: PORT
+                        value: "3000"
+                      - name: JWT_SECRET
+                        value: "${JWT_SECRET}"
+                      - name: SYSTEM_API_KEY
+                        value: "${SYSTEM_API_KEY}"
+                    resources:
+                      cpu: 0.5
+                      memory: 1Gi
                     volumeMounts:
                       - volumeName: data-volume
                         mountPath: /app/data
@@ -147,19 +159,9 @@ jobs:
               --min-replicas 0 \
               --max-replicas 5 \
               --yaml /tmp/deploy-template.yaml
-
-      - name: Set production environment variables
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            az containerapp update \
-              --name gwn-production \
-              --resource-group gwn-rg \
-              --set-env-vars \
-                NODE_ENV=production \
-                PORT=3000 \
-                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
-                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
 
       - name: Deactivate old revisions
         uses: azure/cli@v2
@@ -203,7 +205,7 @@ jobs:
           inlineScript: |
             echo "::error::Rolling back to previous image: ${{ steps.rollback.outputs.current-image }}"
             trap 'rm -f /tmp/deploy-template.yaml' EXIT
-            cat > /tmp/deploy-template.yaml <<'YAMLEOF'
+            cat > /tmp/deploy-template.yaml <<YAMLEOF
             properties:
               template:
                 volumes:
@@ -213,6 +215,18 @@ jobs:
                 containers:
                   - name: gwn-production
                     image: ${{ steps.rollback.outputs.current-image }}
+                    env:
+                      - name: NODE_ENV
+                        value: production
+                      - name: PORT
+                        value: "3000"
+                      - name: JWT_SECRET
+                        value: "${JWT_SECRET}"
+                      - name: SYSTEM_API_KEY
+                        value: "${SYSTEM_API_KEY}"
+                    resources:
+                      cpu: 0.5
+                      memory: 1Gi
                     volumeMounts:
                       - volumeName: data-volume
                         mountPath: /app/data
@@ -221,14 +235,6 @@ jobs:
               --name gwn-production \
               --resource-group gwn-rg \
               --yaml /tmp/deploy-template.yaml
-            az containerapp update \
-              --name gwn-production \
-              --resource-group gwn-rg \
-              --set-env-vars \
-                NODE_ENV=production \
-                PORT=3000 \
-                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
-                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
             echo "Waiting for rollback to stabilize..."
             sleep 60
             HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
@@ -248,6 +254,9 @@ jobs:
                 --revision "$FAILED_REVISION" || true
               echo "🧹 Deactivated failed revision: $FAILED_REVISION"
             fi
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
 
       - name: Fail if unhealthy
         if: steps.healthcheck.outputs.healthy != 'true'

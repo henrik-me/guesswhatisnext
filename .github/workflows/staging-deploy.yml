@@ -24,6 +24,7 @@ permissions:
 jobs:
   build-and-push:
     name: Build & Push Docker Image
+    if: github.event_name == 'workflow_dispatch' || vars.STAGING_AUTO_DEPLOY == 'true'
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.sha }}
@@ -76,9 +77,29 @@ jobs:
           --health-retries 10
           --health-start-period 15s
     steps:
+      - name: Wait for database self-initialization
+        run: |
+          echo "Waiting for database self-initialization..."
+          for i in $(seq 1 30); do
+            DB_STATUS="unreachable"
+            if RESPONSE=$(curl -sf --connect-timeout 5 --max-time 10 \
+              -H "X-API-Key: ephemeral-smoke-test-key" \
+              "http://localhost:3000/api/health"); then
+              DB_STATUS=$(printf '%s' "$RESPONSE" | jq -r '.checks.database.status' 2>/dev/null || echo "unreachable")
+            fi
+            echo "Attempt $i: database status = $DB_STATUS"
+            if [ "$DB_STATUS" = "ok" ]; then
+              echo "Database ready!"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Database not ready after ~60 seconds"
+          exit 1
+
       - name: Health check
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
             -H "X-API-Key: ephemeral-smoke-test-key" \
             "http://localhost:3000/api/health")
           echo "Health check status: $HTTP_STATUS"
@@ -183,14 +204,41 @@ jobs:
               --username ${{ vars.GHCR_USERNAME }} \
               --password ${{ secrets.GHCR_PAT }}
 
-      - name: Deploy to staging Container App
+      - name: Ensure multiple revision mode
         uses: azure/cli@v2
         with:
           inlineScript: |
-            trap 'rm -f /tmp/deploy-template.yaml' EXIT
-            cat > /tmp/deploy-template.yaml <<'YAMLEOF'
+            az containerapp revision set-mode \
+              --name gwn-staging \
+              --resource-group gwn-rg \
+              --mode multiple
+
+      - name: Deploy new revision (0% traffic)
+        id: deploy
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            # Find the revision currently receiving traffic (not just the latest-created one)
+            CURRENT_REV=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
+              --query "properties.configuration.ingress.traffic[?weight > \`0\`] | [0].revisionName" -o tsv 2>/dev/null || echo "")
+            if [ -z "$CURRENT_REV" ] || [ "$CURRENT_REV" = "None" ]; then
+              CURRENT_REV=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
+                --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+            fi
+            echo "current-revision=$CURRENT_REV" >> "$GITHUB_OUTPUT"
+            echo "Current revision (rollback target): $CURRENT_REV"
+
+            # Deploy with YAML template (preserves volume mounts)
+            SUFFIX="deploy-$(date +%s)"
+            TEMPLATE_FILE=$(mktemp)
+            trap "rm -f $TEMPLATE_FILE" EXIT
+            cat > "$TEMPLATE_FILE" <<YAMLEOF
             properties:
               template:
+                revisionSuffix: $SUFFIX
+                scale:
+                  minReplicas: 1
+                  maxReplicas: 1
                 volumes:
                   - name: data-volume
                     storageName: gwn-storage-staging
@@ -198,6 +246,18 @@ jobs:
                 containers:
                   - name: gwn-staging
                     image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+                    env:
+                      - name: NODE_ENV
+                        value: staging
+                      - name: PORT
+                        value: "3000"
+                      - name: JWT_SECRET
+                        value: "${JWT_SECRET}"
+                      - name: SYSTEM_API_KEY
+                        value: "${SYSTEM_API_KEY}"
+                    resources:
+                      cpu: 0.5
+                      memory: 1Gi
                     volumeMounts:
                       - volumeName: data-volume
                         mountPath: /app/data
@@ -205,51 +265,158 @@ jobs:
             az containerapp update \
               --name gwn-staging \
               --resource-group gwn-rg \
-              --min-replicas 1 \
-              --yaml /tmp/deploy-template.yaml
+              --yaml "$TEMPLATE_FILE"
 
-      - name: Set staging environment variables
+            # Get new revision name
+            NEW_REV=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv)
+            if [ -z "$NEW_REV" ] || [ "$NEW_REV" = "None" ]; then
+              echo "::error::Failed to get new revision name"
+              exit 1
+            fi
+            echo "new-revision=$NEW_REV" >> "$GITHUB_OUTPUT"
+
+            echo "New revision: $NEW_REV"
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+
+      - name: Switch traffic to new revision
         uses: azure/cli@v2
         with:
           inlineScript: |
-            az containerapp update \
-              --name gwn-staging \
-              --resource-group gwn-rg \
-              --set-env-vars \
-                NODE_ENV=staging \
-                PORT=3000 \
-                "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
-                "SYSTEM_API_KEY=${{ secrets.SYSTEM_API_KEY }}"
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            echo "Switching 100% traffic to $NEW_REV"
+            az containerapp ingress traffic set \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision-weight "$NEW_REV=100"
 
-      - name: Deactivate old revisions
+      - name: Deactivate old revisions (release SQLite lock)
         uses: azure/cli@v2
         with:
           inlineScript: |
-            LATEST=$(az containerapp show --name gwn-staging --resource-group gwn-rg --query "properties.latestRevisionName" -o tsv)
-            echo "Latest revision: $LATEST"
-            az containerapp revision list --name gwn-staging --resource-group gwn-rg --query "[?name!='$LATEST'].name" -o tsv | while read -r rev; do
-              echo "Deactivating old revision: $rev"
-              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg --revision "$rev" || true
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            if [ -z "$NEW_REV" ] || [ "$NEW_REV" = "None" ]; then
+              echo "::error::NEW_REV is invalid — skipping deactivation to avoid taking app offline"
+              exit 1
+            fi
+            echo "Deactivating all revisions except $NEW_REV to release SQLite file lock..."
+            az containerapp revision list --name gwn-staging --resource-group gwn-rg \
+              --query "[?properties.active && name != '$NEW_REV'].name" -o tsv | while read -r rev; do
+              echo "Deactivating: $rev"
+              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
+                --revision "$rev" || true
             done
-
-      - name: Wait for deployment to stabilize
-        run: sleep 90
+            echo "Waiting for old replicas to shut down and release SMB lock..."
+            sleep 15
 
       - name: Verify staging deployment
-        run: |
-          for i in 1 2 3 4 5; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
-              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
-              "${{ vars.STAGING_URL }}/api/health" || true)
-            echo "Health check attempt $i: $HTTP_STATUS"
-            if [ "$HTTP_STATUS" = "200" ]; then
-              echo "Staging deployment healthy!"
-              exit 0
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            echo "Waiting for revision $NEW_REV to reach Running state..."
+            for i in $(seq 1 10); do
+              STATE=$(az containerapp revision show \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$NEW_REV" \
+                --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
+              echo "Attempt $i: state=$STATE"
+              if [ "$STATE" = "Running" ]; then
+                break
+              fi
+              sleep 10
+            done
+            if [ "$STATE" != "Running" ]; then
+              echo "::error::Revision $NEW_REV not Running after 100s (state: $STATE)"
+              exit 1
             fi
-            sleep 20
-          done
-          echo "::error::Staging health check failed after 5 attempts (last: $HTTP_STATUS)"
-          exit 1
+            echo "Revision is running — verifying DB initialization via application logs..."
+            # Self-init budget: 2s initial delay + up to 30 × (2s busy_timeout + 5s
+            # interval) ≈ 212s, plus Azure log propagation latency (~30s).
+            # 60 × 5s = 300s gives comfortable slack beyond that ceiling.
+            DB_CONFIRMED=0
+            for i in $(seq 1 60); do
+              if ! LOGS=$(az containerapp logs show \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$NEW_REV" \
+                --type console --tail 100 2>&1); then
+                echo "Log query failed, retrying..."
+                sleep 5
+                continue
+              fi
+              if echo "$LOGS" | grep -qE "Database (self-initialized|initialized)"; then
+                echo "✅ Staging deployment verified — DB initialization confirmed in logs"
+                DB_CONFIRMED=1
+                break
+              fi
+              echo "DB init not confirmed yet (attempt $i/60)..."
+              sleep 5
+            done
+            if [ "$DB_CONFIRMED" -ne 1 ]; then
+              echo "::error::DB initialization not confirmed in application logs after 300s"
+              exit 1
+            fi
+
+      - name: Rollback on failure
+        if: failure() && steps.deploy.outputs.current-revision != ''
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            CURRENT_REV="${{ steps.deploy.outputs.current-revision }}"
+            if [ -z "$CURRENT_REV" ] || [ "$CURRENT_REV" = "None" ]; then
+              echo "::error::CURRENT_REV is invalid ('$CURRENT_REV') — cannot rollback safely"
+              exit 1
+            fi
+            echo "::warning::Rolling back to $CURRENT_REV"
+            # Reactivate old revision first so there's always at least one
+            # active revision. Pre-self-init revisions will need manual
+            # POST /api/admin/init-db to resume API service (one-time transition risk).
+            az containerapp revision activate --name gwn-staging --resource-group gwn-rg \
+              --revision "$CURRENT_REV" || true
+            # Wait for old revision to reach Running state before proceeding
+            ROLLBACK_READY=0
+            for attempt in 1 2 3 4 5; do
+              STATE=$(az containerapp revision show \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision "$CURRENT_REV" \
+                --query "properties.runningState" -o tsv 2>/dev/null || echo "Unknown")
+              echo "::notice::Rollback target $CURRENT_REV state=$STATE (attempt $attempt/5)"
+              if [ "$STATE" = "Running" ]; then
+                ROLLBACK_READY=1
+                break
+              fi
+              sleep 10
+            done
+            if [ "$ROLLBACK_READY" -ne 1 ]; then
+              echo "::warning::Rollback target $CURRENT_REV not Running yet — proceeding anyway"
+            fi
+            # --- Step 1: Switch traffic away from the failed revision first ---
+            # This must happen BEFORE deactivating the new revision, otherwise
+            # ingress would briefly point at an inactive revision (downtime).
+            TRAFFIC_SET=0
+            for attempt in 1 2 3; do
+              if az containerapp ingress traffic set \
+                --name gwn-staging --resource-group gwn-rg \
+                --revision-weight "$CURRENT_REV=100"; then
+                TRAFFIC_SET=1
+                break
+              fi
+              echo "::warning::Failed to set traffic to $CURRENT_REV (attempt $attempt/3); retrying in 10s..."
+              sleep 10
+            done
+            if [ "$TRAFFIC_SET" -ne 1 ]; then
+              echo "::error::Failed to set traffic to $CURRENT_REV after 3 attempts"
+              exit 1
+            fi
+            # Allow Azure ingress routing to propagate before deactivating
+            sleep 10
+            # --- Step 2: Deactivate the failed new revision to release DB locks ---
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "None" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
+              az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
+                --revision "$NEW_REV" || true
+            fi
 
       - name: Tag deployment
         uses: azure/cli@v2
