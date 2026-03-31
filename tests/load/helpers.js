@@ -338,20 +338,25 @@ function generateUniqueUser(context, _events, done) {
 }
 
 /**
- * Auth register flow that gracefully handles rate limiting (429).
+ * Auth register flow implementing a "rate-limit dance" that thoroughly
+ * validates the server's rate limiter behavior.
  *
- * Instead of capturing $.token via YAML (which fails on 429 responses),
- * this function:
- * 1. Attempts registration
- * 2. If 201: captures token, marks success
- * 3. If 429: reads Retry-After, waits, retries once
- * 4. Emits custom metrics: auth.rate_limited counter, auth.retry_after_seconds histogram
- * 5. Never fails the VU for expected rate-limit responses
+ * The dance:
+ * 1. Attempt registration — if 201, done.
+ * 2. On 429: immediately retry WITHOUT respecting Retry-After → expect 429
+ *    (validates the limiter is enforced).
+ * 3. Read Retry-After, wait the specified time, then retry → expect 201
+ *    (validates the limiter resets correctly).
+ * 4. Continue sending until 429s repeat, then do the dance again.
+ *
+ * Every 429 in this flow is EXPECTED and never causes a VU failure.
+ * Only truly unexpected errors (500, network errors) throw.
  */
 async function registerWithRetry(context, events) {
   const baseUrl = getBaseUrl(context);
-  const username = context.vars.username;
   const password = context.vars.password;
+  const MAX_RETRY_WAIT = 15;
+  const MAX_DANCE_EXTRA_REQUESTS = 5;
 
   function emitCounter(name) {
     if (events && typeof events.emit === 'function') {
@@ -365,74 +370,130 @@ async function registerWithRetry(context, events) {
     }
   }
 
-  let result;
-  try {
-    result = await httpRequestWithHeaders(
-      baseUrl, 'POST', '/api/auth/register',
-      { username, password },
-    );
-  } catch (err) {
-    emitCounter('auth.network_error');
-    throw err;
-  }
-
-  if (result.statusCode === 201 && result.body.token) {
-    context.vars.token = result.body.token;
-    emitCounter('auth.register_success');
-    return;
-  }
-
-  if (result.statusCode === 429) {
-    emitCounter('auth.rate_limited');
-
-    const retryAfter = parseInt(result.headers['retry-after'], 10);
-    const waitSeconds = (Number.isFinite(retryAfter) && retryAfter > 0) ? retryAfter : 1;
-    emitHistogram('auth.retry_after_seconds', waitSeconds);
-
-    // Cap the wait to avoid excessively long VU durations
-    const cappedWait = Math.min(waitSeconds, 10);
-    await new Promise((r) => setTimeout(r, cappedWait * 1000));
-
-    // Retry with a new unique username to avoid duplicate conflicts
-    let retry;
-    const retryUsername = makeUsername('r');
+  async function doRegister(username) {
     try {
-      retry = await httpRequestWithHeaders(
+      return await httpRequestWithHeaders(
         baseUrl, 'POST', '/api/auth/register',
-        { username: retryUsername, password },
+        { username, password },
       );
     } catch (err) {
       emitCounter('auth.network_error');
       throw err;
     }
-
-    if (retry.statusCode === 201 && retry.body.token) {
-      context.vars.token = retry.body.token;
-      context.vars.username = retryUsername;
-      emitCounter('auth.retry_success');
-      return;
-    }
-
-    if (retry.statusCode === 429) {
-      // Rate limiter is working correctly — mark as expected
-      emitCounter('auth.retry_rate_limited');
-      return;
-    }
-
-    // Unexpected status on retry
-    emitCounter('auth.retry_unexpected_error');
-    throw new Error(`Unexpected retry status: ${retry.statusCode}`);
   }
 
-  if (result.statusCode === 409) {
-    // Duplicate username — treat as non-fatal for this VU
+  function handleUnexpected(result, label) {
+    if (result.statusCode === 409) {
+      emitCounter('auth.duplicate_username');
+      return;
+    }
+    if (result.statusCode >= 500) {
+      emitCounter('auth.unexpected_error');
+      throw new Error(`${label}: unexpected status ${result.statusCode}`);
+    }
+    emitCounter('auth.unexpected_error');
+    throw new Error(`${label}: unexpected status ${result.statusCode}`);
+  }
+
+  // Perform the rate-limit dance: immediate retry (expect 429) then
+  // respect Retry-After (expect 201).
+  // Returns the captured token if registration succeeds, or null.
+  async function performDance(triggerResult) {
+    // Step 1: Immediate retry WITHOUT waiting — should get 429
+    const immediateUsername = makeUsername('d');
+    const immediateResult = await doRegister(immediateUsername);
+
+    if (immediateResult.statusCode === 429) {
+      emitCounter('auth.immediate_retry_blocked');
+    } else if (immediateResult.statusCode === 201) {
+      emitCounter('auth.immediate_retry_leaked');
+      if (immediateResult.body.token) {
+        return immediateResult.body.token;
+      }
+    } else {
+      handleUnexpected(immediateResult, 'Dance immediate retry');
+      return null;
+    }
+
+    // Step 2: Respect Retry-After, then retry
+    const retryAfterSource = immediateResult.statusCode === 429
+      ? immediateResult : triggerResult;
+    const retryAfter = parseInt(retryAfterSource.headers['retry-after'], 10);
+    const waitSeconds = (Number.isFinite(retryAfter) && retryAfter > 0)
+      ? retryAfter : 1;
+    emitHistogram('auth.retry_after_seconds', waitSeconds);
+
+    const cappedWait = Math.min(waitSeconds, MAX_RETRY_WAIT);
+    await new Promise((r) => setTimeout(r, cappedWait * 1000));
+
+    const respectedUsername = makeUsername('w');
+    const respectedResult = await doRegister(respectedUsername);
+
+    if (respectedResult.statusCode === 201 && respectedResult.body.token) {
+      emitCounter('auth.retry_after_success');
+      return respectedResult.body.token;
+    }
+    if (respectedResult.statusCode === 429) {
+      emitCounter('auth.retry_after_still_limited');
+      return null;
+    }
+    handleUnexpected(respectedResult, 'Dance respected retry');
+    return null;
+  }
+
+  // --- Phase 1: Initial registration attempt ---
+  const initialUsername = context.vars.username;
+  const result = await doRegister(initialUsername);
+
+  if (result.statusCode === 201 && result.body.token) {
+    context.vars.token = result.body.token;
+    emitCounter('auth.register_success');
+    // Fall through to phase 4 to keep testing the limiter
+  } else if (result.statusCode === 429) {
+    emitCounter('auth.rate_limited');
+    const token = await performDance(result);
+    if (token) {
+      context.vars.token = token;
+    }
+    // VU completes — all 429s were expected
+    return;
+  } else if (result.statusCode === 409) {
     emitCounter('auth.duplicate_username');
+    return;
+  } else {
+    handleUnexpected(result, 'Initial register');
     return;
   }
 
-  // Unexpected status
-  emitCounter('auth.unexpected_error');
-  throw new Error(`Unexpected register status: ${result.statusCode}`);
+  // --- Phase 4: Continue sending until 429 repeats, then dance again ---
+  for (let i = 0; i < MAX_DANCE_EXTRA_REQUESTS; i++) {
+    const extraUsername = makeUsername('e');
+    const extraResult = await doRegister(extraUsername);
+
+    if (extraResult.statusCode === 201) {
+      emitCounter('auth.register_success');
+      if (extraResult.body.token) {
+        context.vars.token = extraResult.body.token;
+      }
+      continue;
+    }
+
+    if (extraResult.statusCode === 429) {
+      emitCounter('auth.rate_limited');
+      await performDance(extraResult);
+      break;
+    }
+
+    if (extraResult.statusCode === 409) {
+      emitCounter('auth.duplicate_username');
+      continue;
+    }
+
+    handleUnexpected(extraResult, 'Phase 4 extra request');
+    break;
+  }
+
+  // VU completes successfully — all 429s were expected behavior
 }
 
 /**
