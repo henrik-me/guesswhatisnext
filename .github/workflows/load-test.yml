@@ -66,7 +66,7 @@ jobs:
 
           # Wait for the server to be ready (up to 30s)
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+            if curl -sf http://localhost:3000/healthz > /dev/null 2>&1; then
               echo "Server is ready"
               exit 0
             fi
@@ -76,7 +76,7 @@ jobs:
           exit 1
         env:
           PORT: 3000
-          DATABASE_URL: ':memory:'
+          GWN_DB_PATH: ':memory:'
 
       - name: Determine test suite
         id: suite
@@ -84,10 +84,14 @@ jobs:
           SUITE="${{ inputs.test_suite || 'all' }}"
           echo "suite=$SUITE" >> "$GITHUB_OUTPUT"
 
+      - name: Create reports directory
+        run: mkdir -p reports
+
       - name: Run API load tests
         if: steps.suite.outputs.suite == 'api' || steps.suite.outputs.suite == 'all'
         run: |
           npx artillery run \
+            --target "${{ steps.target.outputs.url }}" \
             --output reports/api-stress-report.json \
             tests/load/api-stress.yml
         env:
@@ -97,6 +101,7 @@ jobs:
         if: steps.suite.outputs.suite == 'websocket' || steps.suite.outputs.suite == 'all'
         run: |
           npx artillery run \
+            --target "${{ steps.target.outputs.url }}" \
             --output reports/websocket-stress-report.json \
             tests/load/websocket-stress.yml
         env:
