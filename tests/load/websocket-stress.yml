@@ -1,0 +1,59 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - name: "Ramp up"
+      duration: 30
+      arrivalRate: 1
+      rampTo: 5
+    - name: "Sustained load"
+      duration: 60
+      arrivalRate: 5
+    - name: "Ramp down"
+      duration: 10
+      arrivalRate: 5
+      rampTo: 1
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  processor: "./ws-helpers.js"
+
+before:
+  flow:
+    - function: "setupUsers"
+
+after:
+  flow:
+    - function: "cleanupUserPool"
+
+scenarios:
+  - name: "WebSocket connection and room join"
+    engine: ws
+    flow:
+      - function: "registerAndGetToken"
+      - function: "createMatchRoom"
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 1
+      - send:
+          payload: '{"type":"join","roomCode":"{{ roomCode }}"}'
+      - think: 3
+      - close: true
+
+  - name: "WebSocket connect-disconnect cycle"
+    engine: ws
+    flow:
+      - function: "registerAndGetToken"
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 2
+      - close: true
+      - think: 1
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 1
+      - close: true
+      - think: 1
+      - connect:
+          target: "{{ wsTarget }}/ws?token={{ token }}"
+      - think: 1
+      - close: true

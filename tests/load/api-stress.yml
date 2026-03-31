@@ -1,0 +1,115 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - name: "Ramp up"
+      duration: 30
+      arrivalRate: 1
+      rampTo: 10
+    - name: "Sustained load"
+      duration: 60
+      arrivalRate: 10
+    - name: "Ramp down"
+      duration: 10
+      arrivalRate: 10
+      rampTo: 1
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  plugins:
+    ensure:
+      thresholds:
+        - http.response_time.p95: 500
+  processor: "./helpers.js"
+
+before:
+  flow:
+    - function: "setupUsers"
+
+after:
+  flow:
+    - function: "cleanupUserPool"
+
+scenarios:
+  - name: "Auth flow — register"
+    weight: 10
+    flow:
+      - function: "generateUniqueUser"
+      - post:
+          url: "/api/auth/register"
+          json:
+            username: "{{ username }}"
+            password: "{{ password }}"
+          capture:
+            - json: "$.token"
+              as: "token"
+          expect:
+            - statusCode:
+                - 201
+                - 429
+      - think: 1
+
+  - name: "Score submission burst"
+    weight: 30
+    flow:
+      - function: "assignUser"
+      - loop:
+          - post:
+              url: "/api/scores"
+              headers:
+                Authorization: "Bearer {{ token }}"
+              json:
+                mode: "freeplay"
+                score: "{{ $randomNumber(50, 500) }}"
+                correctCount: "{{ $randomNumber(3, 10) }}"
+                totalRounds: 10
+                bestStreak: "{{ $randomNumber(1, 8) }}"
+              expect:
+                - statusCode: 201
+          - think: 1
+        count: 3
+
+  - name: "Leaderboard reads"
+    weight: 35
+    flow:
+      - function: "assignUser"
+      - loop:
+          - get:
+              url: "/api/scores/leaderboard"
+              headers:
+                Authorization: "Bearer {{ token }}"
+              expect:
+                - statusCode: 200
+          - get:
+              url: "/api/scores/leaderboard?mode=freeplay&period=weekly"
+              headers:
+                Authorization: "Bearer {{ token }}"
+              expect:
+                - statusCode: 200
+          - think: 1
+        count: 5
+
+  - name: "Puzzle fetching"
+    weight: 25
+    flow:
+      - function: "assignUser"
+      - loop:
+          - get:
+              url: "/api/puzzles"
+              headers:
+                Authorization: "Bearer {{ token }}"
+              expect:
+                - statusCode: 200
+          - get:
+              url: "/api/puzzles?difficulty=1"
+              headers:
+                Authorization: "Bearer {{ token }}"
+              expect:
+                - statusCode: 200
+          - get:
+              url: "/api/puzzles?difficulty=2"
+              headers:
+                Authorization: "Bearer {{ token }}"
+              expect:
+                - statusCode: 200
+          - think: 1
+        count: 3
