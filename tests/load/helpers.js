@@ -107,8 +107,9 @@ function loadUserPool() {
  * bypassing the HTTP rate limiter entirely. Persists tokens to a JSON file
  * so scenario workers can access the pool.
  *
- * Requires env vars: GWN_DB_PATH (path to the server's SQLite DB) and
- * JWT_SECRET (must match the running server's secret).
+ * Requires env var: JWT_SECRET (must match the running server's secret).
+ * Optional env var: GWN_DB_PATH (overrides the default SQLite DB path,
+ * which defaults to `data/game.db`).
  */
 async function setupUsers(context, _events, done) {
   const setupTimeoutMs =
@@ -182,7 +183,7 @@ async function setupUsers(context, _events, done) {
     // the tokens would be signed with the local secret and fail against it.
     const { hostname } = new URL(baseUrl);
     const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-    if (!isLocal && !process.env.LOAD_TEST_ALLOW_REMOTE_SEED) {
+    if (!isLocal && process.env.LOAD_TEST_ALLOW_REMOTE_SEED !== '1') {
       const err = new Error(
         `[setup] LOAD_TEST_TARGET (${baseUrl}) does not point to localhost. ` +
         'Direct DB seeding only works when the test runner shares the server\'s ' +
