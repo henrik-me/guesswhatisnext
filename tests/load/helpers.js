@@ -177,7 +177,23 @@ async function setupUsers(context, _events, done) {
       throw err;
     }
 
-    // Direct DB seeding — bypasses HTTP rate limits entirely
+    // Direct DB seeding — bypasses HTTP rate limits entirely.
+    // Guard: refuse to seed if the target looks like a remote server, since
+    // the tokens would be signed with the local secret and fail against it.
+    const { hostname } = new URL(baseUrl);
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+    if (!isLocal && !process.env.LOAD_TEST_ALLOW_REMOTE_SEED) {
+      const err = new Error(
+        `[setup] LOAD_TEST_TARGET (${baseUrl}) does not point to localhost. ` +
+        'Direct DB seeding only works when the test runner shares the server\'s ' +
+        'DB and JWT_SECRET. Set LOAD_TEST_ALLOW_REMOTE_SEED=1 to override, or ' +
+        'run the load tests inside the same environment as the server.',
+      );
+      console.error(err.message);
+      if (typeof done === 'function') return done(err);
+      throw err;
+    }
+
     const Database = require('better-sqlite3');
     const bcrypt = require('bcryptjs');
     const jwt = require('jsonwebtoken');
