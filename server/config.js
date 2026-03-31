@@ -14,6 +14,8 @@ const config = {
   JWT_SECRET: process.env.JWT_SECRET || (isProduction ? '' : 'gwn-dev-secret-change-in-production'),
   SYSTEM_API_KEY: process.env.SYSTEM_API_KEY || (isProduction ? '' : 'gwn-dev-system-key'),
   GWN_DB_PATH: process.env.GWN_DB_PATH || path.join(__dirname, '..', 'data', 'game.db'),
+  DB_BACKEND: process.env.DATABASE_URL ? 'mssql' : 'sqlite',
+  DATABASE_URL: process.env.DATABASE_URL || null,
 };
 
 /**
