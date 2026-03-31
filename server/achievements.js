@@ -2,7 +2,7 @@
  * Achievement definitions and unlock logic.
  */
 
-const { getDb } = require('./db/connection');
+const { getDbAdapter } = require('./db');
 
 /** All achievement definitions. */
 const ACHIEVEMENTS = [
@@ -95,14 +95,10 @@ const ACHIEVEMENTS = [
 /**
  * Seed achievements into the database if the table is empty.
  */
-function seedAchievements() {
-  const db = getDb();
-  const count = db.prepare('SELECT COUNT(*) as c FROM achievements').get().c;
-  if (count > 0) return;
-
-  const insert = db.prepare(
-    'INSERT INTO achievements (id, name, description, icon, category, requirement) VALUES (?, ?, ?, ?, ?, ?)'
-  );
+async function seedAchievements() {
+  const db = await getDbAdapter();
+  const row = await db.get('SELECT COUNT(*) as c FROM achievements');
+  if (row.c > 0) return;
 
   const descriptions = {
     'first-game': 'Play your first game',
@@ -119,12 +115,14 @@ function seedAchievements() {
     'explorer': 'Play puzzles from 5 different categories',
   };
 
-  const insertMany = db.transaction(() => {
+  await db.transaction(async (tx) => {
     for (const a of ACHIEVEMENTS) {
-      insert.run(a.id, a.name, descriptions[a.id], a.icon, a.category, a.requirement);
+      await tx.run(
+        'INSERT INTO achievements (id, name, description, icon, category, requirement) VALUES (?, ?, ?, ?, ?, ?)',
+        [a.id, a.name, descriptions[a.id], a.icon, a.category, a.requirement]
+      );
     }
   });
-  insertMany();
   console.log('🏅 Achievements seeded');
 }
 
@@ -133,18 +131,18 @@ function seedAchievements() {
  *
  * @param {number} userId
  * @param {object} context - { score, correctCount, totalRounds, bestStreak, mode, isWin, fastestAnswerMs }
- * @returns {Array} Newly unlocked achievements
+ * @returns {Promise<Array>} Newly unlocked achievements
  */
-function checkAndUnlockAchievements(userId, context) {
-  const db = getDb();
+async function checkAndUnlockAchievements(userId, context) {
+  const db = await getDbAdapter();
 
   // Get achievements not yet unlocked by this user
-  const locked = db.prepare(`
+  const locked = await db.all(`
     SELECT a.* FROM achievements a
     WHERE a.id NOT IN (
       SELECT achievement_id FROM user_achievements WHERE user_id = ?
     )
-  `).all(userId);
+  `, [userId]);
 
   if (locked.length === 0) return [];
 
@@ -156,8 +154,8 @@ function checkAndUnlockAchievements(userId, context) {
 
     switch (req.type) {
       case 'games_played': {
-        const count = db.prepare('SELECT COUNT(*) as c FROM scores WHERE user_id = ?').get(userId).c;
-        met = count >= req.threshold;
+        const row = await db.get('SELECT COUNT(*) as c FROM scores WHERE user_id = ?', [userId]);
+        met = row.c >= req.threshold;
         break;
       }
       case 'score': {
@@ -173,20 +171,21 @@ function checkAndUnlockAchievements(userId, context) {
         break;
       }
       case 'daily_count': {
-        const count = db.prepare(
-          "SELECT COUNT(*) as c FROM scores WHERE user_id = ? AND mode = 'daily'"
-        ).get(userId).c;
-        met = count >= req.threshold;
+        const row = await db.get(
+          "SELECT COUNT(*) as c FROM scores WHERE user_id = ? AND mode = 'daily'",
+          [userId]
+        );
+        met = row.c >= req.threshold;
         break;
       }
       case 'mp_wins': {
-        const wins = db.prepare(`
+        const row = await db.get(`
           SELECT COUNT(*) as c FROM match_players mp
           JOIN matches m ON mp.match_id = m.id
           WHERE mp.user_id = ? AND m.status = 'finished'
             AND mp.score = (SELECT MAX(mp2.score) FROM match_players mp2 WHERE mp2.match_id = mp.match_id)
-        `).get(userId).c;
-        met = wins >= req.threshold;
+        `, [userId]);
+        met = row.c >= req.threshold;
         break;
       }
       case 'fast_answer': {
@@ -194,10 +193,8 @@ function checkAndUnlockAchievements(userId, context) {
         break;
       }
       case 'categories_played': {
-        // Count distinct categories from puzzle data in scores
-        // We track this via the number of distinct game sessions (approximation)
-        const count = db.prepare('SELECT COUNT(*) as c FROM scores WHERE user_id = ?').get(userId).c;
-        met = count >= req.threshold;
+        const row = await db.get('SELECT COUNT(*) as c FROM scores WHERE user_id = ?', [userId]);
+        met = row.c >= req.threshold;
         break;
       }
       default:
@@ -211,15 +208,14 @@ function checkAndUnlockAchievements(userId, context) {
 
   // Insert newly unlocked achievements
   if (newlyUnlocked.length > 0) {
-    const insert = db.prepare(
-      'INSERT OR IGNORE INTO user_achievements (user_id, achievement_id) VALUES (?, ?)'
-    );
-    const insertAll = db.transaction(() => {
+    await db.transaction(async (tx) => {
       for (const a of newlyUnlocked) {
-        insert.run(userId, a.id);
+        await tx.run(
+          'INSERT OR IGNORE INTO user_achievements (user_id, achievement_id) VALUES (?, ?)',
+          [userId, a.id]
+        );
       }
     });
-    insertAll();
   }
 
   return newlyUnlocked.map(a => ({

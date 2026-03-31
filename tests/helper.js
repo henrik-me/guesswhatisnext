@@ -50,6 +50,9 @@ async function setup() {
   const result = createServer();
   server = result.server;
 
+  // Wait for async DB initialization to complete
+  await waitForDbInit();
+
   // Listen on port 0 = OS-assigned random port (no conflicts)
   await new Promise((resolve) => {
     server.listen(0, () => resolve());
@@ -58,13 +61,25 @@ async function setup() {
   agent = supertest(server);
 }
 
+/** Wait for the database adapter to be initialized (async init in createServer). */
+async function waitForDbInit(timeoutMs = 10000) {
+  const { isAdapterInitialized } = require('../server/db');
+  const start = Date.now();
+  while (!isAdapterInitialized()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error('Database initialization timed out');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 /** Shut down server and clean up temp DB. */
 async function teardown() {
   if (server) {
     // Close DB first
     try {
-      const { closeDb } = require('../server/db/connection');
-      closeDb();
+      const { closeDbAdapter } = require('../server/db');
+      await closeDbAdapter();
     } catch { /* ignore */ }
 
     await new Promise((resolve, reject) => {

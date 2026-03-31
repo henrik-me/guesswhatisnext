@@ -3,150 +3,168 @@
  */
 
 const express = require('express');
-const { getDb } = require('../db/connection');
+const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { checkAndUnlockAchievements } = require('../achievements');
 
 const router = express.Router();
 
 /** POST /api/scores — submit a game score (requires auth) */
-router.post('/', requireAuth, (req, res) => {
-  const { mode, score, correctCount, totalRounds, bestStreak } = req.body;
+router.post('/', requireAuth, async (req, res, next) => {
+  try {
+    const { mode, score, correctCount, totalRounds, bestStreak } = req.body;
 
-  if (!mode || score == null) {
-    return res.status(400).json({ error: 'mode and score required' });
+    if (!mode || score == null) {
+      return res.status(400).json({ error: 'mode and score required' });
+    }
+    if (!['freeplay', 'daily'].includes(mode)) {
+      return res.status(400).json({ error: 'mode must be freeplay or daily' });
+    }
+
+    const db = await getDbAdapter();
+
+    // Verify user exists in DB (JWT may reference a deleted/old user)
+    const userExists = await db.get('SELECT 1 FROM users WHERE id = ?', [req.user.id]);
+    if (!userExists) {
+      return res.status(401).json({ error: 'User not found — please log in again' });
+    }
+
+    const result = await db.run(
+      `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.user.id, mode, score, correctCount || 0, totalRounds || 0, bestStreak || 0]
+    );
+
+    // Check achievements
+    const context = {
+      score: score || 0,
+      correctCount: correctCount || 0,
+      totalRounds: totalRounds || 0,
+      bestStreak: bestStreak || 0,
+      mode,
+      isWin: false,
+      fastestAnswerMs: req.body.fastestAnswerMs || null,
+    };
+    const newAchievements = await checkAndUnlockAchievements(req.user.id, context);
+
+    res.status(201).json({ id: result.lastId, newAchievements });
+  } catch (err) {
+    next(err);
   }
-  if (!['freeplay', 'daily'].includes(mode)) {
-    return res.status(400).json({ error: 'mode must be freeplay or daily' });
-  }
-
-  const db = getDb();
-
-  // Verify user exists in DB (JWT may reference a deleted/old user)
-  const userExists = db.prepare('SELECT 1 FROM users WHERE id = ?').get(req.user.id);
-  if (!userExists) {
-    return res.status(401).json({ error: 'User not found — please log in again' });
-  }
-
-  const result = db.prepare(
-    `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(req.user.id, mode, score, correctCount || 0, totalRounds || 0, bestStreak || 0);
-
-  // Check achievements
-  const context = {
-    score: score || 0,
-    correctCount: correctCount || 0,
-    totalRounds: totalRounds || 0,
-    bestStreak: bestStreak || 0,
-    mode,
-    isWin: false,
-    fastestAnswerMs: req.body.fastestAnswerMs || null,
-  };
-  const newAchievements = checkAndUnlockAchievements(req.user.id, context);
-
-  res.status(201).json({ id: result.lastInsertRowid, newAchievements });
 });
 
 /** GET /api/scores/leaderboard?mode=freeplay&period=all|weekly|daily&limit=20 */
-router.get('/leaderboard', requireAuth, (req, res) => {
-  const { mode = 'freeplay', period = 'all', limit = 20 } = req.query;
+router.get('/leaderboard', requireAuth, async (req, res, next) => {
+  try {
+    const { mode = 'freeplay', period = 'all', limit = 20 } = req.query;
 
-  let dateFilter = '';
-  if (period === 'daily') {
-    dateFilter = "AND date(s.played_at) = date('now')";
-  } else if (period === 'weekly') {
-    dateFilter = "AND s.played_at >= datetime('now', '-7 days')";
+    let dateFilter = '';
+    if (period === 'daily') {
+      dateFilter = "AND date(s.played_at) = date('now')";
+    } else if (period === 'weekly') {
+      dateFilter = "AND s.played_at >= datetime('now', '-7 days')";
+    }
+
+    const db = await getDbAdapter();
+    const rows = await db.all(`
+      SELECT s.id, s.score, s.correct_count, s.total_rounds, s.best_streak, s.played_at,
+             u.id as user_id, u.username
+      FROM scores s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.mode = ? ${dateFilter}
+      ORDER BY s.score DESC
+      LIMIT ?
+    `, [mode, Math.min(Number(limit), 100)]);
+
+    // Add rank and highlight current user
+    const leaderboard = rows.map((row, i) => ({
+      rank: i + 1,
+      username: row.username,
+      score: row.score,
+      correctCount: row.correct_count,
+      totalRounds: row.total_rounds,
+      bestStreak: row.best_streak,
+      playedAt: row.played_at,
+      isCurrentUser: req.user?.id === row.user_id,
+    }));
+
+    res.json({ leaderboard, mode, period });
+  } catch (err) {
+    next(err);
   }
-
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT s.id, s.score, s.correct_count, s.total_rounds, s.best_streak, s.played_at,
-           u.id as user_id, u.username
-    FROM scores s
-    JOIN users u ON s.user_id = u.id
-    WHERE s.mode = ? ${dateFilter}
-    ORDER BY s.score DESC
-    LIMIT ?
-  `).all(mode, Math.min(Number(limit), 100));
-
-  // Add rank and highlight current user
-  const leaderboard = rows.map((row, i) => ({
-    rank: i + 1,
-    username: row.username,
-    score: row.score,
-    correctCount: row.correct_count,
-    totalRounds: row.total_rounds,
-    bestStreak: row.best_streak,
-    playedAt: row.played_at,
-    isCurrentUser: req.user?.id === row.user_id,
-  }));
-
-  res.json({ leaderboard, mode, period });
 });
 
 /** GET /api/scores/leaderboard/multiplayer?period=all|weekly|daily&limit=20 */
-router.get('/leaderboard/multiplayer', requireAuth, (req, res) => {
-  const { period = 'all', limit = 20 } = req.query;
+router.get('/leaderboard/multiplayer', requireAuth, async (req, res, next) => {
+  try {
+    const { period = 'all', limit = 20 } = req.query;
 
-  let dateFilter = '';
-  if (period === 'daily') {
-    dateFilter = "AND date(m.finished_at) = date('now')";
-  } else if (period === 'weekly') {
-    dateFilter = "AND m.finished_at >= datetime('now', '-7 days')";
+    let dateFilter = '';
+    if (period === 'daily') {
+      dateFilter = "AND date(m.finished_at) = date('now')";
+    } else if (period === 'weekly') {
+      dateFilter = "AND m.finished_at >= datetime('now', '-7 days')";
+    }
+
+    const db = await getDbAdapter();
+    const rows = await db.all(`
+      SELECT u.id as user_id, u.username,
+             COUNT(DISTINCT mp.match_id) as matches_played,
+             SUM(mp.score) as total_score,
+             ROUND(AVG(mp.score), 0) as avg_score,
+             SUM(CASE WHEN mp.score = (
+               SELECT MAX(mp2.score) FROM match_players mp2 WHERE mp2.match_id = mp.match_id
+             ) THEN 1 ELSE 0 END) as wins
+      FROM match_players mp
+      JOIN users u ON mp.user_id = u.id
+      JOIN matches m ON mp.match_id = m.id
+      WHERE m.status = 'finished' ${dateFilter}
+      GROUP BY u.id
+      ORDER BY wins DESC, total_score DESC
+      LIMIT ?
+    `, [Math.min(Number(limit), 100)]);
+
+    const leaderboard = rows.map((row, i) => ({
+      rank: i + 1,
+      username: row.username,
+      wins: row.wins,
+      matchesPlayed: row.matches_played,
+      winRate: row.matches_played > 0 ? Math.round((row.wins / row.matches_played) * 100) : 0,
+      totalScore: row.total_score,
+      avgScore: row.avg_score,
+      isCurrentUser: req.user?.id === row.user_id,
+    }));
+
+    res.json({ leaderboard, mode: 'multiplayer', period });
+  } catch (err) {
+    next(err);
   }
-
-  const db = getDb();
-  const rows = db.prepare(`
-    SELECT u.id as user_id, u.username,
-           COUNT(DISTINCT mp.match_id) as matches_played,
-           SUM(mp.score) as total_score,
-           ROUND(AVG(mp.score), 0) as avg_score,
-           SUM(CASE WHEN mp.score = (
-             SELECT MAX(mp2.score) FROM match_players mp2 WHERE mp2.match_id = mp.match_id
-           ) THEN 1 ELSE 0 END) as wins
-    FROM match_players mp
-    JOIN users u ON mp.user_id = u.id
-    JOIN matches m ON mp.match_id = m.id
-    WHERE m.status = 'finished' ${dateFilter}
-    GROUP BY u.id
-    ORDER BY wins DESC, total_score DESC
-    LIMIT ?
-  `).all(Math.min(Number(limit), 100));
-
-  const leaderboard = rows.map((row, i) => ({
-    rank: i + 1,
-    username: row.username,
-    wins: row.wins,
-    matchesPlayed: row.matches_played,
-    winRate: row.matches_played > 0 ? Math.round((row.wins / row.matches_played) * 100) : 0,
-    totalScore: row.total_score,
-    avgScore: row.avg_score,
-    isCurrentUser: req.user?.id === row.user_id,
-  }));
-
-  res.json({ leaderboard, mode: 'multiplayer', period });
 });
 
 /** GET /api/scores/me — get current user's scores */
-router.get('/me', requireAuth, (req, res) => {
-  const db = getDb();
-  const scores = db.prepare(
-    `SELECT id, mode, score, correct_count, total_rounds, best_streak, played_at
-     FROM scores WHERE user_id = ? ORDER BY played_at DESC LIMIT 50`
-  ).all(req.user.id);
+router.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const db = await getDbAdapter();
+    const scores = await db.all(
+      `SELECT id, mode, score, correct_count, total_rounds, best_streak, played_at
+       FROM scores WHERE user_id = ? ORDER BY played_at DESC LIMIT 50`,
+      [req.user.id]
+    );
 
-  const stats = db.prepare(`
-    SELECT mode,
-           COUNT(*) as games_played,
-           MAX(score) as high_score,
-           ROUND(AVG(score), 0) as avg_score,
-           MAX(best_streak) as best_streak
-    FROM scores WHERE user_id = ?
-    GROUP BY mode
-  `).all(req.user.id);
+    const stats = await db.all(`
+      SELECT mode,
+             COUNT(*) as games_played,
+             MAX(score) as high_score,
+             ROUND(AVG(score), 0) as avg_score,
+             MAX(best_streak) as best_streak
+      FROM scores WHERE user_id = ?
+      GROUP BY mode
+    `, [req.user.id]);
 
-  res.json({ scores, stats });
+    res.json({ scores, stats });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

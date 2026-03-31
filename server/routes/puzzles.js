@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { getDb } = require('../db/connection');
+const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 
 /** Parse DB row JSON fields back to arrays. */
@@ -19,32 +19,36 @@ function parsePuzzleRow(row) {
 }
 
 /** GET /api/puzzles — get all active puzzles (requires auth). */
-router.get('/', requireAuth, (req, res) => {
-  const db = getDb();
-  const { category, difficulty } = req.query;
+router.get('/', requireAuth, async (req, res, next) => {
+  try {
+    const db = await getDbAdapter();
+    const { category, difficulty } = req.query;
 
-  let sql = 'SELECT * FROM puzzles WHERE active = 1';
-  const params = [];
+    let sql = 'SELECT * FROM puzzles WHERE active = 1';
+    const params = [];
 
-  if (category) {
-    sql += ' AND category = ?';
-    params.push(category);
-  }
-  if (difficulty) {
-    const diff = parseInt(difficulty, 10);
-    if (isNaN(diff) || diff < 1 || diff > 3) {
-      return res.status(400).json({ error: 'Difficulty must be 1, 2, or 3' });
+    if (category) {
+      sql += ' AND category = ?';
+      params.push(category);
     }
-    sql += ' AND difficulty = ?';
-    params.push(diff);
+    if (difficulty) {
+      const diff = parseInt(difficulty, 10);
+      if (isNaN(diff) || diff < 1 || diff > 3) {
+        return res.status(400).json({ error: 'Difficulty must be 1, 2, or 3' });
+      }
+      sql += ' AND difficulty = ?';
+      params.push(diff);
+    }
+
+    sql += ' ORDER BY category, difficulty, id';
+
+    const rows = await db.all(sql, params);
+    const puzzles = rows.map(parsePuzzleRow);
+
+    res.json(puzzles);
+  } catch (err) {
+    next(err);
   }
-
-  sql += ' ORDER BY category, difficulty, id';
-
-  const rows = db.prepare(sql).all(...params);
-  const puzzles = rows.map(parsePuzzleRow);
-
-  res.json(puzzles);
 });
 
 module.exports = router;
