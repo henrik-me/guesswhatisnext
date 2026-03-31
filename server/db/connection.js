@@ -80,12 +80,9 @@ function getDb({ busyTimeout = 30000 } = {}) {
         }
       }
     }
-    // NOTE: Azure Files (SMB) doesn't support POSIX file locking (fcntl).
-    // Every lock attempt returns SQLITE_BUSY regardless of contention, and
-    // better-sqlite3 doesn't support URI filenames or VFS selection.
-    // The deploy workflow sets GWN_DB_PATH to a local (non-SMB) path so
+    // In Azure deployments, configure GWN_DB_PATH to a local (non-SMB) path so
     // SQLite operates on the container's own filesystem where locking works.
-    // The Azure Files mount is retained for future backup/restore workflows.
+    // The Azure Files mount can then be used for backup/restore workflows.
     db = new Database(DB_PATH);
     const bt = parseInt(busyTimeout, 10);
     db.pragma(`busy_timeout = ${Number.isNaN(bt) ? 30000 : Math.max(0, bt)}`);
