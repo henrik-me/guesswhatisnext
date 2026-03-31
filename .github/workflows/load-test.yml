@@ -26,6 +26,9 @@ concurrency:
   group: load-test
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   load-test:
     name: Artillery Load Tests
@@ -64,7 +67,7 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
         env:
-          INPUT_TARGET_URL: ${{ inputs.target_url }}
+          INPUT_TARGET_URL: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_url) || '' }}
 
       - name: Start local server
         if: steps.target.outputs.local == 'true'
