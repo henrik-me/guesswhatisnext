@@ -85,8 +85,8 @@ npx artillery run tests/load/api-stress.yml --target https://your-staging-url.co
 | `LOAD_TEST_TARGET` | `http://localhost:3000` | Server URL for JS helper HTTP calls (user pool setup). Use `--target` to also override Artillery's config target |
 | `LOAD_TEST_USER_COUNT` | `20` | Number of users to pre-seed in setup phase |
 | `LOAD_TEST_SETUP_TIMEOUT_MS` | `300000` (5 min) | Max time for user pool setup before aborting |
-| `GWN_DB_PATH` | `data/game.db` | Path to the server's SQLite database (must match the running server) |
-| `JWT_SECRET` | *(required)* | JWT signing secret (must match the running server) |
+| `GWN_DB_PATH` | `data/game.db` | Path to the server's SQLite database for **local seeding only**. Must point to the same file the running server uses. Not applicable for remote targets. |
+| `JWT_SECRET` | *(required for local DB seeding)* | JWT signing secret matching the running server. Only needed when seeding locally via `GWN_DB_PATH`. |
 
 ## Test Scenarios
 
@@ -119,14 +119,23 @@ npx artillery run tests/load/api-stress.yml --target https://your-staging-url.co
 ## Rate Limiting & User Pool
 
 The server applies per-IP rate limiting on auth endpoints (5 registrations/min,
-10 logins/min). To avoid slow HTTP-based registration, the `before` hook seeds
-users **directly into the SQLite database** using `better-sqlite3` and signs
-JWTs locally with `jsonwebtoken`. This completes in under 1 second (vs ~4
-minutes with HTTP batching).
+10 logins/min). For **local/dev or same-host runs** where the load test process
+can access the server's SQLite database file and `JWT_SECRET`, the `before` hook
+seeds users **directly into the database** using `better-sqlite3` and signs JWTs
+locally with `jsonwebtoken`. This completes in under 1 second (vs ~4 minutes
+with HTTP batching).
 
 The setup requires two additional env vars:
-- `GWN_DB_PATH` — path to the server's SQLite database file
-- `JWT_SECRET` — must match the running server's secret
+- `GWN_DB_PATH` — path to the server's SQLite database file, as seen from where
+  the load tests are running
+- `JWT_SECRET` — must match the running server's secret and be available to the
+  load test process
+
+For **remote/staging environments**, you typically cannot access the DB file or
+secret directly from your local machine. In those cases, either:
+- run the load tests **inside the same environment** (e.g., a container that has
+  access to the DB and `JWT_SECRET`), or
+- fall back to an environment-specific seeding job or admin endpoint
 
 Tokens are persisted to `.user-pool.json` and scenario VUs pick users from
 this pool in round-robin.

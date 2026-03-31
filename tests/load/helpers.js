@@ -195,12 +195,20 @@ async function setupUsers(context, _events, done) {
       throw err;
     }
 
+    if (!fs.existsSync(dbPath)) {
+      const err = new Error(
+        `[setup] Database file not found at ${dbPath} — start the server first to create it`,
+      );
+      console.error(err.message);
+      if (typeof done === 'function') return done(err);
+      throw err;
+    }
+
     console.log(`[setup] Seeding ${count} users directly into DB at ${dbPath}...`);
     const startTime = Date.now();
 
     const db = new Database(dbPath);
     db.pragma('busy_timeout = 5000');
-    db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
 
     try {
@@ -221,7 +229,7 @@ async function setupUsers(context, _events, done) {
           insertStmt.run(username, hash);
           const user = selectStmt.get(username);
           const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role || 'user' },
+            { id: user.id, username: user.username, role: 'user' },
             jwtSecret,
             { expiresIn: '7d' },
           );
