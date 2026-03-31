@@ -126,11 +126,11 @@ seeds users **directly into the database** using `better-sqlite3` and signs JWTs
 locally with `jsonwebtoken`. This completes in under 1 second (vs ~4 minutes
 with HTTP batching).
 
-The setup requires two additional env vars:
-- `GWN_DB_PATH` — path to the server's SQLite database file, as seen from where
-  the load tests are running
-- `JWT_SECRET` — must match the running server's secret and be available to the
-  load test process
+The setup uses the following env vars:
+- `JWT_SECRET` (required) — must match the running server's secret and be
+  available to the load test process
+- `GWN_DB_PATH` (optional) — override for the server's SQLite database file
+  path, as seen from where the load tests are running (defaults to `data/game.db`)
 
 For **remote/staging environments**, you typically cannot access the DB file or
 secret directly from your local machine. In those cases, either:
