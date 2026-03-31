@@ -54,10 +54,9 @@ jobs:
         id: target
         run: |
           if [ -n "$INPUT_TARGET_URL" ]; then
+            safe_url=$(printf '%s' "$INPUT_TARGET_URL" | sed -e 's/%/%25/g' -e 's/\r/%0D/g' -e 's/\n/%0A/g')
             {
-              echo 'url<<EOF'
-              echo "$INPUT_TARGET_URL"
-              echo 'EOF'
+              echo "url=$safe_url"
               echo 'local=false'
             } >> "$GITHUB_OUTPUT"
           else
