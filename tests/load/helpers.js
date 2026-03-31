@@ -162,8 +162,11 @@ async function setupUsers(context, _events, done) {
       const currentBase = getBaseUrl(context);
       const secretFingerprint = process.env.JWT_SECRET
         ? crypto.createHash('sha256').update(process.env.JWT_SECRET).digest('hex').slice(0, 8)
-        : '';
-      if (existing.baseUrl === currentBase && existing.secretHash === secretFingerprint) {
+        : null;
+      // Reuse pool if baseUrl matches AND either JWT_SECRET is unset (trust
+      // cached tokens) or its fingerprint matches what was used to sign them.
+      const secretOk = secretFingerprint === null || existing.secretHash === secretFingerprint;
+      if (existing.baseUrl === currentBase && secretOk) {
         console.log('[setup] User pool already exists for this target, skipping setup');
         if (typeof done === 'function') return done();
         return;
@@ -253,6 +256,11 @@ async function setupUsers(context, _events, done) {
           const username = `loadtest${String(i + 1).padStart(3, '0')}`;
           insertStmt.run(username, hash);
           const user = selectStmt.get(username);
+          if (!user) {
+            throw new Error(
+              `[setup] User ${username} not found after INSERT — schema mismatch or DB error`,
+            );
+          }
           if (user.role !== 'user') {
             throw new Error(
               `[setup] User ${username} exists with role '${user.role}' (expected 'user'). ` +
