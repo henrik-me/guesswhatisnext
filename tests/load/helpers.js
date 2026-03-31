@@ -15,6 +15,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const USER_POOL_FILE = path.join(__dirname, '.user-pool.json');
 const LOCK_FILE = path.join(__dirname, '.user-pool.lock');
@@ -159,12 +160,18 @@ async function setupUsers(context, _events, done) {
     if (fs.existsSync(USER_POOL_FILE)) {
       const existing = JSON.parse(fs.readFileSync(USER_POOL_FILE, 'utf8'));
       const currentBase = getBaseUrl(context);
-      if (existing.baseUrl === currentBase) {
+      const secretFingerprint = process.env.JWT_SECRET
+        ? crypto.createHash('sha256').update(process.env.JWT_SECRET).digest('hex').slice(0, 8)
+        : '';
+      if (existing.baseUrl === currentBase && existing.secretHash === secretFingerprint) {
         console.log('[setup] User pool already exists for this target, skipping setup');
         if (typeof done === 'function') return done();
         return;
       }
-      console.log(`[setup] Pool exists for ${existing.baseUrl} but target is ${currentBase}, recreating...`);
+      const reason = existing.baseUrl !== currentBase
+        ? `target changed (${existing.baseUrl} → ${currentBase})`
+        : 'JWT_SECRET changed';
+      console.log(`[setup] Pool stale: ${reason}, recreating...`);
     }
 
     const baseUrl = getBaseUrl(context);
@@ -273,7 +280,8 @@ async function setupUsers(context, _events, done) {
 
       // Persist tokens only (not passwords) with restrictive permissions
       // Write to temp file first, then rename for atomic visibility
-      const poolData = { baseUrl, users: pool };
+      const secretHash = crypto.createHash('sha256').update(jwtSecret).digest('hex').slice(0, 8);
+      const poolData = { baseUrl, secretHash, users: pool };
       const tmpFile = USER_POOL_FILE + '.tmp';
       fs.writeFileSync(tmpFile, JSON.stringify(poolData, null, 2), { mode: 0o600 });
       fs.renameSync(tmpFile, USER_POOL_FILE);
