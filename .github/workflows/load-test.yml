@@ -86,9 +86,9 @@ jobs:
 
       - name: Determine test suite
         id: suite
-        run: |
-          SUITE="${{ inputs.test_suite || 'all' }}"
-          echo "suite=$SUITE" >> "$GITHUB_OUTPUT"
+        run: echo "suite=${INPUT_SUITE:-all}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_SUITE: ${{ inputs.test_suite }}
 
       - name: Create reports directory
         run: mkdir -p reports
@@ -97,20 +97,22 @@ jobs:
         if: steps.suite.outputs.suite == 'api' || steps.suite.outputs.suite == 'all'
         run: |
           npx artillery run \
-            --target "${{ steps.target.outputs.url }}" \
+            --target "$TARGET_URL" \
             --output reports/api-stress-report.json \
             tests/load/api-stress.yml
         env:
+          TARGET_URL: ${{ steps.target.outputs.url }}
           LOAD_TEST_TARGET: ${{ steps.target.outputs.url }}
 
       - name: Run WebSocket load tests
         if: steps.suite.outputs.suite == 'websocket' || steps.suite.outputs.suite == 'all'
         run: |
           npx artillery run \
-            --target "${{ steps.target.outputs.url }}" \
+            --target "$TARGET_URL" \
             --output reports/websocket-stress-report.json \
             tests/load/websocket-stress.yml
         env:
+          TARGET_URL: ${{ steps.target.outputs.url }}
           LOAD_TEST_TARGET: ${{ steps.target.outputs.url }}
 
       - name: Generate HTML reports
@@ -127,8 +129,8 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Setting | Value |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---------|-------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Target | \`${{ steps.target.outputs.url }}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Suite | \`${{ steps.suite.outputs.suite }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Target | \`${TARGET_URL}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Suite | \`${TEST_SUITE}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Trigger | \`${{ github.event_name }}\` |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
@@ -181,6 +183,9 @@ jobs:
 
             echo "" >> "$GITHUB_STEP_SUMMARY"
           done
+        env:
+          TARGET_URL: ${{ steps.target.outputs.url }}
+          TEST_SUITE: ${{ steps.suite.outputs.suite }}
 
       - name: Upload Artillery reports
         if: always()
