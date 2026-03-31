@@ -82,9 +82,9 @@ npx artillery run tests/load/api-stress.yml --target https://your-staging-url.co
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `LOAD_TEST_TARGET` | `http://localhost:3000` | Server URL for JS helper HTTP calls (user pool setup). Use `--target` to also override Artillery's config target |
+| `LOAD_TEST_TARGET` | `http://localhost:3000` | Base URL for API/WS requests during load test scenarios. Also written into `.user-pool.json` for target validation. |
 | `LOAD_TEST_USER_COUNT` | `20` | Number of users to pre-seed in setup phase |
-| `LOAD_TEST_SETUP_TIMEOUT_MS` | `300000` (5 min) | Max time for user pool setup before aborting |
+| `LOAD_TEST_SETUP_TIMEOUT_MS` | `300000` (5 min) | Max time to wait for lock during concurrent setup (direct seeding itself completes in < 1s) |
 | `GWN_DB_PATH` | `data/game.db` | Path to the server's SQLite database for **local seeding only**. Must point to the same file the running server uses. Not applicable for remote targets. |
 | `JWT_SECRET` | *(required for local DB seeding)* | JWT signing secret matching the running server. Only needed when seeding locally via `GWN_DB_PATH`. |
 | `LOAD_TEST_ALLOW_REMOTE_SEED` | *(unset)* | Set to `1` to allow direct DB seeding when `LOAD_TEST_TARGET` is not localhost (e.g., in a shared Docker network). |

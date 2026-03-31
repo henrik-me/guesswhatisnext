@@ -245,6 +245,12 @@ async function setupUsers(context, _events, done) {
           const username = `loadtest${String(i + 1).padStart(3, '0')}`;
           insertStmt.run(username, hash);
           const user = selectStmt.get(username);
+          if (user.role !== 'user') {
+            throw new Error(
+              `[setup] User ${username} exists with role '${user.role}' (expected 'user'). ` +
+              'Aborting to avoid minting tokens for a non-load-test account.',
+            );
+          }
           const token = jwt.sign(
             { id: user.id, username: user.username, role: 'user' },
             jwtSecret,
