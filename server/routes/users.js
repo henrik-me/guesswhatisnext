@@ -29,7 +29,7 @@ router.put('/:id/role', requireSystem, (req, res) => {
   }
 
   const targetId = Number(req.params.id);
-  if (Number.isNaN(targetId) || targetId <= 0) {
+  if (Number.isNaN(targetId) || !Number.isInteger(targetId) || targetId <= 0) {
     return res.status(400).json({ error: 'Invalid user ID' });
   }
 

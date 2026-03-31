@@ -436,17 +436,17 @@
       </header>
 
       <div class="moderation-tabs" role="tablist">
-        <button class="btn btn-secondary active" data-mod-tab="submissions" role="tab" aria-selected="true">📝 Pending Submissions</button>
-        <button class="btn btn-secondary" data-mod-tab="users" role="tab" aria-selected="false">👥 User Management</button>
+        <button class="btn btn-secondary active" id="tab-submissions" data-mod-tab="submissions" role="tab" aria-selected="true" aria-controls="mod-submissions-panel">📝 Pending Submissions</button>
+        <button class="btn btn-secondary" id="tab-users" data-mod-tab="users" role="tab" aria-selected="false" aria-controls="mod-users-panel">👥 User Management</button>
       </div>
 
-      <div id="mod-submissions-panel" data-mod-panel="submissions">
+      <div id="mod-submissions-panel" data-mod-panel="submissions" role="tabpanel" aria-labelledby="tab-submissions">
         <div class="moderation-list" data-bind="moderation-list" aria-label="Pending submissions">
           <p class="moderation-loading">Loading submissions…</p>
         </div>
       </div>
 
-      <div id="mod-users-panel" data-mod-panel="users" style="display:none">
+      <div id="mod-users-panel" data-mod-panel="users" role="tabpanel" aria-labelledby="tab-users" style="display:none">
         <div class="moderation-list" data-bind="user-management-list" aria-label="User list">
           <p class="moderation-loading">Loading users…</p>
         </div>

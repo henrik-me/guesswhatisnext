@@ -168,10 +168,10 @@ function _initDbOnce() {
   }
 
   // Bootstrap: promote ADMIN_USERNAME to admin if set AND the system API key
-  // has been explicitly configured (not the dev default). This prevents a
-  // rogue registration from hijacking the configured username in dev.
+  // is explicitly configured to a non-default value. This prevents rogue
+  // registration from hijacking the configured username in dev.
   const adminUsername = process.env.ADMIN_USERNAME;
-  const keyExplicitlySet = !!process.env.SYSTEM_API_KEY;
+  const keyExplicitlySet = !!process.env.SYSTEM_API_KEY && process.env.SYSTEM_API_KEY !== 'gwn-dev-system-key';
   if (adminUsername && keyExplicitlySet) {
     const adminUser = database.prepare('SELECT id, role FROM users WHERE username = ?').get(adminUsername);
     if (adminUser && adminUser.role === 'user') {

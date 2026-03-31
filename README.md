@@ -97,9 +97,9 @@ npm run dev
 
 The first admin user must be bootstrapped. Two options:
 
-1. **Environment variable (recommended):** Set `ADMIN_USERNAME` to auto-promote a registered user to admin on server startup:
+1. **Environment variable (recommended):** Set both `SYSTEM_API_KEY` (to a non-default value) and `ADMIN_USERNAME` to auto-promote a registered user to admin on server startup:
    ```bash
-   ADMIN_USERNAME=myuser npm start
+   SYSTEM_API_KEY=my-secret-key ADMIN_USERNAME=myuser npm start
    ```
 2. **API key:** Use the system API key to promote a user via the admin API:
    ```bash
