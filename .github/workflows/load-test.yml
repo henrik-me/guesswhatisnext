@@ -51,11 +51,17 @@ jobs:
         id: target
         run: |
           if [ -n "${{ inputs.target_url }}" ]; then
-            echo "url=${{ inputs.target_url }}" >> "$GITHUB_OUTPUT"
-            echo "local=false" >> "$GITHUB_OUTPUT"
+            {
+              echo 'url<<EOF'
+              echo '${{ inputs.target_url }}'
+              echo 'EOF'
+              echo 'local=false'
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "url=http://localhost:3000" >> "$GITHUB_OUTPUT"
-            echo "local=true" >> "$GITHUB_OUTPUT"
+            {
+              echo 'url=http://localhost:3000'
+              echo 'local=true'
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Start local server
