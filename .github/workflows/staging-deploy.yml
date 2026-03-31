@@ -11,7 +11,7 @@ on:
 
 concurrency:
   group: staging-deploy
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 env:
   REGISTRY: ghcr.io
@@ -218,6 +218,17 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
+            # Check if container app is stopped and start it if needed
+            APP_STATE=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
+              --query "properties.runningStatus" -o tsv 2>/dev/null || echo "Unknown")
+            echo "Container app state: $APP_STATE"
+            if [ "$APP_STATE" != "Running" ]; then
+              echo "Container app is not running — starting it..."
+              az containerapp start --name gwn-staging --resource-group gwn-rg || true
+              echo "Waiting for container app to start..."
+              sleep 15
+            fi
+
             # Find the revision currently receiving traffic (not just the latest-created one)
             CURRENT_REV=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
               --query "properties.configuration.ingress.traffic[?weight > \`0\`] | [0].revisionName" -o tsv 2>/dev/null || echo "")
