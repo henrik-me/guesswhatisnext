@@ -167,9 +167,12 @@ function _initDbOnce() {
     console.log('🔑 System account seeded');
   }
 
-  // Auto-promote ADMIN_USERNAME to admin if configured
+  // Bootstrap: promote ADMIN_USERNAME to admin if set AND the system API key
+  // has been explicitly configured (not the dev default). This prevents a
+  // rogue registration from hijacking the configured username in dev.
   const adminUsername = process.env.ADMIN_USERNAME;
-  if (adminUsername) {
+  const keyExplicitlySet = !!process.env.SYSTEM_API_KEY;
+  if (adminUsername && keyExplicitlySet) {
     const adminUser = database.prepare('SELECT id, role FROM users WHERE username = ?').get(adminUsername);
     if (adminUser && adminUser.role === 'user') {
       database.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(adminUser.id);

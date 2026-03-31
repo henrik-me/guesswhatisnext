@@ -2322,17 +2322,17 @@ async function loadModerationSubmissions() {
       <div class="moderation-card" data-submission-id="${s.id}">
         <div class="mod-card-header">
           <span class="mod-badge mod-badge-${s.difficulty === 1 ? 'easy' : s.difficulty === 2 ? 'medium' : 'hard'}">${s.difficulty === 1 ? 'Easy' : s.difficulty === 2 ? 'Medium' : 'Hard'}</span>
-          <span class="mod-category">${escapeHtml(s.category)}</span>
-          <span class="mod-author">by ${escapeHtml(s.submitted_by)}</span>
+          <span class="mod-category">${escapeHTML(s.category)}</span>
+          <span class="mod-author">by ${escapeHTML(s.submitted_by)}</span>
         </div>
         <div class="mod-card-body">
-          <p><strong>Sequence:</strong> ${Array.isArray(s.sequence) ? s.sequence.map(escapeHtml).join(', ') : escapeHtml(String(s.sequence))}</p>
-          <p><strong>Answer:</strong> ${escapeHtml(String(s.answer))}</p>
-          <p><strong>Explanation:</strong> ${escapeHtml(s.explanation)}</p>
+          <p><strong>Sequence:</strong> ${Array.isArray(s.sequence) ? s.sequence.map(escapeHtml).join(', ') : escapeHTML(String(s.sequence))}</p>
+          <p><strong>Answer:</strong> ${escapeHTML(String(s.answer))}</p>
+          <p><strong>Explanation:</strong> ${escapeHTML(s.explanation)}</p>
         </div>
         <div class="mod-card-actions">
-          <button class="btn btn-approve" data-mod-action="approve" data-mod-id="${s.id}">✅ Approve</button>
-          <button class="btn btn-reject" data-mod-action="reject" data-mod-id="${s.id}">❌ Reject</button>
+          <button class="btn btn-approve" data-mod-action="approved" data-mod-id="${s.id}">✅ Approve</button>
+          <button class="btn btn-reject" data-mod-action="rejected" data-mod-id="${s.id}">❌ Reject</button>
         </div>
       </div>
     `).join('');
@@ -2393,7 +2393,7 @@ async function loadUserManagement() {
       return `
         <div class="moderation-card user-card">
           <div class="mod-card-header">
-            <span class="mod-username">${escapeHtml(u.username)}</span>
+            <span class="mod-username">${escapeHTML(u.username)}</span>
             <span class="mod-badge mod-badge-${u.role}">${u.role}</span>
           </div>
           <div class="mod-card-actions">
@@ -2425,13 +2425,6 @@ async function handleRoleChange(userId, newRole) {
   } catch {
     if (statusEl) { statusEl.textContent = 'Network error — please try again.'; statusEl.className = 'moderation-status error'; }
   }
-}
-
-/** Simple HTML escape utility. */
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 /** Wire moderation screen event delegation. */
