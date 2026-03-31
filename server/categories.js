@@ -1,7 +1,8 @@
 'use strict';
 
 /**
- * Valid puzzle categories — shared between submission validation and puzzle data.
+ * Canonical list of valid puzzle categories used for submission validation
+ * (and available for reuse by puzzle data or other modules).
  */
 
 const VALID_CATEGORIES = [

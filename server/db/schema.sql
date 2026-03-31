@@ -110,5 +110,5 @@ CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_
 CREATE INDEX IF NOT EXISTS idx_puzzles_category ON puzzles(category);
 CREATE INDEX IF NOT EXISTS idx_puzzles_difficulty ON puzzles(difficulty);
 CREATE INDEX IF NOT EXISTS idx_puzzles_active ON puzzles(active);
-CREATE INDEX IF NOT EXISTS idx_submissions_user ON puzzle_submissions(user_id);
-CREATE INDEX IF NOT EXISTS idx_submissions_status ON puzzle_submissions(status);
+CREATE INDEX IF NOT EXISTS idx_puzzle_submissions_user ON puzzle_submissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_puzzle_submissions_status ON puzzle_submissions(status);

@@ -257,6 +257,27 @@ describe('PUT /api/submissions/:id/review', () => {
     expect(res.status).toBe(400);
   });
 
+  test('rejects non-string reviewerNotes with 400', async () => {
+    // Create a fresh submission to avoid conflict with already-reviewed ones
+    const createRes = await getAgent()
+      .post('/api/submissions')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [2, 4, 6],
+        answer: '8',
+        explanation: 'Even numbers.',
+        difficulty: 1,
+        category: 'Math & Numbers',
+      });
+
+    const res = await getAgent()
+      .put(`/api/submissions/${createRes.body.id}/review`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ status: 'approved', reviewerNotes: { note: 'Not a string' } });
+
+    expect(res.status).toBe(400);
+  });
+
   test('returns 404 for non-existent submission', async () => {
     const res = await getAgent()
       .put('/api/submissions/99999/review')

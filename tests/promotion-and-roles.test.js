@@ -65,6 +65,9 @@ describe('Puzzle Promotion — approved submission creates live puzzle', () => {
     expect(communityPuzzle.answer).toBe('🟢');
     expect(communityPuzzle.explanation).toBe('Colors of the rainbow in order.');
     expect(communityPuzzle.submitted_by).toBe('promo-user');
+    expect(Array.isArray(communityPuzzle.options)).toBe(true);
+    expect(communityPuzzle.options.length).toBe(4);
+    expect(communityPuzzle.options).toContain('🟢');
   });
 
   test('rejecting a submission does NOT create a puzzle', async () => {

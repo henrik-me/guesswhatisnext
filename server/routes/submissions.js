@@ -113,9 +113,40 @@ router.get('/pending', requireSystem, (req, res) => {
   res.json({ submissions });
 });
 
+/** Generate distractor options for a community puzzle from its sequence and answer. */
+function generateOptions(sequence, answer) {
+  const parsed = typeof sequence === 'string' ? JSON.parse(sequence) : sequence;
+  const candidates = new Set();
+  // Use sequence elements as distractor candidates
+  for (const item of parsed) {
+    const str = String(item);
+    if (str !== String(answer)) candidates.add(str);
+  }
+  // Fill with generic placeholders if not enough unique distractors
+  const fillers = ['❓', '⬜', '🔲', '▪️'];
+  for (const f of fillers) {
+    if (candidates.size >= 3) break;
+    if (f !== String(answer)) candidates.add(f);
+  }
+  // Pick up to 3 distractors and combine with the answer
+  const distractors = [...candidates].slice(0, 3);
+  const options = [String(answer), ...distractors];
+  // Shuffle using Fisher-Yates
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return options;
+}
+
 /** PUT /api/submissions/:id/review — approve or reject (system/admin only). */
 router.put('/:id/review', requireSystem, (req, res) => {
   const { status, reviewerNotes } = req.body;
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid submission ID' });
+  }
 
   if (!['approved', 'rejected'].includes(status)) {
     return res.status(400).json({ error: 'status must be approved or rejected' });
@@ -130,7 +161,7 @@ router.put('/:id/review', requireSystem, (req, res) => {
     : null;
 
   const db = getDb();
-  const submission = db.prepare('SELECT * FROM puzzle_submissions WHERE id = ?').get(req.params.id);
+  const submission = db.prepare('SELECT * FROM puzzle_submissions WHERE id = ?').get(id);
 
   if (!submission) {
     return res.status(404).json({ error: 'Submission not found' });
@@ -139,44 +170,62 @@ router.put('/:id/review', requireSystem, (req, res) => {
     return res.status(409).json({ error: 'Submission has already been reviewed' });
   }
 
+  if (status === 'approved') {
+    // Wrap review update + puzzle promotion in a transaction for atomicity
+    const submitter = db.prepare('SELECT username FROM users WHERE id = ?').get(submission.user_id);
+    const puzzleId = `community-${id}`;
+    const options = JSON.stringify(generateOptions(submission.sequence, submission.answer));
+
+    const reviewAndPromote = db.transaction(() => {
+      const result = db.prepare(
+        `UPDATE puzzle_submissions
+         SET status = ?, reviewer_notes = ?, reviewed_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status = 'pending'`
+      ).run(status, notes, id);
+
+      if (result.changes === 0) {
+        throw new Error('ALREADY_REVIEWED');
+      }
+
+      db.prepare(
+        `INSERT INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active, submitted_by)
+         VALUES (?, ?, ?, 'emoji', ?, ?, ?, ?, 1, ?)`
+      ).run(
+        puzzleId,
+        submission.category,
+        submission.difficulty,
+        submission.sequence,
+        submission.answer,
+        options,
+        submission.explanation,
+        submitter ? submitter.username : null
+      );
+    });
+
+    try {
+      reviewAndPromote();
+    } catch (err) {
+      if (err && err.message === 'ALREADY_REVIEWED') {
+        return res.status(409).json({ error: 'Submission has already been reviewed' });
+      }
+      throw err;
+    }
+
+    return res.json({ id, status, message: `Submission ${status}`, puzzleId });
+  }
+
+  // Rejected: only update the submission status
   const result = db.prepare(
     `UPDATE puzzle_submissions
      SET status = ?, reviewer_notes = ?, reviewed_at = CURRENT_TIMESTAMP
      WHERE id = ? AND status = 'pending'`
-  ).run(status, notes, req.params.id);
+  ).run(status, notes, id);
 
   if (result.changes === 0) {
     return res.status(409).json({ error: 'Submission has already been reviewed' });
   }
 
-  const response = { id: Number(req.params.id), status, message: `Submission ${status}` };
-
-  // Promotion: auto-add approved puzzles to the live pool
-  if (status === 'approved') {
-    const submitter = db.prepare('SELECT username FROM users WHERE id = ?').get(submission.user_id);
-    const puzzleId = `community-${req.params.id}`;
-    const sequence = submission.sequence; // already JSON string from DB
-    const answer = submission.answer;
-    const options = JSON.stringify([answer]); // minimal options; game engine augments at runtime
-
-    db.prepare(
-      `INSERT INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active, submitted_by)
-       VALUES (?, ?, ?, 'emoji', ?, ?, ?, ?, 1, ?)`
-    ).run(
-      puzzleId,
-      submission.category,
-      submission.difficulty,
-      sequence,
-      answer,
-      options,
-      submission.explanation,
-      submitter ? submitter.username : null
-    );
-
-    response.puzzleId = puzzleId;
-  }
-
-  res.json(response);
+  res.json({ id, status, message: `Submission ${status}` });
 });
 
 module.exports = router;
