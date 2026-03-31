@@ -33,11 +33,15 @@ async function createDb(opts = {}) {
     let MssqlAdapter;
     try {
       MssqlAdapter = require('./mssql-adapter');
-    } catch {
-      throw new Error(
-        'MSSQL database backend is not yet available because the mssql-adapter module is missing. ' +
-          'To use SQLite instead, remove DATABASE_URL from the environment or do not pass opts.backend = "mssql".'
-      );
+    } catch (err) {
+      if (err.code === 'MODULE_NOT_FOUND') {
+        throw new Error(
+          'MSSQL database backend is not yet available because the mssql-adapter module is missing. ' +
+            'To use SQLite instead, remove DATABASE_URL from the environment or do not pass opts.backend = "mssql".',
+          { cause: err }
+        );
+      }
+      throw err;
     }
     const adapter = new MssqlAdapter(opts.connectionString || config.DATABASE_URL);
     await adapter.connect();
@@ -48,11 +52,15 @@ async function createDb(opts = {}) {
     let SqliteAdapter;
     try {
       SqliteAdapter = require('./sqlite-adapter');
-    } catch {
-      throw new Error(
-        'SQLite database backend is not yet available. ' +
-          'The sqlite-adapter module has not been added yet.'
-      );
+    } catch (err) {
+      if (err.code === 'MODULE_NOT_FOUND') {
+        throw new Error(
+          'SQLite database backend is not yet available. ' +
+            'The sqlite-adapter module has not been added yet.',
+          { cause: err }
+        );
+      }
+      throw err;
     }
     const adapter = new SqliteAdapter(
       opts.sqlitePath || config.GWN_DB_PATH,
