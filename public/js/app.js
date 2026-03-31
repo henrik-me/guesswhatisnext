@@ -122,6 +122,14 @@ const ui = {
     mystery.style.setProperty('--seq-i', puzzle.sequence.length);
     seqContainer.appendChild(mystery);
 
+    // Puzzle credit (community submissions)
+    const creditEl = document.querySelector('[data-bind="puzzle-credit"]');
+    if (creditEl) {
+      creditEl.textContent = puzzle.submitted_by
+        ? `\u{1F4DD} Submitted by: ${puzzle.submitted_by}`
+        : '';
+    }
+
     // Options grid
     const optContainer = document.querySelector('[data-bind="options"]');
     optContainer.innerHTML = '';
@@ -1432,6 +1440,14 @@ function onRound(msg) {
   mystery.textContent = '?';
   mystery.style.setProperty('--seq-i', puzzle.sequence.length);
   seqContainer.appendChild(mystery);
+
+  // Puzzle credit (community submissions)
+  const creditEl = document.querySelector('[data-bind="match-puzzle-credit"]');
+  if (creditEl) {
+    creditEl.textContent = puzzle.submitted_by
+      ? `\u{1F4DD} Submitted by: ${puzzle.submitted_by}`
+      : '';
+  }
 
   // Options
   const optContainer = document.querySelector('[data-bind="match-options"]');
