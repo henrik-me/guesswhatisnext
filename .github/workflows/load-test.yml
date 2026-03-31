@@ -89,7 +89,6 @@ jobs:
           exit 1
         env:
           PORT: 3000
-          GWN_DB_PATH: ':memory:'
 
       - name: Determine test suite
         id: suite
