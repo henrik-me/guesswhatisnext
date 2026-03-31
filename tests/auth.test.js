@@ -49,6 +49,26 @@ describe('POST /api/auth/register', () => {
 
     expect(res.status).toBe(400);
   });
+
+  test('rate-limits registration and includes Retry-After header', async () => {
+    // Send registration requests until we hit a 429 (previous tests in this
+    // describe already consumed some of the burst budget)
+    let rateLimited = false;
+    for (let i = 0; i < 10; i++) {
+      const res = await getAgent()
+        .post('/api/auth/register')
+        .send({ username: `ratelim${i}`, password: 'password123' });
+
+      if (res.status === 429) {
+        expect(res.body.error).toBeDefined();
+        expect(res.headers['retry-after']).toBeDefined();
+        rateLimited = true;
+        break;
+      }
+    }
+
+    expect(rateLimited).toBe(true);
+  });
 });
 
 describe('POST /api/auth/login', () => {

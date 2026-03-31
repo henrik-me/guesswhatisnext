@@ -33,9 +33,12 @@ after:
 scenarios:
   - name: "WebSocket connection and room join"
     engine: ws
+    beforeScenario: "markScenarioStart"
+    afterScenario: "emitWsMetrics"
     flow:
       - connect:
           function: "connectWithTokenAndRoom"
+      - function: "markConnectComplete"
       - think: 1
       - send:
           payload: '{"type":"join","roomCode":"{{ roomCode }}"}'
@@ -43,7 +46,10 @@ scenarios:
 
   - name: "WebSocket sustained connection"
     engine: ws
+    beforeScenario: "markScenarioStart"
+    afterScenario: "emitWsMetrics"
     flow:
       - connect:
           function: "connectWithToken"
+      - function: "markConnectComplete"
       - think: 5

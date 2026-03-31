@@ -10,6 +10,21 @@
  * running any subsequent steps. To perform setup (load token from pool) before
  * the connection, we use `connect.function` handlers that receive `wsArgs`
  * and can set `wsArgs.target` to the authenticated WS URL.
+ *
+ * Custom Metrics:
+ * Artillery's WS engine connect.function handlers receive (wsArgs, context, done)
+ * but do NOT receive an event emitter (ee) parameter. This means we cannot
+ * directly emit histogram metrics (p50/p95/p99) from WS hooks.
+ *
+ * Workaround: We store timestamps in context.vars and emit timing metrics
+ * from the `afterScenario` hooks where the event emitter is available.
+ * For connect time, we record the start timestamp in the connect.function
+ * handler and the end timestamp in a later step (e.g. markConnectComplete),
+ * then compute and emit the duration from the afterScenario hook.
+ *
+ * For message round-trip time, Artillery's WS engine does not provide
+ * per-message response hooks. The best available approach is to track
+ * session-level timing (connect → disconnect) via before/after scenario hooks.
  */
 
 const { httpRequest, getBaseUrl, loadUserPool, setupUsers, cleanupUserPool } = require('./helpers');
@@ -19,8 +34,6 @@ let cachedPool = null;
 
 /**
  * Obtain a token from the pre-seeded user pool (round-robin).
- * The pool is populated by the `setupUsers` before-hook via direct DB seeding.
- * Returns { token, username } or throws if the pool is empty.
  */
 function acquireToken() {
   if (!cachedPool) {
@@ -46,11 +59,12 @@ function buildWsUrl(baseUrl, token) {
 
 /**
  * connect.function handler: load user from pool, then set wsArgs.target to
- * the authenticated WS URL. Called by Artillery BEFORE opening the socket.
+ * the authenticated WS URL. Tracks connection start time for latency metrics.
  * Signature: (wsArgs, context, done)
  */
 function connectWithToken(wsArgs, context, done) {
   try {
+    context.vars._wsConnectStart = Date.now();
     const baseUrl = getBaseUrl(context);
     const { token, username } = acquireToken();
     context.vars.token = token;
@@ -65,11 +79,12 @@ function connectWithToken(wsArgs, context, done) {
 
 /**
  * connect.function handler: load user from pool, create a match room, then
- * set wsArgs.target. Used by the "room join" scenario.
+ * set wsArgs.target. Tracks connection start time for latency metrics.
  * Signature: (wsArgs, context, done)
  */
 async function connectWithTokenAndRoom(wsArgs, context, done) {
   try {
+    context.vars._wsConnectStart = Date.now();
     const baseUrl = getBaseUrl(context);
     const { token, username } = acquireToken();
     context.vars.token = token;
@@ -98,4 +113,62 @@ async function connectWithTokenAndRoom(wsArgs, context, done) {
   }
 }
 
-module.exports = { connectWithToken, connectWithTokenAndRoom, setupUsers, cleanupUserPool };
+/**
+ * afterScenario hook: emit WebSocket timing metrics collected during the scenario.
+ *
+ * Emits:
+ * - ws.session_duration: total scenario duration from start to completion (ms)
+ * - ws.connect_time: time from pre-connect setup to post-connect handshake (ms)
+ *
+ * Note: Artillery's WS engine does not expose per-message response hooks,
+ * so message round-trip timing cannot be measured directly. The session
+ * duration metric serves as a proxy for overall WS interaction health.
+ */
+function emitWsMetrics(context, events, done) {
+  const now = Date.now();
+
+  if (context.vars._scenarioStart) {
+    const sessionDuration = now - context.vars._scenarioStart;
+    if (events && typeof events.emit === 'function') {
+      events.emit('histogram', 'ws.session_duration', sessionDuration);
+    }
+  }
+
+  // Emit connect time if tracked via markConnectComplete step after connect
+  if (context.vars._wsConnectEnd && context.vars._wsConnectStart) {
+    const connectLatency = context.vars._wsConnectEnd - context.vars._wsConnectStart;
+    if (events && typeof events.emit === 'function') {
+      events.emit('histogram', 'ws.connect_time', connectLatency);
+    }
+  }
+
+  return done();
+}
+
+/**
+ * beforeScenario hook: record scenario start time.
+ */
+function markScenarioStart(context, _events, done) {
+  context.vars._scenarioStart = Date.now();
+  return done();
+}
+
+/**
+ * Function step to record when the WS connection has been established.
+ * Place this as a function step immediately after `connect` in the YAML flow
+ * to measure handshake latency (connect_time = _wsConnectEnd - _wsConnectStart).
+ */
+function markConnectComplete(context, _events, done) {
+  context.vars._wsConnectEnd = Date.now();
+  return done();
+}
+
+module.exports = {
+  connectWithToken,
+  connectWithTokenAndRoom,
+  emitWsMetrics,
+  markScenarioStart,
+  markConnectComplete,
+  setupUsers,
+  cleanupUserPool,
+};
