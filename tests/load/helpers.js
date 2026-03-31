@@ -414,7 +414,7 @@ async function registerWithRetry(context, events, done) {
     }
 
     if (result.statusCode === 409) {
-      // Duplicate username — not a failure, generate a new one and retry
+      // Duplicate username — treat as non-fatal for this VU
       emitCounter('auth.duplicate_username');
       return done();
     }

@@ -38,6 +38,7 @@ scenarios:
     flow:
       - connect:
           function: "connectWithTokenAndRoom"
+      - function: "markConnectComplete"
       - think: 1
       - send:
           payload: '{"type":"join","roomCode":"{{ roomCode }}"}'
@@ -50,4 +51,5 @@ scenarios:
     flow:
       - connect:
           function: "connectWithToken"
+      - function: "markConnectComplete"
       - think: 5

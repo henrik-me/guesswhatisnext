@@ -116,8 +116,8 @@ async function connectWithTokenAndRoom(wsArgs, context, done) {
  * afterScenario hook: emit WebSocket timing metrics collected during the scenario.
  *
  * Emits:
- * - ws.connect_time: time from pre-connect setup to scenario start (ms)
- * - ws.session_duration: total scenario duration (ms)
+ * - ws.session_duration: total scenario duration from start to completion (ms)
+ * - ws.connect_time: time from pre-connect setup to post-connect handshake (ms)
  *
  * Note: Artillery's WS engine does not expose per-message response hooks,
  * so message round-trip timing cannot be measured directly. The session
@@ -126,14 +126,14 @@ async function connectWithTokenAndRoom(wsArgs, context, done) {
 function emitWsMetrics(context, events, done) {
   const now = Date.now();
 
-  if (context.vars._wsConnectStart) {
-    const connectTime = now - context.vars._wsConnectStart;
+  if (context.vars._scenarioStart) {
+    const sessionDuration = now - context.vars._scenarioStart;
     if (events && typeof events.emit === 'function') {
-      events.emit('histogram', 'ws.session_duration', connectTime);
+      events.emit('histogram', 'ws.session_duration', sessionDuration);
     }
   }
 
-  // Emit connect time if tracked separately (set after WS open)
+  // Emit connect time if tracked via markConnectComplete step after connect
   if (context.vars._wsConnectEnd && context.vars._wsConnectStart) {
     const connectLatency = context.vars._wsConnectEnd - context.vars._wsConnectStart;
     if (events && typeof events.emit === 'function') {
@@ -152,11 +152,22 @@ function markScenarioStart(context, events, done) {
   return done();
 }
 
+/**
+ * Function step to record when the WS connection has been established.
+ * Place this as a function step immediately after `connect` in the YAML flow
+ * to measure handshake latency (connect_time = _wsConnectEnd - _wsConnectStart).
+ */
+function markConnectComplete(context, _events, done) {
+  context.vars._wsConnectEnd = Date.now();
+  return done();
+}
+
 module.exports = {
   connectWithToken,
   connectWithTokenAndRoom,
   emitWsMetrics,
   markScenarioStart,
+  markConnectComplete,
   setupUsers,
   cleanupUserPool,
 };

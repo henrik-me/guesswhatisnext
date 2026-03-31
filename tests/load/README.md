@@ -173,8 +173,8 @@ The WebSocket test emits custom metrics via `beforeScenario` / `afterScenario` h
 
 | Metric | Type | Description |
 |---|---|---|
-| `ws.session_duration` | histogram | Total scenario duration from connect setup to completion |
-| `ws.connect_time` | histogram | Time from connect setup start to WebSocket open |
+| `ws.session_duration` | histogram | Total scenario duration from start to completion |
+| `ws.connect_time` | histogram | Time from pre-connect setup to post-connect handshake (recorded via `markConnectComplete` step) |
 
 > **Note:** Artillery's WS engine `connect.function` handlers receive
 > `(wsArgs, context, done)` — they do **not** receive an event emitter.
@@ -182,6 +182,8 @@ The WebSocket test emits custom metrics via `beforeScenario` / `afterScenario` h
 > does not provide per-message response hooks. The `afterScenario` hook
 > (which does receive `events`) is used to emit the collected timestamps
 > as histogram metrics that appear in the Artillery report with p50/p95/p99.
+> The `markConnectComplete` function step is placed immediately after
+> `connect` in the YAML flow to record when the handshake completes.
 
 HTTP setup calls (registration, room creation) use a custom Node.js helper and
 are not captured in Artillery's `http.response_time` metrics. Review the
