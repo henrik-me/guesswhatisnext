@@ -160,11 +160,14 @@ dance pattern is:
    enforced even without respecting `Retry-After` (`auth.immediate_retry_blocked`).
 4. **Respect Retry-After** — wait the header-specified time (capped at 15 s),
    then retry. Expect 201 (`auth.retry_after_success`).
-5. **Continue registering** until 429 repeats, then perform the dance again.
+5. **Perform a bounded burst of extra registrations** until another 429 is hit
+   (or the helper's max extra attempts is reached), then run the dance sequence
+   at most one more time and stop.
 
 All 429 responses in this flow are **expected** — they validate that the rate
-limiter works correctly. The VU never throws an error for a 429. Only truly
-unexpected errors (500, network failures) cause VU failures.
+limiter works correctly. The VU never throws an error for a 429. VU failures
+only occur on truly unexpected responses (HTTP statuses other than the expected
+201/409/429 in this flow) or on network failures.
 
 Custom metrics emitted:
 

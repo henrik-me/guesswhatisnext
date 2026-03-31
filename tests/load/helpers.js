@@ -350,7 +350,8 @@ function generateUniqueUser(context, _events, done) {
  * 4. Continue sending until 429s repeat, then do the dance again.
  *
  * Every 429 in this flow is EXPECTED and never causes a VU failure.
- * Only truly unexpected errors (500, network errors) throw.
+ * Any other unexpected HTTP status (including 4xx other than 409/429)
+ * or network error will cause this helper to throw.
  */
 async function registerWithRetry(context, events) {
   const baseUrl = getBaseUrl(context);
@@ -398,6 +399,7 @@ async function registerWithRetry(context, events) {
   // Perform the rate-limit dance: immediate retry (expect 429) then
   // respect Retry-After (expect 201).
   // Returns the captured token if registration succeeds, or null.
+  // Also updates context.vars.username when a new username succeeds.
   async function performDance(triggerResult) {
     // Step 1: Immediate retry WITHOUT waiting — should get 429
     const immediateUsername = makeUsername('d');
@@ -406,10 +408,9 @@ async function registerWithRetry(context, events) {
     if (immediateResult.statusCode === 429) {
       emitCounter('auth.immediate_retry_blocked');
     } else if (immediateResult.statusCode === 201) {
+      // Limiter leak — immediate retry should have been blocked
       emitCounter('auth.immediate_retry_leaked');
-      if (immediateResult.body.token) {
-        return immediateResult.body.token;
-      }
+      throw new Error('Rate limiter leak detected: immediate retry succeeded with 201');
     } else {
       handleUnexpected(immediateResult, 'Dance immediate retry');
       return null;
@@ -431,6 +432,7 @@ async function registerWithRetry(context, events) {
 
     if (respectedResult.statusCode === 201 && respectedResult.body.token) {
       emitCounter('auth.retry_after_success');
+      context.vars.username = respectedUsername;
       return respectedResult.body.token;
     }
     if (respectedResult.statusCode === 429) {
@@ -480,7 +482,10 @@ async function registerWithRetry(context, events) {
 
     if (extraResult.statusCode === 429) {
       emitCounter('auth.rate_limited');
-      await performDance(extraResult);
+      const dancedToken = await performDance(extraResult);
+      if (dancedToken) {
+        context.vars.token = dancedToken;
+      }
       break;
     }
 
