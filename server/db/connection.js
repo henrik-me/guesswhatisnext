@@ -4,9 +4,7 @@
  *
  * @deprecated All new code should use the async adapter from './index.js' instead.
  * This module is kept only for backward compatibility with load tests that
- * construct their own better-sqlite3 Database instances. The initDb() function
- * is no longer safe to call because seedAchievements() and seedPuzzles() are
- * now async — use the adapter's initializeDatabase() flow in app.js instead.
+ * construct their own better-sqlite3 Database instances.
  */
 
 const Database = require('better-sqlite3');
@@ -155,15 +153,49 @@ function _initDbOnce() {
     }
   }
 
-  // Seed achievement definitions
-  const { seedAchievements } = require('../achievements');
-  seedAchievements();
+  // Seed achievement definitions (sync — legacy path uses better-sqlite3 directly)
+  const { ACHIEVEMENTS } = require('../achievements');
+  const achCount = database.prepare('SELECT COUNT(*) as c FROM achievements').get();
+  if (achCount.c === 0) {
+    const achDescriptions = {
+      'first-game': 'Play your first game',
+      'score-500': 'Score 500+ in a single game',
+      'score-1000': 'Score 1000+ in a single game',
+      'perfect-game': 'Get all answers correct in a game',
+      'streak-5': 'Get a 5-answer streak',
+      'streak-10': 'Get a 10-answer streak',
+      'daily-3': 'Complete 3 daily challenges',
+      'daily-7': 'Complete 7 daily challenges',
+      'mp-first-win': 'Win your first multiplayer match',
+      'mp-5-wins': 'Win 5 multiplayer matches',
+      'speed-demon': 'Answer correctly within 2 seconds',
+      'explorer': 'Play puzzles from 5 different categories',
+    };
+    const insertAch = database.prepare(
+      'INSERT INTO achievements (id, name, description, icon, category, requirement) VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    database.transaction((items) => {
+      for (const a of items) {
+        insertAch.run(a.id, a.name, achDescriptions[a.id], a.icon, a.category, a.requirement);
+      }
+    })(ACHIEVEMENTS);
+    console.log('🏅 Achievements seeded');
+  }
 
-  // Seed puzzles if table is empty
+  // Seed puzzles if table is empty (sync — legacy path uses better-sqlite3 directly)
   const puzzleCount = database.prepare('SELECT COUNT(*) AS cnt FROM puzzles').get();
   if (puzzleCount.cnt === 0) {
-    const { seedPuzzles } = require('./seed-puzzles');
-    seedPuzzles();
+    const puzzles = require('../puzzleData');
+    const insertPuzzle = database.prepare(
+      `INSERT OR REPLACE INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
+    );
+    database.transaction((items) => {
+      for (const p of items) {
+        insertPuzzle.run(p.id, p.category, p.difficulty, p.type, JSON.stringify(p.sequence), p.answer, JSON.stringify(p.options), p.explanation);
+      }
+    })(puzzles);
+    console.log(`🧩 Seeded ${puzzles.length} puzzles into database`);
   }
 
   console.log('📦 Database initialized');

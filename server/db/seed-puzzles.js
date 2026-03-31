@@ -40,6 +40,9 @@ if (require.main === module) {
         const { closeDbAdapter } = require('./index');
         await closeDbAdapter();
       } catch { /* ignore */ }
+      if (process.exitCode) {
+        process.exit(process.exitCode);
+      }
     }
   })();
 }
