@@ -2,59 +2,38 @@
 
 /**
  * Artillery helper functions for WebSocket load test scenarios.
- * Handles user registration and match creation via HTTP before WS connection.
+ * Loads pre-seeded users from the pool and creates matches via HTTP before
+ * WS connection.
  *
  * Artillery's WS engine calls getWsInstance() which only reads the `connect`
  * config from the FIRST step in the flow. It opens the WebSocket BEFORE
- * running any subsequent steps. To perform setup (register, get token) before
+ * running any subsequent steps. To perform setup (load token from pool) before
  * the connection, we use `connect.function` handlers that receive `wsArgs`
  * and can set `wsArgs.target` to the authenticated WS URL.
  */
 
-const { httpRequest, getBaseUrl, loadUserPool, setupUsers, cleanupUserPool, makeUsername } = require('./helpers');
+const { httpRequest, getBaseUrl, loadUserPool, setupUsers, cleanupUserPool } = require('./helpers');
 
 let counter = 0;
 let cachedPool = null;
 
 /**
- * Obtain a token from the user pool or by registering a new user.
- * Returns { token, username } or throws on failure.
+ * Obtain a token from the pre-seeded user pool (round-robin).
+ * The pool is populated by the `setupUsers` before-hook via direct DB seeding.
+ * Returns { token, username } or throws if the pool is empty.
  */
-async function acquireToken(baseUrl) {
+function acquireToken() {
   if (!cachedPool) {
     cachedPool = loadUserPool();
   }
-  if (cachedPool.length > 0) {
-    const user = cachedPool[counter % cachedPool.length];
-    counter++;
-    return { token: user.token, username: user.username };
+  if (cachedPool.length === 0) {
+    throw new Error(
+      '[ws] No users in pool — ensure setupUsers ran successfully and .user-pool.json exists',
+    );
   }
-
-  const maxRetries = 3;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const username = makeUsername('w');
-    const password = 'LoadTest123!';
-
-    const res = await httpRequest(baseUrl, 'POST', '/api/auth/register', {
-      username,
-      password,
-    });
-
-    if (res.statusCode === 201 && res.body.token) {
-      return { token: res.body.token, username };
-    }
-
-    if (res.statusCode === 429) {
-      const retryAfter = 61000;
-      console.error(`[ws] Rate limited, waiting ${retryAfter / 1000}s (retry ${attempt + 1}/${maxRetries})...`);
-      await new Promise((r) => setTimeout(r, retryAfter));
-      continue;
-    }
-
-    console.error(`[ws] Registration failed: ${res.statusCode}`, res.body);
-  }
-
-  throw new Error('Failed to register user for WS test after retries');
+  const user = cachedPool[counter % cachedPool.length];
+  counter++;
+  return { token: user.token, username: user.username };
 }
 
 /**
@@ -66,14 +45,14 @@ function buildWsUrl(baseUrl, token) {
 }
 
 /**
- * connect.function handler: register/load user, then set wsArgs.target to
+ * connect.function handler: load user from pool, then set wsArgs.target to
  * the authenticated WS URL. Called by Artillery BEFORE opening the socket.
  * Signature: (wsArgs, context, done)
  */
-async function connectWithToken(wsArgs, context, done) {
+function connectWithToken(wsArgs, context, done) {
   try {
     const baseUrl = getBaseUrl(context);
-    const { token, username } = await acquireToken(baseUrl);
+    const { token, username } = acquireToken();
     context.vars.token = token;
     context.vars.username = username;
     wsArgs.target = buildWsUrl(baseUrl, token);
@@ -85,14 +64,14 @@ async function connectWithToken(wsArgs, context, done) {
 }
 
 /**
- * connect.function handler: register/load user, create a match room, then
+ * connect.function handler: load user from pool, create a match room, then
  * set wsArgs.target. Used by the "room join" scenario.
  * Signature: (wsArgs, context, done)
  */
 async function connectWithTokenAndRoom(wsArgs, context, done) {
   try {
     const baseUrl = getBaseUrl(context);
-    const { token, username } = await acquireToken(baseUrl);
+    const { token, username } = acquireToken();
     context.vars.token = token;
     context.vars.username = username;
 

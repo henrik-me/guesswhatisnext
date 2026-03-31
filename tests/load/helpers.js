@@ -3,16 +3,19 @@
 /**
  * Artillery helper functions for load test scenarios.
  *
- * The server applies per-IP rate limiting on auth endpoints (5 reg/min,
- * 10 login/min). To work around this during load testing, we pre-register
- * a pool of users in `setupUsers` (before hook), persist them to a JSON file,
- * and VUs load them via `assignUser`.
+ * The `setupUsers` before-hook seeds a pool of users directly into the SQLite
+ * database (using better-sqlite3, bcryptjs, and jsonwebtoken) and writes
+ * signed JWTs to `.user-pool.json`. This avoids the HTTP rate limiter
+ * entirely, cutting setup from ~4 minutes to under 1 second.
+ *
+ * VUs load pre-seeded users via `assignUser` (round-robin).
  */
 
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const USER_POOL_FILE = path.join(__dirname, '.user-pool.json');
 const LOCK_FILE = path.join(__dirname, '.user-pool.lock');
@@ -101,9 +104,13 @@ function loadUserPool() {
 
 /**
  * Called once before the test run via top-level `before`.
- * Registers users in batches of 4 (staying under the 5/min rate limit),
- * waiting for the rate limit window between batches. Persists to a JSON file
+ * Seeds users directly into the SQLite database and signs JWTs locally,
+ * bypassing the HTTP rate limiter entirely. Persists tokens to a JSON file
  * so scenario workers can access the pool.
+ *
+ * Requires env var: JWT_SECRET (must match the running server's secret).
+ * Optional env var: GWN_DB_PATH (overrides the default SQLite DB path,
+ * which defaults to `data/game.db`).
  */
 async function setupUsers(context, _events, done) {
   const setupTimeoutMs =
@@ -153,12 +160,21 @@ async function setupUsers(context, _events, done) {
     if (fs.existsSync(USER_POOL_FILE)) {
       const existing = JSON.parse(fs.readFileSync(USER_POOL_FILE, 'utf8'));
       const currentBase = getBaseUrl(context);
-      if (existing.baseUrl === currentBase) {
+      const secretFingerprint = process.env.JWT_SECRET
+        ? crypto.createHash('sha256').update(process.env.JWT_SECRET).digest('hex').slice(0, 8)
+        : null;
+      // Reuse pool if baseUrl matches AND either JWT_SECRET is unset (trust
+      // cached tokens) or its fingerprint matches what was used to sign them.
+      const secretOk = secretFingerprint === null || existing.secretHash === secretFingerprint;
+      if (existing.baseUrl === currentBase && secretOk) {
         console.log('[setup] User pool already exists for this target, skipping setup');
         if (typeof done === 'function') return done();
         return;
       }
-      console.log(`[setup] Pool exists for ${existing.baseUrl} but target is ${currentBase}, recreating...`);
+      const reason = existing.baseUrl !== currentBase
+        ? `target changed (${existing.baseUrl} → ${currentBase})`
+        : 'JWT_SECRET changed';
+      console.log(`[setup] Pool stale: ${reason}, recreating...`);
     }
 
     const baseUrl = getBaseUrl(context);
@@ -172,81 +188,115 @@ async function setupUsers(context, _events, done) {
       throw err;
     }
 
-    const batchSize = 4; // stay under 5/min rate limit
-    const windowMs = 61000; // slightly over 60s rate limit window
-    const maxAttempts = count * 10;
-    const non429BackoffMs = 500;
-    const startTime = Date.now();
-    let attempts = 0;
-    let shouldAbort = false;
-    const pool = [];
-    console.log(`[setup] Pre-registering ${count} users at ${baseUrl}...`);
-
-    while (pool.length < count && !shouldAbort) {
-      const batchEnd = Math.min(pool.length + batchSize, count);
-      const targetCount = batchEnd;
-
-      while (pool.length < targetCount && !shouldAbort) {
-        const username = makeUsername('l');
-        const password = 'LoadTest123!';
-        attempts++;
-
-        try {
-          const res = await httpRequest(baseUrl, 'POST', '/api/auth/register', {
-            username,
-            password,
-          });
-
-          if (res.statusCode === 201 && res.body.token) {
-            pool.push({ username, token: res.body.token });
-          } else if (res.statusCode === 429) {
-            console.log(`[setup] Rate limited at ${pool.length} users, waiting for window reset...`);
-            await new Promise((r) => setTimeout(r, windowMs));
-          } else {
-            console.error(`[setup] Registration failed (${res.statusCode}):`, res.body);
-            await new Promise((r) => setTimeout(r, non429BackoffMs));
-          }
-        } catch (err) {
-          console.error(`[setup] Error registering user:`, err.message);
-          await new Promise((r) => setTimeout(r, non429BackoffMs));
-        }
-
-        const elapsed = Date.now() - startTime;
-        if (elapsed > setupTimeoutMs) {
-          console.error(
-            `[setup] Aborting: exceeded max duration (${setupTimeoutMs}ms) with ${pool.length}/${count} users`,
-          );
-          shouldAbort = true;
-        } else if (attempts >= maxAttempts && pool.length < count) {
-          console.error(
-            `[setup] Aborting: exceeded max attempts (${maxAttempts}) with ${pool.length}/${count} users`,
-          );
-          shouldAbort = true;
-        }
-      }
-
-      if (!shouldAbort && pool.length < count) {
-        console.log(`[setup] Registered ${pool.length}/${count}, waiting for rate limit window...`);
-        await new Promise((r) => setTimeout(r, windowMs));
-      }
-    }
-
-    if (pool.length < count) {
+    // Direct DB seeding — bypasses HTTP rate limits entirely.
+    // Guard: refuse to seed if the target looks like a remote server, since
+    // the tokens would be signed with the local secret and fail against it.
+    const { hostname } = new URL(baseUrl);
+    const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+    if (!isLocal && process.env.LOAD_TEST_ALLOW_REMOTE_SEED !== '1') {
       const err = new Error(
-        `[setup] Failed to prepare user pool: created ${pool.length}/${count} users before hitting limits`,
+        `[setup] LOAD_TEST_TARGET (${baseUrl}) does not point to localhost. ` +
+        'Direct DB seeding only works when the test runner shares the server\'s ' +
+        'DB and JWT_SECRET. Set LOAD_TEST_ALLOW_REMOTE_SEED=1 to override, or ' +
+        'run the load tests inside the same environment as the server.',
       );
       console.error(err.message);
       if (typeof done === 'function') return done(err);
       throw err;
     }
 
-    // Persist tokens only (not passwords) with restrictive permissions
-    // Write to temp file first, then rename for atomic visibility
-    const poolData = { baseUrl, users: pool };
-    const tmpFile = USER_POOL_FILE + '.tmp';
-    fs.writeFileSync(tmpFile, JSON.stringify(poolData, null, 2), { mode: 0o600 });
-    fs.renameSync(tmpFile, USER_POOL_FILE);
-    console.log(`[setup] Registered ${pool.length} users, saved to ${USER_POOL_FILE}`);
+    const Database = require('better-sqlite3');
+    const bcrypt = require('bcryptjs');
+    const jwt = require('jsonwebtoken');
+
+    const dbPath = process.env.GWN_DB_PATH
+      || path.join(__dirname, '..', '..', 'data', 'game.db');
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      const err = new Error(
+        '[setup] JWT_SECRET env var is required for direct DB seeding',
+      );
+      console.error(err.message);
+      if (typeof done === 'function') return done(err);
+      throw err;
+    }
+
+    if (!fs.existsSync(dbPath)) {
+      const err = new Error(
+        `[setup] Database file not found at ${dbPath} — start the server first to create it`,
+      );
+      console.error(err.message);
+      if (typeof done === 'function') return done(err);
+      throw err;
+    }
+
+    console.log(`[setup] Seeding ${count} users directly into DB at ${dbPath}...`);
+    const startTime = Date.now();
+
+    const db = new Database(dbPath);
+    db.pragma('busy_timeout = 5000');
+    db.pragma('foreign_keys = ON');
+
+    try {
+      // Hash once, reuse for all users (same cost factor as the server)
+      const hash = bcrypt.hashSync('LoadTest123!', 10);
+
+      const insertStmt = db.prepare(
+        "INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?, ?, 'user')",
+      );
+      const selectStmt = db.prepare(
+        'SELECT id, username, role FROM users WHERE username = ?',
+      );
+
+      // Seed users inside a transaction, collect metadata for JWT signing
+      const users = [];
+      const seedAll = db.transaction(() => {
+        for (let i = 0; i < count; i++) {
+          const username = `loadtest${String(i + 1).padStart(3, '0')}`;
+          insertStmt.run(username, hash);
+          const user = selectStmt.get(username);
+          if (!user) {
+            throw new Error(
+              `[setup] User ${username} not found after INSERT — schema mismatch or DB error`,
+            );
+          }
+          if (user.role !== 'user') {
+            throw new Error(
+              `[setup] User ${username} exists with role '${user.role}' (expected 'user'). ` +
+              'Aborting to avoid minting tokens for a non-load-test account.',
+            );
+          }
+          users.push({ id: user.id, username: user.username });
+        }
+      });
+
+      seedAll();
+
+      // Sign JWTs outside the transaction to minimize DB lock duration
+      const pool = users.map((user) => ({
+        username: user.username,
+        token: jwt.sign(
+          { id: user.id, username: user.username, role: 'user' },
+          jwtSecret,
+          { expiresIn: '7d' },
+        ),
+      }));
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[setup] Seeded ${pool.length} users in ${elapsed}ms`);
+
+      // Persist tokens only (not passwords) with restrictive permissions
+      // Write to temp file first, then rename for atomic visibility
+      const secretHash = crypto.createHash('sha256').update(jwtSecret).digest('hex').slice(0, 8);
+      const poolData = { baseUrl, secretHash, users: pool };
+      const tmpFile = USER_POOL_FILE + '.tmp';
+      fs.writeFileSync(tmpFile, JSON.stringify(poolData, null, 2), { mode: 0o600 });
+      fs.renameSync(tmpFile, USER_POOL_FILE);
+      console.log(`[setup] Saved user pool to ${USER_POOL_FILE}`);
+    } finally {
+      db.close();
+    }
   } finally {
     // Release lock
     if (lockFd !== undefined) {

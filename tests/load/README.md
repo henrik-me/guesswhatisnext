@@ -82,9 +82,12 @@ npx artillery run tests/load/api-stress.yml --target https://your-staging-url.co
 
 | Environment Variable | Default | Description |
 |---|---|---|
-| `LOAD_TEST_TARGET` | `http://localhost:3000` | Server URL for JS helper HTTP calls (user pool setup). Use `--target` to also override Artillery's config target |
-| `LOAD_TEST_USER_COUNT` | `20` | Number of users to pre-register in setup phase |
-| `LOAD_TEST_SETUP_TIMEOUT_MS` | `300000` (5 min) | Max time for user pool setup before aborting |
+| `LOAD_TEST_TARGET` | `http://localhost:3000` | Base URL for API/WS requests during load test scenarios. Also written into `.user-pool.json` for target validation. |
+| `LOAD_TEST_USER_COUNT` | `20` | Number of users to pre-seed in setup phase |
+| `LOAD_TEST_SETUP_TIMEOUT_MS` | `300000` (5 min) | Max time to wait for lock during concurrent setup (direct seeding itself completes in < 1s) |
+| `GWN_DB_PATH` | `data/game.db` | Path to the server's SQLite database for **local seeding only**. Must point to the same file the running server uses. Not applicable for remote targets. |
+| `JWT_SECRET` | *(required for local DB seeding)* | JWT signing secret matching the running server. Only needed when seeding locally via `GWN_DB_PATH`. |
+| `LOAD_TEST_ALLOW_REMOTE_SEED` | *(unset)* | Set to `1` to allow direct DB seeding when `LOAD_TEST_TARGET` is not localhost (e.g., in a shared Docker network). |
 
 ## Test Scenarios
 
@@ -117,9 +120,26 @@ npx artillery run tests/load/api-stress.yml --target https://your-staging-url.co
 ## Rate Limiting & User Pool
 
 The server applies per-IP rate limiting on auth endpoints (5 registrations/min,
-10 logins/min). Since load tests run from a single IP, the `before` hook
-pre-registers a pool of users before the test starts, persisting tokens to
-`.user-pool.json`. Scenario VUs then pick users from this pool in round-robin.
+10 logins/min). For **local/dev or same-host runs** where the load test process
+can access the server's SQLite database file and `JWT_SECRET`, the `before` hook
+seeds users **directly into the database** using `better-sqlite3` and signs JWTs
+locally with `jsonwebtoken`. This completes in under 1 second (vs ~4 minutes
+with HTTP batching).
+
+The setup uses the following env vars:
+- `JWT_SECRET` (required) — must match the running server's secret and be
+  available to the load test process
+- `GWN_DB_PATH` (optional) — override for the server's SQLite database file
+  path, as seen from where the load tests are running (defaults to `data/game.db`)
+
+For **remote/staging environments**, you typically cannot access the DB file or
+secret directly from your local machine. In those cases, either:
+- run the load tests **inside the same environment** (e.g., a container that has
+  access to the DB and `JWT_SECRET`), or
+- fall back to an environment-specific seeding job or admin endpoint
+
+Tokens are persisted to `.user-pool.json` and scenario VUs pick users from
+this pool in round-robin.
 
 The auth scenario (10% weight) tests direct registration and will naturally
 experience some 429 responses — this is expected and validates that rate
