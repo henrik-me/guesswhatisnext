@@ -253,7 +253,7 @@ jobs:
             echo "current-revision=$CURRENT_REV" >> "$GITHUB_OUTPUT"
             echo "Current revision (rollback target): $CURRENT_REV"
 
-            # Deploy with YAML template (preserves volume mounts)
+            # Deploy with YAML template
             SUFFIX="deploy-$(date +%s)"
             TEMPLATE_FILE=$(mktemp)
             trap "rm -f $TEMPLATE_FILE" EXIT
@@ -264,10 +264,6 @@ jobs:
                 scale:
                   minReplicas: 1
                   maxReplicas: 1
-                volumes:
-                  - name: data-volume
-                    storageName: gwn-storage-staging
-                    storageType: AzureFile
                 containers:
                   - name: gwn-staging
                     image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
@@ -285,9 +281,6 @@ jobs:
                     resources:
                       cpu: 0.5
                       memory: 1Gi
-                    volumeMounts:
-                      - volumeName: data-volume
-                        mountPath: /app/data
             YAMLEOF
             az containerapp update \
               --name gwn-staging \
@@ -318,7 +311,7 @@ jobs:
               --name gwn-staging --resource-group gwn-rg \
               --revision-weight "$NEW_REV=100"
 
-      - name: Deactivate old revisions (release SQLite lock)
+      - name: Deactivate old revisions
         uses: azure/cli@v2
         with:
           inlineScript: |
@@ -327,14 +320,13 @@ jobs:
               echo "::error::NEW_REV is invalid — skipping deactivation to avoid taking app offline"
               exit 1
             fi
-            echo "Deactivating all revisions except $NEW_REV to release SQLite file lock..."
+            echo "Deactivating all revisions except $NEW_REV..."
             az containerapp revision list --name gwn-staging --resource-group gwn-rg \
               --query "[?properties.active && name != '$NEW_REV'].name" -o tsv | while read -r rev; do
               echo "Deactivating: $rev"
               az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \
                 --revision "$rev" || true
             done
-            echo "Waiting for old replicas to shut down and release SMB lock..."
             sleep 15
 
       - name: Verify staging deployment
@@ -438,7 +430,7 @@ jobs:
             fi
             # Allow Azure ingress routing to propagate before deactivating
             sleep 10
-            # --- Step 2: Deactivate the failed new revision to release DB locks ---
+            # --- Step 2: Deactivate the failed new revision ---
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
             if [ -n "$NEW_REV" ] && [ "$NEW_REV" != "None" ] && [ "$NEW_REV" != "$CURRENT_REV" ]; then
               az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg \

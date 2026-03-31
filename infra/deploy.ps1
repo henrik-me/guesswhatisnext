@@ -9,8 +9,6 @@ $ErrorActionPreference = "Stop"
 $ResourceGroup = "gwn-rg"
 $Location = "eastus"
 $Environment = "gwn-env"
-$ShareNameStaging = "gwn-data-staging"
-$ShareNameProduction = "gwn-data-production"
 $Registry = "ghcr.io"
 $ImageName = "ghcr.io/henrik-me/guesswhatisnext"
 $ImageTag = if ($env:IMAGE_TAG) { $env:IMAGE_TAG } else { "latest" }
@@ -54,91 +52,6 @@ if (-not $envExists) {
     Write-Host "  Environment already exists, skipping."
 }
 
-# ─── Azure Storage for SQLite persistence ────────────────────────────────────
-# Each environment gets its own file share so staging data never touches production.
-# The app uses CREATE TABLE IF NOT EXISTS and only seeds when tables are empty,
-# so deployments never overwrite existing data. Schema changes are additive
-# (ALTER TABLE ADD COLUMN) and applied on startup.
-#
-# MIGRATION NOTE: If upgrading from the old shared gwn-data share, copy data first:
-#   azcopy copy "https://<account>.file.core.windows.net/gwn-data/*" `
-#               "https://<account>.file.core.windows.net/gwn-data-production/" --recursive
-
-Write-Host "→ Setting up persistent storage..." -ForegroundColor Yellow
-
-# Find or create storage account (names must be globally unique)
-$ExistingStorage = az storage account list `
-    --resource-group $ResourceGroup `
-    --query "[?starts_with(name, 'gwnstorage')].name | [0]" `
-    -o tsv 2>$null
-
-if ($ExistingStorage -and $ExistingStorage -ne "None") {
-    $StorageAccount = $ExistingStorage
-    Write-Host "  Using existing storage account: $StorageAccount"
-} else {
-    $Suffix = (Get-Date -UFormat %s).Substring(0, 9) -replace "\.", ""
-    $StorageAccount = "gwnstorage$Suffix"
-    Write-Host "  Creating storage account: $StorageAccount"
-    az storage account create `
-        --name $StorageAccount `
-        --resource-group $ResourceGroup `
-        --location $Location `
-        --sku Standard_LRS `
-        --output none
-    if ($LASTEXITCODE -ne 0) { exit 1 }
-}
-
-$StorageKey = az storage account keys list `
-    --resource-group $ResourceGroup `
-    --account-name $StorageAccount `
-    --query "[0].value" `
-    -o tsv
-if ($LASTEXITCODE -ne 0 -or -not $StorageKey) {
-    Write-Error "Error: Failed to retrieve storage account key for storage account '$StorageAccount'."
-    exit 1
-}
-
-# Create separate file shares for staging and production
-foreach ($Share in @($ShareNameStaging, $ShareNameProduction)) {
-    Write-Host "  Creating file share: $Share"
-    az storage share create `
-        --name $Share `
-        --account-name $StorageAccount `
-        --account-key $StorageKey `
-        --output none
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed to create file share '$Share'."
-        exit 1
-    }
-}
-
-# Register storage mounts in Container Apps environment (one per share)
-az containerapp env storage set `
-    --name $Environment `
-    --resource-group $ResourceGroup `
-    --storage-name gwn-storage-staging `
-    --azure-file-account-name $StorageAccount `
-    --azure-file-account-key $StorageKey `
-    --azure-file-share-name $ShareNameStaging `
-    --access-mode ReadWrite `
-    --output none
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "Failed to register staging storage mount (exit code $LASTEXITCODE)."
-}
-
-az containerapp env storage set `
-    --name $Environment `
-    --resource-group $ResourceGroup `
-    --storage-name gwn-storage-production `
-    --azure-file-account-name $StorageAccount `
-    --azure-file-account-key $StorageKey `
-    --azure-file-share-name $ShareNameProduction `
-    --access-mode ReadWrite `
-    --output none
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "Failed to register production storage mount (exit code $LASTEXITCODE)."
-}
-
 # ─── Deploy Staging ──────────────────────────────────────────────────────────
 
 Write-Host "→ Deploying staging container app..." -ForegroundColor Yellow
@@ -177,34 +90,6 @@ if (-not $stagingExists) {
     Write-Host "  Staging app updated."
 }
 
-# Volume mount for staging (via YAML) — preserve the currently deployed image
-$stagingCurrentImage = az containerapp show --name gwn-staging --resource-group $ResourceGroup --query "properties.template.containers[0].image" -o tsv 2>$null
-if (-not $stagingCurrentImage) { $stagingCurrentImage = $PlaceholderImage }
-$stagingYaml = @"
-properties:
-  template:
-    volumes:
-      - name: data-volume
-        storageName: gwn-storage-staging
-        storageType: AzureFile
-    containers:
-      - name: gwn-staging
-        image: ${stagingCurrentImage}
-        volumeMounts:
-          - volumeName: data-volume
-            mountPath: /app/data
-"@
-$stagingYamlFile = [System.IO.Path]::GetTempFileName() + ".yaml"
-$stagingYaml | Set-Content -Path $stagingYamlFile -Encoding UTF8
-try {
-    az containerapp update --name gwn-staging --resource-group $ResourceGroup --yaml $stagingYamlFile --output none 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Staging volume mount failed (exit code $LASTEXITCODE). May need manual config via Azure Portal."
-    }
-} finally {
-    Remove-Item -Path $stagingYamlFile -ErrorAction SilentlyContinue
-}
-
 # ─── Deploy Production ───────────────────────────────────────────────────────
 
 Write-Host "→ Deploying production container app..." -ForegroundColor Yellow
@@ -241,34 +126,6 @@ if (-not $prodExists) {
         --output none
     if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Host "  Production app updated."
-}
-
-# Volume mount for production (via YAML) — preserve the currently deployed image
-$prodCurrentImage = az containerapp show --name gwn-production --resource-group $ResourceGroup --query "properties.template.containers[0].image" -o tsv 2>$null
-if (-not $prodCurrentImage) { $prodCurrentImage = $PlaceholderImage }
-$prodYaml = @"
-properties:
-  template:
-    volumes:
-      - name: data-volume
-        storageName: gwn-storage-production
-        storageType: AzureFile
-    containers:
-      - name: gwn-production
-        image: ${prodCurrentImage}
-        volumeMounts:
-          - volumeName: data-volume
-            mountPath: /app/data
-"@
-$prodYamlFile = [System.IO.Path]::GetTempFileName() + ".yaml"
-$prodYaml | Set-Content -Path $prodYamlFile -Encoding UTF8
-try {
-    az containerapp update --name gwn-production --resource-group $ResourceGroup --yaml $prodYamlFile --output none 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Production volume mount failed (exit code $LASTEXITCODE). May need manual config via Azure Portal."
-    }
-} finally {
-    Remove-Item -Path $prodYamlFile -ErrorAction SilentlyContinue
 }
 
 # ─── Output URLs ─────────────────────────────────────────────────────────────

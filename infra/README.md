@@ -15,10 +15,7 @@ Azure Resources
   ├── Resource Group: gwn-rg
   ├── Container Apps Environment: gwn-env
   ├── Container App: gwn-staging  (0-2 replicas, 0.25 CPU, 0.5 GiB)
-  ├── Container App: gwn-production (1-5 replicas, 0.5 CPU, 1 GiB)
-  └── Storage Account: gwnstorage*
-      ├── gwn-data-staging (Azure Files → gwn-staging /app/data)
-      └── gwn-data-production (Azure Files → gwn-production /app/data)
+  └── Container App: gwn-production (1-5 replicas, 0.5 CPU, 1 GiB)
 ```
 
 ## Prerequisites
@@ -39,7 +36,6 @@ az account set --subscription "<subscription-id>"
 # Register required providers
 az provider register --namespace Microsoft.App
 az provider register --namespace Microsoft.OperationalInsights
-az provider register --namespace Microsoft.Storage
 ```
 
 ## Initial Deployment
@@ -233,26 +229,17 @@ When the monitor creates an issue:
 - Close the issue once the root cause is resolved — the monitor will create a new one if
   the problem recurs
 
-## Persistent Storage
+## Storage
 
-SQLite database files are stored on Azure Files shares mounted at `/app/data`.
-Each environment has its own isolated file share to prevent data corruption
-and ensure staging tests never affect production data.
-
-| Environment | File Share | Storage Mount |
-|---|---|---|
-| Staging | `gwn-data-staging` | `gwn-storage-staging` |
-| Production | `gwn-data-production` | `gwn-storage-production` |
-
-> **Note:** Azure Files has higher latency than local disk. For high-traffic
-> production use, consider migrating to Azure SQL or Cosmos DB.
+SQLite databases are stored on the container's local filesystem (`GWN_DB_PATH=/tmp/game.db`
+in staging/production). Data is ephemeral — lost on container restart. This is acceptable
+for staging; production will migrate to Azure SQL (Phase 11b-c).
 
 ## Cost Estimates
 
 With Container Apps consumption plan (pay-per-use):
 - **Staging** (0 min replicas): ~$0 when idle
 - **Production** (1 min replica): ~$15-30/month at low traffic
-- **Storage**: ~$1/month for Azure Files
 
 ## Troubleshooting
 

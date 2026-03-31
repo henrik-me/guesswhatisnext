@@ -10,9 +10,6 @@ RUN npm ci --omit=dev
 COPY server/ ./server/
 COPY public/ ./public/
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data
-
 EXPOSE 3000
 
 ENV NODE_ENV=production

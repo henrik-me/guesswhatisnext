@@ -130,10 +130,6 @@ jobs:
             cat > /tmp/deploy-template.yaml <<YAMLEOF
             properties:
               template:
-                volumes:
-                  - name: data-volume
-                    storageName: gwn-storage-production
-                    storageType: AzureFile
                 containers:
                   - name: gwn-production
                     image: ${{ env.IMAGE_NAME }}:${{ inputs.image-tag }}
@@ -146,12 +142,11 @@ jobs:
                         value: "${JWT_SECRET}"
                       - name: SYSTEM_API_KEY
                         value: "${SYSTEM_API_KEY}"
+                      - name: GWN_DB_PATH
+                        value: /tmp/game.db
                     resources:
                       cpu: 0.5
                       memory: 1Gi
-                    volumeMounts:
-                      - volumeName: data-volume
-                        mountPath: /app/data
             YAMLEOF
             az containerapp update \
               --name gwn-production \
@@ -208,10 +203,6 @@ jobs:
             cat > /tmp/deploy-template.yaml <<YAMLEOF
             properties:
               template:
-                volumes:
-                  - name: data-volume
-                    storageName: gwn-storage-production
-                    storageType: AzureFile
                 containers:
                   - name: gwn-production
                     image: ${{ steps.rollback.outputs.current-image }}
@@ -224,12 +215,11 @@ jobs:
                         value: "${JWT_SECRET}"
                       - name: SYSTEM_API_KEY
                         value: "${SYSTEM_API_KEY}"
+                      - name: GWN_DB_PATH
+                        value: /tmp/game.db
                     resources:
                       cpu: 0.5
                       memory: 1Gi
-                    volumeMounts:
-                      - volumeName: data-volume
-                        mountPath: /app/data
             YAMLEOF
             az containerapp update \
               --name gwn-production \
