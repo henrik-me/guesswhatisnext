@@ -71,6 +71,7 @@ if (-not $stagingExists) {
         --env-vars `
             NODE_ENV=staging `
             PORT=3000 `
+            GWN_DB_PATH=/tmp/game.db `
             "JWT_SECRET=$env:JWT_SECRET" `
             "SYSTEM_API_KEY=$env:SYSTEM_API_KEY" `
         --output none
@@ -83,6 +84,7 @@ if (-not $stagingExists) {
         --set-env-vars `
             NODE_ENV=staging `
             PORT=3000 `
+            GWN_DB_PATH=/tmp/game.db `
             "JWT_SECRET=$env:JWT_SECRET" `
             "SYSTEM_API_KEY=$env:SYSTEM_API_KEY" `
         --output none
@@ -109,6 +111,7 @@ if (-not $prodExists) {
         --env-vars `
             NODE_ENV=production `
             PORT=3000 `
+            GWN_DB_PATH=/tmp/game.db `
             "JWT_SECRET=$env:JWT_SECRET" `
             "SYSTEM_API_KEY=$env:SYSTEM_API_KEY" `
         --output none
@@ -121,6 +124,7 @@ if (-not $prodExists) {
         --set-env-vars `
             NODE_ENV=production `
             PORT=3000 `
+            GWN_DB_PATH=/tmp/game.db `
             "JWT_SECRET=$env:JWT_SECRET" `
             "SYSTEM_API_KEY=$env:SYSTEM_API_KEY" `
         --output none

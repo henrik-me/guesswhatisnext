@@ -71,6 +71,7 @@ if ! az containerapp show --name gwn-staging --resource-group "$RESOURCE_GROUP" 
     --env-vars \
       NODE_ENV=staging \
       PORT=3000 \
+      GWN_DB_PATH=/tmp/game.db \
       JWT_SECRET="$JWT_SECRET" \
       SYSTEM_API_KEY="$SYSTEM_API_KEY" \
     --output none
@@ -82,6 +83,7 @@ else
     --set-env-vars \
       NODE_ENV=staging \
       PORT=3000 \
+      GWN_DB_PATH=/tmp/game.db \
       JWT_SECRET="$JWT_SECRET" \
       SYSTEM_API_KEY="$SYSTEM_API_KEY" \
     --output none
@@ -106,6 +108,7 @@ if ! az containerapp show --name gwn-production --resource-group "$RESOURCE_GROU
     --env-vars \
       NODE_ENV=production \
       PORT=3000 \
+      GWN_DB_PATH=/tmp/game.db \
       JWT_SECRET="$JWT_SECRET" \
       SYSTEM_API_KEY="$SYSTEM_API_KEY" \
     --output none
@@ -117,6 +120,7 @@ else
     --set-env-vars \
       NODE_ENV=production \
       PORT=3000 \
+      GWN_DB_PATH=/tmp/game.db \
       JWT_SECRET="$JWT_SECRET" \
       SYSTEM_API_KEY="$SYSTEM_API_KEY" \
     --output none
