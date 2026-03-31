@@ -189,6 +189,18 @@ describe('transactions', () => {
     });
     expect(result).toBe('done');
   });
+
+  test('nested transactions are re-entrant', async () => {
+    await adapter.transaction(async (tx) => {
+      await tx.run('INSERT INTO txtest (val) VALUES (?)', ['outer']);
+      await tx.transaction(async (inner) => {
+        await inner.run('INSERT INTO txtest (val) VALUES (?)', ['inner']);
+      });
+    });
+
+    const rows = await adapter.all('SELECT val FROM txtest ORDER BY id');
+    expect(rows).toEqual([{ val: 'outer' }, { val: 'inner' }]);
+  });
 });
 
 /* ── Migrations ────────────────────────────────────────────────────── */

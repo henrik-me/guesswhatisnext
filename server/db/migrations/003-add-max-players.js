@@ -23,16 +23,17 @@ module.exports = {
       if (!isDuplicateColumnError(err)) throw err;
     }
 
-    let hostAdded = false;
+    let hostColumnExists = false;
     try {
       await db.exec('ALTER TABLE matches ADD COLUMN host_user_id INTEGER REFERENCES users(id)');
-      hostAdded = true;
+      hostColumnExists = true;
     } catch (err) {
       if (!isDuplicateColumnError(err)) throw err;
+      hostColumnExists = true; // column already existed
     }
 
-    // Backfill host_user_id — safe to run whether column was just added or already existed
-    if (hostAdded) {
+    // Backfill host_user_id — safe whether column was just added or already existed
+    if (hostColumnExists) {
       await db.exec('UPDATE matches SET host_user_id = created_by WHERE host_user_id IS NULL');
     }
   },

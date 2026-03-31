@@ -23,6 +23,7 @@ class SqliteAdapter extends BaseAdapter {
     this._options = options;
     this._db = null;
     this._txLock = null;
+    this._inTransaction = false;
   }
 
   /* ── Abstract method implementations ──────────────────────────────── */
@@ -75,16 +76,24 @@ class SqliteAdapter extends BaseAdapter {
    *
    * An internal mutex prevents concurrent transactions from interleaving
    * on the shared connection — if another transaction is in progress the
-   * caller waits until it completes.
+   * caller waits until it completes. Nested transaction calls on the same
+   * adapter are re-entrant (they skip BEGIN/COMMIT and run inside the
+   * outer transaction).
    */
   async _transaction(fn) {
-    // Serialize transactions so concurrent async callers don't interleave
+    // Re-entrant: if already inside a transaction, just run fn directly
+    if (this._inTransaction) {
+      return fn(this);
+    }
+
+    // Serialize concurrent transaction calls
     while (this._txLock) {
       await this._txLock;
     }
 
     let releaseLock;
     this._txLock = new Promise((resolve) => { releaseLock = resolve; });
+    this._inTransaction = true;
 
     this._db.exec('BEGIN');
     try {
@@ -95,6 +104,7 @@ class SqliteAdapter extends BaseAdapter {
       this._db.exec('ROLLBACK');
       throw err;
     } finally {
+      this._inTransaction = false;
       this._txLock = null;
       releaseLock();
     }
