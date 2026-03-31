@@ -35,8 +35,8 @@ async function createDb(opts = {}) {
       MssqlAdapter = require('./mssql-adapter');
     } catch {
       throw new Error(
-        'MSSQL database backend is not yet available. ' +
-          'Remove DB_BACKEND=mssql / DATABASE_URL or wait for the mssql-adapter module.'
+        'MSSQL database backend is not yet available because the mssql-adapter module is missing. ' +
+          'To use SQLite instead, remove DATABASE_URL from the environment or do not pass opts.backend = "mssql".'
       );
     }
     const adapter = new MssqlAdapter(opts.connectionString || config.DATABASE_URL);
@@ -94,9 +94,26 @@ async function getDbAdapter(opts) {
  */
 async function closeDbAdapter() {
   if (_instance) {
-    await _instance.close();
-    _instance = null;
-    _instancePromise = null;
+    try {
+      await _instance.close();
+    } finally {
+      _instance = null;
+      _instancePromise = null;
+    }
+    return;
+  }
+
+  // If creation is in-flight, wait for it to resolve then close.
+  if (_instancePromise) {
+    try {
+      const adapter = await _instancePromise;
+      if (adapter && typeof adapter.close === 'function') {
+        await adapter.close();
+      }
+    } finally {
+      _instance = null;
+      _instancePromise = null;
+    }
   }
 }
 
