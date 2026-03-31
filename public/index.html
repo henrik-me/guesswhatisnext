@@ -29,7 +29,7 @@
         <button class="btn btn-secondary" data-action="start-multiplayer" aria-label="Start Multiplayer">⚔️ Multiplayer</button>
         <button class="btn btn-secondary" data-action="show-leaderboard" aria-label="View Leaderboard">🏆 Leaderboard</button>
         <button class="btn btn-secondary" data-action="show-achievements" aria-label="View Achievements">🏅 Achievements</button>
-        <button class="btn btn-secondary" data-action="show-submit-puzzle" aria-label="Submit a Puzzle">📝 Submit Puzzle</button>
+        <button class="btn btn-secondary" data-action="show-submit-puzzle" data-bind="submit-puzzle-btn" aria-label="Submit a Puzzle" style="display:none">📝 Submit Puzzle</button>
         <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
       <footer class="home-stats">
@@ -422,7 +422,7 @@
         <div class="form-group submit-puzzle-actions">
           <button type="submit" class="btn btn-primary">Submit Puzzle</button>
         </div>
-        <p class="submit-puzzle-status" data-bind="submit-puzzle-status"></p>
+        <p class="submit-puzzle-status" data-bind="submit-puzzle-status" role="status" aria-live="polite"></p>
       </form>
       <button class="btn btn-back" data-action="go-home">← Back</button>
     </section>

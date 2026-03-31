@@ -8,16 +8,9 @@
 const express = require('express');
 const { getDb } = require('../db/connection');
 const { requireAuth, requireSystem } = require('../middleware/auth');
+const { VALID_CATEGORIES } = require('../categories');
 
 const router = express.Router();
-
-const VALID_CATEGORIES = [
-  'Nature', 'Math & Numbers', 'Colors & Patterns', 'General Knowledge',
-  'Emoji Sequences', 'Music', 'Flags', 'Science', 'Sports', 'Food',
-  'Animals', 'Pop Culture', 'Letter & Word Patterns', 'Logic Sequences',
-  'Visual & Spatial', 'Creative & Mixed', 'Geography', 'History',
-  'Technology', 'Art & Design', 'Language & Grammar',
-];
 
 /** Validate a submission payload. Returns an error string or null. */
 function validateSubmission(body) {
@@ -26,7 +19,11 @@ function validateSubmission(body) {
   if (!Array.isArray(sequence) || sequence.length < 3) {
     return 'sequence must be an array of at least 3 elements';
   }
-  if (answer === undefined || answer === null || answer === '') {
+  if (answer === undefined || answer === null) {
+    return 'answer is required';
+  }
+  const trimmedAnswer = typeof answer === 'string' ? answer.trim() : String(answer);
+  if (trimmedAnswer.length === 0) {
     return 'answer is required';
   }
   if (typeof explanation !== 'string' || explanation.trim().length === 0) {
@@ -132,11 +129,15 @@ router.put('/:id/review', requireSystem, (req, res) => {
     return res.status(409).json({ error: 'Submission has already been reviewed' });
   }
 
-  db.prepare(
+  const result = db.prepare(
     `UPDATE puzzle_submissions
      SET status = ?, reviewer_notes = ?, reviewed_at = CURRENT_TIMESTAMP
-     WHERE id = ?`
+     WHERE id = ? AND status = 'pending'`
   ).run(status, reviewerNotes || null, req.params.id);
+
+  if (result.changes === 0) {
+    return res.status(409).json({ error: 'Submission has already been reviewed' });
+  }
 
   res.json({ id: Number(req.params.id), status, message: `Submission ${status}` });
 });

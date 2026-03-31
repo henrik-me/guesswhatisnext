@@ -899,12 +899,15 @@ function isLoggedIn() {
 function updateHomeAuthDisplay() {
   const row = document.querySelector('[data-bind="home-user-display"]');
   const label = document.querySelector('[data-bind="home-user-label"]');
+  const submitBtn = document.querySelector('[data-bind="submit-puzzle-btn"]');
   if (!row) return;
   if (isLoggedIn() && authUsername) {
     if (label) label.textContent = `👤 Logged in as ${authUsername}`;
     row.style.display = '';
+    if (submitBtn) submitBtn.style.display = '';
   } else {
     row.style.display = 'none';
+    if (submitBtn) submitBtn.style.display = 'none';
   }
 }
 
