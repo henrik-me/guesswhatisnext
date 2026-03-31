@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 30
 
     env:
-      NODE_ENV: production
+      NODE_ENV: test
       JWT_SECRET: ci-load-test-secret
       SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
 
