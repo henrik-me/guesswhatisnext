@@ -2310,7 +2310,7 @@ async function loadModerationSubmissions() {
     const res = await apiFetch('/api/submissions/pending');
     const data = await res.json();
     if (!res.ok) {
-      container.innerHTML = `<p class="moderation-error">${data.error || 'Failed to load'}</p>`;
+      container.innerHTML = `<p class="moderation-error">${escapeHTML(data.error || 'Failed to load')}</p>`;
       return;
     }
     const submissions = data.submissions || [];
@@ -2380,7 +2380,7 @@ async function loadUserManagement() {
     const res = await apiFetch('/api/users');
     const data = await res.json();
     if (!res.ok) {
-      container.innerHTML = `<p class="moderation-error">${data.error || 'Failed to load users'}</p>`;
+      container.innerHTML = `<p class="moderation-error">${escapeHTML(data.error || 'Failed to load users')}</p>`;
       return;
     }
     const users = data.users || [];
