@@ -153,6 +153,32 @@ jobs:
             exit 1
           fi
 
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Lockfile generated on Windows lacks Linux-specific optional deps
+      # (rolldown native bindings). Fresh install resolves correctly.
+      - run: rm -f package-lock.json && npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests against ephemeral container
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-e2e-results
+          path: test-results/
+          retention-days: 7
+
   update-staging-branch:
     name: Fast-Forward release/staging
     needs: smoke-test
