@@ -12,7 +12,8 @@ describe('Security headers', () => {
     const res = await getAgent().get('/healthz');
 
     expect(res.status).toBe(200);
-    expect(res.headers['strict-transport-security']).toMatch(/max-age=\d+/);
+    // HSTS only in production/staging, not in test
+    expect(res.headers['strict-transport-security']).toBeUndefined();
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['x-frame-options']).toBe('DENY');
     expect(res.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
@@ -37,7 +38,6 @@ describe('Security headers', () => {
 
   test('security headers present on API routes', async () => {
     const res = await getAgent().get('/api/auth/me');
-    expect(res.headers['strict-transport-security']).toMatch(/max-age=\d+/);
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['content-security-policy']).toBeDefined();
   });
@@ -67,10 +67,15 @@ describe('HTTPS redirect in production mode', () => {
   beforeAll(() => {
     originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
+    // Set canonical host on the config object (loaded at import time)
+    const { config } = require('../server/config');
+    config.CANONICAL_HOST = 'example.com';
   });
 
   afterAll(() => {
     process.env.NODE_ENV = originalEnv;
+    const { config } = require('../server/config');
+    config.CANONICAL_HOST = '';
   });
 
   test('redirects HTTP to HTTPS in production', async () => {
@@ -79,7 +84,7 @@ describe('HTTPS redirect in production mode', () => {
       .set('X-Forwarded-Proto', 'http');
 
     expect(res.status).toBe(308);
-    expect(res.headers.location).toMatch(/^https:\/\//);
+    expect(res.headers.location).toBe('https://example.com/healthz');
   });
 
   test('does not redirect HTTPS requests in production', async () => {

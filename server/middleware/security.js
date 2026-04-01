@@ -15,9 +15,11 @@ function httpsRedirect(req, res, next) {
   if (process.env.NODE_ENV === 'production') {
     const isSecure = req.secure || req.protocol === 'https';
     if (!isSecure) {
-      // Use configured canonical host to prevent host-header injection.
-      // Falls back to request Host header for backwards compatibility.
-      const host = config.CANONICAL_HOST || req.get('host') || req.hostname;
+      const host = config.CANONICAL_HOST;
+      if (!host) {
+        // Fail closed: refuse to redirect without a known-safe host.
+        return res.status(421).send('Misdirected Request');
+      }
       return res.redirect(308, `https://${host}${req.originalUrl}`);
     }
   }
@@ -37,6 +39,8 @@ function securityHeaders(req, res, next) {
   helmetMiddleware(req, res, next);
 }
 
+const isProduction = config.NODE_ENV === 'production' || config.NODE_ENV === 'staging';
+
 const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
@@ -50,11 +54,10 @@ const helmetMiddleware = helmet({
       frameAncestors: ["'none'"],
     },
   },
-  strictTransportSecurity: {
-    maxAge: 63072000, // 2 years
-    includeSubDomains: true,
-    preload: true,
-  },
+  // HSTS only in production/staging to avoid browser caching issues in dev
+  strictTransportSecurity: isProduction
+    ? { maxAge: 63072000, includeSubDomains: true, preload: true }
+    : false,
   xContentTypeOptions: true,
   xFrameOptions: { action: 'deny' },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
