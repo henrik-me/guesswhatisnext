@@ -313,7 +313,7 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 | 61c | mssql adapter | ✅ Done | 61a | `mssql-adapter.js`. PR #56 merged. Not used until Task 64. |
 | 62 | Convert routes to async | ✅ Done | 61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 merged. |
 | 63 | Update tests for async | ✅ Done | 61b, 62 | Async test helpers. All 173 tests pass with SQLite adapter. PR #57 merged (combined with 62). |
-| 63v | Validate staging (post-async) | ⬜ Pending | 63 | Trigger staging deploy, verify async DB layer works end-to-end in Azure. |
+| 63v | Validate staging (post-async) | ✅ Done | 63 | Staging deploy + smoke tests + E2E all passed. 4 migrations applied, 504 puzzles seeded, async routes working. Run #23833160313. |
 | 64 | Provision Azure SQL | ⬜ Pending | 63v | Free-tier serverless DB. Firewall. GitHub secret. |
 | 65 | Production deploy | ⬜ Pending | 64 | Update prod-deploy.yml. First deploy + verify. |
 
