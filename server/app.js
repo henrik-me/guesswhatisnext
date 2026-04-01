@@ -27,7 +27,13 @@ const pkg = require('../package.json');
  */
 async function initializeDatabase() {
   const db = await getDbAdapter();
-  await db.migrate(migrations);
+
+  // Migrations are currently SQLite-specific; skip for other dialects.
+  if (db.dialect === 'mssql') {
+    console.warn('⚠️  MSSQL migrations not yet implemented — skipping automatic migration');
+  } else {
+    await db.migrate(migrations);
+  }
 
   // Seed system account if it doesn't exist
   const SYSTEM_API_KEY = config.SYSTEM_API_KEY;

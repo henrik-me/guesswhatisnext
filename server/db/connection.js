@@ -157,26 +157,12 @@ function _initDbOnce() {
   const { ACHIEVEMENTS } = require('../achievements');
   const achCount = database.prepare('SELECT COUNT(*) as c FROM achievements').get();
   if (achCount.c === 0) {
-    const achDescriptions = {
-      'first-game': 'Play your first game',
-      'score-500': 'Score 500+ in a single game',
-      'score-1000': 'Score 1000+ in a single game',
-      'perfect-game': 'Get all answers correct in a game',
-      'streak-5': 'Get a 5-answer streak',
-      'streak-10': 'Get a 10-answer streak',
-      'daily-3': 'Complete 3 daily challenges',
-      'daily-7': 'Complete 7 daily challenges',
-      'mp-first-win': 'Win your first multiplayer match',
-      'mp-5-wins': 'Win 5 multiplayer matches',
-      'speed-demon': 'Answer correctly within 2 seconds',
-      'explorer': 'Play puzzles from 5 different categories',
-    };
     const insertAch = database.prepare(
       'INSERT INTO achievements (id, name, description, icon, category, requirement) VALUES (?, ?, ?, ?, ?, ?)'
     );
     database.transaction((items) => {
       for (const a of items) {
-        insertAch.run(a.id, a.name, achDescriptions[a.id], a.icon, a.category, a.requirement);
+        insertAch.run(a.id, a.name, a.description, a.icon, a.category, a.requirement);
       }
     })(ACHIEVEMENTS);
     console.log('🏅 Achievements seeded');

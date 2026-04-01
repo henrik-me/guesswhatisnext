@@ -9,6 +9,7 @@ const ACHIEVEMENTS = [
   {
     id: 'first-game',
     name: 'First Steps',
+    description: 'Play your first game',
     icon: '🎮',
     category: 'general',
     requirement: JSON.stringify({ type: 'games_played', threshold: 1 }),
@@ -16,6 +17,7 @@ const ACHIEVEMENTS = [
   {
     id: 'score-500',
     name: 'Rising Star',
+    description: 'Score 500+ in a single game',
     icon: '⭐',
     category: 'scoring',
     requirement: JSON.stringify({ type: 'score', threshold: 500 }),
@@ -23,6 +25,7 @@ const ACHIEVEMENTS = [
   {
     id: 'score-1000',
     name: 'High Achiever',
+    description: 'Score 1000+ in a single game',
     icon: '🌟',
     category: 'scoring',
     requirement: JSON.stringify({ type: 'score', threshold: 1000 }),
@@ -30,6 +33,7 @@ const ACHIEVEMENTS = [
   {
     id: 'perfect-game',
     name: 'Perfectionist',
+    description: 'Get all answers correct in a game',
     icon: '💎',
     category: 'scoring',
     requirement: JSON.stringify({ type: 'perfect_game' }),
@@ -37,6 +41,7 @@ const ACHIEVEMENTS = [
   {
     id: 'streak-5',
     name: 'On Fire',
+    description: 'Get a 5-answer streak',
     icon: '🔥',
     category: 'streaks',
     requirement: JSON.stringify({ type: 'streak', threshold: 5 }),
@@ -44,6 +49,7 @@ const ACHIEVEMENTS = [
   {
     id: 'streak-10',
     name: 'Unstoppable',
+    description: 'Get a 10-answer streak',
     icon: '⚡',
     category: 'streaks',
     requirement: JSON.stringify({ type: 'streak', threshold: 10 }),
@@ -51,6 +57,7 @@ const ACHIEVEMENTS = [
   {
     id: 'daily-3',
     name: 'Dedicated',
+    description: 'Complete 3 daily challenges',
     icon: '📅',
     category: 'daily',
     requirement: JSON.stringify({ type: 'daily_count', threshold: 3 }),
@@ -58,6 +65,7 @@ const ACHIEVEMENTS = [
   {
     id: 'daily-7',
     name: 'Weekly Warrior',
+    description: 'Complete 7 daily challenges',
     icon: '🗓️',
     category: 'daily',
     requirement: JSON.stringify({ type: 'daily_count', threshold: 7 }),
@@ -65,6 +73,7 @@ const ACHIEVEMENTS = [
   {
     id: 'mp-first-win',
     name: 'Victor',
+    description: 'Win your first multiplayer match',
     icon: '🏆',
     category: 'multiplayer',
     requirement: JSON.stringify({ type: 'mp_wins', threshold: 1 }),
@@ -72,6 +81,7 @@ const ACHIEVEMENTS = [
   {
     id: 'mp-5-wins',
     name: 'Champion',
+    description: 'Win 5 multiplayer matches',
     icon: '👑',
     category: 'multiplayer',
     requirement: JSON.stringify({ type: 'mp_wins', threshold: 5 }),
@@ -79,6 +89,7 @@ const ACHIEVEMENTS = [
   {
     id: 'speed-demon',
     name: 'Speed Demon',
+    description: 'Answer correctly within 2 seconds',
     icon: '⚡',
     category: 'speed',
     requirement: JSON.stringify({ type: 'fast_answer', threshold: 2000 }),
@@ -86,6 +97,7 @@ const ACHIEVEMENTS = [
   {
     id: 'explorer',
     name: 'Explorer',
+    description: 'Play puzzles from 5 different categories',
     icon: '🗺️',
     category: 'general',
     requirement: JSON.stringify({ type: 'categories_played', threshold: 5 }),
@@ -100,26 +112,11 @@ async function seedAchievements() {
   const row = await db.get('SELECT COUNT(*) as c FROM achievements');
   if (row.c > 0) return;
 
-  const descriptions = {
-    'first-game': 'Play your first game',
-    'score-500': 'Score 500+ in a single game',
-    'score-1000': 'Score 1000+ in a single game',
-    'perfect-game': 'Get all answers correct in a game',
-    'streak-5': 'Get a 5-answer streak',
-    'streak-10': 'Get a 10-answer streak',
-    'daily-3': 'Complete 3 daily challenges',
-    'daily-7': 'Complete 7 daily challenges',
-    'mp-first-win': 'Win your first multiplayer match',
-    'mp-5-wins': 'Win 5 multiplayer matches',
-    'speed-demon': 'Answer correctly within 2 seconds',
-    'explorer': 'Play puzzles from 5 different categories',
-  };
-
   await db.transaction(async (tx) => {
     for (const a of ACHIEVEMENTS) {
       await tx.run(
         'INSERT INTO achievements (id, name, description, icon, category, requirement) VALUES (?, ?, ?, ?, ?, ?)',
-        [a.id, a.name, descriptions[a.id], a.icon, a.category, a.requirement]
+        [a.id, a.name, a.description, a.icon, a.category, a.requirement]
       );
     }
   });
