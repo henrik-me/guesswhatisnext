@@ -84,9 +84,18 @@ function initWebSocket(server, isReady) {
     ws.on('message', (data) => {
       // Chain message handling per-socket to prevent interleaved async mutations
       ws._msgQueue = ws._msgQueue.then(() => {
-        const msg = JSON.parse(data);
+        let msg;
+        try {
+          msg = JSON.parse(data);
+        } catch {
+          if (ws.readyState === 1) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+          }
+          return;
+        }
         return handleMessage(ws, msg);
-      }).catch(() => {
+      }).catch((err) => {
+        console.error('WebSocket handler error:', err);
         if (ws.readyState === 1) {
           ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
         }
