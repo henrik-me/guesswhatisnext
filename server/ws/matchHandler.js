@@ -6,7 +6,7 @@
 const { WebSocketServer } = require('ws');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth');
-const { getDb } = require('../db/connection');
+const { getDbAdapter } = require('../db');
 const { checkAndUnlockAchievements } = require('../achievements');
 
 /** Active rooms: Map<roomCode, RoomState> */
@@ -27,9 +27,9 @@ const NEXT_ROUND_DELAY_MS = 3000;
 const RECONNECT_WINDOW_MS = 30000;
 
 /** Select `count` random puzzles from the database. */
-function selectRandomPuzzles(count) {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM puzzles WHERE active = 1 ORDER BY RANDOM() LIMIT ?').all(count);
+async function selectRandomPuzzles(count) {
+  const db = await getDbAdapter();
+  const rows = await db.all('SELECT * FROM puzzles WHERE active = 1 ORDER BY RANDOM() LIMIT ?', [count]);
   return rows.map(row => ({
     ...row,
     sequence: JSON.parse(row.sequence),
@@ -77,20 +77,33 @@ function initWebSocket(server, isReady) {
 
     ws.user = user;
     ws.isAlive = true;
+    ws._msgQueue = Promise.resolve();
 
     ws.on('pong', () => { ws.isAlive = true; });
 
     ws.on('message', (data) => {
-      try {
-        const msg = JSON.parse(data);
-        handleMessage(ws, msg);
-      } catch {
-        ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
-      }
+      // Chain message handling per-socket to prevent interleaved async mutations
+      ws._msgQueue = ws._msgQueue.then(() => {
+        let msg;
+        try {
+          msg = JSON.parse(data);
+        } catch {
+          if (ws.readyState === 1) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+          }
+          return;
+        }
+        return handleMessage(ws, msg);
+      }).catch((err) => {
+        console.error('WebSocket handler error:', err);
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
+        }
+      });
     });
 
     ws.on('close', () => {
-      handleDisconnect(ws);
+      handleDisconnect(ws).catch(() => { /* non-fatal */ });
     });
 
     ws.send(JSON.stringify({ type: 'connected', user: { id: user.id, username: user.username } }));
@@ -126,22 +139,22 @@ function initWebSocket(server, isReady) {
 }
 
 /** Handle incoming WebSocket messages. */
-function handleMessage(ws, msg) {
+async function handleMessage(ws, msg) {
   switch (msg.type) {
     case 'join':
-      handleJoin(ws, msg.roomCode);
+      await handleJoin(ws, msg.roomCode);
       break;
     case 'answer':
       handleAnswer(ws, msg);
       break;
     case 'start-match':
-      handleStartMatch(ws);
+      await handleStartMatch(ws);
       break;
     case 'rematch-request':
       handleRematchRequest(ws);
       break;
     case 'rematch-start-confirm':
-      handleRematchStartConfirm(ws);
+      await handleRematchStartConfirm(ws);
       break;
     default:
       ws.send(JSON.stringify({ type: 'error', message: `Unknown message type: ${msg.type}` }));
@@ -149,7 +162,7 @@ function handleMessage(ws, msg) {
 }
 
 /** Handle a player joining a room (or reconnecting). */
-function handleJoin(ws, roomCode) {
+async function handleJoin(ws, roomCode) {
   if (!roomCode) {
     ws.send(JSON.stringify({ type: 'error', message: 'Room code required' }));
     return;
@@ -227,8 +240,8 @@ function handleJoin(ws, roomCode) {
 
   // Load match info from DB to get max_players and host
   try {
-    const db = getDb();
-    const match = db.prepare('SELECT max_players, host_user_id, total_rounds FROM matches WHERE room_code = ?').get(code);
+    const db = await getDbAdapter();
+    const match = await db.get('SELECT max_players, host_user_id, total_rounds FROM matches WHERE room_code = ?', [code]);
     if (match) {
       room.maxPlayers = match.max_players || 2;
       room.hostId = match.host_user_id;
@@ -291,7 +304,7 @@ function broadcastLobbyState(roomCode) {
 }
 
 /** Handle host requesting match start. */
-function handleStartMatch(ws) {
+async function handleStartMatch(ws) {
   const roomCode = ws.roomCode;
   if (!roomCode) {
     return sendTo(ws, { type: 'error', message: 'Not in a room' });
@@ -314,16 +327,28 @@ function handleStartMatch(ws) {
     return sendTo(ws, { type: 'error', message: 'Match already started' });
   }
 
-  startMatch(roomCode);
+  await startMatch(roomCode);
 }
 
 /** Start a match: select puzzles and send the first round. */
-function startMatch(roomCode) {
+async function startMatch(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
+  if (room.started || room.starting) return;
 
+  room.starting = true;
+
+  try {
+    room.puzzles = await selectRandomPuzzles(room.totalRounds);
+  } catch (err) {
+    room.starting = false;
+    console.error(`Failed to load puzzles for room ${roomCode}:`, err);
+    broadcastToRoom(roomCode, { type: 'error', message: 'Failed to load puzzles. Please try again.' });
+    cleanupRoom(roomCode);
+    return;
+  }
   room.started = true;
-  room.puzzles = selectRandomPuzzles(room.totalRounds);
+  room.starting = false;
 
   // Build player name list
   const playerNames = [];
@@ -331,8 +356,8 @@ function startMatch(roomCode) {
 
   // Update match status in DB
   try {
-    const db = getDb();
-    db.prepare(`UPDATE matches SET status = 'active' WHERE room_code = ?`).run(roomCode);
+    const db = await getDbAdapter();
+    await db.run(`UPDATE matches SET status = 'active' WHERE room_code = ?`, [roomCode]);
   } catch {
     // Non-fatal: match can proceed without DB update
   }
@@ -344,11 +369,11 @@ function startMatch(roomCode) {
   });
 
   // Start the first round after a brief delay
-  setTimeout(() => sendRound(roomCode), 1000);
+  setTimeout(() => sendRound(roomCode).catch(() => {}), 1000);
 }
 
 /** Send the current round's puzzle to all players. */
-function sendRound(roomCode) {
+async function sendRound(roomCode) {
   const room = rooms.get(roomCode);
   if (!room || room.round >= room.totalRounds) return;
 
@@ -359,12 +384,13 @@ function sendRound(roomCode) {
 
   // Record round in DB
   try {
-    const db = getDb();
-    const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(roomCode);
+    const db = await getDbAdapter();
+    const match = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
     if (match) {
-      db.prepare(
-        `INSERT OR IGNORE INTO match_rounds (match_id, round_num, puzzle_id) VALUES (?, ?, ?)`
-      ).run(match.id, roundNum + 1, puzzle.id);
+      await db.run(
+        `INSERT OR IGNORE INTO match_rounds (match_id, round_num, puzzle_id) VALUES (?, ?, ?)`,
+        [match.id, roundNum + 1, puzzle.id]
+      );
     }
   } catch {
     // Non-fatal
@@ -466,9 +492,9 @@ function resolveRound(roomCode) {
 
   // Check if match is over
   if (room.round >= room.totalRounds) {
-    setTimeout(() => endMatch(roomCode), NEXT_ROUND_DELAY_MS);
+    setTimeout(() => endMatch(roomCode).catch(() => {}), NEXT_ROUND_DELAY_MS);
   } else {
-    setTimeout(() => sendRound(roomCode), NEXT_ROUND_DELAY_MS);
+    setTimeout(() => sendRound(roomCode).catch(() => {}), NEXT_ROUND_DELAY_MS);
   }
 }
 
@@ -487,7 +513,7 @@ function assignRanks(sortedEntries) {
 }
 
 /** End the match: determine winner, persist to DB, broadcast results, keep room for rematch. */
-function endMatch(roomCode) {
+async function endMatch(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
@@ -535,18 +561,19 @@ function endMatch(roomCode) {
 
   // Persist to database
   try {
-    const db = getDb();
-    const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(roomCode);
+    const db = await getDbAdapter();
+    const match = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
     if (match) {
-      db.prepare(
-        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(match.id);
-
-      const updatePlayer = db.prepare(
-        `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`
+      await db.run(
+        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [match.id]
       );
+
       for (const { userId, total } of userScores) {
-        updatePlayer.run(total, match.id, userId);
+        await db.run(
+          `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`,
+          [total, match.id, userId]
+        );
       }
     }
   } catch {
@@ -566,7 +593,7 @@ function endMatch(roomCode) {
         isWin,
         fastestAnswerMs: null,
       };
-      const unlocked = checkAndUnlockAchievements(userId, context);
+      const unlocked = await checkAndUnlockAchievements(userId, context);
       if (unlocked.length > 0) {
         const ws = room.players.get(userId);
         if (ws && ws.readyState === 1) {
@@ -612,7 +639,7 @@ function cleanupRoom(roomCode) {
 }
 
 /** Handle a player disconnecting — start reconnection window if match is active. */
-function handleDisconnect(ws) {
+async function handleDisconnect(ws) {
   if (!ws.roomCode) return;
 
   const room = rooms.get(ws.roomCode);
@@ -636,7 +663,7 @@ function handleDisconnect(ws) {
       });
 
       if (room.players.size === 1) {
-        handleForfeit(roomCode, ws.user.id, ws.user.username);
+        await handleForfeit(roomCode, ws.user.id, ws.user.username);
       } else {
         cleanupRoom(roomCode);
       }
@@ -651,42 +678,44 @@ function handleDisconnect(ws) {
     });
 
     const dcKey = `${ws.user.id}:${roomCode}`;
-    const forfeitTimer = setTimeout(() => {
-      disconnected.delete(dcKey);
-      // Player didn't reconnect — they stay as dropped.
+    const forfeitTimer = setTimeout(async () => {
+      try {
+        disconnected.delete(dcKey);
+        // Player didn't reconnect — they stay as dropped.
 
-      // Host transfer if the disconnected player was host
-      const currentRoom = rooms.get(roomCode);
-      if (currentRoom && currentRoom.started && ws.user.id === currentRoom.hostId && currentRoom.players.size > 0) {
-        const [[newHostId]] = [...currentRoom.players.entries()];
-        currentRoom.hostId = newHostId;
-        try {
-          const db = getDb();
-          db.prepare('UPDATE matches SET host_user_id = ? WHERE room_code = ?').run(newHostId, roomCode);
-        } catch { /* non-fatal */ }
-        broadcastToRoom(roomCode, {
-          type: 'host-transferred',
-          newHost: currentRoom.players.get(newHostId).user.username,
-        });
-      }
-
-      // Notify remaining players that the player has been removed
-      if (currentRoom && currentRoom.started) {
-        broadcastToRoom(roomCode, {
-          type: 'player-forfeited',
-          username: ws.user.username,
-          remainingCount: currentRoom.players.size,
-        });
-      }
-
-      // Check if we still have enough players
-      if (currentRoom && currentRoom.started && currentRoom.players.size <= 1) {
-        if (currentRoom.players.size === 1) {
-          handleForfeit(roomCode, ws.user.id, ws.user.username);
-        } else {
-          cleanupRoom(roomCode);
+        // Host transfer if the disconnected player was host
+        const currentRoom = rooms.get(roomCode);
+        if (currentRoom && currentRoom.started && ws.user.id === currentRoom.hostId && currentRoom.players.size > 0) {
+          const [[newHostId]] = [...currentRoom.players.entries()];
+          currentRoom.hostId = newHostId;
+          try {
+            const db = await getDbAdapter();
+            await db.run('UPDATE matches SET host_user_id = ? WHERE room_code = ?', [newHostId, roomCode]);
+          } catch { /* non-fatal */ }
+          broadcastToRoom(roomCode, {
+            type: 'host-transferred',
+            newHost: currentRoom.players.get(newHostId).user.username,
+          });
         }
-      }
+
+        // Notify remaining players that the player has been removed
+        if (currentRoom && currentRoom.started) {
+          broadcastToRoom(roomCode, {
+            type: 'player-forfeited',
+            username: ws.user.username,
+            remainingCount: currentRoom.players.size,
+          });
+        }
+
+        // Check if we still have enough players
+        if (currentRoom && currentRoom.started && currentRoom.players.size <= 1) {
+          if (currentRoom.players.size === 1) {
+            await handleForfeit(roomCode, ws.user.id, ws.user.username);
+          } else {
+            cleanupRoom(roomCode);
+          }
+        }
+      } catch { /* non-fatal */ }
     }, RECONNECT_WINDOW_MS);
 
     disconnected.set(dcKey, {
@@ -709,8 +738,8 @@ function handleDisconnect(ws) {
 
     // Update host in DB
     try {
-      const db = getDb();
-      db.prepare('UPDATE matches SET host_user_id = ? WHERE room_code = ?').run(newHostId, roomCode);
+      const db = await getDbAdapter();
+      await db.run('UPDATE matches SET host_user_id = ? WHERE room_code = ?', [newHostId, roomCode]);
     } catch {
       // Non-fatal
     }
@@ -758,7 +787,7 @@ function handleDisconnect(ws) {
 }
 
 /** Handle forfeit — remaining player wins (last player standing). */
-function handleForfeit(roomCode, _forfeitUserId, _forfeitUsername) {
+async function handleForfeit(roomCode, _forfeitUserId, _forfeitUsername) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
@@ -813,17 +842,18 @@ function handleForfeit(roomCode, _forfeitUserId, _forfeitUsername) {
 
   // Persist forfeit result
   try {
-    const db = getDb();
-    const match = db.prepare(`SELECT id FROM matches WHERE room_code = ?`).get(roomCode);
+    const db = await getDbAdapter();
+    const match = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
     if (match) {
-      db.prepare(
-        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(match.id);
-      const updatePlayer = db.prepare(
-        `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`
+      await db.run(
+        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [match.id]
       );
       for (const { userId, total } of userScores) {
-        updatePlayer.run(total, match.id, userId);
+        await db.run(
+          `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`,
+          [total, match.id, userId]
+        );
       }
     }
   } catch {
@@ -898,7 +928,7 @@ function broadcastRematchReady(roomCode) {
 }
 
 /** Handle host confirming rematch start. */
-function handleRematchStartConfirm(ws) {
+async function handleRematchStartConfirm(ws) {
   const roomCode = ws.roomCode;
   if (!roomCode) {
     return sendTo(ws, { type: 'error', message: 'No room to rematch in' });
@@ -946,18 +976,20 @@ function handleRematchStartConfirm(ws) {
   let newCode = crypto.randomBytes(3).toString('hex').toUpperCase();
 
   try {
-    const db = getDb();
-    while (db.prepare('SELECT 1 FROM matches WHERE room_code = ?').get(newCode)) {
+    const db = await getDbAdapter();
+    while (await db.get('SELECT 1 FROM matches WHERE room_code = ?', [newCode])) {
       newCode = crypto.randomBytes(3).toString('hex').toUpperCase();
     }
     const matchId = crypto.randomUUID();
-    db.prepare(
-      `INSERT INTO matches (id, room_code, status, total_rounds, max_players, created_by, host_user_id) VALUES (?, ?, 'waiting', ?, ?, ?, ?)`
-    ).run(matchId, newCode, finished.totalRounds, finished.maxPlayers, readyPlayers[0].userId, finished.hostId);
+    await db.run(
+      `INSERT INTO matches (id, room_code, status, total_rounds, max_players, created_by, host_user_id) VALUES (?, ?, 'waiting', ?, ?, ?, ?)`,
+      [matchId, newCode, finished.totalRounds, finished.maxPlayers, readyPlayers[0].userId, finished.hostId]
+    );
     for (const p of readyPlayers) {
-      db.prepare(
-        `INSERT INTO match_players (match_id, user_id) VALUES (?, ?)`
-      ).run(matchId, p.userId);
+      await db.run(
+        `INSERT INTO match_players (match_id, user_id) VALUES (?, ?)`,
+        [matchId, p.userId]
+      );
     }
   } catch {
     // Non-fatal — proceed with in-memory room

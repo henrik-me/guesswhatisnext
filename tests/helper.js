@@ -50,6 +50,11 @@ async function setup() {
   const result = createServer();
   server = result.server;
 
+  // Wait for async DB initialization to complete
+  if (result.dbReady) {
+    await result.dbReady;
+  }
+
   // Listen on port 0 = OS-assigned random port (no conflicts)
   await new Promise((resolve) => {
     server.listen(0, () => resolve());
@@ -63,8 +68,8 @@ async function teardown() {
   if (server) {
     // Close DB first
     try {
-      const { closeDb } = require('../server/db/connection');
-      closeDb();
+      const { closeDbAdapter } = require('../server/db');
+      await closeDbAdapter();
     } catch { /* ignore */ }
 
     await new Promise((resolve, reject) => {
