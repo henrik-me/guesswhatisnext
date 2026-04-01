@@ -909,6 +909,8 @@ let matchState = {
   players: [],
   lobbyPlayers: [],
   isHost: false,
+  isSpectator: false,
+  spectatorCount: 0,
   myName: null,
   scores: {},
   disconnectedPlayers: new Set(),
@@ -1202,6 +1204,12 @@ function handleWSMessage(msg) {
         showAchievementToasts(msg.achievements);
       }
       break;
+    case 'spectator-joined':
+      onSpectatorJoined(msg);
+      break;
+    case 'spectator-count':
+      onSpectatorCount(msg);
+      break;
     case 'error':
       showToast(msg.message || 'Server error');
       break;
@@ -1287,8 +1295,14 @@ async function joinRoom(code) {
     matchState.roomCode = data.roomCode || roomCode;
     matchState.myName = authUsername;
 
-    // Join via WebSocket
+    // Join via WebSocket — server will assign player or spectator role
     ws.send(JSON.stringify({ type: 'join', roomCode: matchState.roomCode }));
+
+    // If the HTTP response indicates spectator mode, wait for WS spectator-joined
+    if (data.status === 'spectator') {
+      matchState.isSpectator = true;
+      return;
+    }
 
     // Show lobby
     bindText('lobby-room-code', matchState.roomCode);
@@ -1461,7 +1475,12 @@ function onRound(msg) {
     } else {
       btn.textContent = option;
     }
-    btn.addEventListener('click', () => handleMatchOptionClick(option, btn));
+    // Spectators cannot interact with options
+    if (matchState.isSpectator) {
+      btn.disabled = true;
+    } else {
+      btn.addEventListener('click', () => handleMatchOptionClick(option, btn));
+    }
     optContainer.appendChild(btn);
   });
 
@@ -1693,7 +1712,8 @@ function onGameOver(msg) {
   if (rematchBtn) {
     rematchBtn.textContent = gameOverIsHost ? '🔄 New Match' : '✅ Ready for Rematch';
     rematchBtn.disabled = false;
-    rematchBtn.style.display = forfeit ? 'none' : '';
+    // Hide rematch for spectators and forfeit situations
+    rematchBtn.style.display = (forfeit || matchState.isSpectator) ? 'none' : '';
   }
   const startRematchBtn = document.querySelector('[data-action="start-rematch"]');
   if (startRematchBtn) {
@@ -1709,6 +1729,18 @@ function onGameOver(msg) {
   if (rematchStatus) {
     rematchStatus.style.display = 'none';
     rematchStatus.textContent = '';
+  }
+
+  // For spectators, update the placement text
+  if (matchState.isSpectator) {
+    const placementEl = document.querySelector('[data-bind="match-placement"]');
+    if (placementEl) {
+      placementEl.textContent = '👀 You were spectating this match';
+      placementEl.style.display = '';
+    }
+    if (hostIndicator) {
+      hostIndicator.style.display = 'none';
+    }
   }
 
   showScreen('match-over');
@@ -1742,6 +1774,8 @@ function resetMatchState() {
     players: [],
     lobbyPlayers: [],
     isHost: false,
+    isSpectator: false,
+    spectatorCount: 0,
     myName: null,
     scores: {},
     disconnectedPlayers: new Set(),
@@ -1911,6 +1945,71 @@ function onPlayerForfeited(msg) {
 function onHostTransferred(msg) {
   showToast(`👑 ${msg.newHost} is now the host`);
   matchState.isHost = (msg.newHost === authUsername);
+}
+
+/* ===========================
+   Spectator Logic
+   =========================== */
+
+/** Handle 'spectator-joined' — we are now spectating this match. */
+function onSpectatorJoined(msg) {
+  matchState.isSpectator = true;
+  matchState.roomCode = msg.roomCode;
+  matchState.spectatorCount = msg.spectatorCount || 0;
+  matchState.totalRounds = msg.totalRounds || 5;
+  matchState.currentRound = msg.currentRound || 0;
+
+  // Build scores from snapshot
+  matchState.scores = msg.scores || {};
+  matchState.players = Object.keys(matchState.scores);
+
+  // Build scoreboard and show match screen in spectator mode
+  bindText('match-round', `Round ${matchState.currentRound + 1}/${matchState.totalRounds}`);
+  renderMatchScoreboard();
+  updateSpectatorUI();
+
+  showScreen('match');
+}
+
+/** Handle 'spectator-count' — updated spectator count. */
+function onSpectatorCount(msg) {
+  matchState.spectatorCount = msg.count || 0;
+  updateSpectatorCountDisplay();
+}
+
+/** Update spectator UI elements (badge, disabled controls). */
+function updateSpectatorUI() {
+  const badge = document.querySelector('[data-bind="spectator-badge"]');
+  if (badge) {
+    badge.style.display = matchState.isSpectator ? '' : 'none';
+  }
+
+  updateSpectatorCountDisplay();
+
+  // Disable answer options for spectators
+  if (matchState.isSpectator) {
+    const optContainer = document.querySelector('[data-bind="match-options"]');
+    if (optContainer) {
+      optContainer.querySelectorAll('.option-btn').forEach(btn => {
+        btn.disabled = true;
+      });
+    }
+  }
+}
+
+/** Update the spectator count display across all screens. */
+function updateSpectatorCountDisplay() {
+  const count = matchState.spectatorCount;
+  const text = count > 0 ? `👀 ${count} watching` : '';
+
+  document.querySelectorAll('[data-bind="spectator-count"]').forEach(el => {
+    el.textContent = text;
+    el.style.display = count > 0 ? '' : 'none';
+  });
+  document.querySelectorAll('[data-bind="lobby-spectator-count"]').forEach(el => {
+    el.textContent = text;
+    el.style.display = count > 0 ? '' : 'none';
+  });
 }
 
 /* ===========================

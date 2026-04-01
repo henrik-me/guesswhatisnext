@@ -14,7 +14,13 @@ function httpsRedirect(req, res, next) {
   if (process.env.NODE_ENV === 'production') {
     const isSecure = req.secure || req.protocol === 'https';
     if (!isSecure) {
-      return res.redirect(308, `https://${req.get('host') || req.hostname}${req.originalUrl}`);
+      const host = req.get('host') || req.hostname;
+      // Validate host to prevent host-header injection / open-redirect.
+      // Only allow alphanumeric, dots, hyphens, colons (for port), and brackets (for IPv6).
+      if (!/^[\w.\-:[\]]+$/.test(host)) {
+        return res.status(400).send('Bad Request');
+      }
+      return res.redirect(308, `https://${host}${req.originalUrl}`);
     }
   }
   next();
