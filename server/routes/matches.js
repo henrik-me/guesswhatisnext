@@ -66,7 +66,7 @@ router.post('/join', requireAuth, (req, res) => {
   if (!match) {
     return res.status(404).json({ error: 'Room not found' });
   }
-  if (match.status === 'active' || match.status === 'finished') {
+  if (match.status === 'active') {
     return res.json({ matchId: match.id, roomCode: roomCode.toUpperCase(), status: 'spectator' });
   }
   if (match.status !== 'waiting') {

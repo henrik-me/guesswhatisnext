@@ -1957,8 +1957,22 @@ function onSpectatorJoined(msg) {
   matchState.totalRounds = msg.totalRounds || 5;
   matchState.currentRound = msg.currentRound || 0;
 
-  matchState.scores = msg.scores || {};
-  matchState.players = Object.keys(matchState.scores);
+  // Use player list to populate scores and track disconnected players
+  if (msg.players && Array.isArray(msg.players)) {
+    matchState.scores = {};
+    matchState.players = [];
+    matchState.disconnectedPlayers = new Set();
+    msg.players.forEach(p => {
+      matchState.scores[p.username] = p.score || 0;
+      matchState.players.push(p.username);
+      if (p.connected === false) {
+        matchState.disconnectedPlayers.add(p.username);
+      }
+    });
+  } else {
+    matchState.scores = msg.scores || {};
+    matchState.players = Object.keys(matchState.scores);
+  }
 
   bindText('match-round', `Round ${matchState.currentRound + 1}/${matchState.totalRounds}`);
   renderMatchScoreboard();
