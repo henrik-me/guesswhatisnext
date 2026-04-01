@@ -62,6 +62,10 @@ describe('HTTPS redirect', () => {
 });
 
 describe('HTTPS redirect in production mode', () => {
+  // NOTE: HSTS is configured at module load time based on NODE_ENV, so it
+  // cannot be toggled by mutating process.env after the server is created.
+  // The test above verifies HSTS is absent in test mode; production HSTS
+  // behaviour is covered by the conditional config in security.js.
   let originalEnv;
 
   beforeAll(() => {
