@@ -77,22 +77,20 @@ function initWebSocket(server, isReady) {
 
     ws.user = user;
     ws.isAlive = true;
+    ws._msgQueue = Promise.resolve();
 
     ws.on('pong', () => { ws.isAlive = true; });
 
     ws.on('message', (data) => {
-      try {
+      // Chain message handling per-socket to prevent interleaved async mutations
+      ws._msgQueue = ws._msgQueue.then(() => {
         const msg = JSON.parse(data);
-        handleMessage(ws, msg).catch(() => {
-          if (ws.readyState === 1) {
-            ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
-          }
-        });
-      } catch {
+        return handleMessage(ws, msg);
+      }).catch(() => {
         if (ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+          ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
         }
-      }
+      });
     });
 
     ws.on('close', () => {

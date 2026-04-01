@@ -249,6 +249,7 @@ function createServer() {
   });
 
   // SPA fallback — serve index.html for non-API routes
+  // Note: /{*path} is the correct Express 5 (path-to-regexp v8) catch-all syntax.
   app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
   });
