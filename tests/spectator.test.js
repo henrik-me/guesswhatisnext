@@ -56,11 +56,13 @@ function waitForMessage(ws, type, timeoutMs = 10000) {
   });
 }
 
-async function createRoom(hostToken) {
+async function createRoom(hostToken, totalRounds) {
+  const body = {};
+  if (totalRounds) body.totalRounds = totalRounds;
   const res = await getAgent()
     .post('/api/matches')
     .set('Authorization', `Bearer ${hostToken}`)
-    .send({});
+    .send(body);
   return res.body.roomCode;
 }
 
@@ -268,4 +270,60 @@ describe('Spectator Mode', () => {
     ws1.close();
     ws2.close();
   });
+
+  test('should spectate a finished match and receive gameOver', async () => {
+    // Use 2 rounds to keep test fast (3s delay per round)
+    const roomCode = await createRoom(tokens.spec_host, 2);
+    const ws1 = await connectWS(tokens.spec_host);
+    const ws2 = await connectWS(tokens.spec_p2);
+
+    await joinRoom(ws1, roomCode);
+    await joinRoom(ws2, roomCode);
+
+    const start1P = waitForMessage(ws1, 'match-start');
+    const start2P = waitForMessage(ws2, 'match-start');
+    const round1P = waitForMessage(ws1, 'round');
+    const round2P = waitForMessage(ws2, 'round');
+
+    ws1.send(JSON.stringify({ type: 'start-match' }));
+    await Promise.all([start1P, start2P]);
+    await Promise.all([round1P, round2P]);
+
+    const totalRounds = 2;
+    for (let i = 0; i < totalRounds; i++) {
+      const resultType = i < totalRounds - 1 ? 'roundResult' : 'gameOver';
+      const resultP1 = waitForMessage(ws1, resultType);
+      const resultP2 = waitForMessage(ws2, resultType);
+
+      ws1.send(JSON.stringify({ type: 'answer', answerId: 'some_answer', timeMs: 1000 }));
+      ws2.send(JSON.stringify({ type: 'answer', answerId: 'some_answer', timeMs: 1000 }));
+
+      await Promise.all([resultP1, resultP2]);
+
+      if (i < totalRounds - 1) {
+        await Promise.all([
+          waitForMessage(ws1, 'round'),
+          waitForMessage(ws2, 'round'),
+        ]);
+      }
+    }
+
+    // Match ended — room in rematch window. Spectator should get spectator-joined + gameOver
+    const ws3 = await connectWS(tokens.spec_viewer);
+    const specJoinedP = waitForMessage(ws3, 'spectator-joined');
+    const gameOverP = waitForMessage(ws3, 'gameOver');
+
+    ws3.send(JSON.stringify({ type: 'join', roomCode }));
+    const specMsg = await specJoinedP;
+    expect(specMsg.type).toBe('spectator-joined');
+
+    const gameOverMsg = await gameOverP;
+    expect(gameOverMsg.type).toBe('gameOver');
+    expect(gameOverMsg.rankings).toBeDefined();
+    expect(gameOverMsg.rankings.length).toBe(2);
+
+    ws1.close();
+    ws2.close();
+    ws3.close();
+  }, 30000);
 });

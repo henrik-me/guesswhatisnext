@@ -288,7 +288,7 @@ function handleJoin(ws, roomCode) {
   broadcastLobbyState(code);
 }
 
-/** Join a user as a spectator for an active match. */
+/** Join a user as a spectator for an active or finished match. */
 function joinAsSpectator(ws, roomCode, room) {
   ws.isSpectator = true;
   room.spectators.set(ws.user.id, ws);
@@ -301,17 +301,50 @@ function joinAsSpectator(ws, roomCode, room) {
     players.push({ username, score: room.scores[uid] || 0, connected: false });
   });
 
+  // Clamp currentRound for finished rooms to avoid "Round 6/5"
+  const currentRound = Math.min(room.round, room.totalRounds - 1);
+
   sendTo(ws, {
     type: 'spectator-joined',
     roomCode,
     spectatorCount: room.spectators.size,
-    currentRound: room.round,
+    currentRound,
     totalRounds: room.totalRounds,
     scores: buildScoresSnapshot(room),
     players,
   });
 
   broadcastSpectatorCount(roomCode);
+
+  // If the match has already finished, immediately send gameOver to the spectator
+  if (finishedRooms.has(roomCode)) {
+    const userScores = [];
+    room.players.forEach((pws, uid) => {
+      userScores.push({ userId: uid, username: pws.user.username, total: room.scores[uid] || 0 });
+    });
+    room.droppedPlayers.forEach(({ username }, uid) => {
+      if (!userScores.find(e => e.userId === uid)) {
+        userScores.push({ userId: uid, username, total: room.scores[uid] || 0 });
+      }
+    });
+    userScores.sort((a, b) => b.total - a.total);
+    assignRanks(userScores);
+
+    const rank1 = userScores.filter(e => e.rank === 1);
+    sendTo(ws, {
+      type: 'gameOver',
+      winner: rank1.length === 1 ? rank1[0].username : null,
+      totalPlayers: userScores.length,
+      rankings: userScores.map(e => ({
+        username: e.username,
+        score: e.total,
+        rank: e.rank,
+        isYou: false,
+      })),
+      scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
+      results: userScores.map(e => ({ username: e.username, score: e.total })),
+    });
+  }
 }
 
 /** Broadcast spectator count to all room members (players + spectators). */
@@ -1121,7 +1154,7 @@ function sendTo(ws, msg) {
   }
 }
 
-/** Send a message to all players in a room, optionally excluding one. */
+/** Send a message to all players and spectators in a room, optionally excluding one. */
 function broadcastToRoom(roomCode, msg, excludeUserId) {
   const room = rooms.get(roomCode);
   if (!room) return;
