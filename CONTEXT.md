@@ -115,8 +115,8 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 43 | Browser E2E tests | ⬜ Pending | 40 | Playwright tests for full UI flows |
-| 44 | Load testing | ⬜ Pending | 41 | k6/Artillery for concurrent WS + API stress |
+| 43 | Browser E2E tests | ✅ Done | 40 | Playwright tests for full UI flows |
+| 44 | Load testing | ✅ Done | 41 | Artillery for concurrent WS + API stress |
 
 ## Phase 8 — User Experience
 
@@ -125,14 +125,14 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | 45 | Mobile PWA | ✅ Done | — | manifest.json, service worker, offline fallback (PR #15) |
 | 46 | Share links | ✅ Done | — | Deep link ?room=CODE, copy-link button (PR #15) |
 | 47 | Multiplayer sound effects | ✅ Done | — | Opponent answered, countdown, win/loss fanfare (PR #15) |
-| 48 | Spectator mode | ⬜ Pending | 42 | Read-only WS, spectator count in lobby |
+| 48 | Spectator mode | 🔄 In PR | 42 | Read-only WS, spectator count in lobby |
 
 ## Phase 9 — Content & Growth
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
-| 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
+| 49 | Puzzle expansion (200+) | ✅ Done | — | AI-assisted generation, broader categories. 504 puzzles in DB. |
+| 50 | Community puzzle submissions | ✅ Done | 49 | Submit form, moderation queue, attribution |
 
 **Parallelism:** Phase 6 is sequential. Phase 7 can start now; its dependencies (40 and 41) are done. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
 
