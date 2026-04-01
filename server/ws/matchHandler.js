@@ -308,15 +308,16 @@ function joinAsSpectator(ws, roomCode, room) {
     players.push({ username, score: room.scores[uid] || 0, connected: false });
   });
 
-  // Clamp currentRound for finished rooms to avoid "Round 6/5"
-  const currentRound = Math.min(room.round, room.totalRounds - 1);
+  // Normalize totalRounds to a positive integer and clamp currentRound >= 0
+  const safeTotalRounds = Math.max(1, Math.floor(room.totalRounds) || 1);
+  const currentRound = Math.max(0, Math.min(room.round, safeTotalRounds - 1));
 
   sendTo(ws, {
     type: 'spectator-joined',
     roomCode,
     spectatorCount: room.spectators.size,
     currentRound,
-    totalRounds: room.totalRounds,
+    totalRounds: safeTotalRounds,
     scores: buildScoresSnapshot(room),
     players,
   });

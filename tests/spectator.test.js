@@ -28,30 +28,49 @@ function connectWS(token) {
   return new Promise((resolve, reject) => {
     const addr = getServerAddr();
     const ws = new WebSocket(`ws://${addr}/ws?token=${encodeURIComponent(token)}`);
-    const timeout = setTimeout(() => reject(new Error('WS connect timeout')), 5000);
-    ws.on('message', function onFirstMsg(data) {
+    function onFirstMsg(data) {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'connected') {
         clearTimeout(timeout);
         ws.removeListener('message', onFirstMsg);
         resolve(ws);
       }
+    }
+    const timeout = setTimeout(() => {
+      ws.removeListener('message', onFirstMsg);
+      ws.terminate();
+      reject(new Error('WS connect timeout'));
+    }, 5000);
+    ws.on('message', onFirstMsg);
+    ws.on('error', (err) => {
+      clearTimeout(timeout);
+      ws.removeListener('message', onFirstMsg);
+      ws.terminate();
+      reject(err);
     });
-    ws.on('error', (err) => { clearTimeout(timeout); reject(err); });
   });
 }
 
 function waitForMessage(ws, type, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`Timeout waiting for "${type}"`)), timeoutMs);
     const handler = (data) => {
-      const msg = JSON.parse(data.toString());
-      if (msg.type === type) {
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === type) {
+          clearTimeout(timeout);
+          ws.removeListener('message', handler);
+          resolve(msg);
+        }
+      } catch (err) {
         clearTimeout(timeout);
         ws.removeListener('message', handler);
-        resolve(msg);
+        reject(err);
       }
     };
+    const timeout = setTimeout(() => {
+      ws.removeListener('message', handler);
+      reject(new Error(`Timeout waiting for "${type}"`));
+    }, timeoutMs);
     ws.on('message', handler);
   });
 }
