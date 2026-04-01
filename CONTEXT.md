@@ -308,11 +308,11 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 |---|---|---|---|---|
 | 60 | Azure Files cleanup | ✅ Done | 59 | Remove dead SMB references from all files. PR #49 merged. |
 | 60v | Validate staging (post-cleanup) | ✅ Done | 60 | Staging deploy + smoke tests all passed. DB self-init, user reg, score submit, puzzles all working. Run #23809714266. |
-| 61a | Adapter interface + factory | ⬜ Pending | 60v | `base-adapter.js`, `index.js` factory, config changes. Defines the async API all consumers use. |
-| 61b | SQLite adapter + migrations | ⬜ Pending | 61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–003`), `seed.js`. Parallel in wt-1. |
-| 61c | mssql adapter | ⬜ Pending | 61a | `mssql-adapter.js`. Parallel in wt-2. Not used until Task 64. |
-| 62 | Convert routes to async | ⬜ Pending | 61a | All DB-touching handlers use `await db.get/all/run()`. Parallel in wt-3. |
-| 63 | Update tests for async | ⬜ Pending | 61b, 62 | Async test helpers. All 81+ tests pass with SQLite adapter. Runs in wt-3 after 61b merges. |
+| 61a | Adapter interface + factory | ✅ Done | 60v | `base-adapter.js`, `index.js` factory, config changes. PR #52 merged. |
+| 61b | SQLite adapter + migrations | ✅ Done | 61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–004`), `seed.js`. PR #55 merged. |
+| 61c | mssql adapter | ✅ Done | 61a | `mssql-adapter.js`. PR #56 merged. Not used until Task 64. |
+| 62 | Convert routes to async | ✅ Done | 61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 merged. |
+| 63 | Update tests for async | ✅ Done | 61b, 62 | Async test helpers. All 173 tests pass with SQLite adapter. PR #57 merged (combined with 62). |
 | 63v | Validate staging (post-async) | ⬜ Pending | 63 | Trigger staging deploy, verify async DB layer works end-to-end in Azure. |
 | 64 | Provision Azure SQL | ⬜ Pending | 63v | Free-tier serverless DB. Firewall. GitHub secret. |
 | 65 | Production deploy | ⬜ Pending | 64 | Update prod-deploy.yml. First deploy + verify. |
