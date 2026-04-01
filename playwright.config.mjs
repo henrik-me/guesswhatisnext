@@ -3,9 +3,8 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 
-// When running the local webServer (i.e. when BASE_URL is not set), use a fixed
-// temp directory so leftover dirs don't accumulate; globalTeardown cleans this
-// up after each run.
+// Use a fixed temp directory so leftover dirs don't accumulate.
+// globalTeardown cleans this up after each run.
 const tmpDir = path.join(os.tmpdir(), 'gwn-e2e');
 fs.mkdirSync(tmpDir, { recursive: true });
 
