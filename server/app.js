@@ -19,6 +19,8 @@ const submissionRoutes = require('./routes/submissions');
 const userRoutes = require('./routes/users');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
+const { httpsRedirect, securityHeaders } = require('./middleware/security');
+
 const pkg = require('../package.json');
 
 /**
@@ -36,6 +38,10 @@ function createServer() {
   let draining = false;
   let activeRequests = 0;
   const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
+
+  // Security middleware — HTTPS redirect (production only) and headers
+  app.use(httpsRedirect);
+  app.use(securityHeaders);
 
   // Middleware
   app.use(express.json());

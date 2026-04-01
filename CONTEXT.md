@@ -2,11 +2,11 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-03-30
+> **Last updated:** 2026-04-01
 
 ---
 
-## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
+## Project Status: ✅ Phases 1–5, 7, 9, 10/10b Complete — Phase 6/8/11/12 Active
 
 ### Development Workflow
 
@@ -109,14 +109,14 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 |---|---|---|---|---|
 | 40 | Remove debug logging | ✅ Done | — | Stripped debug console.log from client code (PR #14) |
 | 41 | Environment variables | ✅ Done | — | server/config.js centralizes env vars with startup validation (PR #14) |
-| 42 | HTTPS & secure cookies | ⬜ Pending | 41 | TLS enforcement, WSS, secure headers |
+| 42 | HTTPS & secure cookies | 🟡 In Progress | 41 | Security headers (helmet/HSTS/CSP), HTTPS redirect in production, WSS verification. PR in review. |
 
 ## Phase 7 — Quality & Testing
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 43 | Browser E2E tests | ⬜ Pending | 40 | Playwright tests for full UI flows |
-| 44 | Load testing | ⬜ Pending | 41 | k6/Artillery for concurrent WS + API stress |
+| 43 | Browser E2E tests | ✅ Done | 40 | Playwright tests for full UI flows (PR #32) |
+| 44 | Load testing | ✅ Done | 41 | Artillery for concurrent WS + API stress. Rate-limit dance validates 429 handling. PRs #34, #51, #54. Validated in run #23819559591. |
 
 ## Phase 8 — User Experience
 
@@ -125,16 +125,16 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | 45 | Mobile PWA | ✅ Done | — | manifest.json, service worker, offline fallback (PR #15) |
 | 46 | Share links | ✅ Done | — | Deep link ?room=CODE, copy-link button (PR #15) |
 | 47 | Multiplayer sound effects | ✅ Done | — | Opponent answered, countdown, win/loss fanfare (PR #15) |
-| 48 | Spectator mode | ⬜ Pending | 42 | Read-only WS, spectator count in lobby |
+| 48 | Spectator mode | 🟡 In Progress | — | Read-only WS, spectator count in lobby. PR in review. Dependency on task 42 removed (TLS handled by Azure ingress). |
 
 ## Phase 9 — Content & Growth
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
-| 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
+| 49 | Puzzle expansion (200+) | ✅ Done | — | 504 puzzles across 21 categories (PR #33) |
+| 50 | Community puzzle submissions | ✅ Done | 49 | Submit form, moderation queue, attribution (PR #45) |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 can start now; its dependencies (40 and 41) are done. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
+**Parallelism:** Phase 9 complete.
 
 ## Phase 10 — CI/CD Pipeline Rework
 
@@ -308,11 +308,11 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 |---|---|---|---|---|
 | 60 | Azure Files cleanup | ✅ Done | 59 | Remove dead SMB references from all files. PR #49 merged. |
 | 60v | Validate staging (post-cleanup) | ✅ Done | 60 | Staging deploy + smoke tests all passed. DB self-init, user reg, score submit, puzzles all working. Run #23809714266. |
-| 61a | Adapter interface + factory | ⬜ Pending | 60v | `base-adapter.js`, `index.js` factory, config changes. Defines the async API all consumers use. |
-| 61b | SQLite adapter + migrations | ⬜ Pending | 61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–003`), `seed.js`. Parallel in wt-1. |
-| 61c | mssql adapter | ⬜ Pending | 61a | `mssql-adapter.js`. Parallel in wt-2. Not used until Task 64. |
-| 62 | Convert routes to async | ⬜ Pending | 61a | All DB-touching handlers use `await db.get/all/run()`. Parallel in wt-3. |
-| 63 | Update tests for async | ⬜ Pending | 61b, 62 | Async test helpers. All 81+ tests pass with SQLite adapter. Runs in wt-3 after 61b merges. |
+| 61a | Adapter interface + factory | ✅ Done | 60v | `base-adapter.js`, `index.js` factory, config changes. PR #52 merged. |
+| 61b | SQLite adapter + migrations | ✅ Done | 61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–003`), `seed.js`. PR #55 merged. |
+| 61c | mssql adapter | ✅ Done | 61a | `mssql-adapter.js`. PR #56 merged. |
+| 62 | Convert routes to async | 🟡 In Progress | 61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 open, CI green. |
+| 63 | Update tests for async | 🟡 In Progress | 61b, 62 | Async test helpers. 173 tests pass with SQLite adapter. Included in PR #57. |
 | 63v | Validate staging (post-async) | ⬜ Pending | 63 | Trigger staging deploy, verify async DB layer works end-to-end in Azure. |
 | 64 | Provision Azure SQL | ⬜ Pending | 63v | Free-tier serverless DB. Firewall. GitHub secret. |
 | 65 | Production deploy | ⬜ Pending | 64 | Update prod-deploy.yml. First deploy + verify. |
