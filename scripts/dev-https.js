@@ -50,6 +50,7 @@ function generateSelfSignedCert() {
   } catch (err) {
     const baseMessage =
       'Failed to run "openssl" to generate the development HTTPS certificate.';
+    const sysDetail = err.stderr ? err.stderr.toString().trim() : err.message;
 
     // On Windows, try Git for Windows' bundled openssl as a fallback.
     if (process.platform === 'win32') {
@@ -67,11 +68,12 @@ function generateSelfSignedCert() {
             cert: fs.readFileSync(certPath),
           };
         } catch (gitErr) {
+          const gitDetail = gitErr.stderr ? gitErr.stderr.toString().trim() : gitErr.message;
           throw new Error(
             `${baseMessage}\n` +
             'Both system "openssl" and Git for Windows bundled "openssl" failed.\n' +
-            `System error: ${err.message}\n` +
-            `Git error: ${gitErr.message}`
+            `System error: ${sysDetail}\n` +
+            `Git error: ${gitDetail}`
           );
         }
       }
@@ -79,7 +81,7 @@ function generateSelfSignedCert() {
 
     throw new Error(
       `${baseMessage}\n` +
-      `Underlying error: ${err.message}\n\n` +
+      `Underlying error: ${sysDetail}\n\n` +
       'Install OpenSSL and ensure "openssl" is available on your PATH.\n' +
       '  macOS:   brew install openssl\n' +
       '  Linux:   sudo apt-get install openssl\n' +
@@ -133,7 +135,7 @@ http.createServer = function patchedCreateServer(app) {
 const { createServer } = require('../server/app');
 const { app, server } = createServer();
 
-server.listen(HTTPS_PORT, () => {
+server.listen(HTTPS_PORT, '127.0.0.1', () => {
   console.log(`\n🔒 HTTPS server: https://localhost:${HTTPS_PORT}`);
   console.log(`   Security headers, HSTS, CSP, and WebSocket (wss://) are active.`);
 });
@@ -145,7 +147,7 @@ const httpServer = http.createServer((req, res) => {
   app(req, res);
 });
 
-httpServer.listen(HTTP_PORT, () => {
+httpServer.listen(HTTP_PORT, '127.0.0.1', () => {
   console.log(`🌐 HTTP  server: http://localhost:${HTTP_PORT}`);
   console.log(`   Requests here will get a 308 redirect to HTTPS.\n`);
 });
