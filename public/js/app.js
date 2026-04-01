@@ -1311,6 +1311,9 @@ async function joinRoom(code) {
 function onJoined(msg) {
   matchState.roomCode = msg.roomCode;
   matchState.isSpectator = false;
+  matchState.spectatorCount = 0;
+  updateSpectatorUI();
+  updateSpectatorCountDisplay();
   if (!matchState.players.includes(authUsername)) {
     matchState.players.push(authUsername);
   }

@@ -267,6 +267,7 @@ function handleJoin(ws, roomCode) {
     return;
   }
 
+  ws.isSpectator = false;
   room.players.set(ws.user.id, ws);
   room.scores[ws.user.id] = room.scores[ws.user.id] || 0;
 
