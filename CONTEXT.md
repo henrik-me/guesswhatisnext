@@ -2,7 +2,7 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-03-30
+> **Last updated:** 2026-04-01
 
 ---
 

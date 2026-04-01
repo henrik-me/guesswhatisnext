@@ -483,7 +483,7 @@ The orchestrating agent **waits for "ready for merge"** before merging and must 
   3. **E2E tests:** `npm run test:e2e`
 - Branch protection rules on `main`:
   - Require PR with review before merging
-  - Require CI status checks to pass (lint, test, e2e) — CI skips docs-only PRs via `paths-ignore`
+  - Require CI status checks to pass (`lint`, `test`, `e2e`) — CI uses `paths-ignore` for docs-only PRs; if branch protection requires these checks, a separate always-on workflow or conditional job approach may be needed
   - No force pushes
   - No direct commits
 
