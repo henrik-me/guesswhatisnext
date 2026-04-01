@@ -125,9 +125,9 @@ const tls = generateSelfSignedCert();
 // Monkey-patch http.createServer so that createServer() builds an HTTPS
 // server transparently (WebSocket upgrade, routes, everything wired up).
 const origCreateServer = http.createServer;
-http.createServer = function patchedCreateServer(app) {
-  const httpsServer = https.createServer(tls, app);
-  // Restore immediately so nothing else is affected
+http.createServer = function patchedCreateServer(...args) {
+  const listener = typeof args[0] === 'function' ? args[0] : args[1];
+  const httpsServer = https.createServer(tls, listener);
   http.createServer = origCreateServer;
   return httpsServer;
 };
