@@ -1295,18 +1295,17 @@ async function joinRoom(code) {
     matchState.roomCode = data.roomCode || roomCode;
     matchState.myName = authUsername;
 
-    // Join via WebSocket
+    // Join via WebSocket — server will assign player or spectator role
     ws.send(JSON.stringify({ type: 'join', roomCode: matchState.roomCode }));
 
-    // If the HTTP response indicates spectator mode, wait for WS spectator-joined
+    // If the HTTP response indicates spectator mode, flag it and show lobby
     if (data.status === 'spectator') {
       matchState.isSpectator = true;
-      return;
     }
 
-    // Show lobby
+    // Show lobby (spectator-joined WS message will transition to match screen)
     bindText('lobby-room-code', matchState.roomCode);
-    bindText('lobby-status', 'Joining room...');
+    bindText('lobby-status', matchState.isSpectator ? 'Joining as spectator...' : 'Joining room...');
     showScreen('lobby');
   } catch {
     showToast('Network error — is the server running?');

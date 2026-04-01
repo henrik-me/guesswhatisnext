@@ -239,7 +239,7 @@ function handleJoin(ws, roomCode) {
   // Ensure spectators map exists (for rooms created before this change)
   if (!room.spectators) room.spectators = new Map();
 
-  // Load match infofrom DB to get max_players and host
+  // Load match info from DB to get max_players and host
   try {
     const db = getDb();
     const match = db.prepare('SELECT max_players, host_user_id, total_rounds FROM matches WHERE room_code = ?').get(code);

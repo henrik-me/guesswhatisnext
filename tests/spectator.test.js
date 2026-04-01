@@ -126,7 +126,7 @@ describe('Spectator Mode', () => {
     await specJoinedP;
 
     const errorP = waitForMessage(ws3, 'error');
-    ws3.send(JSON.stringify({ type: 'answer', answer: 'test' }));
+    ws3.send(JSON.stringify({ type: 'answer', answerId: 'test', timeMs: 1000 }));
     const errorMsg = await errorP;
 
     expect(errorMsg.message).toBe('Spectators cannot perform this action');
@@ -167,8 +167,8 @@ describe('Spectator Mode', () => {
     // Both players answer — spectator should receive roundResult
     const roundResultP = waitForMessage(ws3, 'roundResult');
     // The round was already received in setupActiveMatch; send answers
-    ws1.send(JSON.stringify({ type: 'answer', answer: 'any_answer' }));
-    ws2.send(JSON.stringify({ type: 'answer', answer: 'any_answer' }));
+    ws1.send(JSON.stringify({ type: 'answer', answerId: 'any_answer', timeMs: 1000 }));
+    ws2.send(JSON.stringify({ type: 'answer', answerId: 'any_answer', timeMs: 1000 }));
 
     const roundResult = await roundResultP;
     expect(roundResult.type).toBe('roundResult');
