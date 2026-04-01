@@ -8,6 +8,8 @@ const path = require('path');
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const isProduction = NODE_ENV === 'production' || NODE_ENV === 'staging';
 
+const CANONICAL_HOST_RE = /^[\w][\w.-]*(:\d+)?$/;
+
 const config = {
   NODE_ENV,
   PORT: parseInt(process.env.PORT, 10) || 3000,
@@ -33,7 +35,7 @@ function validateConfig() {
     const canonicalHost = (process.env.CANONICAL_HOST || '').trim();
     if (!canonicalHost) {
       missing.push('CANONICAL_HOST');
-    } else if (!/^[\w][\w.-]*(:\d+)?$/.test(canonicalHost)) {
+    } else if (!CANONICAL_HOST_RE.test(canonicalHost)) {
       console.error(
         `❌ CANONICAL_HOST="${canonicalHost}" is not a valid hostname[:port].\n` +
         '   Example: CANONICAL_HOST=example.com or CANONICAL_HOST=example.com:8443'
@@ -59,4 +61,4 @@ function validateConfig() {
   }
 }
 
-module.exports = { config, validateConfig };
+module.exports = { config, validateConfig, CANONICAL_HOST_RE };

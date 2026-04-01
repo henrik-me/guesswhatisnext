@@ -3,7 +3,7 @@
  */
 
 const helmet = require('helmet');
-const { config } = require('../config');
+const { config, CANONICAL_HOST_RE } = require('../config');
 
 /**
  * HTTPS redirect middleware for production behind a reverse proxy.
@@ -17,7 +17,7 @@ function httpsRedirect(req, res, next) {
     const isSecure = req.secure || req.protocol === 'https';
     if (!isSecure) {
       const host = config.CANONICAL_HOST;
-      if (!host || !/^[\w][\w.-]*(:\d+)?$/.test(host)) {
+      if (!host || !CANONICAL_HOST_RE.test(host)) {
         // Fail closed: refuse to redirect without a valid hostname.
         return res.status(421).send('Misdirected Request');
       }

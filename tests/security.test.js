@@ -67,19 +67,21 @@ describe('HTTPS redirect in production mode', () => {
   // The test above verifies HSTS is absent in test mode; production HSTS
   // behaviour is covered by the conditional config in security.js.
   let originalEnv;
+  let originalCanonicalHost;
 
   beforeAll(() => {
     originalEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
     // Set canonical host on the config object (loaded at import time)
     const { config } = require('../server/config');
+    originalCanonicalHost = config.CANONICAL_HOST;
     config.CANONICAL_HOST = 'example.com';
   });
 
   afterAll(() => {
     process.env.NODE_ENV = originalEnv;
     const { config } = require('../server/config');
-    config.CANONICAL_HOST = '';
+    config.CANONICAL_HOST = originalCanonicalHost;
   });
 
   test('redirects HTTP to HTTPS in production', async () => {
