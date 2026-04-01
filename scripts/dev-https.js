@@ -16,7 +16,6 @@
 
 const https = require('https');
 const http = require('http');
-const crypto = require('crypto');
 const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -42,20 +41,49 @@ function generateSelfSignedCert() {
   console.log('🔐 Generating self-signed certificate…');
   fs.mkdirSync(certDir, { recursive: true });
 
-  // Use Node's built-in crypto to generate via openssl CLI (available on Windows with Git)
+  const opensslCmd =
+    `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" ` +
+    `-days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`;
+
   try {
-    execSync(
-      `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" ` +
-      `-days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`,
-      { stdio: 'pipe' }
-    );
-  } catch {
-    // Fallback: try via Git's bundled openssl
-    const gitOpenssl = 'C:\\Program Files\\Git\\usr\\bin\\openssl.exe';
-    execSync(
-      `"${gitOpenssl}" req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" ` +
-      `-days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`,
-      { stdio: 'pipe' }
+    execSync(opensslCmd, { stdio: 'pipe' });
+  } catch (err) {
+    const baseMessage =
+      'Failed to run "openssl" to generate the development HTTPS certificate.';
+
+    // On Windows, try Git for Windows' bundled openssl as a fallback.
+    if (process.platform === 'win32') {
+      const gitOpenssl = 'C:\\Program Files\\Git\\usr\\bin\\openssl.exe';
+      if (fs.existsSync(gitOpenssl)) {
+        try {
+          execSync(
+            `"${gitOpenssl}" req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" ` +
+            `-days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`,
+            { stdio: 'pipe' }
+          );
+          console.log('✅ Certificate written to data/dev-key.pem + data/dev-cert.pem');
+          return {
+            key: fs.readFileSync(keyPath),
+            cert: fs.readFileSync(certPath),
+          };
+        } catch (gitErr) {
+          throw new Error(
+            `${baseMessage}\n` +
+            'Both system "openssl" and Git for Windows bundled "openssl" failed.\n' +
+            `System error: ${err.message}\n` +
+            `Git error: ${gitErr.message}`
+          );
+        }
+      }
+    }
+
+    throw new Error(
+      `${baseMessage}\n` +
+      `Underlying error: ${err.message}\n\n` +
+      'Install OpenSSL and ensure "openssl" is available on your PATH.\n' +
+      '  macOS:   brew install openssl\n' +
+      '  Linux:   sudo apt-get install openssl\n' +
+      '  Windows: install Git for Windows (with Unix tools)'
     );
   }
 
@@ -67,13 +95,22 @@ function generateSelfSignedCert() {
 }
 
 // ---------- Set environment for production-like behaviour ----------
+// NODE_ENV=production is intentional: httpsRedirect and HSTS only activate
+// in production/staging, which is exactly what this script tests.
 process.env.NODE_ENV = 'production';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'dev-https-test-secret';
 process.env.SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'dev-https-test-key';
 process.env.CANONICAL_HOST = HOST;
 
-// Override PORT so createServer's internal http.createServer binds nowhere
-// — we'll use our own HTTPS server instead.
+// Use a dedicated dev-https database by default so we do not mutate the
+// normal development DB when running with production-like settings.
+if (!process.env.GWN_DB_PATH) {
+  const devHttpsDbPath = path.join(__dirname, '..', 'data', 'game-dev-https.db');
+  process.env.GWN_DB_PATH = devHttpsDbPath;
+  console.warn(`[dev-https] Using dedicated dev database at ${devHttpsDbPath}`);
+}
+
+// Align config.PORT with HTTPS_PORT so modules that read it get the right value.
 process.env.PORT = String(HTTPS_PORT);
 
 const { config, validateConfig } = require('../server/config');
@@ -94,7 +131,7 @@ http.createServer = function patchedCreateServer(app) {
 };
 
 const { createServer } = require('../server/app');
-const { server } = createServer();
+const { app, server } = createServer();
 
 server.listen(HTTPS_PORT, () => {
   console.log(`\n🔒 HTTPS server: https://localhost:${HTTPS_PORT}`);
@@ -103,9 +140,6 @@ server.listen(HTTPS_PORT, () => {
 
 // HTTP server — passes requests to the Express app with X-Forwarded-Proto: http
 // so the redirect middleware kicks in.
-// Extract the Express app from the HTTPS server's request listeners.
-const app = server.listeners('request')[0];
-
 const httpServer = http.createServer((req, res) => {
   req.headers['x-forwarded-proto'] = 'http';
   app(req, res);

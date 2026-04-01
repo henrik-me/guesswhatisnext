@@ -11,6 +11,7 @@ data/*.db-wal
 # Dev HTTPS certificates
 data/dev-key.pem
 data/dev-cert.pem
+data/game-dev-https.db
 *.db
 *.db-shm
 *.db-wal
