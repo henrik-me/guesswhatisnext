@@ -7,8 +7,9 @@ import fs from 'fs';
 // and skip the local webServer entirely.
 const externalBaseURL = process.env.BASE_URL;
 
-// Use a fixed temp directory so leftover dirs don't accumulate.
-// globalTeardown cleans this up after each run.
+// When running the local webServer (i.e. when BASE_URL is not set), use a fixed
+// temp directory so leftover dirs don't accumulate; globalTeardown cleans this
+// up after each run.
 const tmpDir = path.join(os.tmpdir(), 'gwn-e2e');
 if (!externalBaseURL) {
   // Ensure each E2E run starts from a clean DB by removing the temp dir entirely.
