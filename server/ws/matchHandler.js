@@ -327,16 +327,21 @@ async function handleStartMatch(ws) {
 async function startMatch(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
+  if (room.started || room.starting) return;
+
+  room.starting = true;
 
   try {
     room.puzzles = await selectRandomPuzzles(room.totalRounds);
   } catch (err) {
+    room.starting = false;
     console.error(`Failed to load puzzles for room ${roomCode}:`, err);
     broadcastToRoom(roomCode, { type: 'error', message: 'Failed to load puzzles. Please try again.' });
     cleanupRoom(roomCode);
     return;
   }
   room.started = true;
+  room.starting = false;
 
   // Build player name list
   const playerNames = [];

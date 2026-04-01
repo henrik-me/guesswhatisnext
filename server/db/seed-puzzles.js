@@ -30,6 +30,12 @@ if (require.main === module) {
     try {
       const migrations = require('./migrations');
       const db = await getDbAdapter();
+      if (db.dialect === 'mssql') {
+        throw new Error(
+          'The seed-puzzles script does not support the MSSQL backend. ' +
+          'Configure a supported DB_BACKEND before running this script.'
+        );
+      }
       await db.migrate(migrations);
       await seedPuzzles();
     } catch (err) {
