@@ -35,6 +35,7 @@ export default defineConfig({
   use: {
     baseURL: externalBaseURL || 'http://localhost:3011',
     trace: 'retain-on-failure',
+    ...(externalBaseURL ? { extraHTTPHeaders: { 'X-Forwarded-Proto': 'https' } } : {}),
   },
   projects: [
     {
