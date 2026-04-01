@@ -167,7 +167,10 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests against ephemeral container
-        run: npx playwright test
+        run: |
+          echo "Waiting 60s for /api/auth/register burst-limit window to reset..."
+          sleep 60
+          npx playwright test
         env:
           BASE_URL: http://localhost:3000
 
