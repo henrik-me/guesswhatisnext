@@ -244,7 +244,7 @@ Tests **must pass** before any merge to `main`. The **full validation suite** is
 2. **Unit + integration tests:** `npm test` — Vitest, all must pass
 3. **E2E tests:** `npx playwright test` — Playwright browser tests
 
-CI runs all three in parallel on every PR. Agents must run the full suite locally before pushing.
+CI runs all three in parallel on PRs that change application code (non-docs changes). Agents must run the full suite locally before pushing.
 
 ### Test Framework & Tools
 
@@ -483,7 +483,7 @@ The orchestrating agent **waits for "ready for merge"** before merging and must 
   3. **E2E tests:** `npx playwright test`
 - Branch protection rules on `main`:
   - Require PR with review before merging
-  - Require CI status checks to pass (lint, test, e2e)
+  - Require CI status checks to pass (lint, test, e2e) — CI skips docs-only PRs via `paths-ignore`
   - No force pushes
   - No direct commits
 
@@ -618,11 +618,18 @@ Main agent (after wt-X reports PR ready):
 ```
 
 **Merge ordering:** First-done merges first. Each subsequent agent may need to
-rebase before pushing:
+rebase or merge main before pushing:
 ```
 Agent in wt-Y (if main has moved since branch creation):
   git fetch origin main
-  git merge origin/main --no-edit    # or: git rebase origin/main
+
+  # Option A: merge (preserves history, normal push)
+  git merge origin/main --no-edit
+  npm run lint && npm test && npx playwright test
+  git push
+
+  # Option B: rebase (linear history, requires force-push)
+  git rebase origin/main
   npm run lint && npm test && npx playwright test
   git push --force-with-lease
 ```
