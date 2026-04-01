@@ -345,20 +345,29 @@ function joinAsSpectator(ws, roomCode, room) {
     assignRanks(userScores);
 
     const rank1 = userScores.filter(e => e.rank === 1);
-    sendTo(ws, {
-      type: 'gameOver',
-      winner: rank1.length === 1 ? rank1[0].username : null,
-      totalPlayers: userScores.length,
-      rankings: userScores.map(e => ({
-        username: e.username,
-        score: e.total,
-        rank: e.rank,
-        isYou: false,
-      })),
-      scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
-      results: userScores.map(e => ({ username: e.username, score: e.total })),
-    });
+    sendTo(ws, buildSpectatorGameOver(
+      rank1.length === 1 ? rank1[0].username : null,
+      userScores,
+    ));
   }
+}
+
+/** Build a spectator-safe gameOver payload (isYou always false). */
+function buildSpectatorGameOver(winner, userScores, extraFields = {}) {
+  return {
+    type: 'gameOver',
+    winner,
+    totalPlayers: userScores.length,
+    rankings: userScores.map(e => ({
+      username: e.username,
+      score: e.total,
+      rank: e.rank,
+      isYou: false,
+    })),
+    scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
+    results: userScores.map(e => ({ username: e.username, score: e.total })),
+    ...extraFields,
+  };
 }
 
 /** Broadcast spectator count to all room members (players + spectators). */
@@ -656,20 +665,7 @@ async function endMatch(roomCode) {
 
   // Send generic gameOver to spectators
   if (room.spectators) {
-    const spectatorGameOver = {
-      type: 'gameOver',
-      winner,
-      totalPlayers,
-      rankings: userScores.map(e => ({
-        username: e.username,
-        score: e.total,
-        rank: e.rank,
-        isYou: false,
-      })),
-      scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
-      results: userScores.map(e => ({ username: e.username, score: e.total })),
-    };
-    const data = JSON.stringify(spectatorGameOver);
+    const data = JSON.stringify(buildSpectatorGameOver(winner, userScores));
     room.spectators.forEach((ws) => {
       if (ws.readyState === 1) ws.send(data);
     });
@@ -975,21 +971,7 @@ async function handleForfeit(roomCode, _forfeitUserId, _forfeitUsername) {
 
   // Send generic gameOver to spectators
   if (room.spectators) {
-    const spectatorGameOver = {
-      type: 'gameOver',
-      winner: winnerUsername,
-      totalPlayers,
-      rankings: userScores.map(e => ({
-        username: e.username,
-        score: e.total,
-        rank: e.rank,
-        isYou: false,
-      })),
-      scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
-      results: userScores.map(e => ({ username: e.username, score: e.total })),
-      forfeit: true,
-    };
-    const data = JSON.stringify(spectatorGameOver);
+    const data = JSON.stringify(buildSpectatorGameOver(winnerUsername, userScores, { forfeit: true }));
     room.spectators.forEach((ws) => {
       if (ws.readyState === 1) ws.send(data);
     });
