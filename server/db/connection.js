@@ -1,6 +1,10 @@
 /**
- * Database connection and initialization.
+ * Database connection and initialization (LEGACY).
  * Uses better-sqlite3 for synchronous SQLite access.
+ *
+ * @deprecated All new code should use the async adapter from './index.js' instead.
+ * This module is kept only for backward compatibility with load tests that
+ * construct their own better-sqlite3 Database instances.
  */
 
 const Database = require('better-sqlite3');
@@ -149,15 +153,35 @@ function _initDbOnce() {
     }
   }
 
-  // Seed achievement definitions
-  const { seedAchievements } = require('../achievements');
-  seedAchievements();
+  // Seed achievement definitions (sync — legacy path uses better-sqlite3 directly)
+  const { ACHIEVEMENTS } = require('../achievements');
+  const achCount = database.prepare('SELECT COUNT(*) as c FROM achievements').get();
+  if (achCount.c === 0) {
+    const insertAch = database.prepare(
+      'INSERT INTO achievements (id, name, description, icon, category, requirement) VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    database.transaction((items) => {
+      for (const a of items) {
+        insertAch.run(a.id, a.name, a.description, a.icon, a.category, a.requirement);
+      }
+    })(ACHIEVEMENTS);
+    console.log('🏅 Achievements seeded');
+  }
 
-  // Seed puzzles if table is empty
+  // Seed puzzles if table is empty (sync — legacy path uses better-sqlite3 directly)
   const puzzleCount = database.prepare('SELECT COUNT(*) AS cnt FROM puzzles').get();
   if (puzzleCount.cnt === 0) {
-    const { seedPuzzles } = require('./seed-puzzles');
-    seedPuzzles();
+    const puzzles = require('../puzzleData');
+    const insertPuzzle = database.prepare(
+      `INSERT OR REPLACE INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
+    );
+    database.transaction((items) => {
+      for (const p of items) {
+        insertPuzzle.run(p.id, p.category, p.difficulty, p.type, JSON.stringify(p.sequence), p.answer, JSON.stringify(p.options), p.explanation);
+      }
+    })(puzzles);
+    console.log(`🧩 Seeded ${puzzles.length} puzzles into database`);
   }
 
   console.log('📦 Database initialized');

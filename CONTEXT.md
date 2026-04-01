@@ -115,8 +115,8 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 43 | Browser E2E tests | ⬜ Pending | 40 | Playwright tests for full UI flows |
-| 44 | Load testing | ⬜ Pending | 41 | k6/Artillery for concurrent WS + API stress |
+| 43 | Browser E2E tests | ✅ Done | 40 | Playwright tests for full UI flows |
+| 44 | Load testing | ✅ Done | 41 | Artillery for concurrent WS + API stress |
 
 ## Phase 8 — User Experience
 
@@ -125,14 +125,14 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | 45 | Mobile PWA | ✅ Done | — | manifest.json, service worker, offline fallback (PR #15) |
 | 46 | Share links | ✅ Done | — | Deep link ?room=CODE, copy-link button (PR #15) |
 | 47 | Multiplayer sound effects | ✅ Done | — | Opponent answered, countdown, win/loss fanfare (PR #15) |
-| 48 | Spectator mode | ⬜ Pending | 42 | Read-only WS, spectator count in lobby |
+| 48 | Spectator mode | 🔄 In PR | 42 | Read-only WS, spectator count in lobby |
 
 ## Phase 9 — Content & Growth
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 49 | Puzzle expansion (200+) | ⬜ Pending | — | AI-assisted generation, broader categories |
-| 50 | Community puzzle submissions | ⬜ Pending | 49 | Submit form, moderation queue, attribution |
+| 49 | Puzzle expansion (200+) | ✅ Done | — | AI-assisted generation, broader categories. 504 puzzles in DB. |
+| 50 | Community puzzle submissions | ✅ Done | 49 | Submit form, moderation queue, attribution |
 
 **Parallelism:** Phase 6 is sequential. Phase 7 can start now; its dependencies (40 and 41) are done. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
 
@@ -308,12 +308,12 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 |---|---|---|---|---|
 | 60 | Azure Files cleanup | ✅ Done | 59 | Remove dead SMB references from all files. PR #49 merged. |
 | 60v | Validate staging (post-cleanup) | ✅ Done | 60 | Staging deploy + smoke tests all passed. DB self-init, user reg, score submit, puzzles all working. Run #23809714266. |
-| 61a | Adapter interface + factory | ⬜ Pending | 60v | `base-adapter.js`, `index.js` factory, config changes. Defines the async API all consumers use. |
-| 61b | SQLite adapter + migrations | ⬜ Pending | 61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–003`), `seed.js`. Parallel in wt-1. |
-| 61c | mssql adapter | ⬜ Pending | 61a | `mssql-adapter.js`. Parallel in wt-2. Not used until Task 64. |
-| 62 | Convert routes to async | ⬜ Pending | 61a | All DB-touching handlers use `await db.get/all/run()`. Parallel in wt-3. |
-| 63 | Update tests for async | ⬜ Pending | 61b, 62 | Async test helpers. All 81+ tests pass with SQLite adapter. Runs in wt-3 after 61b merges. |
-| 63v | Validate staging (post-async) | ⬜ Pending | 63 | Trigger staging deploy, verify async DB layer works end-to-end in Azure. |
+| 61a | Adapter interface + factory | ✅ Done | 60v | `base-adapter.js`, `index.js` factory, config changes. PR #52 merged. |
+| 61b | SQLite adapter + migrations | ✅ Done | 61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–004`), `seed.js`. PR #55 merged. |
+| 61c | mssql adapter | ✅ Done | 61a | `mssql-adapter.js`. PR #56 merged. Not used until Task 64. |
+| 62 | Convert routes to async | ✅ Done | 61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 merged. |
+| 63 | Update tests for async | ✅ Done | 61b, 62 | Async test helpers. All 173 tests pass with SQLite adapter. PR #57 merged (combined with 62). |
+| 63v | Validate staging (post-async) | ✅ Done | 63 | Staging deploy + smoke tests + E2E all passed. 4 migrations applied, 504 puzzles seeded, async routes working. Run #23833160313. |
 | 64 | Provision Azure SQL | ⬜ Pending | 63v | Free-tier serverless DB. Firewall. GitHub secret. |
 | 65 | Production deploy | ⬜ Pending | 64 | Update prod-deploy.yml. First deploy + verify. |
 
@@ -336,6 +336,24 @@ Integrate E2E and load tests into CI/CD pipelines so they run automatically, not
 | 67 | Load test integration | ⬜ Pending | 44 | Decide where/when load tests run: on-demand workflow_dispatch, nightly schedule, or pre-prod gate. Add workflow accordingly. |
 
 **Parallelism:** Tasks 65 and 66 are sequential. Task 67 is independent and can start anytime after task 44 merges. Phase 12 depends on PRs #32 (task 43) and #34 (task 44) being merged first.
+
+## Phase 13 — Production-Grade Observability & Logging
+
+Add structured logging, request tracing, client-side error reporting, and Azure Monitor integration via OpenTelemetry. Environment-appropriate log levels: debug+pretty in dev, info+JSON+OTel in staging/prod.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 70 | Logger foundation + request logging | ⬜ Pending | — | Install Pino + pino-http + pino-pretty (dev). Create `server/logger.js` singleton, add `LOG_LEVEL` to config.js, add pino-http middleware before routes. JSON in staging/prod, pretty-print in dev. |
+| 71 | Centralized error handler + replace console.* | ⬜ Pending | 70 | Add Express error-handling middleware at end of chain. Replace all 22 `console.*` calls with structured `logger.*` at appropriate levels. |
+| 72 | Auth & user activity logging | ⬜ Pending | 70 | Log login/logout/registration at info, rate limits and auth failures at warn. Log WS connection/disconnection events. Add userId context to log entries. |
+| 73 | Client-side error reporting | ⬜ Pending | 70 | Create `POST /api/telemetry/errors` endpoint (rate-limited, no auth). Add `window.onerror` and `unhandledrejection` handlers in client JS. Batch/debounce (max 10/min per client). |
+| 74 | OpenTelemetry SDK + Azure Monitor | ⬜ Pending | 73 | Install `@opentelemetry/sdk-node` + `@azure/monitor-opentelemetry-exporter`. Create `server/telemetry.js` bootstrap. Auto-instrument HTTP/Express/DB. Provision App Insights (staging + prod). |
+| 75 | Environment-specific log configuration | ⬜ Pending | 74 | Dev: debug + pretty-print + no OTel. Staging: info + JSON + OTel → Azure Monitor. Prod: info + JSON + OTel + sensitive data redaction + trace ID correlation. |
+| 76 | Logging tests + documentation | ⬜ Pending | 75 | Unit tests for logger config, client error endpoint, error middleware. Update INSTRUCTIONS.md with logging conventions (when to use each level, structured context, correlation). |
+
+**Parallelism:** Tasks 71, 72, and 73 can run in parallel after 70 is complete.
+
+**Log Levels:** trace (ultra-verbose) → debug (dev diagnostics) → info (normal operations) → warn (handled anomalies) → error (failures) → fatal (process crash).
 
 ### Deployment Architecture
 

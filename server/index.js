@@ -9,11 +9,16 @@ validateConfig();
 
 const { createServer } = require('./app');
 
-const { server } = createServer();
+const { server, dbReady } = createServer();
 
-server.listen(config.PORT, () => {
-  console.log(`🧩 Guess What's Next server running on http://localhost:${config.PORT}`);
-});
+// Wait for DB initialization before accepting connections (non-Azure).
+// In Azure, dbReady is null — the server starts immediately so health probes succeed.
+(async () => {
+  if (dbReady) await dbReady;
+  server.listen(config.PORT, () => {
+    console.log(`🧩 Guess What's Next server running on http://localhost:${config.PORT}`);
+  });
+})();
 
 module.exports = { server };
 
