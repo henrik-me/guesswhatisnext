@@ -2,11 +2,11 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-03-30
+> **Last updated:** 2026-04-01
 
 ---
 
-## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
+## Project Status: ✅ Phases 1–5, 12 Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
 
 ### Development Workflow
 
@@ -109,7 +109,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 |---|---|---|---|---|
 | 40 | Remove debug logging | ✅ Done | — | Stripped debug console.log from client code (PR #14) |
 | 41 | Environment variables | ✅ Done | — | server/config.js centralizes env vars with startup validation (PR #14) |
-| 42 | HTTPS & secure cookies | ⬜ Pending | 41 | TLS enforcement, WSS, secure headers |
+| 42 | HTTPS & secure headers | ✅ Done | 41 | Helmet headers, HTTPS redirect, HSTS, CSP with wss:, dev-https.js. JWT auth (no cookies). |
 
 ## Phase 7 — Quality & Testing
 
@@ -125,7 +125,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | 45 | Mobile PWA | ✅ Done | — | manifest.json, service worker, offline fallback (PR #15) |
 | 46 | Share links | ✅ Done | — | Deep link ?room=CODE, copy-link button (PR #15) |
 | 47 | Multiplayer sound effects | ✅ Done | — | Opponent answered, countdown, win/loss fanfare (PR #15) |
-| 48 | Spectator mode | 🔄 In PR | 42 | Read-only WS, spectator count in lobby |
+| 48 | Spectator mode | ✅ Done | 42 | Read-only WS, spectator count in lobby, spectator badge, dedicated tests |
 
 ## Phase 9 — Content & Growth
 
@@ -134,7 +134,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | 49 | Puzzle expansion (200+) | ✅ Done | — | AI-assisted generation, broader categories. 504 puzzles in DB. |
 | 50 | Community puzzle submissions | ✅ Done | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 can start now; its dependencies (40 and 41) are done. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
+**Parallelism:** Phase 6 sequential (42 now done). Phase 7 done. Phase 8 all done. Phase 9 done. In Phase 10, the only remaining item is task 56.
 
 ## Phase 10 — CI/CD Pipeline Rework
 
@@ -331,11 +331,11 @@ Integrate E2E and load tests into CI/CD pipelines so they run automatically, not
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 65 | E2E tests in PR CI | ⬜ Pending | 43 | Add Playwright job to ci.yml: install Chromium, start server with temp DB, run `npx playwright test` in parallel with lint+test |
-| 66 | E2E tests in staging validation | ⬜ Pending | 65 | Run Playwright against ephemeral staging container in staging-deploy.yml after smoke tests pass |
-| 67 | Load test integration | ⬜ Pending | 44 | Decide where/when load tests run: on-demand workflow_dispatch, nightly schedule, or pre-prod gate. Add workflow accordingly. |
+| 65 | E2E tests in PR CI | ✅ Done | 43 | Playwright job in ci.yml with Chromium, runs in parallel with lint+test |
+| 66 | E2E tests in staging validation | ✅ Done | 65 | Playwright runs in staging-deploy.yml after smoke tests |
+| 67 | Load test integration | ✅ Done | 44 | load-test.yml: workflow_dispatch + weekly schedule, Artillery API + WS tests, HTML report artifact |
 
-**Parallelism:** Tasks 65 and 66 are sequential. Task 67 is independent and can start anytime after task 44 merges. Phase 12 depends on PRs #32 (task 43) and #34 (task 44) being merged first.
+**Parallelism:** All Phase 12 work complete.
 
 ## Phase 13 — Production-Grade Observability & Logging
 
