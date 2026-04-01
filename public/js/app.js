@@ -1620,7 +1620,10 @@ function onGameOver(msg) {
     const myRank = myEntry ? myEntry.rank : null;
     const totalPlayers = msg.totalPlayers || rankings.length;
 
-    if (myRank === 1 && msg.isDraw) {
+    if (matchState.isSpectator || !myEntry) {
+      outcomeIcon = '👀';
+      outcomeTitle = 'Match Over';
+    } else if (myRank === 1 && msg.isDraw) {
       outcomeIcon = '🤝';
       outcomeTitle = "It's a Tie!";
     } else if (myRank === 1) {
@@ -1631,11 +1634,15 @@ function onGameOver(msg) {
       outcomeTitle = myRank === 1 ? 'You Win!' : `${ordinal(myRank)} Place`;
     }
 
-    // Show placement
+    // Show placement (skip for spectators)
     const placementEl = document.querySelector('[data-bind="match-placement"]');
     if (placementEl) {
-      placementEl.textContent = `Your placement: ${ordinal(myRank)} of ${totalPlayers} player${totalPlayers === 1 ? '' : 's'}`;
-      placementEl.style.display = '';
+      if (matchState.isSpectator || !myEntry) {
+        placementEl.style.display = 'none';
+      } else {
+        placementEl.textContent = `Your placement: ${ordinal(myRank)} of ${totalPlayers} player${totalPlayers === 1 ? '' : 's'}`;
+        placementEl.style.display = '';
+      }
     }
 
     // Render rankings table
@@ -1728,13 +1735,15 @@ function onGameOver(msg) {
     rematchStatus.textContent = '';
   }
 
-  // For spectators, update the placement text
+  // For spectators, update the placement text and ensure title/icon are correct
   if (matchState.isSpectator) {
     const placementEl = document.querySelector('[data-bind="match-placement"]');
     if (placementEl) {
       placementEl.textContent = '\u{1F440} You were spectating this match';
       placementEl.style.display = '';
     }
+    if (iconEl) iconEl.textContent = '👀';
+    if (titleEl) titleEl.textContent = 'Match Over';
     if (hostIndicator) {
       hostIndicator.style.display = 'none';
     }

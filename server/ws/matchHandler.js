@@ -194,37 +194,9 @@ async function handleJoin(ws, roomCode) {
       // Restore player in room
       room.players.set(ws.user.id, ws);
       room.droppedPlayers.delete(ws.user.id);
+      ws.isSpectator = false;
 
-      // Build full player state for reconnecting player
-      const players = [];
-      room.players.forEach((pws, uid) => {
-        players.push({ username: pws.user.username, score: room.scores[uid] || 0, connected: true });
-      });
-      room.droppedPlayers.forEach(({ username }, uid) => {
-        players.push({ username, score: room.scores[uid] || 0, connected: false });
-      });
-      const droppedPlayers = [];
-      room.droppedPlayers.forEach(({ username }) => droppedPlayers.push(username));
-
-      // Send reconnect state to the rejoining player
-      ws.send(JSON.stringify({
-        type: 'reconnected',
-        roomCode: code,
-        scores: buildScoresSnapshot(room),
-        players,
-        droppedPlayers,
-        currentRound: room.round,
-        totalRounds: room.totalRounds,
-        myScore: room.scores[ws.user.id] || 0,
-      }));
-
-      // Notify ALL remaining players
-      broadcastToRoom(code, {
-        type: 'player-reconnected',
-        username: ws.user.username,
-        remainingCount: room.players.size,
-      }, ws.user.id);
-
+      sendReconnectState(ws, code, room);
       return;
     }
   }
@@ -266,6 +238,27 @@ async function handleJoin(ws, roomCode) {
   }
 
   if (room.started) {
+    // Reconnect: player still in active list (old socket close event hasn't fired yet)
+    if (room.players.has(ws.user.id)) {
+      const oldWs = room.players.get(ws.user.id);
+      try { oldWs.close(); } catch { /* ignore stale socket */ }
+      room.players.set(ws.user.id, ws);
+      ws.isSpectator = false;
+      sendReconnectState(ws, code, room);
+      return;
+    }
+    // Reconnect: player was dropped but hasn't been forfeited yet
+    if (room.droppedPlayers.has(ws.user.id)) {
+      const dcKey2 = `${ws.user.id}:${code}`;
+      const dcInfo2 = disconnected.get(dcKey2);
+      if (dcInfo2?.forfeitTimer) clearTimeout(dcInfo2.forfeitTimer);
+      disconnected.delete(dcKey2);
+      room.players.set(ws.user.id, ws);
+      room.droppedPlayers.delete(ws.user.id);
+      ws.isSpectator = false;
+      sendReconnectState(ws, code, room);
+      return;
+    }
     return joinAsSpectator(ws, code, room);
   }
 
@@ -1007,6 +1000,36 @@ function buildScoresSnapshot(room) {
     snapshot[ws.user.username] = room.scores[userId] || 0;
   });
   return snapshot;
+}
+
+/** Send reconnect state to a rejoining player and notify others. */
+function sendReconnectState(ws, roomCode, room) {
+  const players = [];
+  room.players.forEach((pws, uid) => {
+    players.push({ username: pws.user.username, score: room.scores[uid] || 0, connected: true });
+  });
+  room.droppedPlayers.forEach(({ username }, uid) => {
+    players.push({ username, score: room.scores[uid] || 0, connected: false });
+  });
+  const droppedPlayers = [];
+  room.droppedPlayers.forEach(({ username }) => droppedPlayers.push(username));
+
+  ws.send(JSON.stringify({
+    type: 'reconnected',
+    roomCode,
+    scores: buildScoresSnapshot(room),
+    players,
+    droppedPlayers,
+    currentRound: room.round,
+    totalRounds: room.totalRounds,
+    myScore: room.scores[ws.user.id] || 0,
+  }));
+
+  broadcastToRoom(roomCode, {
+    type: 'player-reconnected',
+    username: ws.user.username,
+    remainingCount: room.players.size,
+  }, ws.user.id);
 }
 
 /** Handle a rematch request from a player (ready up). */
