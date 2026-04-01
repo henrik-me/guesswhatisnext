@@ -20,13 +20,14 @@ describe('Security headers', () => {
     expect(res.headers['permissions-policy']).toBeDefined();
   });
 
-  test('CSP allows inline styles and scripts, and data URIs', async () => {
+  test('CSP allows inline styles, data URIs, and WebSocket connections', async () => {
     const res = await getAgent().get('/healthz');
     const csp = res.headers['content-security-policy'];
 
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
-    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
     expect(csp).toMatch(/img-src[^;]*data:/);
+    expect(csp).toMatch(/connect-src[^;]*ws:/);
+    expect(csp).toMatch(/connect-src[^;]*wss:/);
   });
 
   test('X-XSS-Protection header is not set', async () => {
@@ -77,7 +78,7 @@ describe('HTTPS redirect in production mode', () => {
       .get('/healthz')
       .set('X-Forwarded-Proto', 'http');
 
-    expect(res.status).toBe(301);
+    expect(res.status).toBe(308);
     expect(res.headers.location).toMatch(/^https:\/\//);
   });
 

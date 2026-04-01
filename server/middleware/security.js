@@ -14,7 +14,7 @@ function httpsRedirect(req, res, next) {
   if (process.env.NODE_ENV === 'production') {
     const isSecure = req.secure || req.protocol === 'https';
     if (!isSecure) {
-      return res.redirect(301, `https://${req.hostname}${req.originalUrl}`);
+      return res.redirect(308, `https://${req.get('host') || req.hostname}${req.originalUrl}`);
     }
   }
   next();
@@ -22,7 +22,7 @@ function httpsRedirect(req, res, next) {
 
 /**
  * Security headers middleware using helmet.
- * CSP allows inline styles/scripts, data URIs, and self-hosted resources.
+ * CSP allows inline styles, WebSocket connections, data URIs, and self-hosted resources.
  * Permissions-Policy is set manually since helmet does not emit it.
  */
 function securityHeaders(req, res, next) {
@@ -37,10 +37,10 @@ const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", 'ws:', 'wss:'],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
