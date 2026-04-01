@@ -16,8 +16,8 @@ function httpsRedirect(req, res, next) {
     const isSecure = req.secure || req.protocol === 'https';
     if (!isSecure) {
       const host = config.CANONICAL_HOST;
-      if (!host) {
-        // Fail closed: refuse to redirect without a known-safe host.
+      if (!host || !/^[\w][\w.-]*(:\d+)?$/.test(host)) {
+        // Fail closed: refuse to redirect without a valid hostname.
         return res.status(421).send('Misdirected Request');
       }
       return res.redirect(308, `https://${host}${req.originalUrl}`);

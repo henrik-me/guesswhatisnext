@@ -27,6 +27,7 @@ function validateConfig() {
   const missing = [];
   if (!(process.env.JWT_SECRET || '').trim()) missing.push('JWT_SECRET');
   if (!(process.env.SYSTEM_API_KEY || '').trim()) missing.push('SYSTEM_API_KEY');
+  if (!(process.env.CANONICAL_HOST || '').trim()) missing.push('CANONICAL_HOST');
 
   if (missing.length > 0) {
     if (isProduction) {
