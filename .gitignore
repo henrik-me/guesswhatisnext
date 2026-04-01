@@ -7,6 +7,10 @@ data/*.db
 data/*.sqlite
 data/*.db-shm
 data/*.db-wal
+
+# Dev HTTPS certificates
+data/dev-key.pem
+data/dev-cert.pem
 *.db
 *.db-shm
 *.db-wal

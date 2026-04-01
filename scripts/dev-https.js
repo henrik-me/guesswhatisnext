@@ -1,0 +1,117 @@
+#!/usr/bin/env node
+/**
+ * Local HTTPS dev server with self-signed certificate.
+ *
+ * Starts two listeners:
+ *   - HTTPS on port 3443 (self-signed cert, generated on the fly)
+ *   - HTTP  on port 3080 → sets X-Forwarded-Proto: http so the app's
+ *     httpsRedirect middleware fires the 308 redirect.
+ *
+ * Usage:
+ *   node scripts/dev-https.js
+ *
+ * Then open https://localhost:3443 in your browser (accept the self-signed warning).
+ * Or hit  http://localhost:3080  to see the 308 redirect to https://localhost:3443.
+ */
+
+const https = require('https');
+const http = require('http');
+const crypto = require('crypto');
+const { execSync } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+const HTTPS_PORT = parseInt(process.env.HTTPS_PORT, 10) || 3443;
+const HTTP_PORT = parseInt(process.env.HTTP_PORT, 10) || 3080;
+const HOST = `localhost:${HTTPS_PORT}`;
+
+// ---------- Generate a self-signed certificate on the fly ----------
+function generateSelfSignedCert() {
+  const certDir = path.join(__dirname, '..', 'data');
+  const keyPath = path.join(certDir, 'dev-key.pem');
+  const certPath = path.join(certDir, 'dev-cert.pem');
+
+  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    console.log('♻️  Reusing existing self-signed cert in data/');
+    return {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath),
+    };
+  }
+
+  console.log('🔐 Generating self-signed certificate…');
+  fs.mkdirSync(certDir, { recursive: true });
+
+  // Use Node's built-in crypto to generate via openssl CLI (available on Windows with Git)
+  try {
+    execSync(
+      `openssl req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" ` +
+      `-days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`,
+      { stdio: 'pipe' }
+    );
+  } catch {
+    // Fallback: try via Git's bundled openssl
+    const gitOpenssl = 'C:\\Program Files\\Git\\usr\\bin\\openssl.exe';
+    execSync(
+      `"${gitOpenssl}" req -x509 -newkey rsa:2048 -keyout "${keyPath}" -out "${certPath}" ` +
+      `-days 365 -nodes -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`,
+      { stdio: 'pipe' }
+    );
+  }
+
+  console.log('✅ Certificate written to data/dev-key.pem + data/dev-cert.pem');
+  return {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath),
+  };
+}
+
+// ---------- Set environment for production-like behaviour ----------
+process.env.NODE_ENV = 'production';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'dev-https-test-secret';
+process.env.SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'dev-https-test-key';
+process.env.CANONICAL_HOST = HOST;
+
+// Override PORT so createServer's internal http.createServer binds nowhere
+// — we'll use our own HTTPS server instead.
+process.env.PORT = String(HTTPS_PORT);
+
+const { config, validateConfig } = require('../server/config');
+config.CANONICAL_HOST = HOST;
+
+validateConfig();
+
+const tls = generateSelfSignedCert();
+
+// Monkey-patch http.createServer so that createServer() builds an HTTPS
+// server transparently (WebSocket upgrade, routes, everything wired up).
+const origCreateServer = http.createServer;
+http.createServer = function patchedCreateServer(app) {
+  const httpsServer = https.createServer(tls, app);
+  // Restore immediately so nothing else is affected
+  http.createServer = origCreateServer;
+  return httpsServer;
+};
+
+const { createServer } = require('../server/app');
+const { server } = createServer();
+
+server.listen(HTTPS_PORT, () => {
+  console.log(`\n🔒 HTTPS server: https://localhost:${HTTPS_PORT}`);
+  console.log(`   Security headers, HSTS, CSP, and WebSocket (wss://) are active.`);
+});
+
+// HTTP server — passes requests to the Express app with X-Forwarded-Proto: http
+// so the redirect middleware kicks in.
+// Extract the Express app from the HTTPS server's request listeners.
+const app = server.listeners('request')[0];
+
+const httpServer = http.createServer((req, res) => {
+  req.headers['x-forwarded-proto'] = 'http';
+  app(req, res);
+});
+
+httpServer.listen(HTTP_PORT, () => {
+  console.log(`🌐 HTTP  server: http://localhost:${HTTP_PORT}`);
+  console.log(`   Requests here will get a 308 redirect to HTTPS.\n`);
+});
