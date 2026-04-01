@@ -238,7 +238,13 @@ These rules apply even during Phase 1 to ensure a smooth Phase 2 transition:
 | **E2E tests** | All critical user flows (see list below) | Playwright |
 | **Overall** | ≥ 80% line coverage across the project | `npm run test:coverage` |
 
-Tests **must pass** before any merge to `main`. CI/CD pipeline runs the full suite on every push.
+Tests **must pass** before any merge to `main`. The **full validation suite** is:
+
+1. **Lint:** `npm run lint` — ESLint with zero errors (warnings capped at 50)
+2. **Unit + integration tests:** `npm test` — Vitest, all must pass
+3. **E2E tests:** `npx playwright test` — Playwright browser tests
+
+CI runs all three in parallel on every PR. Agents must run the full suite locally before pushing.
 
 ### Test Framework & Tools
 
@@ -449,22 +455,41 @@ Commit after every meaningful, working change. Specifically:
 - After adding a new screen or feature
 - After fixing a bug
 - After adding tests
-- **Do not** commit broken/half-done work to `main`
+- **Do not** commit broken/half-done work
+- **All commits go on feature branches** — never directly on `main`
+
+### Agent Progress Reporting
+
+**All task work happens in background agents on worktrees — never in the main session.** The orchestrating agent dispatches work to background task agents, each running in its own worktree slot. Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
+
+Background agents **must** report progress to the orchestrating agent:
+- **On start:** "Starting task X in wt-N on branch feat/<name>"
+- **On milestone:** "Task X: completed <step>, running validation..."
+- **On validation pass:** "Task X: lint ✓ test ✓ e2e ✓ — creating PR"
+- **On PR created:** "Task X: PR #<N> created, requesting Copilot review"
+- **On review loop:** "Task X: Copilot review round <N> — fixing <count> issues"
+- **On ready:** "Task X: PR #<N> ready for merge (Copilot approved, CI green)"
+
+The orchestrating agent **waits for "ready for merge"** before merging and must not proceed with dependent work until the PR is merged and `main` is pulled.
 
 ### Branch Strategy
-- Phase 1–2: Work directly on `main` (single developer, rapid iteration)
-- Phase 3+: All changes via **pull requests** to `main` — no direct commits to main
-  - Feature branches: `feat/<step-id>` (e.g., `feat/puzzle-expansion`, `feat/mp-game-logic`)
-  - CI runs lint + tests on every PR
-  - At least 1 approval required before merge
-  - Push to `main` auto-deploys to staging, manual approval promotes to production
+
+**All changes go through pull requests. No exceptions. No direct commits to `main`.**
+
+- Feature branches: `feat/<step-id>` (e.g., `feat/puzzle-expansion`, `feat/mp-game-logic`)
+- Every PR must pass the **full validation suite** before merge:
+  1. **Lint:** `npm run lint`
+  2. **Unit + integration tests:** `npm test` (vitest)
+  3. **E2E tests:** `npx playwright test`
 - Branch protection rules on `main`:
   - Require PR with review before merging
-  - Require status checks to pass (lint, test, build)
+  - Require CI status checks to pass (lint, test, e2e)
   - No force pushes
   - No direct commits
 
 ### Parallel Agent Workflow
+
+**All worktree work runs as background tasks.** The orchestrating agent launches each task agent in the background, continues with other work or launches additional parallel tasks, and is notified when each completes. The orchestrating agent never blocks waiting for a worktree agent — it monitors progress via notifications and acts on "ready for merge" signals.
 
 When running multiple AI agents in parallel to implement independent tasks:
 
@@ -565,72 +590,68 @@ tests/helper.js
 └── registerUser() → helper to create auth'd test user
 ```
 
-**4. Commit, push, and merge strategy:**
+**4. Commit, push, and PR workflow:**
 
-Each worktree agent handles its own lifecycle end-to-end:
+All work happens in worktree branches. Agents **never** merge to main directly.
 
 ```
 Agent in wt-X:
   1. Work on feat/<task-name> branch
-  2. Run npm test → all pass
+  2. Run full validation suite:
+     npm run lint && npm test && npx playwright test
   3. git add -A && git commit
   4. git push -u origin feat/<task-name>
-  5. Merge to main on remote:
-     git fetch origin main
-     git checkout main
-     git merge feat/<task-name> --no-edit
-     npm test                     # verify merged state
-     git push origin main
-  6. If merge conflicts: resolve locally, re-run npm test, then push
+  5. Create PR:
+     gh pr create --base main --head feat/<task-name> --title "<title>" --body "<description>"
+  6. Request Copilot review:
+     gh pr edit <PR#> --add-reviewer "@copilot"
+  7. Enter Copilot review loop (see below)
+  8. Report to orchestrating agent: "PR #<N> ready for merge"
 ```
 
-The **main orchestrating agent** pulls after each worktree agent reports completion:
+The **main orchestrating agent** merges PRs and pulls:
 ```
-Main agent (after notification that wt-X pushed):
+Main agent (after wt-X reports PR ready):
+  gh pr merge <PR#> --squash --delete-branch
   cd C:\src\guesswhatisnext
-  git pull                       # get latest main with merged changes
+  git pull
 ```
 
 **Merge ordering:** First-done merges first. Each subsequent agent may need to
-rebase or merge main into their branch before pushing:
+rebase before pushing:
 ```
 Agent in wt-Y (if main has moved since branch creation):
   git fetch origin main
   git merge origin/main --no-edit    # or: git rebase origin/main
-  npm test                           # verify no conflicts broke anything
-  git push origin main
+  npm run lint && npm test && npx playwright test
+  git push --force-with-lease
 ```
-
-**Future (when branch protection is enabled):**
-- Agents push their branch but do NOT merge to main directly
-- Instead, create a PR: `gh pr create --base main --head feat/<task-name>`
-- CI runs tests on the PR automatically
-- PR requires review approval + passing status checks before merge
-- Main agent or reviewer merges PRs one at a time via GitHub UI or `gh pr merge`
 
 **10. Copilot PR Review Policy:**
 
-Every PR must be reviewed by GitHub Copilot before merging. This is part of the standard workflow.
+Every PR **must** be reviewed by GitHub Copilot. The review loop continues until Copilot reports **zero issues**. No PR is merged with unresolved Copilot feedback.
 
 **Requesting review (requires gh CLI ≥ 2.88.0):**
 ```powershell
 gh pr edit <PR#> --add-reviewer "@copilot"
 ```
 
-**After Copilot reviews:**
+**Review loop (mandatory — repeat until clean):**
 1. Read all review comments and suggestions
-2. Assess each comment — categorize as **Fix** (valid issue), **Skip** (by design / low risk), or **Accept suggestion** (has code suggestion that can be applied directly)
+2. Assess each comment — categorize as **Fix**, **Skip**, or **Accept suggestion**
 3. For each comment, reply with the decision and rationale
 4. Fix valid issues, commit, and push
 5. Resolve all threads (fixed or acknowledged)
-6. If Copilot re-reviews after fixes, repeat the cycle
+6. Re-request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
+7. **Repeat from step 1** until Copilot approves with no new comments
+8. Only then report PR as ready for merge
 
 **Assessment criteria:**
 - **Fix**: Real bugs, security issues, correctness problems, missing error handling that could cause silent failures
 - **Skip**: Cosmetic concerns, extremely unlikely edge cases (e.g., port 0), style preferences already covered by lint, or by-design decisions
 - **Accept suggestion**: When Copilot provides a complete code suggestion that is correct and improves the code
 
-**Agents creating PRs must also request Copilot review** as part of their PR creation step.
+**Agents creating PRs must request Copilot review as part of their PR creation step.**
 
 **5. Merge order and conflict resolution:**
 - Merge zero-conflict branches first (e.g., new-files-only tasks like infra)
