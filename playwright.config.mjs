@@ -11,8 +11,6 @@ const externalBaseURL = process.env.BASE_URL;
 // globalTeardown cleans this up after each run.
 const tmpDir = path.join(os.tmpdir(), 'gwn-e2e');
 if (!externalBaseURL) {
-  fs.mkdirSync(tmpDir, { recursive: true });
-
   // Ensure each E2E run starts from a clean DB by removing the temp dir entirely.
   // On Windows, individual file unlinkSync can fail with EBUSY if the DB is still
   // locked by a prior server process. Removing the parent dir is more reliable.
@@ -58,5 +56,5 @@ export default defineConfig({
         },
         timeout: 15000,
       },
-  globalTeardown: './tests/e2e/global-teardown.mjs',
+  globalTeardown: externalBaseURL ? undefined : './tests/e2e/global-teardown.mjs',
 });
