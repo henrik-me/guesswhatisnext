@@ -66,8 +66,11 @@ router.post('/join', requireAuth, (req, res) => {
   if (!match) {
     return res.status(404).json({ error: 'Room not found' });
   }
+  if (match.status === 'active' || match.status === 'finished') {
+    return res.json({ matchId: match.id, roomCode: roomCode.toUpperCase(), status: 'spectator' });
+  }
   if (match.status !== 'waiting') {
-    return res.status(400).json({ error: 'Match already started or finished' });
+    return res.status(400).json({ error: 'Match is no longer available' });
   }
 
   // Check room capacity

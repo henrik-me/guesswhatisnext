@@ -965,6 +965,7 @@ function handleRematchStartConfirm(ws) {
 
   rooms.set(newCode, {
     players: new Map(),
+    spectators: new Map(),
     hostId: finished.hostId,
     maxPlayers: finished.maxPlayers,
     droppedPlayers: new Map(),

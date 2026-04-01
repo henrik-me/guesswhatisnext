@@ -3,6 +3,7 @@
  */
 
 const helmet = require('helmet');
+const { config } = require('../config');
 
 /**
  * HTTPS redirect middleware for production behind a reverse proxy.
@@ -14,12 +15,9 @@ function httpsRedirect(req, res, next) {
   if (process.env.NODE_ENV === 'production') {
     const isSecure = req.secure || req.protocol === 'https';
     if (!isSecure) {
-      const host = req.get('host') || req.hostname;
-      // Validate host to prevent host-header injection / open-redirect.
-      // Only allow alphanumeric, dots, hyphens, colons (for port), and brackets (for IPv6).
-      if (!/^[\w.\-:[\]]+$/.test(host)) {
-        return res.status(400).send('Bad Request');
-      }
+      // Use configured canonical host to prevent host-header injection.
+      // Falls back to request Host header for backwards compatibility.
+      const host = config.CANONICAL_HOST || req.get('host') || req.hostname;
       return res.redirect(308, `https://${host}${req.originalUrl}`);
     }
   }
