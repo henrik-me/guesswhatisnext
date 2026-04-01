@@ -17,15 +17,15 @@ describe('Security headers', () => {
     expect(res.headers['x-frame-options']).toBe('DENY');
     expect(res.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
     expect(res.headers['content-security-policy']).toBeDefined();
+    expect(res.headers['permissions-policy']).toBeDefined();
   });
 
-  test('CSP allows inline styles, WebSocket, and data URIs', async () => {
+  test('CSP allows inline styles and scripts, and data URIs', async () => {
     const res = await getAgent().get('/healthz');
     const csp = res.headers['content-security-policy'];
 
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
-    expect(csp).toContain('connect-src');
-    expect(csp).toMatch(/connect-src[^;]*wss:/);
+    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
     expect(csp).toMatch(/img-src[^;]*data:/);
   });
 

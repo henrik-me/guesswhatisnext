@@ -6,28 +6,41 @@ const helmet = require('helmet');
 
 /**
  * HTTPS redirect middleware for production behind a reverse proxy.
- * Uses X-Forwarded-Proto header (requires trust proxy).
+ * Uses req.secure / req.protocol (which honour trust proxy) for robust
+ * handling of X-Forwarded-Proto (including comma-separated lists).
  * Only active when NODE_ENV === 'production'.
  */
 function httpsRedirect(req, res, next) {
-  if (process.env.NODE_ENV === 'production' && req.get('x-forwarded-proto') === 'http') {
-    return res.redirect(301, `https://${req.get('host')}${req.originalUrl}`);
+  if (process.env.NODE_ENV === 'production') {
+    const isSecure = req.secure || req.protocol === 'https';
+    if (!isSecure) {
+      return res.redirect(301, `https://${req.hostname}${req.originalUrl}`);
+    }
   }
   next();
 }
 
 /**
  * Security headers middleware using helmet.
- * CSP allows inline styles, WebSocket connections, data URIs, and self-hosted resources.
+ * CSP allows inline styles/scripts, data URIs, and self-hosted resources.
+ * Permissions-Policy is set manually since helmet does not emit it.
  */
-const securityHeaders = helmet({
+function securityHeaders(req, res, next) {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), interest-cohort=()'
+  );
+  helmetMiddleware(req, res, next);
+}
+
+const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'", 'wss:', 'ws:'],
+      connectSrc: ["'self'"],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
@@ -41,12 +54,6 @@ const securityHeaders = helmet({
   xContentTypeOptions: true,
   xFrameOptions: { action: 'deny' },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  permissionsPolicy: {
-    camera: [],
-    microphone: [],
-    geolocation: [],
-    'interest-cohort': [],
-  },
   xXssProtection: false,
 });
 
