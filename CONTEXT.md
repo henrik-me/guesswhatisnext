@@ -169,7 +169,7 @@ During staging deployment testing, we discovered that **SQLite on Azure Files (S
 - Concurrency group kills manual dispatch → `cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}`
 - `STAGING_AUTO_DEPLOY` repo variable gates auto-deploy (set to `false`, opt-in with `true`)
 
-**Staging status:** ✅ Deployed and working (2026-03-31)
+**Staging status:** ✅ Deployed and working (2026-04-01). CANONICAL_HOST fix (PR #72) resolved deploy failures caused by missing env var after HTTPS enablement (PR #59).
 
 | # | Task | Status | Notes |
 |---|---|---|---|
@@ -458,10 +458,10 @@ Improve the community puzzle submission experience for both submitters and admin
 | Decision | Choice | Rationale |
 |---|---|---|
 | Docker base image | node:22-slim (single-stage) | better-sqlite3 ships prebuilt binaries; no python3/make/g++ needed. Simpler Dockerfile at cost of ~200MB vs ~100MB image |
-| PR CI checks | Lint + test only (no Docker build) | Docker build is slow, hits Docker Hub rate limits, and isn't needed for PR validation |
+| PR CI checks | Lint + test + E2E (no Docker build) | Docker build is slow, hits Docker Hub rate limits, and isn't needed for PR validation. E2E (Playwright) added in Phase 12. |
 | Push to main | No auto-deployment (disabled) | Auto-deploy temporarily disabled in PR #41 to avoid unintended deploys. Manual workflow_dispatch only for now. |
 | Staging branch strategy | Fast-forward release/staging to main HEAD | Simpler than cherry-picking; no history divergence; staging always matches main |
-| Staging trigger | Manual workflow_dispatch only | Was: auto on merge to main. Disabled in PR #41 while iterating on deploy. Re-enable after staging validated. |
+| Staging trigger | Manual workflow_dispatch only | Auto-deploy gated by STAGING_AUTO_DEPLOY repo variable (default false). Manual dispatch is the standard workflow; auto-deploy available when needed. |
 | Ephemeral staging | Docker container in GitHub Actions | $0 infra cost; sufficient for automated smoke tests (health, auth, scores) |
 | Azure staging | Behind manual approval after ephemeral passes | Persistent environment for manual QA; only promoted after automated validation |
 | Production deploy | Manual workflow_dispatch from release/staging | Production only deploys code that has been validated in staging; never directly from main |
@@ -475,7 +475,7 @@ Improve the community puzzle submission experience for both submitters and admin
 |---|---|---|
 | Frontend stack | Vanilla HTML/CSS/JS | No build tools, fast iteration, lightweight |
 | Backend stack | Node.js + Express | Same language as frontend, easy WebSocket support |
-| Database | SQLite → PostgreSQL | Start simple, migrate when scaling |
+| Database | SQLite → Azure SQL | Start simple (SQLite for dev/staging), Azure SQL free tier for production. Adapter pattern supports both. |
 | Multiplayer | Both async + real-time | Leaderboards for casual, head-to-head for competitive |
 | Multi-player rooms | 2–10 players, host-controlled | Host creates room, configures settings, starts when ready |
 | Multi-player disconnect | Drop after 30s, match continues | Avoids ending match for all when one player leaves |
