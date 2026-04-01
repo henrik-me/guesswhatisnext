@@ -168,9 +168,33 @@ jobs:
 
       - name: Run E2E tests against ephemeral container
         run: |
-          echo "Waiting 60s for /api/auth/register burst-limit window to reset..."
-          sleep 60
-          npx playwright test
+          MAX_ATTEMPTS=3
+          ATTEMPT=1
+
+          while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
+            echo "Running Playwright tests (attempt $ATTEMPT/$MAX_ATTEMPTS)..."
+            OUTPUT=$(npx playwright test 2>&1)
+            STATUS=$?
+            echo "$OUTPUT"
+
+            if [ "$STATUS" -eq 0 ]; then
+              echo "Playwright tests succeeded."
+              exit 0
+            fi
+
+            if echo "$OUTPUT" | grep -qiE '429|too many requests|rate limit'; then
+              if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+                echo "Detected possible rate limiting. Waiting 30s before retrying..."
+                sleep 30
+                ATTEMPT=$((ATTEMPT + 1))
+                continue
+              fi
+              echo "Rate limiting persisted after $MAX_ATTEMPTS attempts. Failing."
+            fi
+
+            echo "Playwright tests failed with status $STATUS. Not retrying."
+            exit "$STATUS"
+          done
         env:
           BASE_URL: http://localhost:3000
 
