@@ -256,6 +256,11 @@ function handleJoin(ws, roomCode) {
     return joinAsSpectator(ws, code, room);
   }
 
+  // After match ends, room stays alive for rematch — new users should spectate
+  if (finishedRooms.has(code)) {
+    return joinAsSpectator(ws, code, room);
+  }
+
   // Cap joins at maxPlayers
   if (room.players.size >= room.maxPlayers && !room.players.has(ws.user.id)) {
     ws.send(JSON.stringify({ type: 'error', message: 'Room is full' }));
@@ -589,6 +594,27 @@ function endMatch(roomCode) {
     });
   });
 
+  // Send generic gameOver to spectators
+  if (room.spectators) {
+    const spectatorGameOver = {
+      type: 'gameOver',
+      winner,
+      totalPlayers,
+      rankings: userScores.map(e => ({
+        username: e.username,
+        score: e.total,
+        rank: e.rank,
+        isYou: false,
+      })),
+      scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
+      results: userScores.map(e => ({ username: e.username, score: e.total })),
+    };
+    const data = JSON.stringify(spectatorGameOver);
+    room.spectators.forEach((ws) => {
+      if (ws.readyState === 1) ws.send(data);
+    });
+  }
+
   // Persist to database
   try {
     const db = getDb();
@@ -684,9 +710,9 @@ function handleDisconnect(ws) {
 
   const roomCode = ws.roomCode;
 
-  // Handle spectator disconnect
+  // Handle spectator disconnect — verify ws identity before removing
   if (ws.isSpectator) {
-    if (room.spectators) {
+    if (room.spectators && room.spectators.get(ws.user.id) === ws) {
       room.spectators.delete(ws.user.id);
       broadcastSpectatorCount(roomCode);
     }
@@ -883,6 +909,28 @@ function handleForfeit(roomCode, _forfeitUserId, _forfeitUsername) {
       forfeit: true,
     });
   });
+
+  // Send generic gameOver to spectators
+  if (room.spectators) {
+    const spectatorGameOver = {
+      type: 'gameOver',
+      winner: winnerUsername,
+      totalPlayers,
+      rankings: userScores.map(e => ({
+        username: e.username,
+        score: e.total,
+        rank: e.rank,
+        isYou: false,
+      })),
+      scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
+      results: userScores.map(e => ({ username: e.username, score: e.total })),
+      forfeit: true,
+    };
+    const data = JSON.stringify(spectatorGameOver);
+    room.spectators.forEach((ws) => {
+      if (ws.readyState === 1) ws.send(data);
+    });
+  }
 
   // Persist forfeit result
   try {

@@ -1298,14 +1298,9 @@ async function joinRoom(code) {
     // Join via WebSocket — server will assign player or spectator role
     ws.send(JSON.stringify({ type: 'join', roomCode: matchState.roomCode }));
 
-    // If the HTTP response indicates spectator mode, flag it and show lobby
-    if (data.status === 'spectator') {
-      matchState.isSpectator = true;
-    }
-
-    // Show lobby (spectator-joined WS message will transition to match screen)
+    // Show lobby; spectator-joined WS message will transition to match screen
     bindText('lobby-room-code', matchState.roomCode);
-    bindText('lobby-status', matchState.isSpectator ? 'Joining as spectator...' : 'Joining room...');
+    bindText('lobby-status', data.status === 'spectator' ? 'Joining as spectator...' : 'Joining room...');
     showScreen('lobby');
   } catch {
     showToast('Network error — is the server running?');
@@ -1315,6 +1310,7 @@ async function joinRoom(code) {
 /** Handle 'joined' — we successfully joined the room. */
 function onJoined(msg) {
   matchState.roomCode = msg.roomCode;
+  matchState.isSpectator = false;
   if (!matchState.players.includes(authUsername)) {
     matchState.players.push(authUsername);
   }
