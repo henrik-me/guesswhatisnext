@@ -355,6 +355,23 @@ Add structured logging, request tracing, client-side error reporting, and Azure 
 
 **Log Levels:** trace (ultra-verbose) → debug (dev diagnostics) → info (normal operations) → warn (handled anomalies) → error (failures) → fatal (process crash).
 
+## Phase 14 — Community Puzzle Submission UX
+
+Improve the community puzzle submission experience for both submitters and admins. The backend API and basic UI exist but the feature feels hidden and incomplete — submit button only visible when logged in with no discovery path, no submission history, no public browsing, and minimal authoring tools.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 80 | Submission discovery & onboarding | ⬜ Pending | — | Add visible "Community" or "Create" entry point on home screen for all users (logged-out users see CTA to log in). Add brief explainer of how submissions work (submit → review → goes live). |
+| 81 | My Submissions dashboard | ⬜ Pending | 80 | New screen showing user's own submissions with status (pending/approved/rejected), reviewer notes, and timestamps. Uses existing `GET /api/submissions` endpoint. |
+| 82 | Enhanced puzzle authoring form | ⬜ Pending | 80 | Puzzle type selector (emoji/text/image). Custom options editor (4 options, must include answer). Live preview of how the puzzle will look to players. Validation feedback before submit. |
+| 83 | Public community gallery | ⬜ Pending | 81 | Browse approved community puzzles with attribution (submitted by username). Filter by category/difficulty. New API endpoint `GET /api/puzzles/community`. |
+| 84 | Admin moderation improvements | ⬜ Pending | 82 | Live puzzle preview in moderation screen. Bulk approve/reject. Edit puzzle before approval (fix typos, adjust options). Submission stats (total pending, approved, rejected). |
+| 85 | Submission editing & deletion | ⬜ Pending | 81 | Users can edit pending submissions and delete their own submissions. API endpoints `PUT /api/submissions/:id` and `DELETE /api/submissions/:id` with ownership checks. |
+| 86 | Submission notifications | ⬜ Pending | 84 | Notify submitters when their puzzle is approved/rejected (in-app notification or badge on submissions screen). Track unread review results. |
+| 87 | Image puzzle submissions | ⬜ Pending | 82 | Image upload support for image-type puzzles. Server-side validation (size, format). Storage (local in dev, Azure Blob in prod). Preview in authoring form and moderation. |
+
+**Parallelism:** Tasks 81 and 82 can run in parallel after 80. Tasks 83, 84, 85 can run in parallel after their dependencies. Task 87 is independent of 83–86 but requires 82.
+
 ### Deployment Architecture
 
 ```
