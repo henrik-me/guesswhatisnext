@@ -27,14 +27,25 @@ function validateConfig() {
   const missing = [];
   if (!(process.env.JWT_SECRET || '').trim()) missing.push('JWT_SECRET');
   if (!(process.env.SYSTEM_API_KEY || '').trim()) missing.push('SYSTEM_API_KEY');
-  if (!(process.env.CANONICAL_HOST || '').trim()) missing.push('CANONICAL_HOST');
+
+  // Validate CANONICAL_HOST (required in production/staging for HTTPS redirect)
+  const canonicalHost = (process.env.CANONICAL_HOST || '').trim();
+  if (!canonicalHost) {
+    missing.push('CANONICAL_HOST');
+  } else if (!/^[\w][\w.-]*(:\d+)?$/.test(canonicalHost)) {
+    console.error(
+      `❌ CANONICAL_HOST="${canonicalHost}" is not a valid hostname[:port].\n` +
+      '   Example: CANONICAL_HOST=example.com or CANONICAL_HOST=example.com:8443'
+    );
+    if (isProduction) process.exit(1);
+  }
 
   if (missing.length > 0) {
     if (isProduction) {
       console.error(
         `❌ Missing required environment variables: ${missing.join(', ')}\n` +
-        '   These must be set when NODE_ENV=production.\n' +
-        '   Example: JWT_SECRET=… SYSTEM_API_KEY=… node server/index.js'
+        '   These must be set when NODE_ENV=production or NODE_ENV=staging.\n' +
+        '   Example: JWT_SECRET=… SYSTEM_API_KEY=… CANONICAL_HOST=… node server/index.js'
       );
       process.exit(1);
     } else {
