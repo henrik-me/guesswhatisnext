@@ -9,10 +9,11 @@ const { config } = require('../config');
  * HTTPS redirect middleware for production behind a reverse proxy.
  * Uses req.secure / req.protocol (which honour trust proxy) for robust
  * handling of X-Forwarded-Proto (including comma-separated lists).
- * Only active when NODE_ENV === 'production'.
+ * Only active when NODE_ENV is 'production' or 'staging'.
  */
 function httpsRedirect(req, res, next) {
-  if (process.env.NODE_ENV === 'production') {
+  const env = process.env.NODE_ENV;
+  if (env === 'production' || env === 'staging') {
     const isSecure = req.secure || req.protocol === 'https';
     if (!isSecure) {
       const host = config.CANONICAL_HOST;
