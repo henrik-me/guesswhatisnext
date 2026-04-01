@@ -28,26 +28,36 @@ function connectWS(token) {
   return new Promise((resolve, reject) => {
     const addr = getServerAddr();
     const ws = new WebSocket(`ws://${addr}/ws?token=${encodeURIComponent(token)}`);
+    function cleanup() {
+      clearTimeout(timeout);
+      ws.removeListener('message', onFirstMsg);
+      ws.removeListener('error', onError);
+    }
     function onFirstMsg(data) {
-      const msg = JSON.parse(data.toString());
+      let msg;
+      try { msg = JSON.parse(data.toString()); } catch (err) {
+        cleanup();
+        ws.terminate();
+        reject(err);
+        return;
+      }
       if (msg.type === 'connected') {
-        clearTimeout(timeout);
-        ws.removeListener('message', onFirstMsg);
+        cleanup();
         resolve(ws);
       }
     }
+    function onError(err) {
+      cleanup();
+      ws.terminate();
+      reject(err);
+    }
     const timeout = setTimeout(() => {
-      ws.removeListener('message', onFirstMsg);
+      cleanup();
       ws.terminate();
       reject(new Error('WS connect timeout'));
     }, 5000);
     ws.on('message', onFirstMsg);
-    ws.on('error', (err) => {
-      clearTimeout(timeout);
-      ws.removeListener('message', onFirstMsg);
-      ws.terminate();
-      reject(err);
-    });
+    ws.on('error', onError);
   });
 }
 
