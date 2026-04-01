@@ -14,7 +14,7 @@ const config = {
   JWT_SECRET: process.env.JWT_SECRET || (isProduction ? '' : 'gwn-dev-secret-change-in-production'),
   SYSTEM_API_KEY: process.env.SYSTEM_API_KEY || (isProduction ? '' : 'gwn-dev-system-key'),
   GWN_DB_PATH: process.env.GWN_DB_PATH || path.join(__dirname, '..', 'data', 'game.db'),
-  CANONICAL_HOST: process.env.CANONICAL_HOST || '',
+  CANONICAL_HOST: (process.env.CANONICAL_HOST || '').trim(),
   DB_BACKEND: process.env.DATABASE_URL ? 'mssql' : 'sqlite',
   DATABASE_URL: process.env.DATABASE_URL || null,
 };
@@ -29,15 +29,17 @@ function validateConfig() {
   if (!(process.env.SYSTEM_API_KEY || '').trim()) missing.push('SYSTEM_API_KEY');
 
   // Validate CANONICAL_HOST (required in production/staging for HTTPS redirect)
-  const canonicalHost = (process.env.CANONICAL_HOST || '').trim();
-  if (!canonicalHost) {
-    missing.push('CANONICAL_HOST');
-  } else if (!/^[\w][\w.-]*(:\d+)?$/.test(canonicalHost)) {
-    console.error(
-      `❌ CANONICAL_HOST="${canonicalHost}" is not a valid hostname[:port].\n` +
-      '   Example: CANONICAL_HOST=example.com or CANONICAL_HOST=example.com:8443'
-    );
-    if (isProduction) process.exit(1);
+  if (isProduction) {
+    const canonicalHost = (process.env.CANONICAL_HOST || '').trim();
+    if (!canonicalHost) {
+      missing.push('CANONICAL_HOST');
+    } else if (!/^[\w][\w.-]*(:\d+)?$/.test(canonicalHost)) {
+      console.error(
+        `❌ CANONICAL_HOST="${canonicalHost}" is not a valid hostname[:port].\n` +
+        '   Example: CANONICAL_HOST=example.com or CANONICAL_HOST=example.com:8443'
+      );
+      process.exit(1);
+    }
   }
 
   if (missing.length > 0) {
