@@ -42,6 +42,12 @@ function securityHeaders(req, res, next) {
 
 const isProduction = config.NODE_ENV === 'production' || config.NODE_ENV === 'staging';
 
+// In production, restrict WebSocket origins to the canonical host.
+// In dev/test, allow any ws/wss for convenience.
+const wsConnectSrc = isProduction && config.CANONICAL_HOST
+  ? [`wss://${config.CANONICAL_HOST}`]
+  : ['ws:', 'wss:'];
+
 const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
@@ -49,7 +55,7 @@ const helmetMiddleware = helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'", 'ws:', 'wss:'],
+      connectSrc: ["'self'", ...wsConnectSrc],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
