@@ -84,10 +84,14 @@ function initWebSocket(server, isReady) {
       try {
         const msg = JSON.parse(data);
         handleMessage(ws, msg).catch(() => {
-          ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
+          if (ws.readyState === 1) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
+          }
         });
       } catch {
-        ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+        }
       }
     });
 

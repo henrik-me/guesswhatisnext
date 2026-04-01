@@ -28,12 +28,15 @@ const pkg = require('../package.json');
 async function initializeDatabase() {
   const db = await getDbAdapter();
 
-  // Migrations are currently SQLite-specific; skip for other dialects.
+  // Migrations and seeding are currently SQLite-specific; fail fast for MSSQL.
   if (db.dialect === 'mssql') {
-    console.warn('⚠️  MSSQL migrations not yet implemented — skipping automatic migration');
-  } else {
-    await db.migrate(migrations);
+    throw new Error(
+      'MSSQL backend is not yet supported for automatic database initialization. ' +
+      'Please implement MSSQL-compatible migrations and seeding before using DB_BACKEND=mssql.'
+    );
   }
+
+  await db.migrate(migrations);
 
   // Seed system account if it doesn't exist
   const SYSTEM_API_KEY = config.SYSTEM_API_KEY;

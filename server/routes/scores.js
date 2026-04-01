@@ -57,6 +57,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 router.get('/leaderboard', requireAuth, async (req, res, next) => {
   try {
     const { mode = 'freeplay', period = 'all', limit = 20 } = req.query;
+    const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
 
     let dateFilter = '';
     if (period === 'daily') {
@@ -74,7 +75,7 @@ router.get('/leaderboard', requireAuth, async (req, res, next) => {
       WHERE s.mode = ? ${dateFilter}
       ORDER BY s.score DESC
       LIMIT ?
-    `, [mode, Math.min(Number(limit), 100)]);
+    `, [mode, safeLimit]);
 
     // Add rank and highlight current user
     const leaderboard = rows.map((row, i) => ({
@@ -98,6 +99,7 @@ router.get('/leaderboard', requireAuth, async (req, res, next) => {
 router.get('/leaderboard/multiplayer', requireAuth, async (req, res, next) => {
   try {
     const { period = 'all', limit = 20 } = req.query;
+    const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
 
     let dateFilter = '';
     if (period === 'daily') {
@@ -122,7 +124,7 @@ router.get('/leaderboard/multiplayer', requireAuth, async (req, res, next) => {
       GROUP BY u.id
       ORDER BY wins DESC, total_score DESC
       LIMIT ?
-    `, [Math.min(Number(limit), 100)]);
+    `, [safeLimit]);
 
     const leaderboard = rows.map((row, i) => ({
       rank: i + 1,
