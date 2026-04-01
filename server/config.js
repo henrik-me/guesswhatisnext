@@ -8,7 +8,10 @@ const path = require('path');
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const isProduction = NODE_ENV === 'production' || NODE_ENV === 'staging';
 
-const CANONICAL_HOST_RE = /^[\w][\w.-]*(:\d+)?$/;
+// Label-based hostname: each label is alnum (with interior hyphens), separated
+// by single dots, followed by an optional port.  No underscores, no consecutive
+// dots, no leading/trailing hyphens in labels.
+const CANONICAL_HOST_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::\d{1,5})?$/i;
 
 const config = {
   NODE_ENV,
