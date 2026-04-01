@@ -184,8 +184,8 @@ jobs:
 
             if echo "$OUTPUT" | grep -qiE '429|too many requests|rate limit'; then
               if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
-                echo "Detected possible rate limiting. Waiting 30s before retrying..."
-                sleep 30
+                echo "Detected possible rate limiting. Waiting 65s for burst window to reset..."
+                sleep 65
                 ATTEMPT=$((ATTEMPT + 1))
                 continue
               fi
