@@ -173,8 +173,10 @@ jobs:
 
           while [ "$ATTEMPT" -le "$MAX_ATTEMPTS" ]; do
             echo "Running Playwright tests (attempt $ATTEMPT/$MAX_ATTEMPTS)..."
+            set +e
             OUTPUT=$(npx playwright test 2>&1)
             STATUS=$?
+            set -e
             echo "$OUTPUT"
 
             if [ "$STATUS" -eq 0 ]; then
