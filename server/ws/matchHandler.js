@@ -22,6 +22,11 @@ const rematchRequests = new Map();
 const finishedRooms = new Map();
 
 const ROUND_TIMEOUT_MS = 20000;
+
+/** Gameplay message types that spectators are NOT allowed to send. */
+const SPECTATOR_BLOCKED_ACTIONS = new Set([
+  'answer', 'start-match', 'rematch-request', 'rematch-start-confirm',
+]);
 const ROOM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const NEXT_ROUND_DELAY_MS = 3000;
 const RECONNECT_WINDOW_MS = 30000;
@@ -140,6 +145,11 @@ function initWebSocket(server, isReady) {
 
 /** Handle incoming WebSocket messages. */
 async function handleMessage(ws, msg) {
+  // Spectators can only join — block gameplay actions
+  if (ws.isSpectator && SPECTATOR_BLOCKED_ACTIONS.has(msg.type)) {
+    return sendTo(ws, { type: 'error', message: 'Spectators cannot perform this action' });
+  }
+
   switch (msg.type) {
     case 'join':
       await handleJoin(ws, msg.roomCode);
@@ -184,37 +194,9 @@ async function handleJoin(ws, roomCode) {
       // Restore player in room
       room.players.set(ws.user.id, ws);
       room.droppedPlayers.delete(ws.user.id);
+      ws.isSpectator = false;
 
-      // Build full player state for reconnecting player
-      const players = [];
-      room.players.forEach((pws, uid) => {
-        players.push({ username: pws.user.username, score: room.scores[uid] || 0, connected: true });
-      });
-      room.droppedPlayers.forEach(({ username }, uid) => {
-        players.push({ username, score: room.scores[uid] || 0, connected: false });
-      });
-      const droppedPlayers = [];
-      room.droppedPlayers.forEach(({ username }) => droppedPlayers.push(username));
-
-      // Send reconnect state to the rejoining player
-      ws.send(JSON.stringify({
-        type: 'reconnected',
-        roomCode: code,
-        scores: buildScoresSnapshot(room),
-        players,
-        droppedPlayers,
-        currentRound: room.round,
-        totalRounds: room.totalRounds,
-        myScore: room.scores[ws.user.id] || 0,
-      }));
-
-      // Notify ALL remaining players
-      broadcastToRoom(code, {
-        type: 'player-reconnected',
-        username: ws.user.username,
-        remainingCount: room.players.size,
-      }, ws.user.id);
-
+      sendReconnectState(ws, code, room);
       return;
     }
   }
@@ -222,6 +204,7 @@ async function handleJoin(ws, roomCode) {
   if (!rooms.has(code)) {
     rooms.set(code, {
       players: new Map(),
+      spectators: new Map(),
       hostId: null,
       maxPlayers: 2,
       droppedPlayers: new Map(),
@@ -238,6 +221,9 @@ async function handleJoin(ws, roomCode) {
 
   const room = rooms.get(code);
 
+  // Ensure spectators map exists (for rooms created before this change)
+  if (!room.spectators) room.spectators = new Map();
+
   // Load match info from DB to get max_players and host
   try {
     const db = await getDbAdapter();
@@ -252,8 +238,33 @@ async function handleJoin(ws, roomCode) {
   }
 
   if (room.started) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Match already in progress' }));
-    return;
+    // Reconnect: player still in active list (old socket close event hasn't fired yet)
+    if (room.players.has(ws.user.id)) {
+      const oldWs = room.players.get(ws.user.id);
+      try { oldWs.close(); } catch { /* ignore stale socket */ }
+      room.players.set(ws.user.id, ws);
+      ws.isSpectator = false;
+      sendReconnectState(ws, code, room);
+      return;
+    }
+    // Reconnect: player was dropped but hasn't been forfeited yet
+    if (room.droppedPlayers.has(ws.user.id)) {
+      const dcKey2 = `${ws.user.id}:${code}`;
+      const dcInfo2 = disconnected.get(dcKey2);
+      if (dcInfo2?.forfeitTimer) clearTimeout(dcInfo2.forfeitTimer);
+      disconnected.delete(dcKey2);
+      room.players.set(ws.user.id, ws);
+      room.droppedPlayers.delete(ws.user.id);
+      ws.isSpectator = false;
+      sendReconnectState(ws, code, room);
+      return;
+    }
+    return joinAsSpectator(ws, code, room);
+  }
+
+  // After match ends, room stays alive for rematch — new users should spectate
+  if (finishedRooms.has(code)) {
+    return joinAsSpectator(ws, code, room);
   }
 
   // Cap joins at maxPlayers
@@ -262,6 +273,7 @@ async function handleJoin(ws, roomCode) {
     return;
   }
 
+  ws.isSpectator = false;
   room.players.set(ws.user.id, ws);
   room.scores[ws.user.id] = room.scores[ws.user.id] || 0;
 
@@ -281,6 +293,91 @@ async function handleJoin(ws, roomCode) {
 
   // Broadcast lobby-state to ALL players in the room
   broadcastLobbyState(code);
+}
+
+/** Join a user as a spectator for an active or finished match. */
+function joinAsSpectator(ws, roomCode, room) {
+  ws.isSpectator = true;
+  room.spectators.set(ws.user.id, ws);
+
+  const players = [];
+  room.players.forEach((pws, uid) => {
+    players.push({ username: pws.user.username, score: room.scores[uid] || 0, connected: true });
+  });
+  room.droppedPlayers.forEach(({ username }, uid) => {
+    players.push({ username, score: room.scores[uid] || 0, connected: false });
+  });
+
+  // Clamp currentRound for finished rooms to avoid "Round 6/5"
+  const currentRound = Math.min(room.round, room.totalRounds - 1);
+
+  sendTo(ws, {
+    type: 'spectator-joined',
+    roomCode,
+    spectatorCount: room.spectators.size,
+    currentRound,
+    totalRounds: room.totalRounds,
+    scores: buildScoresSnapshot(room),
+    players,
+  });
+
+  broadcastSpectatorCount(roomCode);
+
+  // If the match has already finished, immediately send gameOver to the spectator
+  if (finishedRooms.has(roomCode)) {
+    const userScores = [];
+    room.players.forEach((pws, uid) => {
+      userScores.push({ userId: uid, username: pws.user.username, total: room.scores[uid] || 0 });
+    });
+    room.droppedPlayers.forEach(({ username }, uid) => {
+      if (!userScores.find(e => e.userId === uid)) {
+        userScores.push({ userId: uid, username, total: room.scores[uid] || 0 });
+      }
+    });
+    userScores.sort((a, b) => b.total - a.total);
+    assignRanks(userScores);
+
+    const rank1 = userScores.filter(e => e.rank === 1);
+    sendTo(ws, buildSpectatorGameOver(
+      rank1.length === 1 ? rank1[0].username : null,
+      userScores,
+    ));
+  }
+}
+
+/** Build a spectator-safe gameOver payload (isYou always false). */
+function buildSpectatorGameOver(winner, userScores, extraFields = {}) {
+  return {
+    type: 'gameOver',
+    winner,
+    totalPlayers: userScores.length,
+    rankings: userScores.map(e => ({
+      username: e.username,
+      score: e.total,
+      rank: e.rank,
+      isYou: false,
+    })),
+    scores: Object.fromEntries(userScores.map(e => [e.username, e.total])),
+    results: userScores.map(e => ({ username: e.username, score: e.total })),
+    ...extraFields,
+  };
+}
+
+/** Broadcast spectator count to all room members (players + spectators). */
+function broadcastSpectatorCount(roomCode) {
+  const room = rooms.get(roomCode);
+  if (!room) return;
+  if (!room.spectators) room.spectators = new Map();
+
+  const msg = { type: 'spectator-count', count: room.spectators.size };
+  const data = JSON.stringify(msg);
+
+  room.players.forEach((ws) => {
+    if (ws.readyState === 1) ws.send(data);
+  });
+  room.spectators.forEach((ws) => {
+    if (ws.readyState === 1) ws.send(data);
+  });
 }
 
 /** Broadcast lobby state to all players in a room. */
@@ -559,6 +656,14 @@ async function endMatch(roomCode) {
     });
   });
 
+  // Send generic gameOver to spectators
+  if (room.spectators) {
+    const data = JSON.stringify(buildSpectatorGameOver(winner, userScores));
+    room.spectators.forEach((ws) => {
+      if (ws.readyState === 1) ws.send(data);
+    });
+  }
+
   // Persist to database
   try {
     const db = await getDbAdapter();
@@ -635,10 +740,18 @@ function cleanupRoom(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
   if (room.roundTimer) clearTimeout(room.roundTimer);
+  if (room.spectators) {
+    room.spectators.forEach((ws) => {
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Room closed' }));
+      }
+    });
+    room.spectators.clear();
+  }
   rooms.delete(roomCode);
 }
 
-/** Handle a player disconnecting — start reconnection window if match is active. */
+/** Handle a player or spectator disconnecting — start reconnection window if match is active. */
 async function handleDisconnect(ws) {
   if (!ws.roomCode) return;
 
@@ -646,6 +759,15 @@ async function handleDisconnect(ws) {
   if (!room) return;
 
   const roomCode = ws.roomCode;
+
+  // Handle spectator disconnect — verify ws identity before removing
+  if (ws.isSpectator) {
+    if (room.spectators && room.spectators.get(ws.user.id) === ws) {
+      room.spectators.delete(ws.user.id);
+      broadcastSpectatorCount(roomCode);
+    }
+    return;
+  }
 
   // If match is active, track as dropped and give reconnect window
   if (room.started) {
@@ -840,6 +962,14 @@ async function handleForfeit(roomCode, _forfeitUserId, _forfeitUsername) {
     });
   });
 
+  // Send generic gameOver to spectators
+  if (room.spectators) {
+    const data = JSON.stringify(buildSpectatorGameOver(winnerUsername, userScores, { forfeit: true }));
+    room.spectators.forEach((ws) => {
+      if (ws.readyState === 1) ws.send(data);
+    });
+  }
+
   // Persist forfeit result
   try {
     const db = await getDbAdapter();
@@ -870,6 +1000,36 @@ function buildScoresSnapshot(room) {
     snapshot[ws.user.username] = room.scores[userId] || 0;
   });
   return snapshot;
+}
+
+/** Send reconnect state to a rejoining player and notify others. */
+function sendReconnectState(ws, roomCode, room) {
+  const players = [];
+  room.players.forEach((pws, uid) => {
+    players.push({ username: pws.user.username, score: room.scores[uid] || 0, connected: true });
+  });
+  room.droppedPlayers.forEach(({ username }, uid) => {
+    players.push({ username, score: room.scores[uid] || 0, connected: false });
+  });
+  const droppedPlayers = [];
+  room.droppedPlayers.forEach(({ username }) => droppedPlayers.push(username));
+
+  ws.send(JSON.stringify({
+    type: 'reconnected',
+    roomCode,
+    scores: buildScoresSnapshot(room),
+    players,
+    droppedPlayers,
+    currentRound: room.round,
+    totalRounds: room.totalRounds,
+    myScore: room.scores[ws.user.id] || 0,
+  }));
+
+  broadcastToRoom(roomCode, {
+    type: 'player-reconnected',
+    username: ws.user.username,
+    remainingCount: room.players.size,
+  }, ws.user.id);
 }
 
 /** Handle a rematch request from a player (ready up). */
@@ -997,6 +1157,7 @@ async function handleRematchStartConfirm(ws) {
 
   rooms.set(newCode, {
     players: new Map(),
+    spectators: new Map(),
     hostId: finished.hostId,
     maxPlayers: finished.maxPlayers,
     droppedPlayers: new Map(),
@@ -1031,7 +1192,7 @@ function sendTo(ws, msg) {
   }
 }
 
-/** Send a message to all players in a room, optionally excluding one. */
+/** Send a message to all players and spectators in a room, optionally excluding one. */
 function broadcastToRoom(roomCode, msg, excludeUserId) {
   const room = rooms.get(roomCode);
   if (!room) return;
@@ -1042,6 +1203,13 @@ function broadcastToRoom(roomCode, msg, excludeUserId) {
       ws.send(data);
     }
   });
+  if (room.spectators) {
+    room.spectators.forEach((ws, userId) => {
+      if (userId !== excludeUserId && ws.readyState === 1) {
+        ws.send(data);
+      }
+    });
+  }
 }
 
 module.exports = { initWebSocket, rooms };

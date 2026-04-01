@@ -234,6 +234,7 @@
         <button class="lobby-copy-btn" data-action="copy-room-link" aria-label="Copy shareable link">🔗 Copy Link</button>
       </div>
       <div class="lobby-player-count" data-bind="lobby-player-count" aria-label="Player count"></div>
+      <div class="lobby-spectator-count" data-bind="lobby-spectator-count" style="display:none" aria-label="Spectator count"></div>
       <div class="lobby-status">
         <div class="lobby-spinner" aria-hidden="true"></div>
         <p class="lobby-waiting-text" data-bind="lobby-status">Waiting for opponent...</p>
@@ -249,6 +250,8 @@
     <section id="screen-match" class="screen" data-screen="match" aria-label="Multiplayer match">
       <div class="match-hud-bar">
         <span class="match-round-badge" data-bind="match-round">Round 1/5</span>
+        <span class="spectator-badge" data-bind="spectator-badge" style="display:none" aria-label="Spectating">👀 Spectating</span>
+        <span class="spectator-count" data-bind="spectator-count" style="display:none" aria-label="Spectator count"></span>
         <button class="sound-toggle-btn" data-action="toggle-sound" aria-label="Toggle sound effects">🔇</button>
       </div>
       <div class="match-scoreboard" role="status" aria-label="Match scores" data-bind="match-scoreboard">
