@@ -279,6 +279,17 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
+            # Derive CANONICAL_HOST from STAGING_URL if not explicitly set
+            if [ -z "$CANONICAL_HOST" ] && [ -n "$STAGING_URL" ]; then
+              CANONICAL_HOST=$(echo "$STAGING_URL" | sed 's|^https\?://||' | sed 's|/$||')
+              export CANONICAL_HOST
+            fi
+            if [ -z "$CANONICAL_HOST" ]; then
+              echo "::error::CANONICAL_HOST not set. Configure vars.STAGING_URL or vars.CANONICAL_HOST in repository settings."
+              exit 1
+            fi
+            echo "Using CANONICAL_HOST=$CANONICAL_HOST"
+
             # Check if container app is stopped and start it if needed
             APP_STATE=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
               --query "properties.runningStatus" -o tsv 2>/dev/null || echo "Unknown")
@@ -364,6 +375,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
           CANONICAL_HOST: ${{ vars.CANONICAL_HOST }}
+          STAGING_URL: ${{ vars.STAGING_URL }}
 
       - name: Switch traffic to new revision
         uses: azure/cli@v2
