@@ -127,15 +127,18 @@ PR #91 introduces a small central **server-side feature-flag system** to safely 
 - **Supported controls:** specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides for features that explicitly opt in
 - **Client/server model:** on the PR #91 branch, the client reads `/api/features` to hide or show gated UI, but server routes must still enforce the same flag
 
-**`submit-puzzle` setup on PR #91**
+**`submitPuzzle` feature-flag setup on PR #91**
+- Canonical feature-flag key: `submitPuzzle`
 - Hidden/disabled by default
 - Can be enabled for specific users and/or a rollout percentage
 - Request overrides are allowed for this feature only outside `production` and `staging`
-- Override names: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
+- Override identifiers for `submitPuzzle`: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
 
 > Overrides are feature-specific and opt-in, not a global bypass. Only use them for features that explicitly define override support.
 >
-> Until PR #91 merges, `main` does not yet expose `/api/features` or the documented submit-puzzle overrides.
+> `submitPuzzle` is the feature-flag key. The override names above are request identifiers, not alternate flag keys or UI route names.
+>
+> Until PR #91 merges, `main` does not yet expose `/api/features` or the documented `submitPuzzle` overrides.
 
 ### Running with Docker
 
