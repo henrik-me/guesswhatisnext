@@ -152,8 +152,8 @@ Tests are fully isolated — each suite gets its own temp database and random po
 
 ### Known Issues
 
-- On Node versions where the optional `artillery` install is included, `npm ci` may emit OpenTelemetry peer-dependency warnings. Those warnings come from optional load-testing dependencies that still pull older OTel metrics/exporter packages, while the application's runtime telemetry path uses newer OTel packages.
-- This is currently treated as non-blocking install noise for optional load-testing tooling. It does not affect the validated runtime telemetry path, and no dependency changes are planned right now.
+- On Node >= 22.13, `npm ci` may install the optional `artillery` load-testing dependency and emit OpenTelemetry peer-dependency warnings. Those warnings come from optional load-testing dependencies that still pull older OTel metrics/exporter packages, while the application's runtime telemetry path uses newer OTel packages.
+- This is currently treated as non-blocking install noise for optional load-testing tooling. It does not affect the validated runtime telemetry path, and no dependency changes are planned right now. If you do not need load testing, `npm ci --omit=optional` avoids the warning by skipping optional dependencies such as `artillery`.
 
 ### Parallel Development (Worktrees)
 

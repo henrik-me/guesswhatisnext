@@ -34,7 +34,7 @@ Every Copilot review comment thread must be replied to with a meaningful message
 
 ## Known Issues
 
-- On Node versions where the optional `artillery` install is present, `npm ci` may emit OpenTelemetry peer-dependency warnings. The warning comes from optional load-testing dependencies that still pull older OTel metrics/exporter packages, while the application runtime telemetry stack uses newer OTel packages.
+- On Node >= 22.13, when the optional `artillery` install is present, `npm ci` may emit OpenTelemetry peer-dependency warnings. These warnings come from optional load-testing dependencies that still pull older OTel metrics/exporter packages, while the application runtime telemetry path uses newer OTel packages.
 - This is currently treated as non-blocking install noise for optional load-testing tooling. It does not affect the validated runtime telemetry path, and no dependency changes are planned right now.
 
 ---
