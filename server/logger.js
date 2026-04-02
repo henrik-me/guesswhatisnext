@@ -32,10 +32,6 @@ function buildOtelMixin(apiOverride) {
   };
 }
 
-const otelMixin = (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')
-  ? buildOtelMixin()
-  : undefined;
-
 const REDACT_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
@@ -44,16 +40,25 @@ const REDACT_PATHS = [
   'res.headers["set-cookie"]',
 ];
 
-const logger = pino({
-  level: config.LOG_LEVEL,
-  ...(otelMixin ? { mixin: otelMixin } : {}),
-  redact: {
-    paths: REDACT_PATHS,
-    remove: true,
-  },
-  ...(config.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : {}),
-});
+function buildLoggerOptions(configOverride = config) {
+  const mixin = (configOverride.NODE_ENV === 'production' || configOverride.NODE_ENV === 'staging')
+    ? buildOtelMixin()
+    : undefined;
+
+  return {
+    level: configOverride.LOG_LEVEL,
+    ...(mixin ? { mixin } : {}),
+    redact: {
+      paths: REDACT_PATHS,
+      remove: true,
+    },
+    ...(configOverride.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : {}),
+  };
+}
+
+const logger = pino(buildLoggerOptions());
 
 module.exports = logger;
 module.exports.buildOtelMixin = buildOtelMixin;
+module.exports.buildLoggerOptions = buildLoggerOptions;
 module.exports.REDACT_PATHS = REDACT_PATHS;
