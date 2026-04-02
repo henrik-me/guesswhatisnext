@@ -504,7 +504,7 @@ logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled reque
 
 ### Trace ID Correlation
 
-When OpenTelemetry is active (staging/production), pino-http automatically attaches `trace_id` and `span_id` to each log entry via the OTel context. This allows correlating logs with distributed traces in Azure Monitor / Application Insights.
+When OpenTelemetry is active (staging/production), the Pino mixin automatically attaches `traceId` and `spanId` to each log entry via the OTel context. This allows correlating logs with distributed traces in Azure Monitor / Application Insights.
 
 - In development: no trace IDs (OTel SDK is not loaded)
 - In staging/production: trace IDs appear automatically on every request-scoped log line
@@ -518,7 +518,7 @@ The `POST /api/telemetry/errors` endpoint accepts client-side errors (no auth re
 - Optional fields: `type`, `source`, `lineno`, `colno`, `stack`
 - Logged at `warn` level with `{ component: 'client' }` context
 - Authenticated requests include `userId` in the log entry
-- Client JS hooks: `window.onerror` and `unhandledrejection` handlers batch errors (max 10/min)
+- Client JS hooks: `window.onerror` and `unhandledrejection` handlers report errors (max 10 per session)
 
 ### Request Logging
 
