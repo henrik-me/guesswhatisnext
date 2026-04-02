@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ Phases 1–5, 12 Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
+## Project Status: ✅ Phases 1–5, 12–13 Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
 
 ### Development Workflow
 
@@ -345,15 +345,15 @@ Add structured logging, request tracing, client-side error reporting, and Azure 
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 70 | Logger foundation + request logging | ⬜ Pending | — | Install Pino + pino-http + pino-pretty (dev). Create `server/logger.js` singleton, add `LOG_LEVEL` to config.js, add pino-http middleware before routes. JSON in staging/prod, pretty-print in dev. |
-| 71 | Centralized error handler + replace console.* | ⬜ Pending | 70 | Add Express error-handling middleware at end of chain. Replace all 22 `console.*` calls with structured `logger.*` at appropriate levels. |
-| 72 | Auth & user activity logging | ⬜ Pending | 70 | Log login/logout/registration at info, rate limits and auth failures at warn. Log WS connection/disconnection events. Add userId context to log entries. |
-| 73 | Client-side error reporting | ⬜ Pending | 70 | Create `POST /api/telemetry/errors` endpoint (rate-limited, no auth). Add `window.onerror` and `unhandledrejection` handlers in client JS. Batch/debounce (max 10/min per client). |
-| 74 | OpenTelemetry SDK + Azure Monitor | ⬜ Pending | 73 | Install `@opentelemetry/sdk-node` + `@azure/monitor-opentelemetry-exporter`. Create `server/telemetry.js` bootstrap. Auto-instrument HTTP/Express/DB. Provision App Insights (staging + prod). |
-| 75 | Environment-specific log configuration | ⬜ Pending | 74 | Dev: debug + pretty-print + no OTel. Staging: info + JSON + OTel → Azure Monitor. Prod: info + JSON + OTel + sensitive data redaction + trace ID correlation. |
-| 76 | Logging tests + documentation | ⬜ Pending | 75 | Unit tests for logger config, client error endpoint, error middleware. Update INSTRUCTIONS.md with logging conventions (when to use each level, structured context, correlation). |
+| 70 | Logger foundation + request logging | ✅ Complete | — | Install Pino + pino-http + pino-pretty (dev). Create `server/logger.js` singleton, add `LOG_LEVEL` to config.js, add pino-http middleware before routes. JSON in staging/prod, pretty-print in dev. |
+| 71 | Centralized error handler + replace console.* | ✅ Complete | 70 | Add Express error-handling middleware at end of chain. Replace all 22 `console.*` calls with structured `logger.*` at appropriate levels. |
+| 72 | Auth & user activity logging | ✅ Complete | 70 | Log login/logout/registration at info, rate limits and auth failures at warn. Log WS connection/disconnection events. Add userId context to log entries. |
+| 73 | Client-side error reporting | ✅ Complete | 70 | Create `POST /api/telemetry/errors` endpoint (rate-limited, no auth). Add `window.onerror` and `unhandledrejection` handlers in client JS. Batch/debounce (max 10/min per client). |
+| 74 | OpenTelemetry SDK + Azure Monitor | ✅ Complete | 73 | Install `@opentelemetry/sdk-node` + `@azure/monitor-opentelemetry-exporter`. Create `server/telemetry.js` bootstrap. Auto-instrument HTTP/Express/DB. Provision App Insights (staging + prod). |
+| 75 | Environment-specific log configuration | ✅ Complete | 74 | Dev: debug + pretty-print + no OTel. Staging: info + JSON + OTel → Azure Monitor. Prod: info + JSON + OTel + sensitive data redaction + trace ID correlation. |
+| 76 | Logging tests + documentation | ✅ Complete | 75 | Unit tests for logger config, client error endpoint, error middleware. Update INSTRUCTIONS.md with logging conventions (when to use each level, structured context, correlation). |
 
-**Parallelism:** Tasks 71, 72, and 73 can run in parallel after 70 is complete.
+**Parallelism:** All Phase 13 work complete.
 
 **Log Levels:** trace (ultra-verbose) → debug (dev diagnostics) → info (normal operations) → warn (handled anomalies) → error (failures) → fatal (process crash).
 

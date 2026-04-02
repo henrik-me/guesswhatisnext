@@ -446,7 +446,92 @@ Tests use Vitest with supertest for API and ws for WebSocket testing. Run with `
 
 ---
 
-## 4. Git Workflow
+## 4. Logging Conventions
+
+The project uses **Pino** for structured JSON logging (`server/logger.js` singleton). All server code must use the logger — never `console.*` (except in `config.js` where the logger isn't available yet).
+
+### Log Levels
+
+| Level | When to use | Example |
+|---|---|---|
+| `fatal` | Process is about to crash — unrecoverable errors | Uncaught exception handler, out-of-memory |
+| `error` | Operation failed and could not be recovered | 5xx response, DB write failure, WebSocket crash |
+| `warn` | Handled anomaly that deserves attention | 4xx client error, rate limit hit, auth failure, deprecated usage |
+| `info` | Normal operational events worth recording | Server start, DB initialized, user registered, match created |
+| `debug` | Diagnostic detail useful during development | Route handler entry/exit, cache hit/miss, query timing |
+| `trace` | Ultra-verbose, rarely enabled | Full request/response bodies, internal state dumps |
+
+**Defaults per environment:**
+- **development:** `debug` (with pino-pretty for human-readable output)
+- **test:** `silent` (suppress all output during test runs)
+- **production / staging:** `info` (JSON, machine-parseable)
+- Override with `LOG_LEVEL` env var (validated: `fatal | error | warn | info | debug | trace | silent`)
+
+### Structured Context Guidelines
+
+Always pass a context object as the **first** argument to log methods, followed by a human-readable message:
+
+```js
+logger.info({ userId, matchId, rounds: 5 }, 'Match created');
+logger.warn({ err, status: 429, ip: req.ip }, 'Rate limit exceeded');
+logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled request error');
+```
+
+**What to include in context objects:**
+- `err` — the Error instance (Pino serialises it with message + stack automatically)
+- `userId` / `username` — who triggered the event
+- `matchId` / `roomCode` — relevant entity identifiers
+- `method`, `url`, `status` — HTTP request context
+- `requestId` — from `req.id` (assigned by pino-http)
+- `remoteAddress` — `req.ip` for rate-limiting / abuse tracking
+- Duration/timing values for performance-sensitive operations
+
+### Sensitive Data Handling
+
+**Redacted automatically** (via Pino `redact` config with `remove: true`):
+- `req.headers.authorization`
+- `req.headers.cookie`
+- `req.headers["x-api-key"]`
+- `req.headers["x-access-token"]`
+- `res.headers["set-cookie"]`
+
+**Never log these manually:**
+- Passwords, password hashes, or JWT secrets
+- Full JWT tokens (log a truncated prefix if needed for debugging)
+- Database connection strings
+- Raw request bodies that may contain user credentials
+- PII beyond username (no email, IP stored long-term, etc.)
+
+### Trace ID Correlation
+
+When OpenTelemetry is active (staging/production), pino-http automatically attaches `trace_id` and `span_id` to each log entry via the OTel context. This allows correlating logs with distributed traces in Azure Monitor / Application Insights.
+
+- In development: no trace IDs (OTel SDK is not loaded)
+- In staging/production: trace IDs appear automatically on every request-scoped log line
+- Manual log calls outside request scope won't have trace IDs unless you explicitly propagate context
+
+### Client Error Reporting
+
+The `POST /api/telemetry/errors` endpoint accepts client-side errors (no auth required):
+- Rate limited: 10 requests/minute per IP
+- Required field: `message` (string)
+- Optional fields: `type`, `source`, `lineno`, `colno`, `stack`
+- Logged at `warn` level with `{ component: 'client' }` context
+- Authenticated requests include `userId` in the log entry
+- Client JS hooks: `window.onerror` and `unhandledrejection` handlers batch errors (max 10/min)
+
+### Request Logging
+
+Pino-http middleware logs every request/response automatically, with these exceptions (auto-logging ignore list):
+- `/api/health` and `/healthz` — health probes (too noisy)
+- `/api/telemetry/*` — telemetry endpoints (avoid recursion)
+- Static file extensions (`.css`, `.js`, `.map`, `.ico`, `.png`, etc.)
+
+In test mode, auto-logging is fully disabled to keep test output clean.
+
+---
+
+## 5. Git Workflow
 
 ### Repository Setup
 - Initialize with `git init` at project root
@@ -780,7 +865,7 @@ Group tasks to minimize file overlap:
 
 ---
 
-## 5. Puzzle Authoring Guide
+## 6. Puzzle Authoring Guide
 
 When adding new puzzles to `puzzles.js`:
 
@@ -797,7 +882,7 @@ When adding new puzzles to `puzzles.js`:
 
 ---
 
-## 6. Performance & Accessibility
+## 7. Performance & Accessibility
 
 ### Performance
 - No heavy libraries — total JS payload should stay under 50KB (Phase 1)
@@ -813,7 +898,7 @@ When adding new puzzles to `puzzles.js`:
 
 ---
 
-## 7. Tools & Frameworks Evaluated
+## 8. Tools & Frameworks Evaluated
 
 This section documents tools and frameworks that were evaluated for the project, including those adopted and those deferred.
 

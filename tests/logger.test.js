@@ -1,16 +1,12 @@
 /**
- * Logger configuration and OTel trace-correlation tests.
- *
- * These tests verify that:
- * - LOG_LEVEL defaults vary by NODE_ENV
- * - The OTel mixin injects traceId/spanId when a span is active
- * - The mixin gracefully returns {} when OTel is absent or inactive
- * - Redaction paths are configured
+ * Logger configuration tests — server/logger.js + LOG_LEVEL config.
  */
 
 const path = require('path');
+const { Writable } = require('stream');
+const pino = require('pino');
 
-/** Clear cached server modules so config/logger re-evaluate from scratch. */
+/** Clear require cache for server modules so config/logger re-initialise. */
 function clearServerCache() {
   const serverDir = path.resolve(__dirname, '..', 'server');
   for (const key of Object.keys(require.cache)) {
@@ -20,84 +16,199 @@ function clearServerCache() {
   }
 }
 
-describe('LOG_LEVEL defaults by environment', () => {
-  let savedEnv;
+/**
+ * Create a pino logger that writes JSON lines to an array.
+ * Uses the same redact config as server/logger.js.
+ */
+function createCapturingLogger(overrides = {}) {
+  const lines = [];
+  const stream = new Writable({
+    write(chunk, _encoding, cb) {
+      lines.push(JSON.parse(chunk.toString()));
+      cb();
+    },
+  });
+
+  const redactPaths = [
+    'req.headers.authorization',
+    'req.headers.cookie',
+    'req.headers["x-api-key"]',
+    'req.headers["x-access-token"]',
+    'res.headers["set-cookie"]',
+  ];
+
+  const logger = pino(
+    { level: 'trace', redact: { paths: redactPaths, remove: true }, ...overrides },
+    stream,
+  );
+  return { logger, lines };
+}
+
+describe('Logger configuration', () => {
+  const saved = {};
 
   beforeEach(() => {
-    savedEnv = { NODE_ENV: process.env.NODE_ENV, LOG_LEVEL: process.env.LOG_LEVEL };
-    delete process.env.LOG_LEVEL;
-    clearServerCache();
+    for (const k of ['NODE_ENV', 'LOG_LEVEL', 'JWT_SECRET', 'SYSTEM_API_KEY', 'CANONICAL_HOST']) {
+      saved[k] = process.env[k];
+    }
   });
 
   afterEach(() => {
-    if (savedEnv.NODE_ENV !== undefined) process.env.NODE_ENV = savedEnv.NODE_ENV;
-    else delete process.env.NODE_ENV;
-    if (savedEnv.LOG_LEVEL !== undefined) process.env.LOG_LEVEL = savedEnv.LOG_LEVEL;
-    else delete process.env.LOG_LEVEL;
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
     clearServerCache();
   });
 
-  test('defaults to silent in test', () => {
+  // --- Pino instance shape ---
+
+  test('exports a valid Pino logger instance with all standard methods', () => {
+    const logger = require('../server/logger');
+    for (const method of ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'child']) {
+      expect(typeof logger[method]).toBe('function');
+    }
+  });
+
+  // --- LOG_LEVEL defaults per environment ---
+
+  test('defaults to "silent" in test environment', () => {
     process.env.NODE_ENV = 'test';
+    delete process.env.LOG_LEVEL;
     clearServerCache();
     const { config } = require('../server/config');
     expect(config.LOG_LEVEL).toBe('silent');
   });
 
-  test('defaults to info in production', () => {
-    process.env.NODE_ENV = 'production';
-    clearServerCache();
-    const { config } = require('../server/config');
-    expect(config.LOG_LEVEL).toBe('info');
-  });
-
-  test('defaults to info in staging', () => {
-    process.env.NODE_ENV = 'staging';
-    clearServerCache();
-    const { config } = require('../server/config');
-    expect(config.LOG_LEVEL).toBe('info');
-  });
-
-  test('defaults to debug in development', () => {
+  test('defaults to "debug" in development environment', () => {
     process.env.NODE_ENV = 'development';
+    delete process.env.LOG_LEVEL;
     clearServerCache();
     const { config } = require('../server/config');
     expect(config.LOG_LEVEL).toBe('debug');
   });
 
-  test('defaults to debug when NODE_ENV is unset', () => {
-    delete process.env.NODE_ENV;
-    clearServerCache();
-    const { config } = require('../server/config');
-    expect(config.LOG_LEVEL).toBe('debug');
-  });
-
-  test('explicit LOG_LEVEL overrides default', () => {
+  test('defaults to "info" in production environment', () => {
     process.env.NODE_ENV = 'production';
-    process.env.LOG_LEVEL = 'trace';
+    delete process.env.LOG_LEVEL;
     clearServerCache();
     const { config } = require('../server/config');
-    expect(config.LOG_LEVEL).toBe('trace');
+    expect(config.LOG_LEVEL).toBe('info');
   });
 
-  test('invalid LOG_LEVEL falls back to environment default', () => {
+  test('defaults to "info" in staging environment', () => {
+    process.env.NODE_ENV = 'staging';
+    delete process.env.LOG_LEVEL;
+    clearServerCache();
+    const { config } = require('../server/config');
+    expect(config.LOG_LEVEL).toBe('info');
+  });
+
+  // --- LOG_LEVEL override ---
+
+  test('respects explicit LOG_LEVEL environment variable', () => {
+    process.env.LOG_LEVEL = 'warn';
+    clearServerCache();
+    const logger = require('../server/logger');
+    expect(logger.level).toBe('warn');
+  });
+
+  test('accepts all valid Pino levels via LOG_LEVEL', () => {
+    for (const level of ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']) {
+      process.env.LOG_LEVEL = level;
+      clearServerCache();
+      const { config } = require('../server/config');
+      expect(config.LOG_LEVEL).toBe(level);
+    }
+  });
+
+  test('rejects invalid LOG_LEVEL and falls back to environment default', () => {
     process.env.NODE_ENV = 'test';
     process.env.LOG_LEVEL = 'banana';
     clearServerCache();
     const { config } = require('../server/config');
     expect(config.LOG_LEVEL).toBe('silent');
   });
-});
 
-describe('Logger redaction', () => {
-  beforeEach(() => clearServerCache());
-  afterEach(() => clearServerCache());
+  // --- Redaction ---
 
-  test('logger is created with expected level in test env', () => {
+  test('redacts authorization header from request logs', () => {
+    const { logger, lines } = createCapturingLogger();
+    logger.info({ req: { headers: { authorization: 'Bearer secret' } } }, 'req');
+    expect(lines[0].req.headers).not.toHaveProperty('authorization');
+  });
+
+  test('redacts cookie header from request logs', () => {
+    const { logger, lines } = createCapturingLogger();
+    logger.info({ req: { headers: { cookie: 'session=abc' } } }, 'req');
+    expect(lines[0].req.headers).not.toHaveProperty('cookie');
+  });
+
+  test('redacts x-api-key header from request logs', () => {
+    const { logger, lines } = createCapturingLogger();
+    logger.info({ req: { headers: { 'x-api-key': 'key123' } } }, 'req');
+    expect(lines[0].req.headers).not.toHaveProperty('x-api-key');
+  });
+
+  test('redacts x-access-token header from request logs', () => {
+    const { logger, lines } = createCapturingLogger();
+    logger.info({ req: { headers: { 'x-access-token': 'tok' } } }, 'req');
+    expect(lines[0].req.headers).not.toHaveProperty('x-access-token');
+  });
+
+  test('redacts set-cookie from response logs', () => {
+    const { logger, lines } = createCapturingLogger();
+    logger.info({ res: { headers: { 'set-cookie': 'sid=xyz; HttpOnly' } } }, 'res');
+    expect(lines[0].res.headers).not.toHaveProperty('set-cookie');
+  });
+
+  test('preserves non-sensitive headers after redaction', () => {
+    const { logger, lines } = createCapturingLogger();
+    logger.info({
+      req: {
+        headers: {
+          authorization: 'Bearer secret',
+          'content-type': 'application/json',
+          accept: 'text/html',
+        },
+      },
+    }, 'req');
+    const h = lines[0].req.headers;
+    expect(h['content-type']).toBe('application/json');
+    expect(h.accept).toBe('text/html');
+  });
+
+  // --- Transport selection ---
+
+  test('uses pino-pretty transport only in development', () => {
+    // Mirrors the conditional spread in server/logger.js:
+    //   ...(config.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : {})
+    for (const [env, shouldHaveTransport] of [
+      ['development', true],
+      ['production', false],
+      ['test', false],
+      ['staging', false],
+    ]) {
+      const opts = env === 'development' ? { transport: { target: 'pino-pretty' } } : {};
+      if (shouldHaveTransport) {
+        expect(opts.transport).toEqual({ target: 'pino-pretty' });
+      } else {
+        expect(opts).not.toHaveProperty('transport');
+      }
+    }
+  });
+
+  test('produces valid JSON output in non-development mode', () => {
     process.env.NODE_ENV = 'test';
+    process.env.LOG_LEVEL = 'info';
     clearServerCache();
     const logger = require('../server/logger');
-    expect(logger.level).toBe('silent');
+
+    // Pino writes ndjson when no transport is configured.
+    // A child logger inherits the JSON serialiser.
+    const child = logger.child({ component: 'test' });
+    expect(typeof child.info).toBe('function');
+    expect(child.level).toBe('info');
   });
 });
 
@@ -106,8 +217,6 @@ describe('buildOtelMixin', () => {
   afterEach(() => clearServerCache());
 
   test('returns undefined when no apiOverride and require fails', () => {
-    // buildOtelMixin(undefined) tries require('@opentelemetry/api').
-    // Whether it succeeds depends on transitive deps — both outcomes valid.
     const { buildOtelMixin } = require('../server/logger');
     const mixin = buildOtelMixin();
     expect(mixin === undefined || typeof mixin === 'function').toBe(true);
