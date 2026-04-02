@@ -26,7 +26,6 @@ router.post('/errors', errorReportLimiter, optionalAuth, (req, res) => {
   const safeInt = (val) => (Number.isFinite(val) ? val : undefined);
 
   const errorContext = {
-    clientError: true,
     component: 'client',
     type: safeString(type, 50) || 'error',
     source: safeString(source, 500) || 'unknown',

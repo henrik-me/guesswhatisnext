@@ -5,7 +5,7 @@
  * When absent the module is a silent no-op so local dev is unaffected.
  */
 
-const connectionString = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+const connectionString = (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING || '').trim() || undefined;
 
 if (connectionString) {
   const { NodeSDK } = require('@opentelemetry/sdk-node')
@@ -44,7 +44,9 @@ if (connectionString) {
   process.on('SIGTERM', shutdown)
   process.on('SIGINT', shutdown)
 
-  // Use console here — logger.js hasn't been required yet
+  // console.log is intentional: this module must load before server/logger.js
+  // (it instruments Node HTTP before Express loads), so Pino is not available yet.
+  // server/config.js is the only other module allowed to use console (see §4 Logging).
   console.log(`OpenTelemetry active — exporting traces for "${name}@${version}"`)
 }
 

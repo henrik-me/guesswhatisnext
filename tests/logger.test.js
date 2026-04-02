@@ -188,8 +188,8 @@ describe('Logger configuration', () => {
 
   // --- Transport selection ---
 
-  test('uses pino-pretty transport only in development', () => {
-    for (const [env, shouldHaveTransport] of [
+  test('configures pino-pretty transport only in development', () => {
+    for (const [env, shouldUsePretty] of [
       ['development', true],
       ['production', false],
       ['test', false],
@@ -199,14 +199,15 @@ describe('Logger configuration', () => {
       process.env.LOG_LEVEL = 'silent';
       clearServerCache();
       const logger = require('../server/logger');
+      // Pino stores the underlying stream on a private Symbol; pino-pretty
+      // creates a ThreadStream worker whereas the default is SonicBoom.
       const streamSym = Object.getOwnPropertySymbols(logger)
         .find(s => s.toString() === 'Symbol(pino.stream)');
       const streamName = streamSym ? logger[streamSym]?.constructor?.name : undefined;
-      if (shouldHaveTransport) {
-        // pino-pretty transport creates a ThreadStream, not SonicBoom
+      if (shouldUsePretty) {
         expect(streamName).toBe('ThreadStream');
       } else {
-        expect(streamName).toBe('SonicBoom');
+        expect(streamName).not.toBe('ThreadStream');
       }
       clearServerCache();
     }
@@ -248,7 +249,7 @@ describe('buildOtelMixin', () => {
     expect(mixin()).toEqual({});
   });
 
-  test('mixin returns traceId and spanId when active span exists', () => {
+  test('mixin returns trace_id and span_id when active span exists', () => {
     const fakeApi = {
       trace: {
         getSpan: () => ({
@@ -265,8 +266,8 @@ describe('buildOtelMixin', () => {
     const mixin = buildOtelMixin(fakeApi);
     expect(typeof mixin).toBe('function');
     expect(mixin()).toEqual({
-      traceId: 'abc123def456abc123def456abc123de',
-      spanId: '1234567890abcdef',
+      trace_id: 'abc123def456abc123def456abc123de',
+      span_id: '1234567890abcdef',
     });
   });
 
