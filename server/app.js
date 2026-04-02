@@ -99,9 +99,14 @@ function createServer() {
   app.use(httpsRedirect);
   app.use(securityHeaders);
 
+  // Request logging (before body parsers for consistent access logs)
+  const pinoHttpOptions = config.NODE_ENV === 'test'
+    ? { logger, autoLogging: false }
+    : { logger, autoLogging: { ignore: (req) => req.path === '/api/health' || req.path === '/healthz' || req.path.startsWith('/api/telemetry/') } };
+  app.use(pinoHttp(pinoHttpOptions));
+
   // Middleware
   app.use(express.json());
-  app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.path === '/api/health' || req.path === '/healthz' } }));
 
   // Serve static files from public/
   app.use(express.static(path.join(__dirname, '..', 'public')));

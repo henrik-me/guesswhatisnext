@@ -54,7 +54,7 @@ describe('POST /api/telemetry/errors', () => {
     expect(res.status).toBe(204);
   });
 
-  test('attaches userId when authenticated', async () => {
+  test('attaches userId when authenticated (returns 204)', async () => {
     const { token } = await registerUser('telemetry-user', 'pass12345');
 
     const res = await getAgent()
@@ -73,18 +73,21 @@ describe('POST /api/telemetry/errors', () => {
     expect(res.status).toBe(204);
   });
 
-  test('rate limits after 10 requests', async () => {
+  test('rate limits after 10 requests per minute per IP', async () => {
     const agent = getAgent();
     const results = [];
 
     for (let i = 0; i < 11; i++) {
       const res = await agent
         .post('/api/telemetry/errors')
+        .set('X-Forwarded-For', '10.0.0.99')
         .send({ message: `Rate limit test ${i}` });
       results.push(res.status);
     }
 
-    // The 11th request should be rate-limited (429)
+    // First 10 should succeed
+    expect(results.slice(0, 10)).toEqual(Array(10).fill(204));
+    // 11th should be rate-limited
     expect(results[10]).toBe(429);
   });
 });
