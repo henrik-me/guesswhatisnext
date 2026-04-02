@@ -16,15 +16,19 @@ function clearServerCache() {
 }
 
 describe('server/telemetry.js', () => {
-  const originalEnv = { ...process.env }
+  const savedEnvKeys = ['APPLICATIONINSIGHTS_CONNECTION_STRING', 'NODE_ENV'];
+  const savedEnv = {};
 
   beforeEach(() => {
-    clearServerCache()
+    savedEnvKeys.forEach(k => { savedEnv[k] = process.env[k]; });
+    clearServerCache();
   })
 
   afterEach(() => {
-    // Restore original env vars
-    process.env = { ...originalEnv }
+    savedEnvKeys.forEach(k => {
+      if (savedEnv[k] === undefined) delete process.env[k];
+      else process.env[k] = savedEnv[k];
+    });
   })
 
   test('loads without error when APPLICATIONINSIGHTS_CONNECTION_STRING is not set', () => {
