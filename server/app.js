@@ -7,7 +7,9 @@ const express = require('express');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const pinoHttp = require('pino-http');
 const { config } = require('./config');
+const logger = require('./logger');
 const { getDbAdapter, closeDbAdapter, isAdapterInitialized } = require('./db');
 const migrations = require('./db/migrations');
 const { requireSystem } = require('./middleware/auth');
@@ -98,6 +100,7 @@ function createServer() {
 
   // Middleware
   app.use(express.json());
+  app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/api/health' } }));
 
   // Serve static files from public/
   app.use(express.static(path.join(__dirname, '..', 'public')));
