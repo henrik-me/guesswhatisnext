@@ -782,6 +782,31 @@ gh pr edit <PR#> --add-reviewer "@copilot"
 - **Skip**: Cosmetic concerns, extremely unlikely edge cases (e.g., port 0), style preferences already covered by lint, or by-design decisions
 - **Accept suggestion**: When Copilot provides a complete code suggestion that is correct and improves the code
 
+**Replying to review comments (REST API):**
+```powershell
+# Reply to a specific review comment thread
+gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/comments/{COMMENT_ID}/replies --method POST -f "body=YOUR_REPLY"
+```
+
+**Reply message conventions:**
+- **Fixed**: Reference the commit hash and describe what changed. Example: "Fixed in commit abc1234: replaced req.connection with req.socket throughout."
+- **Acknowledged (by design)**: Explain why the current approach is intentional. Example: "Acknowledged — telemetry.js must load before logger.js, so console.* is intentional. Comment on line 47 explains this."
+- **Not applicable**: When the reviewer's observation is factually incorrect about the current code. Example: "Verified: @opentelemetry/api IS listed in package.json dependencies."
+- **Duplicate**: Reference the original thread. Example: "Duplicate of thread on line 187 — see that thread for the full rationale."
+
+**Resolving review threads (GraphQL API):**
+```powershell
+# Get all unresolved thread IDs
+gh api graphql -f query='{ repository(owner: "henrik-me", name: "guesswhatisnext") { pullRequest(number: {PR#}) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { databaseId path } } } } } } }'
+
+# Resolve a single thread
+gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THREAD_ID" }) { thread { isResolved } } }'
+```
+
+**Important:** Always reply BEFORE resolving. A resolved thread without a reply looks like the comment was dismissed without consideration. Every thread must have a reply explaining the disposition (fixed, acknowledged, or not applicable) before being resolved.
+
+**Large-diff PR behavior:** On PRs with large diffs, Copilot may re-post comments on unchanged lines across multiple review rounds. When comments reference code that was already fixed in a previous commit, reply with the fix commit hash and resolve. Do not keep iterating — resolve stale threads after verifying the fix is in the current code.
+
 **Agents creating PRs must request Copilot review as part of their PR creation step.**
 
 **5. Merge order and conflict resolution:**
