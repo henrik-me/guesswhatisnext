@@ -46,40 +46,60 @@ export default function globalTeardown() {
   // --- Log assertion: no ERROR/FATAL entries during clean e2e run ---
   const serverLogPath = path.join('.playwright', 'server.log');
   if (fs.existsSync(serverLogPath)) {
-    const raw = fs.readFileSync(serverLogPath, 'utf8');
-    const clean = stripAnsi(raw);
-    const lines = clean.split('\n');
-
-    // Copy server log into test-results/ for CI artifact upload
     const artifactPath = path.join('test-results', 'server.log');
-    fs.mkdirSync('test-results', { recursive: true });
-    fs.copyFileSync(serverLogPath, artifactPath);
+    let raw;
 
-    const errors = [];
-    const warnings = [];
-    for (const line of lines) {
-      const cls = classifyLine(line);
-      if (cls === 'error') errors.push(line);
-      else if (cls === 'warn') warnings.push(line);
-    }
-
-    if (errors.length > 0) {
-      console.error('\n❌ Server log contains ERROR/FATAL entries during e2e run:');
-      errors.forEach(line => console.error('  ', line.trim()));
-      console.error(`\nFull server log: ${path.resolve(artifactPath)}`);
-      throw new Error(
-        `Server emitted ${errors.length} ERROR/FATAL log entries during e2e tests. See test-results/server.log for details.`
+    try {
+      raw = fs.readFileSync(serverLogPath, 'utf8');
+    } catch (error) {
+      console.warn(
+        `\n⚠️  Unable to read server log during global teardown: ${path.resolve(serverLogPath)}`
       );
+      console.warn(`   ${error instanceof Error ? error.message : String(error)}`);
+      raw = null;
     }
 
-    // Report warnings (informational, not a failure)
-    if (warnings.length > 0) {
-      console.log(`\n⚠️  Server log contains ${warnings.length} WARN entries (not a failure):`);
-      warnings.slice(0, 5).forEach(line => console.log('  ', line.trim()));
-      if (warnings.length > 5) console.log(`  ... and ${warnings.length - 5} more`);
-    }
+    if (raw !== null) {
+      const clean = stripAnsi(raw);
+      const lines = clean.split('\n');
 
-    console.log(`\n✅ Server log clean: ${lines.length} lines, 0 errors`);
+      // Copy server log into test-results/ for CI artifact upload
+      try {
+        fs.mkdirSync('test-results', { recursive: true });
+        fs.copyFileSync(serverLogPath, artifactPath);
+      } catch (error) {
+        console.warn(
+          `\n⚠️  Unable to copy server log artifact: ${path.resolve(artifactPath)}`
+        );
+        console.warn(`   ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      const errors = [];
+      const warnings = [];
+      for (const line of lines) {
+        const cls = classifyLine(line);
+        if (cls === 'error') errors.push(line);
+        else if (cls === 'warn') warnings.push(line);
+      }
+
+      if (errors.length > 0) {
+        console.error('\n❌ Server log contains ERROR/FATAL entries during e2e run:');
+        errors.forEach(line => console.error('  ', line.trim()));
+        console.error(`\nFull server log: ${path.resolve(artifactPath)}`);
+        throw new Error(
+          `Server emitted ${errors.length} ERROR/FATAL log entries during e2e tests. See test-results/server.log for details.`
+        );
+      }
+
+      // Report warnings (informational, not a failure)
+      if (warnings.length > 0) {
+        console.log(`\n⚠️  Server log contains ${warnings.length} WARN entries (not a failure):`);
+        warnings.slice(0, 5).forEach(line => console.log('  ', line.trim()));
+        if (warnings.length > 5) console.log(`  ... and ${warnings.length - 5} more`);
+      }
+
+      console.log(`\n✅ Server log clean: ${lines.length} lines, 0 errors`);
+    }
   }
 
   // --- Clean up temp DB directory ---

@@ -95,16 +95,20 @@ const child = spawn(process.execPath, nodeArgs, {
 
 let logStream = null;
 if (logPath) {
-  // Ensure parent directory exists (e.g. Playwright cleans test-results/ before
-  // starting the webServer, so it may not exist even if the config created it).
-  fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  const stream = fs.createWriteStream(logPath, { flags: 'w' });
-  logStream = stream;
-  stream.on('error', (err) => {
-    console.warn(`⚠️  Failed to write log file "${logPath}": ${err.message}. Falling back to console-only logging.`);
-    if (!stream.destroyed) stream.destroy();
-    if (logStream === stream) logStream = null;
-  });
+  try {
+    // Ensure parent directory exists (e.g. Playwright cleans test-results/ before
+    // starting the webServer, so it may not exist even if the config created it).
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    const stream = fs.createWriteStream(logPath, { flags: 'w' });
+    logStream = stream;
+    stream.on('error', (err) => {
+      console.warn(`⚠️  Failed to write log file "${logPath}": ${err.message}. Falling back to console-only logging.`);
+      if (!stream.destroyed) stream.destroy();
+      if (logStream === stream) logStream = null;
+    });
+  } catch (err) {
+    console.warn(`⚠️  Could not set up log file "${logPath}": ${err.message}. Falling back to console-only logging.`);
+  }
 }
 
 child.on('error', (err) => {
