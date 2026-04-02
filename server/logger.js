@@ -36,17 +36,19 @@ const otelMixin = (config.NODE_ENV === 'production' || config.NODE_ENV === 'stag
   ? buildOtelMixin()
   : undefined;
 
+const REDACT_PATHS = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-api-key"]',
+  'req.headers["x-access-token"]',
+  'res.headers["set-cookie"]',
+];
+
 const logger = pino({
   level: config.LOG_LEVEL,
   ...(otelMixin ? { mixin: otelMixin } : {}),
   redact: {
-    paths: [
-      'req.headers.authorization',
-      'req.headers.cookie',
-      'req.headers["x-api-key"]',
-      'req.headers["x-access-token"]',
-      'res.headers["set-cookie"]',
-    ],
+    paths: REDACT_PATHS,
     remove: true,
   },
   ...(config.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : {}),
@@ -54,3 +56,4 @@ const logger = pino({
 
 module.exports = logger;
 module.exports.buildOtelMixin = buildOtelMixin;
+module.exports.REDACT_PATHS = REDACT_PATHS;
