@@ -85,6 +85,8 @@ function initWebSocket(server, isReady) {
     ws.isAlive = true;
     ws._msgQueue = Promise.resolve();
 
+    logger.info({ userId: user.id }, 'Player connected to WebSocket');
+
     ws.on('pong', () => { ws.isAlive = true; });
 
     ws.on('message', (data) => {
@@ -197,6 +199,8 @@ async function handleJoin(ws, roomCode) {
       room.droppedPlayers.delete(ws.user.id);
       ws.isSpectator = false;
 
+      logger.info({ userId: ws.user.id, roomCode: code }, 'Player reconnected');
+
       sendReconnectState(ws, code, room);
       return;
     }
@@ -245,6 +249,7 @@ async function handleJoin(ws, roomCode) {
       try { oldWs.close(); } catch { /* ignore stale socket */ }
       room.players.set(ws.user.id, ws);
       ws.isSpectator = false;
+      logger.info({ userId: ws.user.id, roomCode: code }, 'Player reconnected');
       sendReconnectState(ws, code, room);
       return;
     }
@@ -257,6 +262,7 @@ async function handleJoin(ws, roomCode) {
       room.players.set(ws.user.id, ws);
       room.droppedPlayers.delete(ws.user.id);
       ws.isSpectator = false;
+      logger.info({ userId: ws.user.id, roomCode: code }, 'Player reconnected');
       sendReconnectState(ws, code, room);
       return;
     }
@@ -449,6 +455,8 @@ async function startMatch(roomCode) {
   room.started = true;
   room.starting = false;
 
+  logger.info({ roomCode, playerCount: room.players.size }, 'Match started');
+
   // Build player name list
   const playerNames = [];
   room.players.forEach((ws) => playerNames.push(ws.user.username));
@@ -616,6 +624,8 @@ async function endMatch(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
+  logger.info({ roomCode, playerCount: room.players.size + room.droppedPlayers.size }, 'Match ended');
+
   // Collect scores for all players (active + dropped)
   const userScores = [];
   room.players.forEach((ws, userId) => {
@@ -771,6 +781,11 @@ async function handleDisconnect(ws) {
     return;
   }
 
+  // Ignore stale socket close events (e.g. after reconnect replaced this socket)
+  if (room.players.get(ws.user.id) !== ws) return;
+
+  logger.info({ userId: ws.user.id, roomCode }, 'Player disconnected');
+
   // If match is active, track as dropped and give reconnect window
   if (room.started) {
     room.players.delete(ws.user.id);
@@ -805,6 +820,7 @@ async function handleDisconnect(ws) {
     const forfeitTimer = setTimeout(async () => {
       try {
         disconnected.delete(dcKey);
+        logger.warn({ userId: ws.user.id, roomCode }, 'Player dropped after reconnect timeout');
         // Player didn't reconnect — they stay as dropped.
 
         // Host transfer if the disconnected player was host
@@ -816,6 +832,7 @@ async function handleDisconnect(ws) {
             const db = await getDbAdapter();
             await db.run('UPDATE matches SET host_user_id = ? WHERE room_code = ?', [newHostId, roomCode]);
           } catch { /* non-fatal */ }
+          logger.info({ roomCode, newHostId }, 'Host transferred');
           broadcastToRoom(roomCode, {
             type: 'host-transferred',
             newHost: currentRoom.players.get(newHostId).user.username,
@@ -824,6 +841,7 @@ async function handleDisconnect(ws) {
 
         // Notify remaining players that the player has been removed
         if (currentRoom && currentRoom.started) {
+          logger.info({ userId: ws.user.id, roomCode }, 'Player forfeited');
           broadcastToRoom(roomCode, {
             type: 'player-forfeited',
             username: ws.user.username,
@@ -867,6 +885,8 @@ async function handleDisconnect(ws) {
     } catch {
       // Non-fatal
     }
+
+    logger.info({ roomCode, newHostId }, 'Host transferred');
 
     // If in rematch setup, also transfer host in finishedRooms and notify
     const finished = finishedRooms.get(roomCode);

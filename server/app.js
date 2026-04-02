@@ -105,6 +105,17 @@ function createServer() {
   app.use(pinoHttp(pinoHttpOptions));
 
   // Middleware
+  const staticExtensions = new Set(['.css', '.js', '.map', '.ico', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.woff2', '.ttf']);
+  app.use(pinoHttp({
+    logger,
+    autoLogging: process.env.NODE_ENV === 'test' ? false : {
+      ignore: (req) => {
+        if (req.path === '/api/health' || req.path === '/healthz') return true;
+        const dotIdx = req.path.lastIndexOf('.');
+        return dotIdx !== -1 && staticExtensions.has(req.path.substring(dotIdx));
+      },
+    },
+  }));
   app.use(express.json());
 
   // Serve static files from public/
