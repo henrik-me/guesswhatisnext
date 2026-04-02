@@ -121,7 +121,7 @@ Once promoted, admin users can manage other users' roles from the **🛡️ Mode
 
 ### Feature Flags
 
-PR #91 introduces a small central **server-side feature-flag system** to safely ship incomplete or limited-access features without exposing them to everyone at once. This follow-up PR documents that behavior for reviewers and for the eventual merge to `main`.
+This section documents the small central **server-side feature-flag system** introduced in PR #91, which safely ships incomplete or limited-access features without exposing them to everyone at once.
 
 - **Evaluation order:** feature-specific request override (only when that feature allows overrides in the current environment) → default state → explicit user targeting → deterministic percentage rollout → disabled
 - **Supported controls:** specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides for features that explicitly opt in
