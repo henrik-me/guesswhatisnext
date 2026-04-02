@@ -76,18 +76,41 @@ describe('Production log format', () => {
     child.stderr.on('data', (chunk) => { logBuffer.append(chunk.toString()); });
 
     await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Server startup timeout')), 15000);
+      let done = false;
+      let retryTimer;
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        if (retryTimer) clearTimeout(retryTimer);
+        child.off('exit', onExit);
+      };
+      const finish = (err) => {
+        if (done) return;
+        done = true;
+        cleanup();
+        err ? reject(err) : resolve();
+      };
+      const onExit = (code, signal) => {
+        finish(new Error(`Server exited before ready (code: ${code}, signal: ${signal})`));
+      };
+
+      const timeout = setTimeout(() => finish(new Error('Server startup timeout')), 15000);
+
       const checkReady = () => {
+        if (done) return;
         const req = http.get(`http://localhost:${port}/api/health`, {
           headers: { 'X-API-Key': 'test-log-format-key', 'X-Forwarded-Proto': 'https' },
         }, (res) => {
-          if (res.statusCode === 200) { clearTimeout(timeout); resolve(); }
-          else { setTimeout(checkReady, 500); }
+          if (done) { res.resume(); return; }
+          if (res.statusCode === 200) { finish(); }
+          else { retryTimer = setTimeout(checkReady, 500); }
           res.resume();
         });
-        req.on('error', () => setTimeout(checkReady, 500));
+        req.on('error', () => { if (!done) retryTimer = setTimeout(checkReady, 500); });
       };
-      setTimeout(checkReady, 1000);
+
+      child.once('exit', onExit);
+      retryTimer = setTimeout(checkReady, 1000);
     });
   }, 20000);
 
@@ -111,6 +134,7 @@ describe('Production log format', () => {
   }
 
   function getRawOutput() {
+    logBuffer.flush();
     return logBuffer.lines.join('\n');
   }
 
