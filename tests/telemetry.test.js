@@ -100,7 +100,7 @@ describe('POST /api/telemetry/errors', () => {
   });
 
   test('rate limits after 10 requests per minute per IP', async () => {
-    // Rate limiter keys on socket remoteAddress; earlier tests share the budget.
+    // Rate limiter keys on req.ip (express-rate-limit default); earlier tests share the budget.
     // Send enough requests to definitely exceed the 10-request window.
     const agent = getAgent();
     const results = [];

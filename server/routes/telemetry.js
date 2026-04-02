@@ -31,7 +31,7 @@ router.post('/errors', errorReportLimiter, optionalAuth, (req, res) => {
     lineno: safeInt(lineno),
     colno: safeInt(colno),
     userId: req.user?.id || null,
-    userAgent: req.headers['user-agent'],
+    userAgent: safeString(req.headers['user-agent'], 500),
     remoteAddress: req.ip,
   };
 
