@@ -11,6 +11,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { config } = require('../config');
+const logger = require('../logger');
 
 const DB_PATH = config.GWN_DB_PATH;
 const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
@@ -90,9 +91,9 @@ function initDb(maxRetries = 5) {
     } catch (err) {
       if (!isSqliteLockError(err) || attempt === maxRetries) throw err;
       const delay = 1000 * attempt;
-      console.warn(
-        `⏳ Database init attempt ${attempt}/${maxRetries} failed (${err.code}): ${err.message}. ` +
-        `Retrying in ${delay}ms...`
+      logger.warn(
+        { attempt, maxRetries, errCode: err.code, err, delay },
+        'Database init attempt failed, retrying'
       );
       closeDb();
       // Synchronous sleep: initDb runs once at startup before the server
@@ -137,7 +138,7 @@ function _initDbOnce() {
     const bcrypt = require('bcryptjs');
     const hash = bcrypt.hashSync(SYSTEM_API_KEY, 10);
     database.prepare("INSERT INTO users (username, password_hash, role) VALUES ('system', ?, 'system')").run(hash);
-    console.log('🔑 System account seeded');
+    logger.info('System account seeded');
   }
 
   // Bootstrap: promote ADMIN_USERNAME to admin if set AND the system API key
@@ -149,7 +150,7 @@ function _initDbOnce() {
     const adminUser = database.prepare('SELECT id, role FROM users WHERE username = ?').get(adminUsername);
     if (adminUser && adminUser.role === 'user') {
       database.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(adminUser.id);
-      console.log(`👑 Auto-promoted ${adminUsername} to admin`);
+      logger.info({ username: adminUsername }, 'Auto-promoted user to admin');
     }
   }
 
@@ -165,7 +166,7 @@ function _initDbOnce() {
         insertAch.run(a.id, a.name, a.description, a.icon, a.category, a.requirement);
       }
     })(ACHIEVEMENTS);
-    console.log('🏅 Achievements seeded');
+    logger.info('Achievements seeded');
   }
 
   // Seed puzzles if table is empty (sync — legacy path uses better-sqlite3 directly)
@@ -181,10 +182,10 @@ function _initDbOnce() {
         insertPuzzle.run(p.id, p.category, p.difficulty, p.type, JSON.stringify(p.sequence), p.answer, JSON.stringify(p.options), p.explanation);
       }
     })(puzzles);
-    console.log(`🧩 Seeded ${puzzles.length} puzzles into database`);
+    logger.info({ count: puzzles.length }, 'Puzzles seeded into database');
   }
 
-  console.log('📦 Database initialized');
+  logger.info('Database initialized');
 }
 
 /** Close the database connection. */

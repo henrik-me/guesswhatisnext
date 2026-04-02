@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth');
 const { getDbAdapter } = require('../db');
 const { checkAndUnlockAchievements } = require('../achievements');
+const logger = require('../logger');
 
 /** Active rooms: Map<roomCode, RoomState> */
 const rooms = new Map();
@@ -100,7 +101,7 @@ function initWebSocket(server, isReady) {
         }
         return handleMessage(ws, msg);
       }).catch((err) => {
-        console.error('WebSocket handler error:', err);
+        logger.error({ err }, 'WebSocket handler error');
         if (ws.readyState === 1) {
           ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
         }
@@ -139,7 +140,7 @@ function initWebSocket(server, isReady) {
     clearInterval(roomCleanup);
   });
 
-  console.log('🔌 WebSocket server ready on /ws');
+  logger.info('WebSocket server ready on /ws');
   return wss;
 }
 
@@ -440,7 +441,7 @@ async function startMatch(roomCode) {
     room.puzzles = await selectRandomPuzzles(room.totalRounds);
   } catch (err) {
     room.starting = false;
-    console.error(`Failed to load puzzles for room ${roomCode}:`, err);
+    logger.error({ err, roomCode }, 'Failed to load puzzles for room');
     broadcastToRoom(roomCode, { type: 'error', message: 'Failed to load puzzles. Please try again.' });
     cleanupRoom(roomCode);
     return;

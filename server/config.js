@@ -22,7 +22,7 @@ const config = {
   CANONICAL_HOST: (process.env.CANONICAL_HOST || '').trim(),
   DB_BACKEND: process.env.DATABASE_URL ? 'mssql' : 'sqlite',
   DATABASE_URL: process.env.DATABASE_URL || null,
-  LOG_LEVEL: (process.env.LOG_LEVEL || '').trim() || (isProduction ? 'info' : 'debug'),
+  LOG_LEVEL: (process.env.LOG_LEVEL || '').trim() || (isProduction ? 'info' : NODE_ENV === 'test' ? 'silent' : 'debug'),
 };
 
 /**
@@ -40,6 +40,7 @@ function validateConfig() {
     if (!canonicalHost) {
       missing.push('CANONICAL_HOST');
     } else if (!CANONICAL_HOST_RE.test(canonicalHost)) {
+      // console.error used here — logger depends on config, can't require it
       console.error(
         `❌ CANONICAL_HOST="${canonicalHost}" is not a valid hostname[:port].\n` +
         '   Example: CANONICAL_HOST=example.com or CANONICAL_HOST=example.com:8443'
@@ -50,6 +51,7 @@ function validateConfig() {
 
   if (missing.length > 0) {
     if (isProduction) {
+      // console.error used here — logger depends on config, can't require it
       console.error(
         `❌ Missing required environment variables: ${missing.join(', ')}\n` +
         '   These must be set when NODE_ENV=production or NODE_ENV=staging.\n' +
@@ -57,6 +59,7 @@ function validateConfig() {
       );
       process.exit(1);
     } else {
+      // console.warn used here — logger depends on config, can't require it
       console.warn(
         `⚠️  Missing environment variables: ${missing.join(', ')}\n` +
         '   Using dev defaults. Set these before deploying to production.'

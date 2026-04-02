@@ -3,6 +3,7 @@
  */
 
 const { getDbAdapter } = require('./db');
+const logger = require('./logger');
 
 /** All achievement definitions. */
 const ACHIEVEMENTS = [
@@ -120,7 +121,7 @@ async function seedAchievements() {
       );
     }
   });
-  console.log('🏅 Achievements seeded');
+  logger.info('Achievements seeded');
 }
 
 /**
