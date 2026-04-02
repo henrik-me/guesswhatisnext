@@ -3,7 +3,12 @@
  * Manages which screen is visible and delegates to game modules.
  */
 
-// Client-side error reporting
+import { Game } from './game.js';
+import { puzzles as localPuzzles, getCategories } from './puzzles.js';
+import { Storage } from './storage.js';
+import { GameAudio } from './audio.js';
+
+// Client-side error reporting (IIFE keeps internals private)
 (function initErrorReporting() {
   const ERROR_ENDPOINT = '/api/telemetry/errors';
   const MAX_ERRORS_PER_MINUTE = 10;
@@ -59,11 +64,6 @@
     });
   });
 })();
-
-import { Game } from './game.js';
-import { puzzles as localPuzzles, getCategories } from './puzzles.js';
-import { Storage } from './storage.js';
-import { GameAudio } from './audio.js';
 
 const screens = {};
 

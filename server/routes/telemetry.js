@@ -10,8 +10,7 @@ const errorReportLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : req.ip,
-  validate: { keyGeneratorIpFallback: false },
+  // req.ip respects trust proxy setting, giving the real client IP behind a reverse proxy
   message: { error: 'Too many error reports, try again later' },
 });
 
@@ -33,7 +32,7 @@ router.post('/errors', errorReportLimiter, optionalAuth, (req, res) => {
     colno: safeInt(colno),
     userId: req.user?.id || null,
     userAgent: req.headers['user-agent'],
-    remoteAddress: req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : req.ip,
+    remoteAddress: req.ip,
   };
 
   const truncatedStack = typeof stack === 'string' && stack.length > 0
