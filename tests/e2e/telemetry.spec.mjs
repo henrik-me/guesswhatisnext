@@ -11,6 +11,7 @@ test.describe('Client Error Telemetry', () => {
         lineno: 42,
         colno: 10,
       },
+      headers: { 'X-Forwarded-For': '10.0.0.1' },
     });
     expect(res.status()).toBe(204);
   });
@@ -18,6 +19,7 @@ test.describe('Client Error Telemetry', () => {
   test('POST /api/telemetry/errors returns 400 without message', async ({ request }) => {
     const res = await request.post('/api/telemetry/errors', {
       data: { type: 'error' },
+      headers: { 'X-Forwarded-For': '10.0.0.1' },
     });
     expect(res.status()).toBe(400);
     const body = await res.json();
@@ -27,6 +29,7 @@ test.describe('Client Error Telemetry', () => {
   test('POST /api/telemetry/errors returns 400 for non-string message', async ({ request }) => {
     const res = await request.post('/api/telemetry/errors', {
       data: { message: 123 },
+      headers: { 'X-Forwarded-For': '10.0.0.1' },
     });
     expect(res.status()).toBe(400);
   });
@@ -39,6 +42,7 @@ test.describe('Client Error Telemetry', () => {
         type: 'error',
         source: 'app.js',
       },
+      headers: { 'X-Forwarded-For': '10.0.0.1' },
     });
     expect(res.status()).toBe(204);
   });
@@ -49,6 +53,7 @@ test.describe('Client Error Telemetry', () => {
     for (let i = 0; i < 12; i++) {
       const res = await request.post('/api/telemetry/errors', {
         data: { message: `Rate limit e2e test ${i}` },
+        headers: { 'X-Forwarded-For': '10.0.0.2' },
       });
       statuses.push(res.status());
     }
@@ -146,7 +151,7 @@ test.describe('Client Error Telemetry', () => {
 
   test('authenticated user includes auth token in error report', async ({ page, request }) => {
     // Register a user first
-    const username = `e2e${Date.now().toString(36)}`;
+    const username = `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const regRes = await request.post('/api/auth/register', {
       data: { username, password: 'testpass123' },
     });
