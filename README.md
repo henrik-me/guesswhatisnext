@@ -119,6 +119,22 @@ The first admin user must be bootstrapped. Two options:
 
 Once promoted, admin users can manage other users' roles from the **🛡️ Moderation** screen in the UI. Note: after a role change, the user must log out and log back in for the new role to take effect (the role is stored in their JWT token).
 
+### Feature Flags
+
+The app uses a small central **server-side feature-flag system** to safely ship incomplete or limited-access features without exposing them to everyone at once.
+
+- **Evaluation order:** feature-specific request override (only when that feature allows overrides in the current environment) → default state → explicit user targeting → deterministic percentage rollout → disabled
+- **Supported controls:** specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides for features that explicitly opt in
+- **Client/server model:** the client reads `/api/features` to hide or show gated UI, but server routes must still enforce the same flag
+
+**Current `submit-puzzle` setup**
+- Hidden/disabled by default
+- Can be enabled for specific users and/or a rollout percentage
+- Request overrides are allowed for this feature only outside `production` and `staging`
+- Override names: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
+
+> Overrides are feature-specific and opt-in, not a global bypass. Only use them for features that explicitly define override support.
+
 ### Running with Docker
 
 ```bash

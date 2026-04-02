@@ -134,6 +134,24 @@ guesswhatisnext/
 - **Storage layer** (`storage.js`) abstracts all persistence behind a clean API
 - **Server routes** handle HTTP API, middleware handles auth, WebSocket handler manages real-time matches
 
+### Feature Flag Rollouts
+
+Use the central feature-flag module for staged rollouts of incomplete or limited-access features. Do **not** scatter ad hoc environment checks across routes or client UI.
+
+- **Source of truth:** server-side evaluation per request; the client may mirror flag state via `/api/features`, but guarded server routes must enforce the same flag
+- **Evaluation order:** feature-specific request override (only if that feature opts in and the current environment allows it) → default state → explicit user targeting → deterministic percentage rollout → disabled
+- **Supported controls:** specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides
+- **Rollout stability:** percentage rollouts are deterministic per authenticated user so the same user consistently lands in or out of the rollout bucket across requests
+- **Override policy:** overrides are never global; each feature must explicitly opt in and define its own override names
+
+**Current `submitPuzzle` flag**
+- Default-off / hidden by default
+- Can be enabled for explicit users and/or a rollout percentage
+- Allows request overrides only outside `production` and `staging`
+- Override names: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
+
+When adding future flags, prefer default-off, keep evaluation centralized, and document any override behavior explicitly so teammates can test safely without creating production bypasses.
+
 ### Multiplayer Architecture (Phase 4)
 
 The multiplayer system supports 2–10 players per room with a host-controlled lobby:
