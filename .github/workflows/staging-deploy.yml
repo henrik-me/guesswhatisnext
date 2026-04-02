@@ -161,7 +161,7 @@ jobs:
 
       - name: Telemetry endpoint (valid error)
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
             -X POST "http://localhost:3000/api/telemetry/errors" \
             -H "Content-Type: application/json" \
             -H "X-Forwarded-Proto: https" \
@@ -174,7 +174,7 @@ jobs:
 
       - name: Telemetry endpoint (invalid payload)
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
             -X POST "http://localhost:3000/api/telemetry/errors" \
             -H "Content-Type: application/json" \
             -H "X-Forwarded-Proto: https" \

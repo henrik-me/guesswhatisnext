@@ -4,22 +4,58 @@
  */
 
 const { spawn } = require('child_process');
+const net = require('net');
 const path = require('path');
 const http = require('http');
 const os = require('os');
 const fs = require('fs');
 
+/** Find an available port by briefly binding to port 0. */
+async function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.listen(0, () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+    srv.on('error', reject);
+  });
+}
+
+/** Collect complete newline-terminated lines, carrying partial tails. */
+function createLineBuffer() {
+  let pending = '';
+  const lines = [];
+  return {
+    lines,
+    append(chunk) {
+      pending += chunk;
+      const parts = pending.split('\n');
+      pending = parts.pop(); // keep incomplete trailing fragment
+      for (const p of parts) {
+        if (p.trim()) lines.push(p);
+      }
+    },
+    flush() {
+      if (pending.trim()) lines.push(pending);
+      pending = '';
+    },
+  };
+}
+
 describe('Production log format', () => {
   let child;
-  let logOutput = '';
+  let logBuffer;
   let port;
   const tmpDir = path.join(os.tmpdir(), `gwn-log-format-test-${process.pid}`);
   const dbPath = path.join(tmpDir, 'test.db');
 
   beforeAll(async () => {
-    port = 3090 + Math.floor(Math.random() * 100);
+    port = await findFreePort();
 
     fs.mkdirSync(tmpDir, { recursive: true });
+
+    logBuffer = createLineBuffer();
 
     child = spawn(process.execPath, [path.join('server', 'index.js')], {
       cwd: path.resolve(__dirname, '..'),
@@ -36,8 +72,8 @@ describe('Production log format', () => {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
-    child.stdout.on('data', (chunk) => { logOutput += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { logOutput += chunk.toString(); });
+    child.stdout.on('data', (chunk) => { logBuffer.append(chunk.toString()); });
+    child.stderr.on('data', (chunk) => { logBuffer.append(chunk.toString()); });
 
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Server startup timeout')), 15000);
@@ -56,15 +92,30 @@ describe('Production log format', () => {
   }, 20000);
 
   afterAll(async () => {
-    if (child) {
+    if (child && child.exitCode == null) {
       child.kill('SIGTERM');
-      await new Promise(resolve => child.on('exit', resolve));
+      await new Promise((resolve) => {
+        const killTimeout = setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch { /* already dead */ }
+        }, 5000);
+        child.once('exit', () => { clearTimeout(killTimeout); resolve(); });
+        if (child.exitCode != null) { clearTimeout(killTimeout); resolve(); }
+      });
     }
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 
+  function getLogLines() {
+    logBuffer.flush();
+    return logBuffer.lines;
+  }
+
+  function getRawOutput() {
+    return logBuffer.lines.join('\n');
+  }
+
   it('outputs JSON lines (not pretty-printed)', () => {
-    const lines = logOutput.trim().split('\n').filter(l => l.trim());
+    const lines = getLogLines();
     expect(lines.length).toBeGreaterThan(0);
 
     for (const line of lines) {
@@ -87,7 +138,7 @@ describe('Production log format', () => {
     // Give pino a moment to flush
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    const lines = logOutput.trim().split('\n').filter(l => l.trim());
+    const lines = getLogLines();
     const requestLogs = lines
       .map(l => { try { return JSON.parse(l); } catch { return null; } })
       .filter(entry => entry && entry.req);
@@ -106,11 +157,11 @@ describe('Production log format', () => {
 
   it('does not contain ANSI escape codes', () => {
     // eslint-disable-next-line no-control-regex
-    expect(logOutput).not.toMatch(/\x1b\[/);
+    expect(getRawOutput()).not.toMatch(/\x1b\[/);
   });
 
   it('does not contain pino-pretty formatting', () => {
-    const lines = logOutput.trim().split('\n');
+    const lines = getLogLines();
     const indentedObjectLines = lines.filter(l => /^\s{4,}\w+:/.test(l));
     expect(indentedObjectLines).toHaveLength(0);
   });
