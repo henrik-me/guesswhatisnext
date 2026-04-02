@@ -9,6 +9,34 @@ function stripAnsi(str) {
 }
 
 /**
+ * Classify a log line as 'error', 'warn', or null.
+ * Handles both pino JSON (numeric level) and pino-pretty (text level) formats.
+ */
+function classifyLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  // Try JSON parse for pino structured logs (NODE_ENV=test)
+  if (trimmed.startsWith('{')) {
+    try {
+      const obj = JSON.parse(trimmed);
+      if (typeof obj.level === 'number') {
+        if (obj.level >= 50) return 'error';  // 50=ERROR, 60=FATAL
+        if (obj.level === 40) return 'warn';
+        return null;
+      }
+    } catch {
+      // Not valid JSON; fall through to text matching
+    }
+  }
+
+  // Text-based matching for pino-pretty output (NODE_ENV=development)
+  if (/\b(ERROR|FATAL)\b/.test(trimmed)) return 'error';
+  if (/\bWARN\b/.test(trimmed)) return 'warn';
+  return null;
+}
+
+/**
  * Post-test assertions and cleanup:
  * 1. Check server log for unexpected ERROR/FATAL entries
  * 2. Copy server log to test-results/ for CI artifact upload
@@ -27,7 +55,14 @@ export default function globalTeardown() {
     fs.mkdirSync('test-results', { recursive: true });
     fs.copyFileSync(serverLogPath, artifactPath);
 
-    const errors = lines.filter(line => /\b(ERROR|FATAL)\b/.test(line));
+    const errors = [];
+    const warnings = [];
+    for (const line of lines) {
+      const cls = classifyLine(line);
+      if (cls === 'error') errors.push(line);
+      else if (cls === 'warn') warnings.push(line);
+    }
+
     if (errors.length > 0) {
       console.error('\n❌ Server log contains ERROR/FATAL entries during e2e run:');
       errors.forEach(line => console.error('  ', line.trim()));
@@ -38,7 +73,6 @@ export default function globalTeardown() {
     }
 
     // Report warnings (informational, not a failure)
-    const warnings = lines.filter(line => /\bWARN\b/.test(line));
     if (warnings.length > 0) {
       console.log(`\n⚠️  Server log contains ${warnings.length} WARN entries (not a failure):`);
       warnings.slice(0, 5).forEach(line => console.log('  ', line.trim()));
