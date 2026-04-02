@@ -3,6 +3,10 @@
  * Creates the app via the factory and starts listening.
  */
 
+// OpenTelemetry must be initialised before any other requires so
+// auto-instrumentation can monkey-patch http / express modules.
+require('./telemetry');
+
 const { config, validateConfig } = require('./config');
 
 validateConfig();

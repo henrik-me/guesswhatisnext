@@ -25,6 +25,9 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
+    "@azure/monitor-opentelemetry-exporter": "^1.0.0-beta.32",
+    "@opentelemetry/auto-instrumentations-node": "^0.72.0",
+    "@opentelemetry/sdk-node": "^0.214.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.8.0",
     "express": "^5.2.1",

@@ -22,6 +22,7 @@ const config = {
   CANONICAL_HOST: (process.env.CANONICAL_HOST || '').trim(),
   DB_BACKEND: process.env.DATABASE_URL ? 'mssql' : 'sqlite',
   DATABASE_URL: process.env.DATABASE_URL || null,
+  APPLICATIONINSIGHTS_CONNECTION_STRING: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING || '',
   LOG_LEVEL: (() => {
     const VALID_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'];
     const raw = (process.env.LOG_LEVEL || '').trim().toLowerCase();
