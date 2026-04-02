@@ -49,7 +49,7 @@ async function initializeDatabase() {
     const bcrypt = require('bcryptjs');
     const hash = bcrypt.hashSync(SYSTEM_API_KEY, 10);
     await db.run("INSERT INTO users (username, password_hash, role) VALUES ('system', ?, 'system')", [hash]);
-    console.log('🔑 System account seeded');
+    logger.info('System account seeded');
   }
 
   // Bootstrap: promote ADMIN_USERNAME to admin if set AND the system API key
@@ -60,7 +60,7 @@ async function initializeDatabase() {
     const adminUser = await db.get('SELECT id, role FROM users WHERE username = ?', [adminUsername]);
     if (adminUser && adminUser.role === 'user') {
       await db.run("UPDATE users SET role = 'admin' WHERE id = ?", [adminUser.id]);
-      console.log(`👑 Auto-promoted ${adminUsername} to admin`);
+      logger.info({ username: adminUsername }, 'Auto-promoted user to admin');
     }
   }
 
@@ -75,7 +75,7 @@ async function initializeDatabase() {
     await seedPuzzles();
   }
 
-  console.log('📦 Database initialized');
+  logger.info('Database initialized');
 }
 
 /**
@@ -225,7 +225,7 @@ function createServer() {
         await closeDbAdapter();
       } catch { /* ignore close errors */ }
       dbInitialized = false;
-      console.log(`🔌 Database connection closed (drain: ${result.status})`);
+      logger.info({ drainStatus: result.status }, 'Database connection closed');
       res.json(result);
     };
 
@@ -251,13 +251,13 @@ function createServer() {
       await initializeDatabase();
       draining = false;
       dbInitialized = true;
-      console.log('📦 Database initialized (via admin endpoint)');
+      logger.info('Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
     } catch (err) {
       try { await closeDbAdapter(); } catch { /* ignore */ }
       draining = true;
       dbInitialized = false;
-      console.error('❌ Database init failed:', err.message);
+      logger.error({ err }, 'Database init failed');
       res.status(500).json({ error: 'Database initialization failed', message: err.message });
     }
   });
@@ -266,6 +266,27 @@ function createServer() {
   // Note: /{*path} is the correct Express 5 (path-to-regexp v8) catch-all syntax.
   app.get('/{*path}', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+  });
+
+  // Centralized error handler — must be after all routes
+  app.use((err, req, res, next) => {
+    const status = err.status || err.statusCode || 500;
+    const logLevel = status >= 500 ? 'error' : 'warn';
+    logger[logLevel](
+      {
+        err,
+        status,
+        method: req.method,
+        url: req.originalUrl || req.url,
+        requestId: req.id,
+        remoteAddress: req.ip || (req.connection && req.connection.remoteAddress),
+      },
+      'Unhandled request error'
+    );
+    if (res.headersSent) {
+      return next(err);
+    }
+    res.status(status).json({ error: status >= 500 ? 'Internal server error' : err.message });
   });
 
   let dbReadyPromise;
@@ -285,7 +306,7 @@ function createServer() {
         await initializeDatabase();
         draining = false;
         dbInitialized = true;
-        console.log(`📦 Database self-initialized on attempt ${selfInitAttempt}`);
+        logger.info({ attempt: selfInitAttempt }, 'Database self-initialized');
       } catch (err) {
         dbInitialized = false;
         const isLockError = err.code === 'SQLITE_BUSY' ||
@@ -294,18 +315,19 @@ function createServer() {
         if (!isLockError) {
           try { await closeDbAdapter(); } catch { /* ignore */ }
           draining = true;
-          console.error(`❌ Self-init failed with non-retryable error: ${err.message}`);
-          console.error('Call POST /api/admin/init-db after fixing the underlying issue.');
+          logger.error({ err }, 'Self-init failed with non-retryable error — call POST /api/admin/init-db after fixing the underlying issue');
         } else if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
-          console.warn(
-            `⏳ Self-init attempt ${selfInitAttempt}/${SELF_INIT_MAX_ATTEMPTS} failed: ${err.message}. Retrying in ${SELF_INIT_INTERVAL_MS / 1000}s...`
+          logger.warn(
+            { attempt: selfInitAttempt, maxAttempts: SELF_INIT_MAX_ATTEMPTS, err },
+            `Self-init attempt failed, retrying in ${SELF_INIT_INTERVAL_MS / 1000}s`
           );
           setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
         } else {
           try { await closeDbAdapter(); } catch { /* ignore */ }
           draining = true;
-          console.error(
-            `❌ Self-init failed after ${SELF_INIT_MAX_ATTEMPTS} attempts. Call POST /api/admin/init-db to initialize manually.`
+          logger.error(
+            { attempts: SELF_INIT_MAX_ATTEMPTS },
+            'Self-init failed after max attempts — call POST /api/admin/init-db to initialize manually'
           );
         }
       }
@@ -320,9 +342,11 @@ function createServer() {
         await initializeDatabase();
         dbInitialized = true;
       } catch (err) {
-        console.error('❌ Database initialization failed:', err.message);
-        console.error(err.stack);
-        process.exit(1);
+        logger.fatal({ err }, 'Database initialization failed');
+        // Allow pino transports to flush, then force exit since WS timers
+        // keep the event loop alive.
+        setTimeout(() => process.exit(1), 500);
+        throw err;
       }
     })();
   }

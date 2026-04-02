@@ -9,6 +9,7 @@ const express = require('express');
 const { getDbAdapter } = require('../db');
 const { requireAuth, requireSystem } = require('../middleware/auth');
 const { VALID_CATEGORIES } = require('../categories');
+const logger = require('../logger');
 
 const router = express.Router();
 
@@ -222,7 +223,7 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
         if (err && err.message === 'ALREADY_REVIEWED') {
           return res.status(409).json({ error: 'Submission has already been reviewed' });
         }
-        console.error('Error while approving submission %s:', id, err);
+        logger.error({ err, submissionId: id }, 'Error while approving submission');
         return res.status(500).json({ error: 'Internal server error' });
       }
 
