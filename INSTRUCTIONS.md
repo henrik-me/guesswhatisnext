@@ -249,23 +249,56 @@ CI runs all three in parallel on PRs that change application code (non-docs chan
 ### Test Framework & Tools
 
 **Current test structure (implemented):**
+
+Tests cover unit, integration, WebSocket, and E2E layers. Run `npm test` for the full vitest suite.
+
 ```
 tests/
-├── helper.js                 # Test utilities: setup/teardown, getAgent, connectWS
-├── auth.test.js              # Register, login, token, auth enforcement (10 tests)
-├── health.test.js            # Health endpoint: system auth, deep checks (3 tests)
-├── puzzles.test.js           # Puzzle API: filtering, auth, shape validation (6 tests)
-├── scores.test.js            # Score submission, leaderboard, multiplayer LB (8 tests)
-├── achievements.test.js      # Achievement list, unlock triggers (4 tests)
-├── matches.test.js           # Match create, join, capacity, history, get by ID (9 tests)
-├── e2e-singleplayer.test.js  # Free play + daily challenge full flows (4 tests)
-├── e2e-multiplayer.test.js   # Room create → join → play → result → rematch (10 tests)
-├── nplayer.test.js           # 3-player match, disconnect, ties (4 tests)
-├── reconnection.test.js      # Reconnect, host transfer, notifications (4 tests)
-└── rematch.test.js           # Rematch ready-up, host start, partial rematch (4 tests)
+├── helper.js                      # Test utilities: setup/teardown, getAgent, registerUser
+│
+│  # ── Unit tests ──
+├── sqlite-adapter.test.js         # SQLite adapter: init, queries, migrations, transactions
+├── mssql-adapter.test.js          # Azure SQL adapter: param rewriting, pool, transactions
+├── wal-cleanup.test.js            # DB startup/cleanup, WAL artifacts, journal modes
+│
+│  # ── Integration / API tests ──
+├── auth.test.js                   # Register, login, token, auth enforcement
+├── health.test.js                 # Health endpoint: system auth, deep checks
+├── puzzles.test.js                # Puzzle API: filtering, auth, shape validation
+├── scores.test.js                 # Score submission, leaderboards (free play + multiplayer)
+├── achievements.test.js           # Achievement list, unlock triggers
+├── matches.test.js                # Match create, join, capacity, history
+├── admin-endpoints.test.js        # System API admin: drain/init, role enforcement
+├── promotion-and-roles.test.js    # Role changes, admin guardrails
+├── submissions.test.js            # Community puzzle submit/review workflows
+├── security.test.js               # Security headers, CSP, HTTPS redirect
+├── e2e-singleplayer.test.js       # Full free-play + daily challenge API flows
+│
+│  # ── WebSocket tests ──
+├── e2e-multiplayer.test.js        # Room lifecycle: create → join → play → result → rematch
+├── nplayer.test.js                # N-player match, disconnect, last-player-standing, ties
+├── reconnection.test.js           # Reconnect, host transfer, forfeit edge cases
+├── rematch.test.js                # Rematch ready-up, host start, partial rematch
+├── spectator.test.js              # Spectator join, blocking, live match updates
+│
+│  # ── E2E / Browser tests (Playwright) ──
+├── e2e/
+│   ├── auth.spec.mjs              # Browser auth/register/logout, persistence
+│   ├── daily.spec.mjs             # Daily challenge playthrough + completed state
+│   ├── freeplay.spec.mjs          # Free-play navigation + game-over flow
+│   ├── keyboard.spec.mjs          # Keyboard shortcut navigation
+│   ├── leaderboard.spec.mjs       # Leaderboard visibility after scoring
+│   ├── helpers.mjs                # Playwright helper: playOneRound()
+│   └── global-teardown.mjs        # Playwright global cleanup
+│
+│  # ── Load / performance tests ──
+└── load/
+    ├── api-stress.yml             # Artillery API stress test
+    ├── websocket-stress.yml       # Artillery WebSocket stress test
+    ├── helpers.js                 # Load test helpers
+    ├── ws-helpers.js              # WS load test helpers
+    └── README.md                  # Load test documentation
 ```
-
-**Total: 66 tests across 11 suites — all passing.**
 
 **Test isolation model:**
 Each test file gets its own:

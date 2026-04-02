@@ -24,6 +24,8 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Available |
 | wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Available |
 
+**All implementation work runs as background task agents — the main session only orchestrates.** The orchestrating agent dispatches tasks to background agents in worktree slots, monitors progress via notifications, and merges approved PRs. It never directly edits code, runs tests, or creates PRs itself.
+
 **Current workflow (pre-branch-protection):** Agent pushes branch → merges to main on remote → pushes main.
 **Future workflow (post-branch-protection):** Agent pushes branch → creates PR → CI + review → merge via GH UI.
 
