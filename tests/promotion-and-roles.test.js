@@ -5,6 +5,7 @@
 const { getAgent, setup, teardown, registerUser } = require('./helper');
 
 const SYSTEM_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
+const ENABLED_SUBMISSIONS_PATH = '/api/submissions?ff_submit_puzzle=1';
 
 let userToken;
 let adminId;
@@ -30,7 +31,7 @@ describe('Puzzle Promotion — approved submission creates live puzzle', () => {
 
   beforeAll(async () => {
     const res = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: ['🔴', '🟠', '🟡'],
@@ -72,7 +73,7 @@ describe('Puzzle Promotion — approved submission creates live puzzle', () => {
 
   test('rejecting a submission does NOT create a puzzle', async () => {
     const createRes = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [1, 3, 5],
@@ -100,7 +101,7 @@ describe('Puzzle Promotion — approved submission creates live puzzle', () => {
 
   test('approved puzzle has submitted_by set to the submitter username', async () => {
     const createRes = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: ['A', 'C', 'E'],

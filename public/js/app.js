@@ -449,6 +449,7 @@ function init() {
 
   // Update auth display on home screen
   updateHomeAuthDisplay();
+  refreshFeatureFlags();
 
   // Validate stored token on startup (non-blocking)
   if (authToken) {
@@ -548,11 +549,13 @@ function init() {
         }
         break;
       case 'show-submit-puzzle':
-        if (isLoggedIn()) {
+        if (!isLoggedIn()) {
+          showScreen('auth');
+        } else if (isFeatureEnabled('submitPuzzle')) {
           showScreen('submit-puzzle');
           resetSubmitPuzzleForm();
         } else {
-          showScreen('auth');
+          showToast('Puzzle submissions are not enabled for your account yet');
         }
         break;
       case 'show-moderation':
@@ -961,6 +964,10 @@ let ws = null;
 let authToken = localStorage.getItem('gwn_auth_token');
 let authUsername = localStorage.getItem('gwn_auth_username');
 let authRole = localStorage.getItem('gwn_auth_role');
+const DEFAULT_FEATURE_FLAGS = Object.freeze({
+  submitPuzzle: false,
+});
+let featureFlags = { ...DEFAULT_FEATURE_FLAGS };
 let matchState = {
   roomCode: null,
   players: [],
@@ -982,6 +989,41 @@ function isLoggedIn() {
   return !!authToken;
 }
 
+function resetFeatureFlags() {
+  featureFlags = { ...DEFAULT_FEATURE_FLAGS };
+}
+
+function isFeatureEnabled(featureName) {
+  return !!featureFlags[featureName];
+}
+
+function getFeatureAwarePath(path) {
+  const query = window.location.search.replace(/^\?/, '');
+  if (!query) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}${query}`;
+}
+
+async function refreshFeatureFlags() {
+  try {
+    const res = await apiFetch(getFeatureAwarePath('/api/features'));
+    if (!res.ok) {
+      resetFeatureFlags();
+      updateHomeAuthDisplay();
+      return;
+    }
+
+    const data = await res.json();
+    featureFlags = {
+      ...DEFAULT_FEATURE_FLAGS,
+      ...(data.features || {}),
+    };
+  } catch {
+    resetFeatureFlags();
+  }
+
+  updateHomeAuthDisplay();
+}
+
 /** Update home screen to reflect auth state. */
 function updateHomeAuthDisplay() {
   const row = document.querySelector('[data-bind="home-user-display"]');
@@ -992,8 +1034,7 @@ function updateHomeAuthDisplay() {
   if (isLoggedIn() && authUsername) {
     if (label) label.textContent = `👤 Logged in as ${authUsername}`;
     row.style.display = '';
-    // Hidden until Phase 14 reworks community puzzle submission UX
-    if (submitBtn) submitBtn.style.display = 'none';
+    if (submitBtn) submitBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
     if (modBtn) modBtn.style.display = (authRole === 'admin' || authRole === 'system') ? '' : 'none';
   } else {
     row.style.display = 'none';
@@ -1007,6 +1048,7 @@ function logout() {
   authToken = null;
   authUsername = null;
   authRole = null;
+  resetFeatureFlags();
   localStorage.removeItem('gwn_auth_token');
   localStorage.removeItem('gwn_auth_username');
   localStorage.removeItem('gwn_auth_role');
@@ -1150,7 +1192,7 @@ async function authAction(action) {
     passwordInput.value = '';
     bindText('auth-error', '');
 
-    updateHomeAuthDisplay();
+    await refreshFeatureFlags();
     submitPendingScores();
     showScreen('multiplayer');
   } catch {
@@ -2448,7 +2490,7 @@ function initSubmitPuzzleForm() {
     }
 
     try {
-      const res = await apiFetch('/api/submissions', {
+      const res = await apiFetch(getFeatureAwarePath('/api/submissions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sequence, answer, explanation, difficulty, category }),

@@ -7,6 +7,7 @@
 
 const express = require('express');
 const { getDbAdapter } = require('../db');
+const { isFeatureEnabled } = require('../feature-flags');
 const { requireAuth, requireSystem } = require('../middleware/auth');
 const { VALID_CATEGORIES } = require('../categories');
 const logger = require('../logger');
@@ -43,6 +44,10 @@ function validateSubmission(body) {
 /** POST /api/submissions — submit a puzzle proposal (requires auth). */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
+    if (!isFeatureEnabled('submitPuzzle', req)) {
+      return res.status(403).json({ error: 'Submit puzzle feature is not enabled' });
+    }
+
     const error = validateSubmission(req.body);
     if (error) {
       return res.status(400).json({ error });
