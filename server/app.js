@@ -357,6 +357,7 @@ function createServer() {
         throw err;
       }
     })();
+    dbReadyPromise.catch(() => undefined);
   }
   initWebSocket(server, () => dbInitialized && !draining);
 

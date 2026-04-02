@@ -193,16 +193,15 @@ describe('Logger configuration', () => {
       process.env.NODE_ENV = env;
       process.env.LOG_LEVEL = 'silent';
       clearServerCache();
-      const logger = require('../server/logger');
-      // Pino stores the underlying stream on a private Symbol; pino-pretty
-      // creates a ThreadStream worker whereas the default is SonicBoom.
-      const streamSym = Object.getOwnPropertySymbols(logger)
-        .find(s => s.toString() === 'Symbol(pino.stream)');
-      const streamName = streamSym ? logger[streamSym]?.constructor?.name : undefined;
+      const { buildLoggerOptions } = require('../server/logger');
+      const loggerOptions = buildLoggerOptions({
+        NODE_ENV: env,
+        LOG_LEVEL: 'silent',
+      });
       if (shouldUsePretty) {
-        expect(streamName).toBe('ThreadStream');
+        expect(loggerOptions.transport).toEqual({ target: 'pino-pretty' });
       } else {
-        expect(streamName).not.toBe('ThreadStream');
+        expect(loggerOptions.transport).toBeUndefined();
       }
       clearServerCache();
     }

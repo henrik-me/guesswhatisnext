@@ -15,7 +15,17 @@ const errorReportLimiter = rateLimit({
 });
 
 router.post('/errors', errorReportLimiter, optionalAuth, (req, res) => {
-  const { message, source, lineno, colno, stack, type } = req.body;
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body
+    : {};
+  const {
+    message,
+    source,
+    lineno,
+    colno,
+    stack,
+    type,
+  } = body;
 
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'message is required' });

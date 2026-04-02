@@ -448,7 +448,7 @@ Tests use Vitest with supertest for API and ws for WebSocket testing. Run with `
 
 ## 4. Logging Conventions
 
-The project uses **Pino** for structured JSON logging (`server/logger.js` singleton). All server code must use the logger — never `console.*` (except in `config.js` and `telemetry.js` where the logger isn't available due to load order).
+The project uses **Pino** for structured JSON logging (`server/logger.js` singleton). All server code must use the logger — never `console.*` (except in `config.js` and the early bootstrap path in `telemetry.js`, where the logger is not yet available due to load order).
 
 ### Log Levels
 
@@ -509,6 +509,7 @@ When OpenTelemetry is active (staging/production), the Pino mixin automatically 
 - In development: no trace IDs by default (OTel SDK only activates when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set)
 - In staging/production: trace IDs appear automatically on every request-scoped log line (connection string is always set)
 - Manual log calls outside request scope won't have trace IDs unless you explicitly propagate context
+- The bootstrap only enables the HTTP and Express instrumentations; startup/shutdown failures are reported via the early console bootstrap path instead of surfacing as unhandled promise rejections
 
 ### Client Error Reporting
 
@@ -516,6 +517,7 @@ The `POST /api/telemetry/errors` endpoint accepts client-side errors (no auth re
 - Rate limited: 10 requests/minute per IP
 - Required field: `message` (string)
 - Optional fields: `type`, `source`, `lineno`, `colno`, `stack`
+- Missing, empty, or non-JSON bodies return `400` with a validation error instead of throwing
 - Logged at `warn` level with `{ component: 'client' }` context
 - Authenticated requests include `userId` in the log entry
 - Client JS hooks: `window.onerror` and `unhandledrejection` handlers report errors (max 10 per minute, sliding window)
