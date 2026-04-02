@@ -20,6 +20,7 @@ const puzzleRoutes = require('./routes/puzzles');
 const achievementRoutes = require('./routes/achievements');
 const submissionRoutes = require('./routes/submissions');
 const userRoutes = require('./routes/users');
+const telemetryRoutes = require('./routes/telemetry');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
@@ -107,7 +108,7 @@ function createServer() {
 
   // Request tracking middleware — gates API access on DB readiness
   app.use((req, res, next) => {
-    if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/')) return next();
+    if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/') || req.path.startsWith('/api/telemetry/')) return next();
 
     if (draining) {
       return res.status(503).json({ error: 'Server is draining', retryAfter: 5 });
@@ -135,6 +136,7 @@ function createServer() {
   app.use('/api/achievements', achievementRoutes);
   app.use('/api/submissions', submissionRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/telemetry', telemetryRoutes);
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, async (req, res, next) => {

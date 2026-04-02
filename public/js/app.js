@@ -3,6 +3,60 @@
  * Manages which screen is visible and delegates to game modules.
  */
 
+// Client-side error reporting
+(function initErrorReporting() {
+  const ERROR_ENDPOINT = '/api/telemetry/errors';
+  let errorCount = 0;
+  const MAX_ERRORS_PER_SESSION = 10;
+
+  function getAuthToken() {
+    try { return localStorage.getItem('gwn_auth_token'); } catch { return null; }
+  }
+
+  function reportError(payload) {
+    if (errorCount >= MAX_ERRORS_PER_SESSION) return;
+    errorCount++;
+    const token = getAuthToken();
+    // Use fetch with auth when available; fall back to sendBeacon for anonymous
+    if (token) {
+      fetch(ERROR_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => {}); // Swallow — error reporting must never break the app
+    } else if (navigator.sendBeacon) {
+      navigator.sendBeacon(ERROR_ENDPOINT, new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+    } else {
+      fetch(ERROR_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+  }
+
+  window.addEventListener('error', (event) => {
+    reportError({
+      message: event.message,
+      source: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      stack: event.error?.stack,
+      type: 'error',
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    reportError({
+      message: reason?.message || String(reason),
+      stack: reason?.stack,
+      type: 'unhandledrejection',
+    });
+  });
+})();
+
 import { Game } from './game.js';
 import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
