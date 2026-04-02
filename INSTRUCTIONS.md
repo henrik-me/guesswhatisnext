@@ -136,11 +136,11 @@ guesswhatisnext/
 
 ### Feature Flag Rollouts
 
-PR #91 introduces a central feature-flag module for staged rollouts of incomplete or limited-access features. This follow-up PR documents that design so reviewers know how the new rollout path is intended to work once PR #91 lands.
+PR #91 introduces a central feature-flag module for staged rollouts of incomplete or limited-access features. This document records that design so the intended rollout path is clear in branches that include PR #91.
 
 - **Source of truth:** server-side evaluation per request; in branches that include PR #91, the client mirrors flag state via `/api/features`, but guarded server routes still enforce the same flag
-- **Evaluation order:** feature-specific request override (only if that feature opts in and the current environment allows it) → default state → explicit user targeting → deterministic percentage rollout → disabled
-- **Supported controls:** specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides
+- **Evaluation order:** start from the feature's configured default state; then apply a feature-specific request override only when that feature opts in and the current environment allows it; otherwise apply explicit user targeting, then deterministic percentage rollout. If none of those change the result, the feature remains at its default state.
+- **Supported controls:** feature default state, specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides. Targeting and percentage rollout may enable a feature even when its default state is off.
 - **Rollout stability:** percentage rollouts are deterministic per authenticated user so the same user consistently lands in or out of the rollout bucket across requests
 - **Override policy:** overrides are never global; each feature must explicitly opt in and define its own override names
 

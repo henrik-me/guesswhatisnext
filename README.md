@@ -123,8 +123,8 @@ Once promoted, admin users can manage other users' roles from the **🛡️ Mode
 
 This section documents the small central **server-side feature-flag system** introduced in PR #91, which safely ships incomplete or limited-access features without exposing them to everyone at once.
 
-- **Evaluation order:** feature-specific request override (only when that feature allows overrides in the current environment) → default state → explicit user targeting → deterministic percentage rollout → disabled
-- **Supported controls:** specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides for features that explicitly opt in
+- **Evaluation order:** start from the feature's configured default state; then apply a feature-specific request override only when that feature allows overrides in the current environment; otherwise apply explicit user targeting, then deterministic percentage rollout. If none of those change the result, the feature remains at its default state.
+- **Supported controls:** feature default state, specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides for features that explicitly opt in. Targeting and percentage rollout may enable a feature even when its default state is off.
 - **Client/server model:** in branches that include PR #91, the client reads `/api/features` to hide or show gated UI, but server routes must still enforce the same flag
 
 **`submitPuzzle` feature-flag setup on PR #91**
