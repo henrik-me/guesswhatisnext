@@ -116,6 +116,7 @@ function createServer() {
     'x-content-type-options', 'x-dns-prefetch-control',
     'x-download-options', 'x-frame-options',
     'x-permitted-cross-domain-policies',
+    'strict-transport-security',
   ]);
 
   app.use(pinoHttp({

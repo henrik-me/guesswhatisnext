@@ -86,12 +86,20 @@ const child = spawn(process.execPath, nodeArgs, {
 
 let logStream = null;
 if (logPath) {
-  logStream = fs.createWriteStream(logPath, { flags: 'w' });
-  logStream.on('error', (err) => {
+  const stream = fs.createWriteStream(logPath, { flags: 'w' });
+  logStream = stream;
+  stream.on('error', (err) => {
     console.warn(`⚠️  Failed to write log file "${logPath}": ${err.message}. Falling back to console-only logging.`);
-    logStream = null;
+    if (!stream.destroyed) stream.destroy();
+    if (logStream === stream) logStream = null;
   });
 }
+
+child.on('error', (err) => {
+  console.error(`Failed to start child process: ${err.message}`);
+  if (logStream) logStream.end();
+  process.exit(1);
+});
 
 child.stdout.on('data', (chunk) => {
   process.stdout.write(chunk);
