@@ -483,7 +483,7 @@ logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled reque
 - `matchId` / `roomCode` — relevant entity identifiers
 - `method`, `url`, `status` — HTTP request context
 - `requestId` — from `req.id` (assigned by pino-http)
-- `remoteAddress` — `req.ip` for rate-limiting / abuse tracking
+- `remoteAddress` — `req.ip` for rate-limiting / abuse tracking (logged per-request, not stored long-term)
 - Duration/timing values for performance-sensitive operations
 
 ### Sensitive Data Handling
@@ -500,7 +500,7 @@ logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled reque
 - Full JWT tokens (log a truncated prefix if needed for debugging)
 - Database connection strings
 - Raw request bodies that may contain user credentials
-- PII beyond username (no email, IP stored long-term, etc.)
+- PII beyond username (no email, no IP addresses persisted to database, etc.)
 
 ### Trace ID Correlation
 

@@ -61,7 +61,7 @@ describe('Centralized error handler', () => {
 /**
  * Unit-style tests for error handler edge cases that are hard to trigger
  * through integration routes (5xx masking, headers-already-sent delegation).
- * Uses the same error handler pattern as server/app.js (lines 279–298).
+ * Uses the same error handler pattern as the centralized handler in server/app.js.
  */
 describe('Error handler — 5xx and edge cases', () => {
   const express = require('express');
