@@ -935,7 +935,8 @@ function updateHomeAuthDisplay() {
   if (isLoggedIn() && authUsername) {
     if (label) label.textContent = `👤 Logged in as ${authUsername}`;
     row.style.display = '';
-    if (submitBtn) submitBtn.style.display = '';
+    // Hidden until Phase 14 reworks community puzzle submission UX
+    if (submitBtn) submitBtn.style.display = 'none';
     if (modBtn) modBtn.style.display = (authRole === 'admin' || authRole === 'system') ? '' : 'none';
   } else {
     row.style.display = 'none';
