@@ -125,7 +125,7 @@ This section documents the small central **server-side feature-flag system** int
 
 - **Evaluation order:** feature-specific request override (only when that feature allows overrides in the current environment) → default state → explicit user targeting → deterministic percentage rollout → disabled
 - **Supported controls:** specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides for features that explicitly opt in
-- **Client/server model:** on the PR #91 branch, the client reads `/api/features` to hide or show gated UI, but server routes must still enforce the same flag
+- **Client/server model:** in branches that include PR #91, the client reads `/api/features` to hide or show gated UI, but server routes must still enforce the same flag
 
 **`submitPuzzle` feature-flag setup on PR #91**
 - Canonical feature-flag key: `submitPuzzle`
@@ -138,7 +138,7 @@ This section documents the small central **server-side feature-flag system** int
 >
 > `submitPuzzle` is the feature-flag key. The override names above are request identifiers, not alternate flag keys or UI route names.
 >
-> Until PR #91 merges, `main` does not yet expose `/api/features` or the documented `submitPuzzle` overrides.
+> If your branch does not include PR #91 yet, `/api/features` and the documented `submitPuzzle` overrides will not be available there.
 
 ### Running with Docker
 
