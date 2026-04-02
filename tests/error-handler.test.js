@@ -33,9 +33,10 @@ describe('Centralized error handler', () => {
   });
 
   test('returns structured JSON error for non-existent resource', async () => {
+    const { config } = require('../server/config');
     const res = await getAgent()
       .put('/api/submissions/999999/review')
-      .set('X-API-Key', 'gwn-dev-system-key')
+      .set('X-API-Key', config.SYSTEM_API_KEY)
       .send({ status: 'approved' });
 
     expect(res.status).toBe(404);

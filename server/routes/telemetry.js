@@ -11,6 +11,7 @@ const errorReportLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : req.ip,
+  validate: { keyGeneratorIpFallback: false },
   message: { error: 'Too many error reports, try again later' },
 });
 
