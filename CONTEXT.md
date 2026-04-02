@@ -29,6 +29,9 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 **Current workflow (pre-branch-protection):** Agent pushes branch → merges to main on remote → pushes main.
 **Future workflow (post-branch-protection):** Agent pushes branch → creates PR → CI + review → merge via GH UI.
 
+**PR Review Comment Resolution:**
+Every Copilot review comment thread must be replied to with a meaningful message (fix commit reference, acknowledgment, or explanation) and then resolved via the GraphQL API. See INSTRUCTIONS.md §10 for API commands and reply conventions. Threads are never left unresolved — even "by design" decisions get an explicit reply before resolution.
+
 ---
 
 ## Phase 1 — Client-Side Game
