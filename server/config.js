@@ -22,7 +22,12 @@ const config = {
   CANONICAL_HOST: (process.env.CANONICAL_HOST || '').trim(),
   DB_BACKEND: process.env.DATABASE_URL ? 'mssql' : 'sqlite',
   DATABASE_URL: process.env.DATABASE_URL || null,
-  LOG_LEVEL: (process.env.LOG_LEVEL || '').trim() || (isProduction ? 'info' : 'debug'),
+  LOG_LEVEL: (() => {
+    const VALID_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'];
+    const raw = (process.env.LOG_LEVEL || '').trim().toLowerCase();
+    if (raw && VALID_LEVELS.includes(raw)) return raw;
+    return isProduction ? 'info' : 'debug';
+  })(),
 };
 
 /**
