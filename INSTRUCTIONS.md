@@ -506,8 +506,8 @@ logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled reque
 
 When OpenTelemetry is active (staging/production), the Pino mixin automatically attaches `trace_id` and `span_id` (snake_case) to each log entry via the OTel context. This allows correlating logs with distributed traces in Azure Monitor / Application Insights.
 
-- In development: no trace IDs (OTel SDK is not loaded)
-- In staging/production: trace IDs appear automatically on every request-scoped log line
+- In development: no trace IDs by default (OTel SDK only activates when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set)
+- In staging/production: trace IDs appear automatically on every request-scoped log line (connection string is always set)
 - Manual log calls outside request scope won't have trace IDs unless you explicitly propagate context
 
 ### Client Error Reporting
