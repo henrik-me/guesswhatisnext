@@ -104,6 +104,14 @@ describe('Logger configuration', () => {
     expect(config.LOG_LEVEL).toBe('info');
   });
 
+  test('defaults to "debug" when NODE_ENV is unset', () => {
+    delete process.env.NODE_ENV;
+    delete process.env.LOG_LEVEL;
+    clearServerCache();
+    const { config } = require('../server/config');
+    expect(config.LOG_LEVEL).toBe('debug');
+  });
+
   // --- LOG_LEVEL override ---
 
   test('respects explicit LOG_LEVEL environment variable', () => {

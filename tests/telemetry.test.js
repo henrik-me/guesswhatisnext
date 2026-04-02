@@ -73,6 +73,32 @@ describe('POST /api/telemetry/errors', () => {
     expect(res.status).toBe(204);
   });
 
+  test('truncates long message to 500 characters in response', async () => {
+    const longMsg = 'x'.repeat(1000);
+    const res = await getAgent()
+      .post('/api/telemetry/errors')
+      .send({ message: longMsg, type: 'error' });
+
+    expect(res.status).toBe(204);
+  });
+
+  test('sanitizes non-string source and type fields', async () => {
+    const res = await getAgent()
+      .post('/api/telemetry/errors')
+      .send({ message: 'valid message', source: 12345, type: { xss: true }, lineno: 'not-a-number' });
+
+    expect(res.status).toBe(204);
+  });
+
+  test('truncates stack to safe length', async () => {
+    const longStack = 'Error: boom\n' + '    at file.js:1:1\n'.repeat(500);
+    const res = await getAgent()
+      .post('/api/telemetry/errors')
+      .send({ message: 'stack overflow', stack: longStack });
+
+    expect(res.status).toBe(204);
+  });
+
   test('rate limits after 10 requests per minute per IP', async () => {
     // Rate limiter keys on socket remoteAddress; earlier tests share the budget.
     // Send enough requests to definitely exceed the 10-request window.
