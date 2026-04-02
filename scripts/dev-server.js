@@ -95,6 +95,9 @@ const child = spawn(process.execPath, nodeArgs, {
 
 let logStream = null;
 if (logPath) {
+  // Ensure parent directory exists (e.g. Playwright cleans test-results/ before
+  // starting the webServer, so it may not exist even if the config created it).
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
   const stream = fs.createWriteStream(logPath, { flags: 'w' });
   logStream = stream;
   stream.on('error', (err) => {
