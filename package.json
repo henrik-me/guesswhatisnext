@@ -14,7 +14,9 @@
     "test:load:ws": "npx artillery run tests/load/websocket-stress.yml",
     "test:load:all": "npx artillery run tests/load/api-stress.yml && npx artillery run tests/load/websocket-stress.yml",
     "test:all": "vitest run && playwright test",
-    "lint": "eslint . --max-warnings 50"
+    "lint": "eslint . --max-warnings 50",
+    "dev:full": "node scripts/dev-server.js",
+    "dev:log": "node scripts/dev-server.js --no-https"
   },
   "keywords": [
     "game",

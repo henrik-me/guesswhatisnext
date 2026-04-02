@@ -101,8 +101,46 @@ function createServer() {
 
   // Request logging (before body parsers for consistent access logs)
   const staticExtensions = new Set(['.css', '.js', '.map', '.ico', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.woff2', '.ttf']);
+
+  // Blocklist noisy headers that are identical across requests (browser fingerprinting + static security headers)
+  const DROP_REQ_HEADERS = new Set([
+    'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
+    'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest',
+    'accept-encoding', 'accept-language', 'connection',
+    'upgrade-insecure-requests',
+  ]);
+  const DROP_RES_HEADERS = new Set([
+    'permissions-policy', 'content-security-policy',
+    'cross-origin-opener-policy', 'cross-origin-resource-policy',
+    'origin-agent-cluster', 'referrer-policy',
+    'x-content-type-options', 'x-dns-prefetch-control',
+    'x-download-options', 'x-frame-options',
+    'x-permitted-cross-domain-policies',
+  ]);
+
   app.use(pinoHttp({
     logger,
+    serializers: {
+      req(req) {
+        const headers = {};
+        for (const [k, v] of Object.entries(req.headers || {})) {
+          if (!DROP_REQ_HEADERS.has(k)) headers[k] = v;
+        }
+        return {
+          id: req.id, method: req.method, url: req.url,
+          query: req.query, params: req.params,
+          headers, remoteAddress: req.remoteAddress, remotePort: req.remotePort,
+        };
+      },
+      res(res) {
+        const raw = res.headers || {};
+        const headers = {};
+        for (const [k, v] of Object.entries(raw)) {
+          if (!DROP_RES_HEADERS.has(k)) headers[k] = v;
+        }
+        return { statusCode: res.statusCode, headers };
+      },
+    },
     autoLogging: config.NODE_ENV === 'test' ? false : {
       ignore: (req) => {
         if (req.path === '/api/health' || req.path === '/healthz') return true;

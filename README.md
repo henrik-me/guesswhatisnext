@@ -93,6 +93,12 @@ For development with auto-reload:
 npm run dev
 ```
 
+For production-like local testing (HTTPS + log capture):
+```bash
+npm run dev:full
+# → https://localhost:3443 (accept self-signed cert warning)
+```
+
 ### Admin Bootstrapping
 
 The first admin user must be bootstrapped. Two options:
@@ -323,8 +329,25 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 |---|---|
 | `npm start` | Start the server on port 3000 |
 | `npm run dev` | Start with auto-reload (--watch) |
+| `npm run dev:full` | HTTPS + log capture (recommended for testing) |
+| `npm run dev:log` | HTTP + log capture (plain HTTP with logging) |
 | `npm test` | Run tests |
 | `npm run lint` | Run ESLint (0 warnings target) |
+
+### Development Server Modes
+
+| Mode | Command | URL | Use Case |
+|---|---|---|---|
+| Quick iteration | `npm run dev` | http://localhost:3000 | Code changes with auto-reload |
+| Full local testing | `npm run dev:full` | https://localhost:3443 | Production-like: HTTPS, security headers, log capture |
+| HTTP + logging | `npm run dev:log` | http://localhost:3000 | Log analysis without HTTPS overhead |
+
+**`dev:full` (recommended for manual testing)** starts an HTTPS server with self-signed certificates, all security headers active (CSP, HSTS, CORS), and captures structured logs to `telemetry.log`. An HTTP server on port 3080 redirects to HTTPS, verifying the redirect middleware.
+
+All modes except `dev` capture logs to `telemetry.log` by default. Use `--no-log-file` to disable:
+```bash
+node scripts/dev-server.js --no-log-file
+```
 
 ---
 

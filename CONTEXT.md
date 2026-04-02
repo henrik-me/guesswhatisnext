@@ -6,7 +6,7 @@ This file tracks the current state of the project: what's been done, what's next
 
 ---
 
-## Project Status: ✅ Phases 1–5, 12–13 Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
+## Project Status: ✅ Phases 1–5, 12–13, 15 (partial) Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
 
 ### Development Workflow
 
@@ -377,6 +377,20 @@ Improve the community puzzle submission experience for both submitters and admin
 
 **Parallelism:** Tasks 81 and 82 can run in parallel after 80. Tasks 83, 84, 85 can run in parallel after their dependencies. Task 87 is independent of 83–86 but requires 82.
 
+## Phase 15 — Dev Tooling & Log Assertions
+
+Consolidate dev server scripts, integrate log capture into e2e tests, and add CI log assertion tests.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 90 | Unified dev server script | ✅ Done | — | `scripts/dev-server.js`: HTTPS + log capture by default. Replaces standalone `log-wrapper.js`. npm scripts: `dev:full`, `dev:log`. |
+| 91 | E2e log capture integration | ⬜ Pending | 90 | Playwright webServer uses dev-server.js to capture logs during test runs. Log file path configurable via env. |
+| 92 | Log assertion tests | ⬜ Pending | 91 | Post-test assertion: no ERROR-level entries during clean e2e run. Catches silent failures and unexpected error paths. |
+| 93 | CI log artifact upload | ⬜ Pending | 92 | On e2e failure in CI, upload captured log file as GitHub Actions artifact for debugging. |
+| 94 | Production log format validation | ⬜ Pending | 91 | Assert JSON structure in NODE_ENV=production mode: required fields (level, time, msg, req.id), no pretty-print leaking. |
+
+**Parallelism:** 91 first, then 92+93+94 can run in parallel.
+
 ### Deployment Architecture
 
 ```
@@ -471,6 +485,15 @@ Improve the community puzzle submission experience for both submitters and admin
 | Azure staging | Behind manual approval after ephemeral passes | Persistent environment for manual QA; only promoted after automated validation |
 | Production deploy | Manual workflow_dispatch from release/staging | Production only deploys code that has been validated in staging; never directly from main |
 | Production gate | Requires staging environment green | Cannot trigger prod deploy unless the latest staging deployment succeeded |
+
+### Key Design Decisions (Phase 15 — Dev Tooling)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Dev server default | HTTPS + log capture | Production-like by default ensures security headers and logging are always validated during manual testing |
+| Log capture method | Child process with piped stdio | pino-pretty's ThreadStream bypasses shell pipelines; spawning as child with pipe is the only reliable capture method |
+| Script architecture | Wrapper spawns dev-https.js or server/index.js | Keeps HTTPS logic separate (monkey-patches http.createServer), log capture is orthogonal |
+| Watch mode | Only for --no-https | dev-https.js monkey-patches http.createServer once; --watch restart would re-patch incorrectly |
 
 ---
 
