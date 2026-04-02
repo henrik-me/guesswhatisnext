@@ -23,6 +23,8 @@ const config = {
   DB_BACKEND: process.env.DATABASE_URL ? 'mssql' : 'sqlite',
   DATABASE_URL: process.env.DATABASE_URL || null,
   APPLICATIONINSIGHTS_CONNECTION_STRING: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING || '',
+  FEATURE_SUBMIT_PUZZLE_PERCENTAGE: process.env.FEATURE_SUBMIT_PUZZLE_PERCENTAGE || '0',
+  FEATURE_SUBMIT_PUZZLE_USERS: process.env.FEATURE_SUBMIT_PUZZLE_USERS || '',
   LOG_LEVEL: (() => {
     const VALID_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'];
     const raw = (process.env.LOG_LEVEL || '').trim().toLowerCase();

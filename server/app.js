@@ -18,6 +18,7 @@ const scoreRoutes = require('./routes/scores');
 const matchRoutes = require('./routes/matches');
 const puzzleRoutes = require('./routes/puzzles');
 const achievementRoutes = require('./routes/achievements');
+const featureRoutes = require('./routes/features');
 const submissionRoutes = require('./routes/submissions');
 const userRoutes = require('./routes/users');
 const telemetryRoutes = require('./routes/telemetry');
@@ -190,6 +191,7 @@ function createServer() {
   app.use('/api/matches', matchRoutes);
   app.use('/api/puzzles', puzzleRoutes);
   app.use('/api/achievements', achievementRoutes);
+  app.use('/api/features', featureRoutes);
   app.use('/api/submissions', submissionRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/telemetry', telemetryRoutes);

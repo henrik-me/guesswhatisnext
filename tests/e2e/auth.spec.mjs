@@ -37,14 +37,13 @@ test.describe('Authentication', () => {
     await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
   });
 
-  test('submit puzzle button stays hidden after registration', async ({ page }) => {
+  test('submit puzzle button stays hidden by default after registration', async ({ page }) => {
     const username = uniqueUser();
     const password = 'testpass123';
 
     await page.goto('/');
     await page.click('[data-action="start-multiplayer"]');
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
-
     await page.fill('#auth-username', username);
     await page.fill('#auth-password', password);
     await page.click('[data-action="auth-register"]');
