@@ -503,6 +503,12 @@ Background agents **must** report progress to the orchestrating agent:
 - **On review loop:** "Task X: Copilot review round <N> — fixing <count> issues"
 - **On ready:** "Task X: PR #<N> ready for merge (Copilot approved, CI green)"
 
+The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently:
+- Poll background agents periodically and report milestone updates
+- Relay key status changes: validation passed, PR created, review in progress, ready for merge
+- When multiple tasks run in parallel, provide a summary table of all task statuses
+- On completion, report the result and ask for next steps (e.g., "Shall I merge?")
+
 The orchestrating agent **waits for "ready for merge"** before merging and must not proceed with dependent work until the PR is merged and `main` is pulled.
 
 ### Branch Strategy
