@@ -34,6 +34,7 @@ if (connectionString) {
   })
 
   sdk.start()
+    .catch((err) => console.error('OpenTelemetry failed to start', err))
 
   // Graceful shutdown — flush pending spans before process exits
   const shutdown = () => {

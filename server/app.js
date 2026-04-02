@@ -287,7 +287,7 @@ function createServer() {
         method: req.method,
         url: req.originalUrl || req.url,
         requestId: req.id,
-        remoteAddress: req.ip || (req.connection && req.connection.remoteAddress),
+        remoteAddress: req.ip || (req.socket && req.socket.remoteAddress),
       },
       'Unhandled request error'
     );

@@ -199,12 +199,14 @@ describe('Logger configuration', () => {
       process.env.LOG_LEVEL = 'silent';
       clearServerCache();
       const logger = require('../server/logger');
-      // Pino stores transport config internally; check via stream type
+      const streamSym = Object.getOwnPropertySymbols(logger)
+        .find(s => s.toString() === 'Symbol(pino.stream)');
+      const streamName = streamSym ? logger[streamSym]?.constructor?.name : undefined;
       if (shouldHaveTransport) {
-        // Dev logger wraps pino-pretty; it won't have a simple fd destination
-        expect(logger[Symbol.for('pino.serializers')]).toBeDefined();
+        // pino-pretty transport creates a ThreadStream, not SonicBoom
+        expect(streamName).toBe('ThreadStream');
       } else {
-        expect(logger[Symbol.for('pino.serializers')]).toBeDefined();
+        expect(streamName).toBe('SonicBoom');
       }
       clearServerCache();
     }

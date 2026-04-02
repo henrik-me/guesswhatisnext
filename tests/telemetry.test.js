@@ -73,7 +73,7 @@ describe('POST /api/telemetry/errors', () => {
     expect(res.status).toBe(204);
   });
 
-  test('truncates long message to 500 characters in response', async () => {
+  test('accepts and processes long messages without error', async () => {
     const longMsg = 'x'.repeat(1000);
     const res = await getAgent()
       .post('/api/telemetry/errors')
@@ -90,7 +90,7 @@ describe('POST /api/telemetry/errors', () => {
     expect(res.status).toBe(204);
   });
 
-  test('truncates stack to safe length', async () => {
+  test('accepts and processes long stack traces without error', async () => {
     const longStack = 'Error: boom\n' + '    at file.js:1:1\n'.repeat(500);
     const res = await getAgent()
       .post('/api/telemetry/errors')
