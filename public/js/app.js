@@ -998,7 +998,16 @@ function isFeatureEnabled(featureName) {
 }
 
 function getFeatureAwarePath(path) {
-  const query = window.location.search.replace(/^\?/, '');
+  const params = new URLSearchParams(window.location.search);
+  const featureParams = new URLSearchParams();
+
+  for (const [key, value] of params.entries()) {
+    if (key.startsWith('ff_')) {
+      featureParams.append(key, value);
+    }
+  }
+
+  const query = featureParams.toString();
   if (!query) return path;
   return `${path}${path.includes('?') ? '&' : '?'}${query}`;
 }
