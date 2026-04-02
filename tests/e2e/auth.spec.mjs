@@ -37,7 +37,7 @@ test.describe('Authentication', () => {
     await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
   });
 
-  test('submit puzzle button stays hidden after sign-in', async ({ page }) => {
+  test('submit puzzle button stays hidden after registration', async ({ page }) => {
     const username = uniqueUser();
     const password = 'testpass123';
 
