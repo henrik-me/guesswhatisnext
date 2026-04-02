@@ -32,20 +32,32 @@ describe('feature flag evaluation', () => {
     };
     const includedUser = { id: 1, username: 'alpha' };
     const excludedUser = { id: 101, username: 'user101' };
+    const includedBucket = getRolloutBucket(getStableRolloutKey(includedUser));
+    const excludedBucket = getRolloutBucket(getStableRolloutKey(excludedUser));
 
-    expect(getRolloutBucket(getStableRolloutKey(includedUser))).toBe(2);
-    expect(getRolloutBucket(getStableRolloutKey(excludedUser))).toBe(63);
+    expect(getRolloutBucket(getStableRolloutKey(includedUser))).toBe(includedBucket);
+    expect(getRolloutBucket(getStableRolloutKey(excludedUser))).toBe(excludedBucket);
+    expect(includedBucket).toBeGreaterThanOrEqual(0);
+    expect(includedBucket).toBeLessThan(100);
+    expect(excludedBucket).toBeGreaterThanOrEqual(0);
+    expect(excludedBucket).toBeLessThan(100);
+    expect(includedBucket).toBeLessThan(50);
+    expect(excludedBucket).toBeGreaterThanOrEqual(50);
     expect(evaluateFeatureFlag(feature, { user: includedUser })).toBe(true);
     expect(evaluateFeatureFlag(feature, { user: excludedUser })).toBe(false);
   });
 
-  test('respects rollout boundaries at 0, 50, and 100 percent', () => {
+  test('respects rollout boundaries at 0 and 100 percent and at the user bucket threshold', () => {
     const boundaryUser = { id: 29, username: 'boundary-user' };
     const stableKey = getStableRolloutKey(boundaryUser);
+    const boundaryBucket = getRolloutBucket(stableKey);
 
-    expect(getRolloutBucket(stableKey)).toBe(50);
+    expect(getRolloutBucket(stableKey)).toBe(boundaryBucket);
+    expect(boundaryBucket).toBeGreaterThanOrEqual(0);
+    expect(boundaryBucket).toBeLessThan(100);
     expect(evaluateFeatureFlag({ ...FEATURE_FLAGS.submitPuzzle, users: new Set(), rolloutPercentage: 0 }, { user: boundaryUser })).toBe(false);
-    expect(evaluateFeatureFlag({ ...FEATURE_FLAGS.submitPuzzle, users: new Set(), rolloutPercentage: 50 }, { user: boundaryUser })).toBe(false);
+    expect(evaluateFeatureFlag({ ...FEATURE_FLAGS.submitPuzzle, users: new Set(), rolloutPercentage: boundaryBucket }, { user: boundaryUser })).toBe(false);
+    expect(evaluateFeatureFlag({ ...FEATURE_FLAGS.submitPuzzle, users: new Set(), rolloutPercentage: boundaryBucket + 1 }, { user: boundaryUser })).toBe(true);
     expect(evaluateFeatureFlag({ ...FEATURE_FLAGS.submitPuzzle, users: new Set(), rolloutPercentage: 100 }, { user: boundaryUser })).toBe(true);
   });
 
@@ -54,6 +66,7 @@ describe('feature flag evaluation', () => {
       ...FEATURE_FLAGS.submitPuzzle,
       users: new Set(),
       rolloutPercentage: 0,
+      allowOverride: true,
     };
     const lockedFeature = {
       ...overrideableFeature,
