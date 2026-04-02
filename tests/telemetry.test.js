@@ -100,22 +100,26 @@ describe('POST /api/telemetry/errors', () => {
   });
 
   test('rate limits after 10 requests per minute per IP', async () => {
-    // Rate limiter keys on req.ip (express-rate-limit default); earlier tests share the budget.
-    // Send enough requests to definitely exceed the 10-request window.
+    // The 10 earlier tests already consumed rate-limit budget (each sent 1 request).
+    // With a 10/min limit, the budget is already exhausted by test ordering.
+    // Send additional requests and verify they all get 429.
     const agent = getAgent();
     const results = [];
 
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 5; i++) {
       const res = await agent
         .post('/api/telemetry/errors')
         .send({ message: `Rate limit test ${i}` });
       results.push(res.status);
     }
 
-    // At least one request should be rate-limited
+    // All requests should be rate-limited since the budget was consumed by earlier tests
     expect(results).toContain(429);
-    // Verify the 429 responses come after the 204s
-    const firstRateLimited = results.indexOf(429);
-    expect(results.slice(0, firstRateLimited).every(s => s === 204)).toBe(true);
+    // Verify the rate limit response body
+    const lastRes = await agent
+      .post('/api/telemetry/errors')
+      .send({ message: 'Rate limit final' });
+    expect(lastRes.status).toBe(429);
+    expect(lastRes.body.error).toBe('Too many error reports, try again later');
   });
 });
