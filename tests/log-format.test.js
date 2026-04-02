@@ -83,6 +83,7 @@ describe('Production log format', () => {
         clearTimeout(timeout);
         if (retryTimer) clearTimeout(retryTimer);
         child.off('exit', onExit);
+        child.off('error', onError);
       };
       const finish = (err) => {
         if (done) return;
@@ -92,6 +93,9 @@ describe('Production log format', () => {
       };
       const onExit = (code, signal) => {
         finish(new Error(`Server exited before ready (code: ${code}, signal: ${signal})`));
+      };
+      const onError = (err) => {
+        finish(err);
       };
 
       const timeout = setTimeout(() => finish(new Error('Server startup timeout')), 15000);
@@ -110,6 +114,7 @@ describe('Production log format', () => {
       };
 
       child.once('exit', onExit);
+      child.once('error', onError);
       retryTimer = setTimeout(checkReady, 1000);
     });
   }, 20000);
