@@ -27,13 +27,14 @@ router.post('/errors', errorReportLimiter, optionalAuth, (req, res) => {
 
   const errorContext = {
     clientError: true,
+    component: 'client',
     type: safeString(type, 50) || 'error',
     source: safeString(source, 500) || 'unknown',
     lineno: safeInt(lineno),
     colno: safeInt(colno),
     userId: req.user?.id || null,
     userAgent: req.headers['user-agent'],
-    ip: req.ip,
+    remoteAddress: req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : req.ip,
   };
 
   const truncatedStack = typeof stack === 'string' && stack.length > 0

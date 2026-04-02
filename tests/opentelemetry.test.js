@@ -3,15 +3,14 @@
  * and related config entries.
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'vitest'
-import path from 'path'
+const path = require('path');
 
 /** Clear all server modules from the require cache. */
 function clearServerCache() {
-  const serverDir = path.resolve(__dirname, '..', 'server')
+  const serverDir = path.resolve(__dirname, '..', 'server');
   for (const key of Object.keys(require.cache)) {
     if (key.startsWith(serverDir)) {
-      delete require.cache[key]
+      delete require.cache[key];
     }
   }
 }
