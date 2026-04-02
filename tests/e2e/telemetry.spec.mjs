@@ -154,6 +154,7 @@ test.describe('Client Error Telemetry', () => {
     const username = `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const regRes = await request.post('/api/auth/register', {
       data: { username, password: 'testpass123' },
+      headers: { 'X-Forwarded-For': '10.0.0.1' },
     });
     expect(regRes.ok()).toBeTruthy();
     const { token } = await regRes.json();
