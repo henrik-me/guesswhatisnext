@@ -138,19 +138,19 @@ guesswhatisnext/
 
 PR #91 introduces a central feature-flag module for staged rollouts of incomplete or limited-access features. This follow-up PR documents that design so reviewers know how the new rollout path is intended to work once PR #91 lands.
 
-- **Source of truth:** server-side evaluation per request; on the PR #91 branch the client mirrors flag state via `/api/features`, but guarded server routes still enforce the same flag
+- **Source of truth:** server-side evaluation per request; in branches that include PR #91, the client mirrors flag state via `/api/features`, but guarded server routes still enforce the same flag
 - **Evaluation order:** feature-specific request override (only if that feature opts in and the current environment allows it) → default state → explicit user targeting → deterministic percentage rollout → disabled
 - **Supported controls:** specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides
 - **Rollout stability:** percentage rollouts are deterministic per authenticated user so the same user consistently lands in or out of the rollout bucket across requests
 - **Override policy:** overrides are never global; each feature must explicitly opt in and define its own override names
 
-**`submitPuzzle` flag on PR #91**
+**`submitPuzzle` flag in branches that include PR #91**
 - Default-off / hidden by default
 - Can be enabled for explicit users and/or a rollout percentage
 - Allows request overrides only outside `production` and `staging`
 - Override names: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
 
-Until PR #91 merges, `main` does not yet contain the shared module or `/api/features` route. After it lands, prefer default-off, keep evaluation centralized, and document any override behavior explicitly so teammates can test safely without creating production bypasses.
+If your branch does not include PR #91 yet, it will not contain the shared module or `/api/features` route. In branches that do include it, prefer default-off, keep evaluation centralized, and document any override behavior explicitly so teammates can test safely without creating production bypasses.
 
 ### Multiplayer Architecture (Phase 4)
 
