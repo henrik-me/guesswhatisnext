@@ -448,7 +448,7 @@ Tests use Vitest with supertest for API and ws for WebSocket testing. Run with `
 
 ## 4. Logging Conventions
 
-The project uses **Pino** for structured JSON logging (`server/logger.js` singleton). All server code must use the logger — never `console.*` (except in `config.js` where the logger isn't available yet).
+The project uses **Pino** for structured JSON logging (`server/logger.js` singleton). All server code must use the logger — never `console.*` (except in `config.js` and `telemetry.js` where the logger isn't available due to load order).
 
 ### Log Levels
 
@@ -504,7 +504,7 @@ logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled reque
 
 ### Trace ID Correlation
 
-When OpenTelemetry is active (staging/production), the Pino mixin automatically attaches `traceId` and `spanId` to each log entry via the OTel context. This allows correlating logs with distributed traces in Azure Monitor / Application Insights.
+When OpenTelemetry is active (staging/production), the Pino mixin automatically attaches `trace_id` and `span_id` (snake_case) to each log entry via the OTel context. This allows correlating logs with distributed traces in Azure Monitor / Application Insights.
 
 - In development: no trace IDs (OTel SDK is not loaded)
 - In staging/production: trace IDs appear automatically on every request-scoped log line
@@ -518,7 +518,7 @@ The `POST /api/telemetry/errors` endpoint accepts client-side errors (no auth re
 - Optional fields: `type`, `source`, `lineno`, `colno`, `stack`
 - Logged at `warn` level with `{ component: 'client' }` context
 - Authenticated requests include `userId` in the log entry
-- Client JS hooks: `window.onerror` and `unhandledrejection` handlers report errors (max 10 per session)
+- Client JS hooks: `window.onerror` and `unhandledrejection` handlers report errors (max 10 per minute, sliding window)
 
 ### Request Logging
 

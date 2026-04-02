@@ -6,16 +6,19 @@
 // Client-side error reporting
 (function initErrorReporting() {
   const ERROR_ENDPOINT = '/api/telemetry/errors';
-  let errorCount = 0;
-  const MAX_ERRORS_PER_SESSION = 10;
+  const MAX_ERRORS_PER_MINUTE = 10;
+  const WINDOW_MS = 60000;
+  let errorTimestamps = [];
 
   function getAuthToken() {
     try { return localStorage.getItem('gwn_auth_token'); } catch { return null; }
   }
 
   function reportError(payload) {
-    if (errorCount >= MAX_ERRORS_PER_SESSION) return;
-    errorCount++;
+    const now = Date.now();
+    errorTimestamps = errorTimestamps.filter(t => now - t < WINDOW_MS);
+    if (errorTimestamps.length >= MAX_ERRORS_PER_MINUTE) return;
+    errorTimestamps.push(now);
     const token = getAuthToken();
     // Use fetch with auth when available; fall back to sendBeacon for anonymous
     if (token) {

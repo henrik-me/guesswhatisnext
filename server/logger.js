@@ -2,12 +2,16 @@ const pino = require('pino');
 const { config } = require('./config');
 
 /**
- * Build a Pino mixin that injects OpenTelemetry trace context (traceId,
- * spanId) into every log entry when OTel is active.  Gracefully returns an
- * empty object when @opentelemetry/api is not installed or no active span
- * exists.
+ * Build a Pino mixin that injects OpenTelemetry trace context (trace_id,
+ * span_id) into every log entry when OTel is active.  Returns undefined
+ * when @opentelemetry/api is not installed so the caller can skip setting
+ * the mixin entirely.  Returns {} for individual calls with no active span.
+ *
+ * Uses snake_case field names (trace_id/span_id) to align with common
+ * observability tool conventions (ELK, Azure Monitor custom dimensions).
  *
  * @param {object} [apiOverride] - Optional OTel API object (for testing).
+ * @returns {Function|undefined} Mixin function, or undefined if OTel unavailable.
  */
 function buildOtelMixin(apiOverride) {
   let api = apiOverride;
@@ -24,7 +28,7 @@ function buildOtelMixin(apiOverride) {
     if (!span) return {};
     const ctx = span.spanContext();
     if (!ctx || ctx.traceId === '00000000000000000000000000000000') return {};
-    return { traceId: ctx.traceId, spanId: ctx.spanId };
+    return { trace_id: ctx.traceId, span_id: ctx.spanId };
   };
 }
 
