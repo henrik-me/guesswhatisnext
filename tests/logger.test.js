@@ -29,16 +29,11 @@ function createCapturingLogger(overrides = {}) {
     },
   });
 
-  const redactPaths = [
-    'req.headers.authorization',
-    'req.headers.cookie',
-    'req.headers["x-api-key"]',
-    'req.headers["x-access-token"]',
-    'res.headers["set-cookie"]',
-  ];
+  // Import REDACT_PATHS from server/logger.js to stay in sync with production config
+  const { REDACT_PATHS } = require('../server/logger');
 
   const logger = pino(
-    { level: 'trace', redact: { paths: redactPaths, remove: true }, ...overrides },
+    { level: 'trace', redact: { paths: REDACT_PATHS, remove: true }, ...overrides },
     stream,
   );
   return { logger, lines };

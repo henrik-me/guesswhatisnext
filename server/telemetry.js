@@ -20,10 +20,9 @@ if (connectionString) {
     traceExporter,
     instrumentations: [
       getNodeAutoInstrumentations({
-        // Only enable HTTP and Express auto-instrumentation
         '@opentelemetry/instrumentation-http': { enabled: true },
         '@opentelemetry/instrumentation-express': { enabled: true },
-        // Disable noisy instrumentations we don't need yet
+        // Disable noisy/unnecessary instrumentations
         '@opentelemetry/instrumentation-fs': { enabled: false },
         '@opentelemetry/instrumentation-dns': { enabled: false },
         '@opentelemetry/instrumentation-net': { enabled: false },
