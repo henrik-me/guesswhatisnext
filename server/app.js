@@ -20,6 +20,7 @@ const puzzleRoutes = require('./routes/puzzles');
 const achievementRoutes = require('./routes/achievements');
 const submissionRoutes = require('./routes/submissions');
 const userRoutes = require('./routes/users');
+const telemetryRoutes = require('./routes/telemetry');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
@@ -99,18 +100,13 @@ function createServer() {
   app.use(securityHeaders);
 
   // Request logging (before body parsers for consistent access logs)
-  const pinoHttpOptions = config.NODE_ENV === 'test'
-    ? { logger, autoLogging: false }
-    : { logger, autoLogging: { ignore: (req) => req.path === '/api/health' || req.path === '/healthz' } };
-  app.use(pinoHttp(pinoHttpOptions));
-
-  // Middleware
   const staticExtensions = new Set(['.css', '.js', '.map', '.ico', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.woff2', '.ttf']);
   app.use(pinoHttp({
     logger,
-    autoLogging: process.env.NODE_ENV === 'test' ? false : {
+    autoLogging: config.NODE_ENV === 'test' ? false : {
       ignore: (req) => {
         if (req.path === '/api/health' || req.path === '/healthz') return true;
+        if (req.path.startsWith('/api/telemetry/')) return true;
         const dotIdx = req.path.lastIndexOf('.');
         return dotIdx !== -1 && staticExtensions.has(req.path.substring(dotIdx));
       },
@@ -123,7 +119,7 @@ function createServer() {
 
   // Request tracking middleware — gates API access on DB readiness
   app.use((req, res, next) => {
-    if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/')) return next();
+    if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/') || req.path.startsWith('/api/telemetry/')) return next();
 
     if (draining) {
       return res.status(503).json({ error: 'Server is draining', retryAfter: 5 });
@@ -151,6 +147,7 @@ function createServer() {
   app.use('/api/achievements', achievementRoutes);
   app.use('/api/submissions', submissionRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/telemetry', telemetryRoutes);
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, async (req, res, next) => {
