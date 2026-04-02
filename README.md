@@ -129,8 +129,14 @@ The container mounts `./data` for SQLite persistence and sets dev environment va
 ### Testing
 
 ```bash
-# Run all tests (66 tests across 11 suites)
+# Run unit + integration tests (vitest)
 npm test
+
+# Run E2E browser tests (Playwright)
+npm run test:e2e
+
+# Run everything (vitest + Playwright)
+npm run test:all
 
 # Watch mode (re-run on changes)
 npm run test:watch
