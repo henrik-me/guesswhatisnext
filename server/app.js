@@ -98,12 +98,14 @@ function createServer() {
   app.use(httpsRedirect);
   app.use(securityHeaders);
 
-  // Middleware
-  app.use(express.json());
+  // Request logging (before body parsers for consistent access logs)
   const pinoHttpOptions = config.NODE_ENV === 'test'
     ? { logger, autoLogging: false }
     : { logger, autoLogging: { ignore: (req) => req.path === '/api/health' || req.path === '/healthz' } };
   app.use(pinoHttp(pinoHttpOptions));
+
+  // Middleware
+  app.use(express.json());
 
   // Serve static files from public/
   app.use(express.static(path.join(__dirname, '..', 'public')));
