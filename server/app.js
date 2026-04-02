@@ -126,17 +126,19 @@ function createServer() {
         for (const [k, v] of Object.entries(req.headers || {})) {
           if (!DROP_REQ_HEADERS.has(k)) headers[k] = v;
         }
+        const remoteAddress = req.ip || req.socket?.remoteAddress;
+        const remotePort = req.socket?.remotePort;
         return {
           id: req.id, method: req.method, url: req.url,
-          query: req.query, params: req.params,
-          headers, remoteAddress: req.remoteAddress, remotePort: req.remotePort,
+          headers, remoteAddress, remotePort,
         };
       },
       res(res) {
-        const raw = res.headers || {};
+        const raw = res.getHeaders?.() || res.headers || {};
         const headers = {};
         for (const [k, v] of Object.entries(raw)) {
-          if (!DROP_RES_HEADERS.has(k)) headers[k] = v;
+          const key = String(k).toLowerCase();
+          if (!DROP_RES_HEADERS.has(key)) headers[key] = v;
         }
         return { statusCode: res.statusCode, headers };
       },

@@ -342,7 +342,7 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 | Full local testing | `npm run dev:full` | https://localhost:3443 | Production-like: HTTPS, security headers, log capture |
 | HTTP + logging | `npm run dev:log` | http://localhost:3000 | Log analysis without HTTPS overhead |
 
-**`dev:full` (recommended for manual testing)** starts an HTTPS server with self-signed certificates, all security headers active (CSP, HSTS, CORS), and captures structured logs to `telemetry.log`. An HTTP server on port 3080 redirects to HTTPS, verifying the redirect middleware.
+**`dev:full` (recommended for manual testing)** starts an HTTPS server with self-signed certificates, security headers active (including CSP, HSTS, and Permissions-Policy), and captures structured logs to `telemetry.log`. An HTTP server on port 3080 redirects to HTTPS, verifying the redirect middleware.
 
 All modes except `dev` capture logs to `telemetry.log` by default. Use `--no-log-file` to disable:
 ```bash

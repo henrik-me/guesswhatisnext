@@ -39,8 +39,12 @@ const outputArg = getFlagValue('--output');
 const logPath   = noLogFile ? null : path.resolve(outputArg || 'telemetry.log');
 
 // ── Default environment variables ───────────────────────────────────
-if (!process.env.JWT_SECRET)     process.env.JWT_SECRET     = 'dev-jwt-secret';
-if (!process.env.SYSTEM_API_KEY) process.env.SYSTEM_API_KEY = 'gwn-dev-system-key';
+// In HTTPS mode, defer JWT/API key defaults to scripts/dev-https.js,
+// which intentionally applies production-like values for some flows.
+if (noHttps) {
+  if (!process.env.JWT_SECRET)     process.env.JWT_SECRET     = 'dev-jwt-secret';
+  if (!process.env.SYSTEM_API_KEY) process.env.SYSTEM_API_KEY = 'gwn-dev-system-key';
+}
 if (!process.env.LOG_LEVEL)      process.env.LOG_LEVEL      = 'debug';
 
 // ── Build the child command ─────────────────────────────────────────
@@ -83,6 +87,10 @@ const child = spawn(process.execPath, nodeArgs, {
 let logStream = null;
 if (logPath) {
   logStream = fs.createWriteStream(logPath, { flags: 'w' });
+  logStream.on('error', (err) => {
+    console.warn(`⚠️  Failed to write log file "${logPath}": ${err.message}. Falling back to console-only logging.`);
+    logStream = null;
+  });
 }
 
 child.stdout.on('data', (chunk) => {
