@@ -28,7 +28,11 @@ function hasFlag(name) {
 
 function getFlagValue(name) {
   const idx = args.indexOf(name);
-  if (idx === -1 || idx + 1 >= args.length) return undefined;
+  if (idx === -1) return undefined;
+  if (idx + 1 >= args.length) {
+    console.error(`Expected a value after ${name}`);
+    process.exit(1);
+  }
   const val = args[idx + 1];
   if (val.startsWith('-')) {
     console.error(`Expected a value after ${name}, got "${val}"`);
