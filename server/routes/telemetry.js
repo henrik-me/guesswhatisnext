@@ -10,6 +10,7 @@ const errorReportLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : req.ip,
   message: { error: 'Too many error reports, try again later' },
 });
 
@@ -34,11 +35,14 @@ router.post('/errors', errorReportLimiter, optionalAuth, (req, res) => {
     ip: req.ip,
   };
 
-  logger.warn(errorContext, `Client error: ${message.substring(0, 500)}`);
+  const truncatedStack = typeof stack === 'string' && stack.length > 0
+    ? stack.substring(0, 2000)
+    : undefined;
 
-  if (typeof stack === 'string' && stack.length > 0) {
-    logger.debug({ clientError: true, stack: stack.substring(0, 2000) }, 'Client error stack trace');
-  }
+  logger.warn(
+    { ...errorContext, ...(truncatedStack ? { stack: truncatedStack } : {}) },
+    `Client error: ${message.substring(0, 500)}`
+  );
 
   res.status(204).end();
 });
