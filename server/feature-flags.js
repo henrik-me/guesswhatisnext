@@ -37,7 +37,7 @@ const FEATURE_FLAGS = Object.freeze({
     defaultEnabled: false,
     rolloutPercentage: clampRolloutPercentage(config.FEATURE_SUBMIT_PUZZLE_PERCENTAGE),
     users: parseUserList(config.FEATURE_SUBMIT_PUZZLE_USERS),
-    allowOverride: true,
+    allowOverride: config.NODE_ENV !== 'production' && config.NODE_ENV !== 'staging',
     overrideQueryParam: 'ff_submit_puzzle',
     overrideHeader: 'x-gwn-feature-submit-puzzle',
   }),

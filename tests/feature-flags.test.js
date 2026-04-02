@@ -15,6 +15,7 @@ describe('feature flag evaluation', () => {
       ...FEATURE_FLAGS.submitPuzzle,
       users: new Set(['target-user', '42']),
       rolloutPercentage: 0,
+      allowOverride: true,
     };
 
     expect(evaluateFeatureFlag(feature, { user: { id: 7, username: 'target-user' } })).toBe(true);
@@ -27,6 +28,7 @@ describe('feature flag evaluation', () => {
       ...FEATURE_FLAGS.submitPuzzle,
       users: new Set(),
       rolloutPercentage: 50,
+      allowOverride: true,
     };
     const includedUser = { id: 1, username: 'alpha' };
     const excludedUser = { id: 101, username: 'user101' };
