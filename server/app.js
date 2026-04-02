@@ -100,7 +100,7 @@ function createServer() {
 
   // Middleware
   app.use(express.json());
-  app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/api/health' } }));
+  app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.path === '/api/health' || req.path === '/healthz' } }));
 
   // Serve static files from public/
   app.use(express.static(path.join(__dirname, '..', 'public')));
