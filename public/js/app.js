@@ -8,6 +8,63 @@ import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
 
+// Client-side error reporting (IIFE keeps internals private)
+(function initErrorReporting() {
+  const ERROR_ENDPOINT = '/api/telemetry/errors';
+  const MAX_ERRORS_PER_MINUTE = 10;
+  const WINDOW_MS = 60000;
+  let errorTimestamps = [];
+
+  function getAuthToken() {
+    try { return localStorage.getItem('gwn_auth_token'); } catch { return null; }
+  }
+
+  function reportError(payload) {
+    const now = Date.now();
+    errorTimestamps = errorTimestamps.filter(t => now - t < WINDOW_MS);
+    if (errorTimestamps.length >= MAX_ERRORS_PER_MINUTE) return;
+    errorTimestamps.push(now);
+    const token = getAuthToken();
+    // Use fetch with auth when available; fall back to sendBeacon for anonymous
+    if (token) {
+      fetch(ERROR_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => {}); // Swallow — error reporting must never break the app
+    } else if (navigator.sendBeacon) {
+      navigator.sendBeacon(ERROR_ENDPOINT, new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+    } else {
+      fetch(ERROR_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+  }
+
+  window.addEventListener('error', (event) => {
+    reportError({
+      message: event.message,
+      source: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      stack: event.error?.stack,
+      type: 'error',
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    reportError({
+      message: reason?.message || String(reason),
+      stack: reason?.stack,
+      type: 'unhandledrejection',
+    });
+  });
+})();
+
 const screens = {};
 
 /** Currently selected difficulty for free-play. */

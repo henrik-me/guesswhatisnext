@@ -9,6 +9,7 @@
  */
 
 const MIGRATIONS_TABLE = '_migrations';
+const logger = require('../../logger');
 
 /**
  * Ensure the migrations tracking table exists.
@@ -70,7 +71,7 @@ async function runMigrations(db, migrations) {
         [migration.version, migration.name]
       );
     });
-    console.log(`📦 Migration ${migration.version} applied: ${migration.name}`);
+    logger.info({ version: migration.version, name: migration.name }, 'Migration applied');
   }
 
   return pending.length;

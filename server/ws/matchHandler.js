@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth');
 const { getDbAdapter } = require('../db');
 const { checkAndUnlockAchievements } = require('../achievements');
+const logger = require('../logger');
 
 /** Active rooms: Map<roomCode, RoomState> */
 const rooms = new Map();
@@ -84,6 +85,8 @@ function initWebSocket(server, isReady) {
     ws.isAlive = true;
     ws._msgQueue = Promise.resolve();
 
+    logger.info({ userId: user.id }, 'Player connected to WebSocket');
+
     ws.on('pong', () => { ws.isAlive = true; });
 
     ws.on('message', (data) => {
@@ -100,7 +103,7 @@ function initWebSocket(server, isReady) {
         }
         return handleMessage(ws, msg);
       }).catch((err) => {
-        console.error('WebSocket handler error:', err);
+        logger.error({ err }, 'WebSocket handler error');
         if (ws.readyState === 1) {
           ws.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
         }
@@ -139,7 +142,7 @@ function initWebSocket(server, isReady) {
     clearInterval(roomCleanup);
   });
 
-  console.log('🔌 WebSocket server ready on /ws');
+  logger.info('WebSocket server ready on /ws');
   return wss;
 }
 
@@ -196,6 +199,8 @@ async function handleJoin(ws, roomCode) {
       room.droppedPlayers.delete(ws.user.id);
       ws.isSpectator = false;
 
+      logger.info({ userId: ws.user.id, roomCode: code }, 'Player reconnected');
+
       sendReconnectState(ws, code, room);
       return;
     }
@@ -244,6 +249,7 @@ async function handleJoin(ws, roomCode) {
       try { oldWs.close(); } catch { /* ignore stale socket */ }
       room.players.set(ws.user.id, ws);
       ws.isSpectator = false;
+      logger.info({ userId: ws.user.id, roomCode: code }, 'Player reconnected');
       sendReconnectState(ws, code, room);
       return;
     }
@@ -256,6 +262,7 @@ async function handleJoin(ws, roomCode) {
       room.players.set(ws.user.id, ws);
       room.droppedPlayers.delete(ws.user.id);
       ws.isSpectator = false;
+      logger.info({ userId: ws.user.id, roomCode: code }, 'Player reconnected');
       sendReconnectState(ws, code, room);
       return;
     }
@@ -440,13 +447,15 @@ async function startMatch(roomCode) {
     room.puzzles = await selectRandomPuzzles(room.totalRounds);
   } catch (err) {
     room.starting = false;
-    console.error(`Failed to load puzzles for room ${roomCode}:`, err);
+    logger.error({ err, roomCode }, 'Failed to load puzzles for room');
     broadcastToRoom(roomCode, { type: 'error', message: 'Failed to load puzzles. Please try again.' });
     cleanupRoom(roomCode);
     return;
   }
   room.started = true;
   room.starting = false;
+
+  logger.info({ roomCode, playerCount: room.players.size }, 'Match started');
 
   // Build player name list
   const playerNames = [];
@@ -615,6 +624,8 @@ async function endMatch(roomCode) {
   const room = rooms.get(roomCode);
   if (!room) return;
 
+  logger.info({ roomCode, playerCount: room.players.size + room.droppedPlayers.size }, 'Match ended');
+
   // Collect scores for all players (active + dropped)
   const userScores = [];
   room.players.forEach((ws, userId) => {
@@ -770,6 +781,11 @@ async function handleDisconnect(ws) {
     return;
   }
 
+  // Ignore stale socket close events (e.g. after reconnect replaced this socket)
+  if (room.players.get(ws.user.id) !== ws) return;
+
+  logger.info({ userId: ws.user.id, roomCode }, 'Player disconnected');
+
   // If match is active, track as dropped and give reconnect window
   if (room.started) {
     room.players.delete(ws.user.id);
@@ -804,6 +820,7 @@ async function handleDisconnect(ws) {
     const forfeitTimer = setTimeout(async () => {
       try {
         disconnected.delete(dcKey);
+        logger.warn({ userId: ws.user.id, roomCode }, 'Player dropped after reconnect timeout');
         // Player didn't reconnect — they stay as dropped.
 
         // Host transfer if the disconnected player was host
@@ -815,6 +832,7 @@ async function handleDisconnect(ws) {
             const db = await getDbAdapter();
             await db.run('UPDATE matches SET host_user_id = ? WHERE room_code = ?', [newHostId, roomCode]);
           } catch { /* non-fatal */ }
+          logger.info({ roomCode, newHostId }, 'Host transferred');
           broadcastToRoom(roomCode, {
             type: 'host-transferred',
             newHost: currentRoom.players.get(newHostId).user.username,
@@ -823,6 +841,7 @@ async function handleDisconnect(ws) {
 
         // Notify remaining players that the player has been removed
         if (currentRoom && currentRoom.started) {
+          logger.info({ userId: ws.user.id, roomCode }, 'Player forfeited');
           broadcastToRoom(roomCode, {
             type: 'player-forfeited',
             username: ws.user.username,
@@ -866,6 +885,8 @@ async function handleDisconnect(ws) {
     } catch {
       // Non-fatal
     }
+
+    logger.info({ roomCode, newHostId }, 'Host transferred');
 
     // If in rematch setup, also transfer host in finishedRooms and notify
     const finished = finishedRooms.get(roomCode);

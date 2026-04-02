@@ -7,8 +7,14 @@ const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { getDbAdapter } = require('../db');
 const { generateToken, requireAuth } = require('../middleware/auth');
+const logger = require('../logger');
 
 const router = express.Router();
+
+const rateLimitHandler = (req, res, _next, options) => {
+  logger.warn({ ip: req.ip }, 'Auth rate limit exceeded');
+  res.status(options.statusCode).json(options.message);
+};
 
 const registerBurstLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -16,6 +22,7 @@ const registerBurstLimiter = rateLimit({
   message: { error: 'Too many registration attempts, try again in a minute' },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: rateLimitHandler,
 });
 
 const registerHourlyLimiter = rateLimit({
@@ -24,6 +31,7 @@ const registerHourlyLimiter = rateLimit({
   message: { error: 'Hourly registration limit reached, try again later' },
   standardHeaders: false,
   legacyHeaders: false,
+  handler: rateLimitHandler,
 });
 
 const registerDailyLimiter = rateLimit({
@@ -32,6 +40,7 @@ const registerDailyLimiter = rateLimit({
   message: { error: 'Daily registration limit reached, try again tomorrow' },
   standardHeaders: false,
   legacyHeaders: false,
+  handler: rateLimitHandler,
 });
 
 const loginLimiter = rateLimit({
@@ -40,6 +49,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts, try again in a minute' },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: rateLimitHandler,
 });
 
 /** POST /api/auth/register */
@@ -70,6 +80,8 @@ router.post('/register', registerDailyLimiter, registerHourlyLimiter, registerBu
     const user = { id: result.lastId, username, role: 'user' };
     const token = generateToken(user);
 
+    logger.info({ username }, 'User registered');
+
     res.status(201).json({ user: { id: user.id, username, role: 'user' }, token });
   } catch (err) {
     next(err);
@@ -88,11 +100,17 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     const db = await getDbAdapter();
     const user = await db.get('SELECT id, username, password_hash, role FROM users WHERE username = ?', [username]);
 
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    if (!user) {
+      logger.warn({ username }, 'Login failed: user not found');
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+    if (!bcrypt.compareSync(password, user.password_hash)) {
+      logger.warn({ username }, 'Login failed: invalid password');
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
     const token = generateToken({ id: user.id, username: user.username, role: user.role });
+    logger.info({ username: user.username, userId: user.id }, 'User logged in');
     res.json({ user: { id: user.id, username: user.username, role: user.role }, token });
   } catch (err) {
     next(err);
