@@ -71,9 +71,9 @@ console.log('┌─────────────────────�
 console.log('│          dev-server.js launcher           │');
 console.log('├──────────────────────────────────────────┤');
 console.log(`│  Mode:     ${noHttps ? 'HTTP (plain)' : 'HTTPS (production-like)'}${' '.repeat(noHttps ? 16 : 9)}│`);
-console.log(`│  URL:      ${protocol}://localhost:${port}${' '.repeat(28 - protocol.length - port.length)}│`);
+console.log(`│  URL:      ${protocol}://localhost:${port}${' '.repeat(Math.max(0, 28 - protocol.length - port.length))}│`);
 console.log(`│  Log file: ${logPath ? path.relative(process.cwd(), logPath) : '(disabled)'}${' '.repeat(Math.max(0, 28 - (logPath ? path.relative(process.cwd(), logPath).length : 10)))}│`);
-console.log(`│  Watch:    ${watch && noHttps ? 'enabled' : 'disabled'}${' '.repeat(28 - (watch && noHttps ? 7 : 8))}│`);
+console.log(`│  Watch:    ${watch && noHttps ? 'enabled' : 'disabled'}${' '.repeat(Math.max(0, 28 - (watch && noHttps ? 7 : 8)))}│`);
 console.log('└──────────────────────────────────────────┘');
 console.log('');
 
@@ -111,11 +111,26 @@ child.stderr.on('data', (chunk) => {
   if (logStream) logStream.write(chunk);
 });
 
-child.on('exit', (code) => {
+const forwardSigint = () => child.kill('SIGINT');
+const forwardSigterm = () => child.kill('SIGTERM');
+
+child.on('exit', (code, signal) => {
   if (logStream) logStream.end();
-  process.exit(code ?? 1);
+
+  if (code !== null) {
+    process.exit(code);
+  }
+
+  if (signal) {
+    process.removeListener('SIGINT', forwardSigint);
+    process.removeListener('SIGTERM', forwardSigterm);
+    process.kill(process.pid, signal);
+    return;
+  }
+
+  process.exit(1);
 });
 
 // Forward signals to child
-process.on('SIGINT', () => child.kill('SIGINT'));
-process.on('SIGTERM', () => child.kill('SIGTERM'));
+process.on('SIGINT', forwardSigint);
+process.on('SIGTERM', forwardSigterm);
