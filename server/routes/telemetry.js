@@ -4,6 +4,17 @@ const { optionalAuth } = require('../middleware/auth');
 const logger = require('../logger');
 
 const router = express.Router();
+const telemetryJsonParser = express.json({ type: 'application/json' });
+
+function parseTelemetryJson(req, res, next) {
+  telemetryJsonParser(req, res, (err) => {
+    if (!err) return next();
+    if (err.type === 'entity.parse.failed' || err instanceof SyntaxError) {
+      return res.status(400).json({ error: 'Malformed JSON body' });
+    }
+    return next(err);
+  });
+}
 
 const errorReportLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -14,7 +25,7 @@ const errorReportLimiter = rateLimit({
   message: { error: 'Too many error reports, try again later' },
 });
 
-router.post('/errors', errorReportLimiter, optionalAuth, (req, res) => {
+router.post('/errors', errorReportLimiter, optionalAuth, parseTelemetryJson, (req, res) => {
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
     ? req.body
     : {};

@@ -55,7 +55,27 @@ describe('POST /api/telemetry/errors', () => {
       .send('{"message"');
 
     expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty('error');
+    expect(res.body.error).toBe('Malformed JSON body');
+  });
+
+  test('rate limits malformed JSON bodies after 10 requests per minute per IP', async () => {
+    const agent = getAgent();
+    const responses = [];
+    const rateLimitedIp = '198.51.100.43';
+
+    for (let i = 0; i < 11; i++) {
+      const res = await agent
+        .post('/api/telemetry/errors')
+        .set('Content-Type', 'application/json')
+        .set('X-Forwarded-For', rateLimitedIp)
+        .send('{"message"');
+      responses.push(res);
+    }
+
+    expect(responses.slice(0, 10).map((res) => res.status)).toEqual(new Array(10).fill(400));
+    expect(responses.slice(0, 10).every((res) => res.body.error === 'Malformed JSON body')).toBe(true);
+    expect(responses[10].status).toBe(429);
+    expect(responses[10].body.error).toBe('Too many error reports, try again later');
   });
 
   test('accepts error with stack trace', async () => {

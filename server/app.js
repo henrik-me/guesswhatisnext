@@ -112,7 +112,11 @@ function createServer() {
       },
     },
   }));
-  app.use(express.json());
+  const defaultJsonParser = express.json();
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/telemetry/')) return next();
+    return defaultJsonParser(req, res, next);
+  });
 
   // Serve static files from public/
   app.use(express.static(path.join(__dirname, '..', 'public')));
