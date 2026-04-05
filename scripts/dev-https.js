@@ -4,8 +4,8 @@
  *
  * Starts two listeners:
  *   - HTTPS on port 3443 (self-signed cert, generated on the fly)
- *   - HTTP  on port 3080 → sets X-Forwarded-Proto: http so the app's
- *     httpsRedirect middleware fires the 308 redirect.
+ *   - HTTP  on port 3080 → 308 redirect to HTTPS (handled directly,
+ *     independent of NODE_ENV).
  *
  * Usage:
  *   node scripts/dev-https.js
