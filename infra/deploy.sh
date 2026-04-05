@@ -184,6 +184,8 @@ resolve_shared_secret() {
 ensure_azure_login() {
   SUBSCRIPTION_ID="$(az account show --query id -o tsv 2>/dev/null || true)"
   TENANT_ID="$(az account show --query tenantId -o tsv 2>/dev/null || true)"
+  SUBSCRIPTION_ID="$(sanitize_tsv_value "$SUBSCRIPTION_ID")"
+  TENANT_ID="$(sanitize_tsv_value "$TENANT_ID")"
 
   if [ -z "$SUBSCRIPTION_ID" ] || [ -z "$TENANT_ID" ]; then
     echo "Error: not logged in to Azure. Run 'az login' first." >&2
@@ -213,6 +215,7 @@ ensure_service_principal() {
 
   if [ -z "$app_id" ]; then
     app_id="$(az ad app create --display-name "$SERVICE_PRINCIPAL_NAME" --query appId -o tsv)"
+    app_id="$(sanitize_tsv_value "$app_id")"
     log_success "Created Entra application $SERVICE_PRINCIPAL_NAME"
   else
     log_info "Using existing Entra application $SERVICE_PRINCIPAL_NAME"
@@ -226,6 +229,7 @@ ensure_service_principal() {
   fi
 
   sp_object_id="$(az ad sp show --id "$app_id" --query id -o tsv)"
+  sp_object_id="$(sanitize_tsv_value "$sp_object_id")"
   role_count="$(az role assignment list --assignee-object-id "$sp_object_id" --scope "$RESOURCE_SCOPE" --query "[?roleDefinitionName=='Contributor'] | length(@)" -o tsv 2>/dev/null || echo 0)"
   role_count="$(sanitize_tsv_value "$role_count")"
   role_count="${role_count:-0}"
@@ -243,6 +247,7 @@ ensure_service_principal() {
   fi
 
   client_secret="$(az ad app credential reset --id "$app_id" --display-name "${SERVICE_PRINCIPAL_NAME}-github-actions" --query password -o tsv)"
+  client_secret="$(sanitize_tsv_value "$client_secret")"
   AZURE_CREDENTIALS_JSON="$(node -e "const [clientId, clientSecret, subscriptionId, tenantId] = process.argv.slice(1); process.stdout.write(JSON.stringify({ clientId, clientSecret, subscriptionId, tenantId, activeDirectoryEndpointUrl: 'https://login.microsoftonline.com', resourceManagerEndpointUrl: 'https://management.azure.com/', activeDirectoryGraphResourceId: 'https://graph.windows.net/', sqlManagementEndpointUrl: 'https://management.core.windows.net:8443/', galleryEndpointUrl: 'https://gallery.azure.com/', managementEndpointUrl: 'https://management.core.windows.net/' }));" "$app_id" "$client_secret" "$SUBSCRIPTION_ID" "$TENANT_ID")"
   log_success "Refreshed service principal credentials"
 }
