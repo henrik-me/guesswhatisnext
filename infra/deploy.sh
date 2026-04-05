@@ -467,14 +467,14 @@ fi
 
 if [ -n "$STAGING_HOST" ]; then
   log_step "Configuring $STAGING_APP_NAME..."
-  update_container_app_runtime "$STAGING_APP_NAME" staging "$STAGING_HOST" "${STAGING_IMAGE:-$PLACEHOLDER_IMAGE}"
+  update_container_app_runtime "$STAGING_APP_NAME" staging "$STAGING_HOST" "$STAGING_IMAGE"
 else
   log_warn "Could not determine staging CANONICAL_HOST; leaving $STAGING_APP_NAME unchanged"
 fi
 
 if [ -n "$PRODUCTION_HOST" ]; then
   log_step "Configuring $PRODUCTION_APP_NAME..."
-  update_container_app_runtime "$PRODUCTION_APP_NAME" production "$PRODUCTION_HOST" "${PRODUCTION_IMAGE:-$PLACEHOLDER_IMAGE}"
+  update_container_app_runtime "$PRODUCTION_APP_NAME" production "$PRODUCTION_HOST" "$PRODUCTION_IMAGE"
 else
   log_warn "Could not determine production CANONICAL_HOST; leaving $PRODUCTION_APP_NAME unchanged"
 fi

@@ -566,7 +566,7 @@ if ($GhcrPatValue) {
 
 if ($StagingHost) {
     Write-Step "Configuring $StagingAppName..."
-    Update-ContainerAppRuntime -AppName $StagingAppName -NodeEnv 'staging' -CanonicalHost $StagingHost -Image $(if ($StagingImage) { $StagingImage } else { $PlaceholderImage })
+    Update-ContainerAppRuntime -AppName $StagingAppName -NodeEnv 'staging' -CanonicalHost $StagingHost -Image $StagingImage
 }
 else {
     Write-WarnMessage "Could not determine staging CANONICAL_HOST; leaving $StagingAppName unchanged"
@@ -574,7 +574,7 @@ else {
 
 if ($ProductionHost) {
     Write-Step "Configuring $ProductionAppName..."
-    Update-ContainerAppRuntime -AppName $ProductionAppName -NodeEnv 'production' -CanonicalHost $ProductionHost -Image $(if ($ProductionImage) { $ProductionImage } else { $PlaceholderImage })
+    Update-ContainerAppRuntime -AppName $ProductionAppName -NodeEnv 'production' -CanonicalHost $ProductionHost -Image $ProductionImage
 }
 else {
     Write-WarnMessage "Could not determine production CANONICAL_HOST; leaving $ProductionAppName unchanged"
