@@ -10,7 +10,8 @@ const router = express.Router();
 router.get('/', optionalAuth, (req, res) => {
   const features = getFeatureFlags(req);
   const userId = req.user ? req.user.id : null;
-  logger.info({ features, userId }, 'feature flags requested');
+  const featureCount = Object.keys(features).length;
+  logger.debug({ userId, featureCount }, 'feature flags requested');
   res.json({ features });
 });
 

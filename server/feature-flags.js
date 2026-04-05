@@ -3,7 +3,7 @@
 const { config } = require('./config');
 const logger = require('./logger');
 
-const ENABLED_OVERRIDE_VALUES= new Set(['1', 'true', 'yes', 'on', 'enable', 'enabled']);
+const ENABLED_OVERRIDE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enable', 'enabled']);
 const DISABLED_OVERRIDE_VALUES = new Set(['0', 'false', 'no', 'off', 'disable', 'disabled']);
 
 function clampRolloutPercentage(value) {
@@ -125,7 +125,7 @@ function evaluateFeatureFlag(feature, req = {}) {
       reason = 'rollout';
     } else {
       enabled = false;
-      reason = 'default-off';
+      reason = 'rollout-miss';
     }
   } else {
     enabled = false;
