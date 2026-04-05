@@ -144,7 +144,7 @@ Every Copilot review comment thread must be replied to with a meaningful message
 | 49 | Puzzle expansion (200+) | ✅ Done | — | AI-assisted generation, broader categories. 504 puzzles in DB. |
 | 50 | Community puzzle submissions | ✅ Done | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 sequential (42 now done). Phase 7 done. Phase 8 all done. Phase 9 done. In Phase 10, the only remaining item is task 56.
+**Parallelism:** Phase 6 sequential (42 now done). Phase 7 done. Phase 8 all done. Phase 9 done. Phase 10 is now complete.
 
 ## Phase 10 — CI/CD Pipeline Rework
 
@@ -155,7 +155,7 @@ Every Copilot review comment thread must be replied to with a meaningful message
 | 53 | Remove push-to-main deploy pipeline | ✅ Done | 52 | ci-cd.yml gutted to disabled placeholder; push to main no longer triggers any deployment |
 | 54 | Staging deploy on merge | ✅ Done | 53 | New staging-deploy.yml: triggers on push to main, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, fast-forwards release/staging, then (with manual approval) deploys to Azure staging |
 | 55 | Manual production deploy workflow | ✅ Done | 54 | prod-deploy.yml: manual workflow_dispatch with image tag + confirmation, validates image exists in GHCR, deploys to production environment (with approval gate), runs health verification, auto-rollback on failure (PR #21) |
-| 56 | Unified infra setup script | ⬜ Pending | 55 | Merge deploy.sh + setup-github.sh into one script: auto-generates secrets, creates Azure service principal, sets all GitHub secrets/variables, runs verification health check |
+| 56 | Unified infra setup script | ✅ Done | 55 | `infra/deploy.*` now provisions Azure, configures GitHub secrets/vars, and runs verification health checks; `setup-github.*` kept as compatibility wrappers |
 
 ### Phase 10b — SQLite on Azure Files SMB Fix (COMPLETE)
 
