@@ -117,6 +117,7 @@ new_secure_secret() {
 
 sanitize_tsv_value() {
   local value="$1"
+  value="${value//$'\r'/}"
   if [ "$value" = "None" ] || [ "$value" = "null" ]; then
     printf ''
   else

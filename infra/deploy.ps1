@@ -93,7 +93,7 @@ function Set-GhSecret {
         [string]$Value
     )
 
-    $Value | gh secret set $Name --repo $TargetRepo | Out-Null
+    gh secret set $Name --repo $TargetRepo --body $Value | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to set GitHub secret $Name"
     }
