@@ -485,7 +485,6 @@ function Invoke-VerificationHealthCheck {
         return 'skipped'
     }
 
-    Require-Command curl
     Ensure-ContainerAppRunning $AppName
 
     Write-Step "Running $Label health check..."
