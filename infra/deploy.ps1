@@ -413,17 +413,23 @@ function Update-ContainerAppRuntime {
         [string]$Image
     )
 
+    $envVars = @(
+        "NODE_ENV=$NodeEnv",
+        'PORT=3000',
+        'GWN_DB_PATH=/tmp/game.db',
+        "JWT_SECRET=$($script:JwtSecret)",
+        "SYSTEM_API_KEY=$($script:SystemApiKey)"
+    )
+    if ($CanonicalHost) {
+        $envVars += "CANONICAL_HOST=$CanonicalHost"
+    }
+
     $arguments = @(
         'containerapp', 'update',
         '--name', $AppName,
         '--resource-group', $ResourceGroup,
         '--set-env-vars',
-        "NODE_ENV=$NodeEnv",
-        'PORT=3000',
-        'GWN_DB_PATH=/tmp/game.db',
-        "JWT_SECRET=$($script:JwtSecret)",
-        "SYSTEM_API_KEY=$($script:SystemApiKey)",
-        "CANONICAL_HOST=$CanonicalHost",
+        $envVars,
         '--output', 'none'
     )
 
@@ -549,6 +555,12 @@ $StagingHostOverride = Get-EnvValue 'CANONICAL_HOST'
 $ProductionHostOverride = Get-EnvValue 'PRODUCTION_CANONICAL_HOST'
 $StagingHost = if ($StagingHostOverride) { $StagingHostOverride } else { Get-HostFromUrl $StagingUrl }
 $ProductionHost = if ($ProductionHostOverride) { $ProductionHostOverride } else { Get-HostFromUrl $ProdUrl }
+if (-not $StagingHost) {
+    $StagingHost = Get-AppEnvValue $StagingAppName 'CANONICAL_HOST'
+}
+if (-not $ProductionHost) {
+    $ProductionHost = Get-AppEnvValue $ProductionAppName 'CANONICAL_HOST'
+}
 
 $StagingImage = Get-AppImage $StagingAppName
 $ProductionImage = Get-AppImage $ProductionAppName
@@ -564,21 +576,17 @@ if ($GhcrPatValue) {
     }
 }
 
-if ($StagingHost) {
-    Write-Step "Configuring $StagingAppName..."
-    Update-ContainerAppRuntime -AppName $StagingAppName -NodeEnv 'staging' -CanonicalHost $StagingHost -Image $StagingImage
+Write-Step "Configuring $StagingAppName..."
+if (-not $StagingHost) {
+    Write-WarnMessage "Could not determine staging CANONICAL_HOST; updating runtime without changing it"
 }
-else {
-    Write-WarnMessage "Could not determine staging CANONICAL_HOST; leaving $StagingAppName unchanged"
-}
+Update-ContainerAppRuntime -AppName $StagingAppName -NodeEnv 'staging' -CanonicalHost $StagingHost -Image $StagingImage
 
-if ($ProductionHost) {
-    Write-Step "Configuring $ProductionAppName..."
-    Update-ContainerAppRuntime -AppName $ProductionAppName -NodeEnv 'production' -CanonicalHost $ProductionHost -Image $ProductionImage
+Write-Step "Configuring $ProductionAppName..."
+if (-not $ProductionHost) {
+    Write-WarnMessage "Could not determine production CANONICAL_HOST; updating runtime without changing it"
 }
-else {
-    Write-WarnMessage "Could not determine production CANONICAL_HOST; leaving $ProductionAppName unchanged"
-}
+Update-ContainerAppRuntime -AppName $ProductionAppName -NodeEnv 'production' -CanonicalHost $ProductionHost -Image $ProductionImage
 
 Write-Step 'Configuring GitHub repository settings...'
 Ensure-ServicePrincipal

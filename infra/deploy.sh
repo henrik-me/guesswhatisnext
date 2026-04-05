@@ -332,17 +332,22 @@ update_container_app_runtime() {
   local node_env="$2"
   local canonical_host="$3"
   local image="$4"
+  local env_vars=(
+    "NODE_ENV=$node_env"
+    "PORT=3000"
+    "GWN_DB_PATH=/tmp/game.db"
+    "JWT_SECRET=$JWT_SECRET"
+    "SYSTEM_API_KEY=$SYSTEM_API_KEY"
+  )
+  if [ -n "$canonical_host" ]; then
+    env_vars+=("CANONICAL_HOST=$canonical_host")
+  fi
   local command=(
     az containerapp update
     --name "$app_name"
     --resource-group "$RESOURCE_GROUP"
     --set-env-vars
-      "NODE_ENV=$node_env"
-      "PORT=3000"
-      "GWN_DB_PATH=/tmp/game.db"
-      "JWT_SECRET=$JWT_SECRET"
-      "SYSTEM_API_KEY=$SYSTEM_API_KEY"
-      "CANONICAL_HOST=$canonical_host"
+      "${env_vars[@]}"
     --output none
   )
 
@@ -456,6 +461,12 @@ fi
 
 STAGING_HOST="${CANONICAL_HOST:-$(get_host_from_url "$STAGING_URL")}"
 PRODUCTION_HOST="${PRODUCTION_CANONICAL_HOST:-$(get_host_from_url "$PROD_URL")}"
+if [ -z "$STAGING_HOST" ]; then
+  STAGING_HOST="$(get_app_env_value "$STAGING_APP_NAME" CANONICAL_HOST)"
+fi
+if [ -z "$PRODUCTION_HOST" ]; then
+  PRODUCTION_HOST="$(get_app_env_value "$PRODUCTION_APP_NAME" CANONICAL_HOST)"
+fi
 
 STAGING_IMAGE="$(get_app_image "$STAGING_APP_NAME")"
 PRODUCTION_IMAGE="$(get_app_image "$PRODUCTION_APP_NAME")"
@@ -471,19 +482,17 @@ if [ -n "$GHCR_PAT_VALUE" ]; then
   fi
 fi
 
-if [ -n "$STAGING_HOST" ]; then
-  log_step "Configuring $STAGING_APP_NAME..."
-  update_container_app_runtime "$STAGING_APP_NAME" staging "$STAGING_HOST" "$STAGING_IMAGE"
-else
-  log_warn "Could not determine staging CANONICAL_HOST; leaving $STAGING_APP_NAME unchanged"
+log_step "Configuring $STAGING_APP_NAME..."
+if [ -z "$STAGING_HOST" ]; then
+  log_warn "Could not determine staging CANONICAL_HOST; updating runtime without changing it"
 fi
+update_container_app_runtime "$STAGING_APP_NAME" staging "$STAGING_HOST" "$STAGING_IMAGE"
 
-if [ -n "$PRODUCTION_HOST" ]; then
-  log_step "Configuring $PRODUCTION_APP_NAME..."
-  update_container_app_runtime "$PRODUCTION_APP_NAME" production "$PRODUCTION_HOST" "$PRODUCTION_IMAGE"
-else
-  log_warn "Could not determine production CANONICAL_HOST; leaving $PRODUCTION_APP_NAME unchanged"
+log_step "Configuring $PRODUCTION_APP_NAME..."
+if [ -z "$PRODUCTION_HOST" ]; then
+  log_warn "Could not determine production CANONICAL_HOST; updating runtime without changing it"
 fi
+update_container_app_runtime "$PRODUCTION_APP_NAME" production "$PRODUCTION_HOST" "$PRODUCTION_IMAGE"
 
 log_step "Configuring GitHub repository settings..."
 ensure_service_principal

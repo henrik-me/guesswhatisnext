@@ -10,7 +10,10 @@ for ($i = 0; $i -lt $args.Count; $i++) {
         if (
             $arg -eq '-SkipProvision' -and
             $i + 1 -lt $args.Count -and
-            $args[$i + 1] -in @('$true', '$false', 'true', 'false')
+            (
+                $args[$i + 1] -is [bool] -or
+                $args[$i + 1].ToString() -in @('$true', '$false', 'true', 'false', 'True', 'False')
+            )
         ) {
             $i++
         }
