@@ -22,8 +22,10 @@ Azure Resources
 
 1. **Azure CLI** — [Install](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
 2. **GitHub CLI** — [Install](https://cli.github.com/)
-3. **Azure subscription** with permissions to create resources and Entra apps/service principals
-4. **GitHub repository** with Actions enabled
+3. **Node.js** — [Install](https://nodejs.org/) (required by `infra/deploy.sh`)
+4. **curl** — required when running the bundled health checks from Bash / Git Bash
+5. **Azure subscription** with permissions to create resources and Entra apps/service principals
+6. **GitHub repository** with Actions enabled
 
 ### Azure CLI Setup
 
@@ -56,7 +58,7 @@ The legacy `setup-github.sh` / `setup-github.ps1` entry points remain as compati
 
 | Variable | Purpose |
 |----------|---------|
-| `GHCR_PAT` | Recommended: a dedicated GitHub token with at least `read:packages` so Azure Container Apps can pull the private GHCR image |
+| `GHCR_PAT` | Dedicated GitHub token with at least `read:packages` so Azure Container Apps can pull the private GHCR image |
 | `GHCR_USERNAME` | Override the GHCR username if it differs from the logged-in `gh` user |
 | `IMAGE_TAG` | Deploy a specific image tag instead of `latest` |
 | `CANONICAL_HOST` | Override the staging hostname written to Azure / GitHub vars |
@@ -64,7 +66,7 @@ The legacy `setup-github.sh` / `setup-github.ps1` entry points remain as compati
 | `STAGING_AUTO_DEPLOY` | Seed or update the repo variable that gates automatic staging deploys |
 | `RESOURCE_GROUP`, `LOCATION`, `ENVIRONMENT`, `TARGET_REPO` | Override the default infra or repo targets |
 
-If `GHCR_PAT` is omitted, the script falls back to the current `gh auth token` when possible. That is convenient for local bootstrap, but a dedicated least-privilege `read:packages` token is still recommended for long-lived automation.
+If `GHCR_PAT` is omitted, the script leaves any existing `GHCR_PAT` repo secret untouched but does not seed or rotate GHCR pull credentials. Provide `GHCR_PAT` explicitly whenever you want the bootstrap to configure or update GHCR access.
 
 ## Initial Deployment
 

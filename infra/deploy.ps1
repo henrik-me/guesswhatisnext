@@ -485,6 +485,7 @@ function Invoke-VerificationHealthCheck {
         return 'skipped'
     }
 
+    Require-Command curl
     Ensure-ContainerAppRunning $AppName
 
     Write-Step "Running $Label health check..."
@@ -526,17 +527,8 @@ if (-not $GhcrUsername) {
 $GhcrUsername = $GhcrUsername.Trim()
 
 $GhcrPatValue = Get-EnvValue 'GHCR_PAT'
-if (-not $GhcrPatValue) {
-    $GhcrPatValue = gh auth token 2>$null
-    if ($LASTEXITCODE -eq 0 -and $GhcrPatValue) {
-        $GhcrPatValue = $GhcrPatValue.Trim()
-        if ($GhcrPatValue) {
-            Write-WarnMessage 'Using gh auth token as GHCR_PAT fallback. Set GHCR_PAT to use a dedicated read:packages token.'
-        }
-    }
-    else {
-        $GhcrPatValue = ''
-    }
+if ($GhcrPatValue) {
+    $GhcrPatValue = $GhcrPatValue.Trim()
 }
 
 if (-not $SkipProvision) {
@@ -602,7 +594,7 @@ elseif (Test-GhSecretExists 'GHCR_PAT') {
     Write-Info 'GHCR_PAT already exists, leaving current value in place'
 }
 else {
-    Write-WarnMessage 'GHCR_PAT is not set. Export GHCR_PAT (read:packages) and rerun to enable GHCR image pulls.'
+    Write-WarnMessage 'GHCR_PAT is not set. Export a dedicated read:packages token to seed the repo secret and Azure registry credentials.'
 }
 
 if ($ProdUrl) {

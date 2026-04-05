@@ -392,6 +392,7 @@ run_health_check() {
     return 2
   fi
 
+  require_command curl
   ensure_container_app_running "$app_name"
 
   log_step "Running $label health check..."
@@ -409,7 +410,6 @@ echo ""
 require_command az
 require_command gh
 require_command node
-require_command curl
 
 ensure_azure_login
 ensure_github_login
@@ -426,12 +426,6 @@ if [ -z "$GHCR_USERNAME" ]; then
 fi
 
 GHCR_PAT_VALUE="${GHCR_PAT:-}"
-if [ -z "$GHCR_PAT_VALUE" ]; then
-  GHCR_PAT_VALUE="$(gh auth token 2>/dev/null | tr -d '\r\n' || true)"
-  if [ -n "$GHCR_PAT_VALUE" ]; then
-    log_warn "Using gh auth token as GHCR_PAT fallback. Set GHCR_PAT to use a dedicated read:packages token."
-  fi
-fi
 
 if [ "$SKIP_PROVISION" -eq 0 ]; then
   ensure_resource_group
@@ -496,7 +490,7 @@ if [ -n "$GHCR_PAT_VALUE" ]; then
 elif gh_secret_exists GHCR_PAT; then
   log_info "GHCR_PAT already exists, leaving current value in place"
 else
-  log_warn "GHCR_PAT is not set. Export GHCR_PAT (read:packages) and rerun to enable GHCR image pulls."
+  log_warn "GHCR_PAT is not set. Export a dedicated read:packages token to seed the repo secret and Azure registry credentials."
 fi
 
 if [ -n "$PROD_URL" ]; then
