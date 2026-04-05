@@ -119,6 +119,27 @@ The first admin user must be bootstrapped. Two options:
 
 Once promoted, admin users can manage other users' roles from the **🛡️ Moderation** screen in the UI. Note: after a role change, the user must log out and log back in for the new role to take effect (the role is stored in their JWT token).
 
+### Feature Flags
+
+This section documents the small central **server-side feature-flag system** introduced in PR #91, which safely ships incomplete or limited-access features without exposing them to everyone at once.
+
+- **Evaluation order:** start from the feature's configured default state; then apply a feature-specific request override only when that feature allows overrides in the current environment; otherwise apply explicit user targeting, then deterministic percentage rollout. If none of those change the result, the feature remains at its default state.
+- **Supported controls:** feature default state, specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides for features that explicitly opt in. Targeting and percentage rollout may enable a feature even when its default state is off.
+- **Client/server model:** in branches that include PR #91, the client reads `/api/features` to hide or show gated UI, but server routes must still enforce the same flag
+
+**`submitPuzzle` feature-flag setup on PR #91**
+- Canonical feature-flag key: `submitPuzzle`
+- Hidden/disabled by default
+- Can be enabled for specific users and/or a rollout percentage
+- Request overrides are allowed for this feature only outside `production` and `staging`
+- Override identifiers for `submitPuzzle`: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
+
+> Overrides are feature-specific and opt-in, not a global bypass. Only use them for features that explicitly define override support.
+>
+> `submitPuzzle` is the feature-flag key. The override names above are request identifiers, not alternate flag keys or UI route names.
+>
+> If your branch does not include PR #91 yet, `/api/features` and the documented `submitPuzzle` overrides will not be available there.
+
 ### Running with Docker
 
 ```bash

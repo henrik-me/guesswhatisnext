@@ -134,6 +134,24 @@ guesswhatisnext/
 - **Storage layer** (`storage.js`) abstracts all persistence behind a clean API
 - **Server routes** handle HTTP API, middleware handles auth, WebSocket handler manages real-time matches
 
+### Feature Flag Rollouts
+
+PR #91 introduces a central feature-flag module for staged rollouts of incomplete or limited-access features. This document records that design so the intended rollout path is clear in branches that include PR #91.
+
+- **Source of truth:** server-side evaluation per request; in branches that include PR #91, the client mirrors flag state via `/api/features`, but guarded server routes still enforce the same flag
+- **Evaluation order:** start from the feature's configured default state; then apply a feature-specific request override only when that feature opts in and the current environment allows it; otherwise apply explicit user targeting, then deterministic percentage rollout. If none of those change the result, the feature remains at its default state.
+- **Supported controls:** feature default state, specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides. Targeting and percentage rollout may enable a feature even when its default state is off.
+- **Rollout stability:** percentage rollouts are deterministic per authenticated user so the same user consistently lands in or out of the rollout bucket across requests
+- **Override policy:** overrides are never global; each feature must explicitly opt in and define its own override names
+
+**`submitPuzzle` flag in branches that include PR #91**
+- Default-off / hidden by default
+- Can be enabled for explicit users and/or a rollout percentage
+- Allows request overrides only outside `production` and `staging`
+- Override names: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
+
+If your branch does not include PR #91 yet, it will not contain the shared module or `/api/features` route. In branches that do include it, prefer default-off, keep evaluation centralized, and document any override behavior explicitly so teammates can test safely without creating production bypasses.
+
 ### Multiplayer Architecture (Phase 4)
 
 The multiplayer system supports 2–10 players per room with a host-controlled lobby:

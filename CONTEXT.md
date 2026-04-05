@@ -2,7 +2,7 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-04-01
+> **Last updated:** 2026-04-02
 
 ---
 
@@ -368,6 +368,10 @@ Add structured logging, request tracing, client-side error reporting, and Azure 
 ## Phase 14 — Community Puzzle Submission UX
 
 Improve the community puzzle submission experience for both submitters and admins. The backend API and basic UI exist but the feature feels hidden and incomplete — submit button only visible when logged in with no discovery path, no submission history, no public browsing, and minimal authoring tools.
+
+**Planned release control (PR #91):** `submitPuzzle` is gated by a small central feature-flag system on the PR #91 branch so the feature can stay hidden by default while rollout and UX work continue. Evaluation order there is: feature-specific request override (only when that feature allows it in the current environment) → default state → explicit user targeting → deterministic percentage rollout → disabled.
+
+**Planned `submitPuzzle` configuration (PR #91):** hidden/disabled by default; can be enabled for explicit users and/or a rollout percentage; request overrides are allowed only outside `production` and `staging`; override names are query param `ff_submit_puzzle` and header `x-gwn-feature-submit-puzzle`. Overrides are opt-in per feature, not a global bypass. `main` does not have that central flag path until PR #91 merges.
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
