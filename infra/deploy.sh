@@ -225,7 +225,7 @@ ensure_service_principal() {
   fi
 
   sp_object_id="$(az ad sp show --id "$app_id" --query id -o tsv)"
-  role_count="$(az role assignment list --assignee-object-id "$sp_object_id" --scope "$RESOURCE_SCOPE" --query 'length(@)' -o tsv 2>/dev/null || echo 0)"
+  role_count="$(az role assignment list --assignee-object-id "$sp_object_id" --scope "$RESOURCE_SCOPE" --query "[?roleDefinitionName=='Contributor'] | length(@)" -o tsv 2>/dev/null || echo 0)"
   role_count="$(sanitize_tsv_value "$role_count")"
   role_count="${role_count:-0}"
 

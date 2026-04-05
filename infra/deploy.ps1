@@ -263,7 +263,7 @@ function Ensure-ServicePrincipal {
     }
     $spObjectId = $spObjectId.Trim()
 
-    $roleCount = az role assignment list --assignee-object-id $spObjectId --scope $script:ResourceScope --query 'length(@)' -o tsv 2>$null
+    $roleCount = az role assignment list --assignee-object-id $spObjectId --scope $script:ResourceScope --query "[?roleDefinitionName=='Contributor'] | length(@)" -o tsv 2>$null
     if ($LASTEXITCODE -ne 0) {
         $roleCount = '0'
     }
