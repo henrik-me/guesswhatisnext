@@ -4,8 +4,8 @@
  *
  * Starts two listeners:
  *   - HTTPS on port 3443 (self-signed cert, generated on the fly)
- *   - HTTP  on port 3080 → sets X-Forwarded-Proto: http so the app's
- *     httpsRedirect middleware fires the 308 redirect.
+ *   - HTTP  on port 3080 → 308 redirect to HTTPS (handled directly,
+ *     independent of NODE_ENV).
  *
  * Usage:
  *   node scripts/dev-https.js
@@ -96,10 +96,13 @@ function generateSelfSignedCert() {
   };
 }
 
-// ---------- Set environment for production-like behaviour ----------
-// NODE_ENV=production is intentional: httpsRedirect and HSTS only activate
-// in production/staging, which is exactly what this script tests.
-process.env.NODE_ENV = 'production';
+// ---------- Set environment for development with HTTPS ----------
+// Force NODE_ENV=development so dev features work (pretty logs, feature flag
+// overrides, etc.) even if the caller has a different NODE_ENV set.
+// Security headers (helmet) apply regardless of NODE_ENV.
+// The HTTP→HTTPS redirect is handled directly by the HTTP server below,
+// not by the production-only httpsRedirect middleware.
+process.env.NODE_ENV = 'development';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'dev-https-test-secret';
 process.env.SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'dev-https-test-key';
 process.env.CANONICAL_HOST = HOST;
@@ -137,14 +140,14 @@ const { app, server } = createServer();
 
 server.listen(HTTPS_PORT, '127.0.0.1', () => {
   console.log(`\n🔒 HTTPS server: https://localhost:${HTTPS_PORT}`);
-  console.log(`   Security headers, HSTS, CSP, and WebSocket (wss://) are active.`);
+  console.log(`   Security headers, CSP, and WebSocket (wss://) are active.`);
 });
 
-// HTTP server — passes requests to the Express app with X-Forwarded-Proto: http
-// so the redirect middleware kicks in.
+// HTTP server — redirects to HTTPS directly (independent of NODE_ENV).
 const httpServer = http.createServer((req, res) => {
-  req.headers['x-forwarded-proto'] = 'http';
-  app(req, res);
+  const location = `https://localhost:${HTTPS_PORT}${req.url}`;
+  res.writeHead(308, { Location: location });
+  res.end();
 });
 
 httpServer.listen(HTTP_PORT, '127.0.0.1', () => {
