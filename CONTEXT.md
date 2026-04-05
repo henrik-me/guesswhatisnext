@@ -324,10 +324,24 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 | 62 | Convert routes to async | ✅ Done | 61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 merged. |
 | 63 | Update tests for async | ✅ Done | 61b, 62 | Async test helpers. All 173 tests pass with SQLite adapter. PR #57 merged (combined with 62). |
 | 63v | Validate staging (post-async) | ✅ Done | 63 | Staging deploy + smoke tests + E2E all passed. 4 migrations applied, 504 puzzles seeded, async routes working. Run #23833160313. |
-| 64 | Provision Azure SQL | ⬜ Pending | 63v | Free-tier serverless DB. Firewall. GitHub secret. |
-| 65 | Production deploy | ⬜ Pending | 64 | Update prod-deploy.yml. First deploy + verify. |
+| 64 | Provision Azure SQL | ⬜ Pending | 63v | Rollup for 64a–64e: create prod Azure SQL, open access, define MSSQL init path, store GitHub secret. |
+| 64a | Create Azure SQL server | ⬜ Pending | 63v | Create the production logical server in the chosen region/tier; capture admin + server details. |
+| 64b | Create serverless prod DB | ⬜ Pending | 64a | Create the production DB on that server and capture the final DB name/connection parameters. |
+| 64c | Configure firewall access | ⬜ Pending | 64a | Allow Azure-hosted app access plus operator IP(s) for setup/testing. Parallel with 64b once server exists. |
+| 64d | Plan MSSQL schema bootstrap | ⬜ Pending | 64b | Required before cutover: app startup still fails fast for MSSQL auto-init, so use manual migrations/seeding or enable an equivalent init path first. |
+| 64e | Add GitHub `DATABASE_URL` secret | ⬜ Pending | 64b | Store the production connection string after the server + DB names are final. Parallel with 64d. |
+| 65 | Production deploy | ⬜ Pending | 64 | Rollup for 65a–65c: wire workflow/env, deploy, then verify production. |
+| 65a | Update `prod-deploy.yml` for MSSQL | ⬜ Pending | 64 | Pass `DATABASE_URL` so production selects MSSQL; the workflow still uses `GWN_DB_PATH=/tmp/game.db` today. |
+| 65b | First production deploy | ⬜ Pending | 65a | Run the first deploy with Azure SQL settings and the chosen MSSQL bootstrap process. |
+| 65c | Verify production | ⬜ Pending | 65b | Smoke test startup, read paths, auth, submit flow, and DB-backed writes against Azure SQL. |
 
-**Parallelism:** After 61a merges, three parallel tracks start:
+**Task ID scope:** IDs in this summary are phase-local; 65/65a–65c here refer to the Phase 11c production-deploy track.
+
+**Parallelism:** After 64a, 64b and 64c can move in parallel. After 64b, 64d and 64e can run in parallel. Task 65 stays sequential: 65a → 65b → 65c.
+
+**Suggested order:** 63v → 64a → (64b + 64c) → (64d + 64e) → 64 → 65a → 65b → 65c → 65
+
+**Phase 11a/11b parallelism history:** After 61a merges, three parallel tracks start:
 ```
 Main: 61a → merge → signal workers → orchestrate merges → 63v → 64 → 65
   wt-1: 61b (SQLite adapter + migrations)
