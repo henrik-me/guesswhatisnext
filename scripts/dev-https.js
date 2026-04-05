@@ -97,11 +97,12 @@ function generateSelfSignedCert() {
 }
 
 // ---------- Set environment for development with HTTPS ----------
-// Keep NODE_ENV=development so dev features work (pretty logs, feature flag
-// overrides, etc.). Security headers (helmet) apply regardless of NODE_ENV.
+// Force NODE_ENV=development so dev features work (pretty logs, feature flag
+// overrides, etc.) even if the caller has a different NODE_ENV set.
+// Security headers (helmet) apply regardless of NODE_ENV.
 // The HTTP→HTTPS redirect is handled directly by the HTTP server below,
 // not by the production-only httpsRedirect middleware.
-process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+process.env.NODE_ENV = 'development';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'dev-https-test-secret';
 process.env.SYSTEM_API_KEY = process.env.SYSTEM_API_KEY || 'dev-https-test-key';
 process.env.CANONICAL_HOST = HOST;
@@ -139,7 +140,7 @@ const { app, server } = createServer();
 
 server.listen(HTTPS_PORT, '127.0.0.1', () => {
   console.log(`\n🔒 HTTPS server: https://localhost:${HTTPS_PORT}`);
-  console.log(`   Security headers, HSTS, CSP, and WebSocket (wss://) are active.`);
+  console.log(`   Security headers, CSP, and WebSocket (wss://) are active.`);
 });
 
 // HTTP server — redirects to HTTPS directly (independent of NODE_ENV).
