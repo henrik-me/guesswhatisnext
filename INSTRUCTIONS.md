@@ -454,13 +454,29 @@ The orchestrating agent **must actively relay progress to the user** — never d
 
 ### Agent Work Model
 
-The **main agent** works in the main checkout (`C:\src\guesswhatisnext<suffix>`) but **does not make code changes there**. Its role is:
-- Communicating with the human user (clarifying requirements, reporting progress)
-- Planning and decomposing work into tasks
-- Delegating implementation to sub-agents working in worktree slots
-- Orchestrating: tracking sub-agent progress, pulling merged changes, resolving cross-task issues
+**Main agent (orchestration only)** — operates on the main checkout (`C:\src\guesswhatisnext<suffix>`).
 
-**All code changes** — features, fixes, tests, docs, refactoring — are done by **sub-agents in worktree slots**. Each sub-agent gets a worktree with a meaningful branch name (e.g., `feat/lean-instructions`, `fix/ws-reconnect`). This keeps `main` clean and ensures every change flows through a PR.
+Allowed on main checkout:
+- `git pull` to sync after merges
+- `git worktree add/remove` to manage worktree slots
+- `gh pr merge --squash` to merge approved PRs
+- Communication with the user (clarifying requirements, reporting progress)
+- Planning, decomposing, and delegating work to sub-agents
+
+NOT allowed on main checkout:
+- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`)
+- No `git push` from main
+- No merge conflict resolution — if `git pull` conflicts, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
+
+**Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `feat/lean-instructions`, `fix/ws-reconnect`).
+
+Sub-agents are responsible for:
+- All file changes (code, docs, config) and all commits/pushes
+- PR creation (`gh pr create`)
+- Copilot review loop (reply to comments, resolve threads, re-request review)
+- Merge conflict resolution (rebase/merge `origin/main` into the feature branch)
+
+This keeps `main` clean and ensures every change flows through a PR.
 
 ### Parallel Agent Workflow
 
