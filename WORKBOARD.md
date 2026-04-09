@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-09T23:46Z
+> **Last updated:** 2026-04-09T23:51Z
 
 ## Orchestrators
 
@@ -17,7 +17,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS11-64 | Database Migration | Provision Azure SQL (64a–64e) | yoga-gwn | wt-1 | yoga-gwn/cs11-64-provision-azure-sql | — | 2026-04-09 |
+| CS11-64 | Database Migration | Provision Azure SQL — 64a/b/c/e done, 64d PR pending | yoga-gwn | wt-1 | yoga-gwn/cs11-64d-mssql-schema-bootstrap | — | 2026-04-09 |
 | CS15 | Dev Tooling | Close out CS15 (all tasks already merged) | yoga-gwn-c2 | wt-1 | yoga-gwn-c2/cs15-close-out | — | 2026-04-09 |
 | CS14 | Community Puzzle UX | Planning — detailed task design | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-plan | — | 2026-04-09 |
 
@@ -25,7 +25,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Depends On |
 |---------|-----------|-------------|------------|
-| CS11-64 | Database Migration | Provision Azure SQL | — |
+| — | — | No queued tasks | — |
 
 ## Recently Completed
 
