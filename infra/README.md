@@ -21,8 +21,11 @@ Azure Resources
 ## Prerequisites
 
 1. **Azure CLI** — [Install](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
-2. **Azure subscription** with permissions to create resources
-3. **GitHub repository** with Actions enabled
+2. **GitHub CLI** — [Install](https://cli.github.com/)
+3. **Node.js** — [Install](https://nodejs.org/) (required by `infra/deploy.sh`)
+4. **curl** — required when running the bundled health checks from Bash / Git Bash
+5. **Azure subscription** with permissions to create resources and Entra apps/service principals
+6. **GitHub repository** with Actions enabled
 
 ### Azure CLI Setup
 
@@ -38,6 +41,33 @@ az provider register --namespace Microsoft.App
 az provider register --namespace Microsoft.OperationalInsights
 ```
 
+## Unified Setup
+
+`infra/deploy.sh` and `infra/deploy.ps1` now handle the full first-run bootstrap:
+
+- create/update the Azure resource group, Container Apps environment, and staging/production apps
+- generate or reuse `JWT_SECRET` + `SYSTEM_API_KEY`
+- create/reset the GitHub Actions Azure service principal and store `AZURE_CREDENTIALS`
+- set the GitHub secrets/variables used by the deploy and health-monitor workflows
+- configure app `CANONICAL_HOST` values from the deployed ingress URLs
+- run the existing health-check script against any app already running the real image
+
+The legacy `setup-github.sh` / `setup-github.ps1` entry points remain as compatibility wrappers and simply forward to `deploy.* --skip-provision`.
+
+### Optional environment overrides
+
+| Variable | Purpose |
+|----------|---------|
+| `GHCR_PAT` | Dedicated GitHub token with at least `read:packages` so Azure Container Apps can pull the private GHCR image |
+| `GHCR_USERNAME` | Override the GHCR username if it differs from the logged-in `gh` user |
+| `IMAGE_TAG` | Deploy a specific image tag instead of `latest` |
+| `CANONICAL_HOST` | Override the staging hostname written to Azure / GitHub vars |
+| `PRODUCTION_CANONICAL_HOST` | Override the production hostname written to Azure |
+| `STAGING_AUTO_DEPLOY` | Seed or update the repo variable that gates automatic staging deploys |
+| `RESOURCE_GROUP`, `LOCATION`, `ENVIRONMENT`, `TARGET_REPO` | Override the default infra or repo targets |
+
+If `GHCR_PAT` is omitted, the script leaves any existing `GHCR_PAT` repo secret untouched but does not seed or rotate GHCR pull credentials. Provide `GHCR_PAT` explicitly whenever you want the bootstrap to configure or update GHCR access.
+
 ## Initial Deployment
 
 ### PowerShell (Windows)
@@ -46,20 +76,11 @@ az provider register --namespace Microsoft.OperationalInsights
 # 1. Login
 az login
 
-# 2. Set required environment variables (using cryptographically secure RNG)
-function New-SecureSecret([int]$ByteLength) {
-    $bytes = New-Object 'System.Byte[]' $ByteLength
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    return [Convert]::ToBase64String($bytes)
-}
-$env:JWT_SECRET = New-SecureSecret 48
-$env:SYSTEM_API_KEY = New-SecureSecret 32
+# 2. (Recommended) provide a dedicated GHCR pull token
+$env:GHCR_PAT = '<github-token-with-read-packages>'
 
-# 3. Provision Azure resources
+# 3. Run the unified bootstrap
 .\infra\deploy.ps1
-
-# 4. Configure GitHub secrets and variables
-.\infra\setup-github.ps1
 ```
 
 ### Bash (macOS / Linux / WSL)
@@ -68,67 +89,47 @@ $env:SYSTEM_API_KEY = New-SecureSecret 32
 # 1. Login
 az login
 
-# 2. Set required environment variables
-export JWT_SECRET="$(openssl rand -base64 36)"
-export SYSTEM_API_KEY="$(openssl rand -base64 24)"
+# 2. (Recommended) provide a dedicated GHCR pull token
+export GHCR_PAT='<github-token-with-read-packages>'
 
-# 3. Provision Azure resources
+# 3. Run the unified bootstrap
 chmod +x infra/deploy.sh
 ./infra/deploy.sh
-
-# 4. Configure GitHub secrets and variables
-chmod +x infra/setup-github.sh
-./infra/setup-github.sh
 ```
 
-Both scripts are idempotent — safe to re-run at any time.
+The bootstrap script is idempotent — safe to re-run at any time.
 
 ## GitHub Configuration
 
-### 1. Create a Service Principal for GitHub Actions
+The unified deploy script writes the repository settings the workflows expect.
 
-```bash
-# Create service principal with Contributor role on the resource group
-az ad sp create-for-rbac \
-  --name "gwn-github-actions" \
-  --role contributor \
-  --scopes /subscriptions/<subscription-id>/resourceGroups/gwn-rg \
-  --sdk-auth
-```
-
-Copy the JSON output — this becomes the `AZURE_CREDENTIALS` secret.
-
-### 2. GitHub Repository Secrets
-
-Navigate to **Settings → Secrets and variables → Actions** and add:
+### Repository secrets (set automatically when values are available)
 
 | Secret | Description |
 |--------|-------------|
-| `AZURE_CREDENTIALS` | Service principal JSON from step above |
-| `JWT_SECRET` | Secret key for JWT token signing |
-| `SYSTEM_API_KEY` | API key for health check and admin endpoints |
+| `AZURE_CREDENTIALS` | Azure service principal JSON for `azure/login` |
+| `JWT_SECRET` | Shared app secret for JWT signing |
+| `SYSTEM_API_KEY` | Shared app secret for health/admin access |
+| `GHCR_PAT` | Token used by Azure Container Apps to pull the private GHCR image |
+| `PROD_URL` | Production base URL used by `prod-deploy.yml` and `health-monitor.yml` |
 
-### 3. GitHub Environments
+### Repository variables (set automatically when values are available)
+
+| Variable | Description |
+|----------|-------------|
+| `STAGING_URL` | Staging base URL used by `staging-deploy.yml` |
+| `GHCR_USERNAME` | GHCR username paired with `GHCR_PAT` |
+| `CANONICAL_HOST` | Staging host name injected into staging runtime config |
+| `STAGING_AUTO_DEPLOY` | Gates automatic staging deploys (`false` by default unless overridden) |
+
+### GitHub environments
 
 Create two environments under **Settings → Environments**:
 
-#### `staging`
-- Add variable: `STAGING_URL` = `https://<staging-fqdn>` (from deploy script output)
-
-#### `production`
-- Add variable: `PRODUCTION_URL` = `https://<production-fqdn>` (from deploy script output)
-- Enable **Required reviewers** — add team members who must approve production deployments
-- Optionally add a **wait timer** (e.g., 5 minutes)
-
-### 4. GHCR Authentication
-
-GitHub Actions uses `GITHUB_TOKEN` automatically for GHCR. Ensure the package
-visibility is set correctly:
-
-```bash
-# If needed, grant the repository access to the container package
-# Settings → Packages → guesswhatisnext → Manage Actions access
-```
+- **`staging`** — used by staging deployment jobs
+- **`production`** — used by production deployment and health monitoring
+  - Enable **Required reviewers** for the production approval gate
+  - Optionally add a **wait timer** (for example, 5 minutes)
 
 ## CI/CD Pipeline
 
@@ -147,7 +148,7 @@ Build & Push GHCR → Ephemeral Smoke Test → ff release/staging
   → Manual Approval → Deploy Azure Staging → Verify Health
 ```
 
-### Production Deploy (`.github/workflows/prod-deploy.yml` — planned)
+### Production Deploy (`.github/workflows/prod-deploy.yml`)
 Manual trigger from `release/staging`:
 ```
 Deploy same image to prod → Verify → Auto-rollback on failure
@@ -264,15 +265,26 @@ configured in the GitHub repository settings.
 
 ### Required Secrets
 
-Navigate to **Settings → Secrets and variables → Actions → Secrets** and add:
+Navigate to **Settings → Secrets and variables → Actions → Secrets** and verify:
 
 | Secret | Description |
 |--------|-------------|
-| `AZURE_CREDENTIALS` | Service principal JSON for Azure deployments (see "Create a Service Principal" above) |
+| `AZURE_CREDENTIALS` | Service principal JSON for Azure deployments |
 | `JWT_SECRET` | Secret key used for signing JWT authentication tokens |
 | `SYSTEM_API_KEY` | API key for health-check and admin endpoints |
+| `GHCR_PAT` | GitHub token with package-read access for Azure Container Apps pulls |
 | `PROD_URL` | Production application URL (e.g. `https://gwn-production.<region>.azurecontainerapps.io`) |
+
+### Required Variables
+
+Navigate to **Settings → Secrets and variables → Actions → Variables** and verify:
+
+| Variable | Description |
+|----------|-------------|
 | `STAGING_URL` | Staging application URL (e.g. `https://gwn-staging.<region>.azurecontainerapps.io`) |
+| `GHCR_USERNAME` | Username paired with `GHCR_PAT` |
+| `CANONICAL_HOST` | Staging hostname used by the staging deploy workflow |
+| `STAGING_AUTO_DEPLOY` | Auto-deploy gate (`false` by default unless intentionally enabled) |
 
 ### Environments
 

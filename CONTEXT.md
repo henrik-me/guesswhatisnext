@@ -92,7 +92,6 @@ Unified dev server script done (CS15-90). Remaining: e2e log capture, log assert
 - **Staging auto-deploy disabled**: Must manually trigger `workflow_dispatch` after merging to main. Re-enable once CS11 is stable.
 - **Production not yet deployed**: Depends on Azure SQL migration (CS11c) since Azure Files SMB is broken for SQLite.
 - **Azure SQL free tier limit**: 1 free DB per subscription. Production gets the free DB; staging uses ephemeral local SQLite.
-- **Sync→async migration risk**: ✅ Done. All DB calls converted from sync (better-sqlite3) to async. 241 tests pass.
 
 ---
 

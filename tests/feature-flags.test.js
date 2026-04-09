@@ -61,6 +61,22 @@ describe('feature flag evaluation', () => {
     expect(evaluateFeatureFlag({ ...FEATURE_FLAGS.submitPuzzle, users: new Set(), rolloutPercentage: 100 }, { user: boundaryUser })).toBe(true);
   });
 
+  test('does not include anonymous users in percentage rollouts', () => {
+    const feature = {
+      ...FEATURE_FLAGS.submitPuzzle,
+      users: new Set(),
+      rolloutPercentage: 50,
+      allowOverride: false,
+    };
+
+    // No user at all
+    expect(evaluateFeatureFlag(feature, {})).toBe(false);
+    // User object without id or username
+    expect(evaluateFeatureFlag(feature, { user: {} })).toBe(false);
+    // Null user
+    expect(evaluateFeatureFlag(feature, { user: null })).toBe(false);
+  });
+
   test('supports query and header overrides only for overrideable features', () => {
     const overrideableFeature = {
       ...FEATURE_FLAGS.submitPuzzle,
