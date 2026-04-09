@@ -15,19 +15,19 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 
 | ID | Name | Status | Tasks | Archive |
 |----|------|--------|-------|---------|
-| CS1 | Client-Side Game | ✅ Complete | 10/10 | [details](project/clickstops/completed_clickstop_client-side-game.md) |
-| CS2 | Backend & Multiplayer | ✅ Complete | 10/10 | [details](project/clickstops/completed_clickstop_backend-multiplayer.md) |
-| CS3 | Security & Game Features | ✅ Complete | 10/10 | [details](project/clickstops/completed_clickstop_security-game-features.md) |
-| CS4 | Infrastructure & Deployment | ✅ Complete | 3/3 | [details](project/clickstops/completed_clickstop_infrastructure.md) |
-| CS5 | Multi-Player Expansion | ✅ Complete | 7/7 | [details](project/clickstops/completed_clickstop_multiplayer-expansion.md) |
-| CS6 | Production Hardening | ✅ Complete | 3/3 | [details](project/clickstops/completed_clickstop_production-hardening.md) |
-| CS7 | Quality & Testing | ✅ Complete | 2/2 | [details](project/clickstops/completed_clickstop_quality-testing.md) |
-| CS8 | User Experience | ✅ Complete | 4/4 | [details](project/clickstops/completed_clickstop_user-experience.md) |
-| CS9 | Content & Growth | ✅ Complete | 2/2 | [details](project/clickstops/completed_clickstop_content-growth.md) |
-| CS10 | CI/CD Pipeline | ✅ Complete* | 5/6 | [details](project/clickstops/completed_clickstop_cicd-pipeline.md) |
+| CS1 | Client-Side Game | ✅ Complete | 10/10 | [details](project/clickstops/done_cs1_client-side-game.md) |
+| CS2 | Backend & Multiplayer | ✅ Complete | 10/10 | [details](project/clickstops/done_cs2_backend-multiplayer.md) |
+| CS3 | Security & Game Features | ✅ Complete | 10/10 | [details](project/clickstops/done_cs3_security-game-features.md) |
+| CS4 | Infrastructure & Deployment | ✅ Complete | 3/3 | [details](project/clickstops/done_cs4_infrastructure.md) |
+| CS5 | Multi-Player Expansion | ✅ Complete | 7/7 | [details](project/clickstops/done_cs5_multiplayer-expansion.md) |
+| CS6 | Production Hardening | ✅ Complete | 3/3 | [details](project/clickstops/done_cs6_production-hardening.md) |
+| CS7 | Quality & Testing | ✅ Complete | 2/2 | [details](project/clickstops/done_cs7_quality-testing.md) |
+| CS8 | User Experience | ✅ Complete | 4/4 | [details](project/clickstops/done_cs8_user-experience.md) |
+| CS9 | Content & Growth | ✅ Complete | 2/2 | [details](project/clickstops/done_cs9_content-growth.md) |
+| CS10 | CI/CD Pipeline | ✅ Complete* | 5/6 | [details](project/clickstops/done_cs10_cicd-pipeline.md) |
 | CS11 | Database Migration | 🔄 Active | see below | — |
-| CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/completed_clickstop_test-infrastructure.md) |
-| CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/completed_clickstop_observability-logging.md) |
+| CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/done_cs12_test-infrastructure.md) |
+| CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done_cs13_observability-logging.md) |
 | CS14 | Community Puzzle Submission UX | ⬜ Planned | see below | — |
 | CS15 | Dev Tooling & Log Assertions | 🔄 Active | see below | — |
 
@@ -236,7 +236,7 @@ Improve the community puzzle submission experience for both submitters and admin
 
 **Planned `submitPuzzle` configuration (PR #91):** hidden/disabled by default; can be enabled for explicit users and/or a rollout percentage; request overrides are allowed only outside `production` and `staging`; override names are query param `ff_submit_puzzle` and header `x-gwn-feature-submit-puzzle`. Overrides are opt-in per feature, not a global bypass. `main` does not have that central flag path until PR #91 merges.
 
-> **Note:** Puzzle authoring format reference is in the [CS9 archive](project/clickstops/completed_clickstop_content-growth.md).
+> **Note:** Puzzle authoring format reference is in the [CS9 archive](project/clickstops/done_cs9_content-growth.md).
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
