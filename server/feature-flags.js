@@ -35,7 +35,7 @@ function parseUserList(value) {
   return new Set(
     String(value || '')
       .split(',')
-      .map((item) => item.trim().toLowerCase())
+      .map((item) => normalizeIdentifier(item))
       .filter(Boolean),
   );
 }

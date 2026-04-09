@@ -244,8 +244,8 @@ describe('evaluateFeatureDetailed', () => {
   });
 });
 
-describe('header case-insensitivity for overrides', () => {
-  test('lowercase header key is recognized', () => {
+describe('header override value case-insensitivity', () => {
+  test('lowercase header value is recognized', () => {
     const feature = {
       ...FEATURE_FLAGS.submitPuzzle,
       users: new Set(),
@@ -259,7 +259,7 @@ describe('header case-insensitivity for overrides', () => {
     expect(result.enabled).toBe(true);
   });
 
-  test('mixed-case header values are recognized', () => {
+  test('uppercase header value is recognized', () => {
     const feature = {
       ...FEATURE_FLAGS.submitPuzzle,
       users: new Set(),
@@ -269,6 +269,20 @@ describe('header case-insensitivity for overrides', () => {
 
     const result = evaluateFeatureFlag(feature, {
       headers: { 'x-gwn-feature-submit-puzzle': 'TRUE' },
+    });
+    expect(result.enabled).toBe(true);
+  });
+
+  test('mixed-case header value is recognized', () => {
+    const feature = {
+      ...FEATURE_FLAGS.submitPuzzle,
+      users: new Set(),
+      rolloutPercentage: 0,
+      allowOverride: true,
+    };
+
+    const result = evaluateFeatureFlag(feature, {
+      headers: { 'x-gwn-feature-submit-puzzle': 'Enabled' },
     });
     expect(result.enabled).toBe(true);
   });
