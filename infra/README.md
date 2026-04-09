@@ -53,7 +53,9 @@ $bytes32 = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGener
 # 3. Provision Azure resources
 .\infra\deploy.ps1
 
-# 4. Configure GitHub secrets and variables (auto-generates GitHub secrets from env or fresh values)
+# 4. Configure GitHub secrets and variables (auto-sets AZURE_CREDENTIALS, JWT_SECRET,
+#    SYSTEM_API_KEY, and URLs). Additional items like GHCR_PAT, GHCR_USERNAME,
+#    and STAGING_AUTO_DEPLOY must be added manually — see tables below.
 .\infra\setup-github.ps1
 ```
 
@@ -71,7 +73,9 @@ export SYSTEM_API_KEY="$(openssl rand -base64 32)"
 chmod +x infra/deploy.sh
 ./infra/deploy.sh
 
-# 4. Configure GitHub secrets and variables (auto-generates GitHub secrets from env or fresh values)
+# 4. Configure GitHub secrets and variables (auto-sets AZURE_CREDENTIALS, JWT_SECRET,
+#    SYSTEM_API_KEY, and URLs). Additional items like GHCR_PAT, GHCR_USERNAME,
+#    and STAGING_AUTO_DEPLOY must be added manually — see tables below.
 chmod +x infra/setup-github.sh
 ./infra/setup-github.sh
 ```
