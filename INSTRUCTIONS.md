@@ -2,6 +2,8 @@
 
 This document defines architecture decisions, coding standards, testing strategy, and git workflow for the **Guess What's Next** project.
 
+For project phases, task plans, detailed test specifications, tool evaluations, and current status, see **CONTEXT.md**.
+
 ---
 
 ## 1. Architecture Principles
@@ -16,7 +18,7 @@ guesswhatisnext/
 │   ├── js/
 │   │   ├── app.js                  # Entry point, screen nav, auth, multiplayer UI
 │   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
-│   │   ├── puzzles.js              # Client-side puzzle data (85 puzzles, 12 categories — server has 200+)
+│   │   ├── puzzles.js              # Client-side puzzle data
 │   │   ├── daily.js                # Date-seeded daily challenge logic
 │   │   ├── storage.js              # LocalStorage persistence
 │   │   └── audio.js                # Web Audio API sound effects
@@ -24,22 +26,29 @@ guesswhatisnext/
 │       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
 │       └── colors/                 # Color circles (red → purple)
 ├── server/
-│   ├── index.js                    # Express app + HTTP + WebSocket bootstrap
+│   ├── index.js                    # Entry point: telemetry init, config, server bootstrap
+│   ├── app.js                      # Express app factory, middleware, route wiring
 │   ├── puzzleData.js               # Server-side puzzle pool (multiplayer)
-│   ├── routes/
+│   ├── routes/                      # Route modules
+│   │   ├── achievements.js         # Achievement API routes
 │   │   ├── auth.js                 # Register, login, JWT tokens
-│   │   ├── scores.js               # Score submission + leaderboards
+│   │   ├── features.js             # Feature flag status endpoint
 │   │   ├── matches.js              # Room create/join + match history
-│   │   └── puzzles.js              # Puzzle API
+│   │   ├── puzzles.js              # Puzzle API
+│   │   ├── scores.js               # Score submission + leaderboards
+│   │   ├── submissions.js          # User-submitted puzzles
+│   │   ├── telemetry.js            # Client telemetry ingestion
+│   │   └── users.js                # User profiles + management
 │   ├── ws/matchHandler.js          # WebSocket match engine (2–10 players)
 │   ├── db/
 │   │   ├── schema.sql              # SQLite table definitions
-│   │   └── connection.js           # DB init + query helpers
+│   │   ├── index.js                # DB factory / primary database entry point
+│   │   └── connection.js           # Legacy DB module
 │   └── middleware/auth.js          # JWT + API key verification middleware
 ├── data/                           # SQLite database (auto-created, git-ignored)
-├── Dockerfile                      # Production container image (Phase 3)
-├── docker-compose.yml              # Local container dev environment (Phase 3)
-├── .github/workflows/              # ci-cd.yml + health-monitor.yml
+├── Dockerfile                      # Production container image
+├── docker-compose.yml              # Local container dev environment
+├── .github/workflows/              # CI, deploy, load-test, and health-monitor workflows
 ├── scripts/                        # Local health-check scripts (sh + ps1)
 ├── infra/                          # Azure deployment (deploy.sh + README)
 ├── eslint.config.mjs              # ESLint flat config
@@ -49,7 +58,7 @@ guesswhatisnext/
 └── README.md                       # User & developer documentation
 ```
 
-### System Architecture (Current — Phase 2)
+### System Architecture
 
 ```
   Browser (Client)                     Server (Node.js)
@@ -72,7 +81,7 @@ guesswhatisnext/
                                    └──────────────────────┘
 ```
 
-### Deployment Architecture (Phase 3)
+### Deployment Architecture
 
 ```
   Developer                    GitHub                              Azure
@@ -80,7 +89,7 @@ guesswhatisnext/
  │ git push│──────────────▶│ GitHub Actions │
  │ to main │              │               │
  └─────────┘              │ ┌───────────┐ │
-                          │ │ Lint+Test  │ │
+                          │ │Lint+Test+E2E│ │
                           │ └─────┬─────┘ │
                           │       │       │
                           │ ┌─────▼─────┐ │
@@ -121,7 +130,7 @@ guesswhatisnext/
                           │               │
                           │ ┌───────────┐ │               ▲
                           │ │ Health    │─┼───────────────┘
-                          │ │ Monitor   │ │  every 5 min
+                          │ │ Monitor   │ │  every 6 hours
                           │ │ (cron)    │ │  on failure → GH Issue
                           │ └───────────┘ │
                           └───────────────┘
@@ -136,49 +145,11 @@ guesswhatisnext/
 
 ### Feature Flag Rollouts
 
-PR #91 introduces a central feature-flag module for staged rollouts of incomplete or limited-access features. This document records that design so the intended rollout path is clear in branches that include PR #91.
+The project uses a central feature-flag module for staged rollouts. The client mirrors flag state via `/api/features`, but guarded server routes still enforce the same flag server-side.
 
-- **Source of truth:** server-side evaluation per request; in branches that include PR #91, the client mirrors flag state via `/api/features`, but guarded server routes still enforce the same flag
-- **Evaluation order:** start from the feature's configured default state; then apply a feature-specific request override only when that feature opts in and the current environment allows it; otherwise apply explicit user targeting, then deterministic percentage rollout. If none of those change the result, the feature remains at its default state.
-- **Supported controls:** feature default state, specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides. Targeting and percentage rollout may enable a feature even when its default state is off.
-- **Rollout stability:** percentage rollouts are deterministic per authenticated user so the same user consistently lands in or out of the rollout bucket across requests
-- **Override policy:** overrides are never global; each feature must explicitly opt in and define its own override names
-
-**`submitPuzzle` flag in branches that include PR #91**
-- Default-off / hidden by default
-- Can be enabled for explicit users and/or a rollout percentage
-- Allows request overrides only outside `production` and `staging`
-- Override names: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
-
-If your branch does not include PR #91 yet, it will not contain the shared module or `/api/features` route. In branches that do include it, prefer default-off, keep evaluation centralized, and document any override behavior explicitly so teammates can test safely without creating production bypasses.
-
-### Multiplayer Architecture (Phase 4)
-
-The multiplayer system supports 2–10 players per room with a host-controlled lobby:
-
-1. **Room lifecycle:** CREATED → LOBBY (players joining) → ACTIVE (game running) → FINISHED
-2. **Host model:** Room creator is host; configures max players (2–10) and rounds (3/5/7/10); clicks Start when ready
-3. **Host transfer:** If host disconnects in lobby, next player becomes host automatically
-4. **During gameplay:** All players answer the same puzzles simultaneously; round resolves when all answer or timer expires
-5. **Disconnect handling:** 30s reconnect window → player "dropped" (score frozen, match continues if ≥2 players remain)
-6. **Rankings:** Full placement with tie handling (not just winner/loser) — 🥇🥈🥉 for top 3
-7. **Scoreboard:** Dynamic N-player scoreboard during match; dropped players shown dimmed
-
-**Key WS messages (Phase 4 additions):**
-- `lobby-state` — Full roster broadcast on every join/leave
-- `start-match` — Host-initiated game start
-- `player-disconnected` / `player-reconnected` — Replaces singular "opponent" messages
-- `player-dropped` — Player eliminated after reconnect timeout
-- `gameOver.results[].placement` — Full ranking for all players
-
-### Multiplayer-Ready Design (Phase 1 prep)
-These rules apply even during Phase 1 to ensure a smooth Phase 2 transition:
-
-1. **Puzzle data as plain objects** — The game engine receives puzzle data as arguments, never imports it directly. This allows swapping from a local JS file to a `fetch()` call without changing the engine.
-2. **Serializable score/result objects** — All game results are plain JSON-serializable objects. No DOM references, no circular structures. This enables POSTing to a server later.
-3. **Callback-based answer submission** — The game engine accepts an `onAnswer` callback rather than directly writing to the DOM. This lets multiplayer hook in alongside the single-player UI.
-4. **Extensible screen navigation** — The screen router must support adding new screens (leaderboard, lobby, match) without refactoring existing ones.
-5. **No global mutable state** — Game state lives in a single state object passed through functions. No top-level `let` variables tracking game progress.
+- **Evaluation order:** feature-specific request override (if opted in and environment allows) → default state (`defaultEnabled`) → explicit user targeting → deterministic percentage rollout
+- **Rollout stability:** percentage rollouts are deterministic per authenticated user
+- **Override policy:** each feature must explicitly opt in and define its own override names; overrides are never global
 
 ### File Organization
 - One module per file, one responsibility per module
@@ -190,7 +161,7 @@ These rules apply even during Phase 1 to ensure a smooth Phase 2 transition:
 ## 2. Coding Guidelines
 
 ### Language & Style
-- **Vanilla JavaScript** (ES6+ modules) — no frameworks, no transpilers in Phase 1
+- **Vanilla JavaScript** (ES6+ modules) — no frameworks, no transpilers
 - Use `const` by default, `let` when reassignment is needed, never `var`
 - Use arrow functions for callbacks, regular functions for top-level declarations
 - Use template literals over string concatenation
@@ -253,7 +224,7 @@ These rules apply even during Phase 1 to ensure a smooth Phase 2 transition:
 | **Unit tests** | ≥ 90% line coverage on game logic, scoring, auth, DB helpers | Vitest with `--coverage` |
 | **API / integration tests** | 100% of endpoints with success + error cases | supertest |
 | **WebSocket tests** | All message types (join, answer, roundResult, gameOver, reconnect) | ws client in tests |
-| **E2E tests** | All critical user flows (see list below) | Playwright |
+| **E2E tests** | All critical user flows | Playwright |
 | **Overall** | ≥ 80% line coverage across the project | `npm run test:coverage` |
 
 Tests **must pass** before any merge to `main`. The **full validation suite** is:
@@ -266,57 +237,6 @@ CI runs all three in parallel on PRs that change application code (non-docs chan
 
 ### Test Framework & Tools
 
-**Current test structure (implemented):**
-
-Tests cover unit, integration, WebSocket, and E2E layers. Run `npm test` for the full vitest suite.
-
-```
-tests/
-├── helper.js                      # Test utilities: setup/teardown, getAgent, registerUser
-│
-│  # ── Unit tests ──
-├── sqlite-adapter.test.js         # SQLite adapter: init, queries, migrations, transactions
-├── mssql-adapter.test.js          # Azure SQL adapter: param rewriting, pool, transactions
-├── wal-cleanup.test.js            # DB startup/cleanup, WAL artifacts, journal modes
-│
-│  # ── Integration / API tests ──
-├── auth.test.js                   # Register, login, token, auth enforcement
-├── health.test.js                 # Health endpoint: system auth, deep checks
-├── puzzles.test.js                # Puzzle API: filtering, auth, shape validation
-├── scores.test.js                 # Score submission, leaderboards (free play + multiplayer)
-├── achievements.test.js           # Achievement list, unlock triggers
-├── matches.test.js                # Match create, join, capacity, history
-├── admin-endpoints.test.js        # System API admin: drain/init, role enforcement
-├── promotion-and-roles.test.js    # Role changes, admin guardrails
-├── submissions.test.js            # Community puzzle submit/review workflows
-├── security.test.js               # Security headers, CSP, HTTPS redirect
-├── e2e-singleplayer.test.js       # Full free-play + daily challenge API flows
-│
-│  # ── WebSocket tests ──
-├── e2e-multiplayer.test.js        # Room lifecycle: create → join → play → result → rematch
-├── nplayer.test.js                # N-player match, disconnect, last-player-standing, ties
-├── reconnection.test.js           # Reconnect, host transfer, forfeit edge cases
-├── rematch.test.js                # Rematch ready-up, host start, partial rematch
-├── spectator.test.js              # Spectator join, blocking, live match updates
-│
-│  # ── E2E / Browser tests (Playwright) ──
-├── e2e/
-│   ├── auth.spec.mjs              # Browser auth/register/logout, persistence
-│   ├── daily.spec.mjs             # Daily challenge playthrough + completed state
-│   ├── freeplay.spec.mjs          # Free-play navigation + game-over flow
-│   ├── keyboard.spec.mjs          # Keyboard shortcut navigation
-│   ├── leaderboard.spec.mjs       # Leaderboard visibility after scoring
-│   ├── helpers.mjs                # Playwright helper: playOneRound()
-│   └── global-teardown.mjs        # Playwright global cleanup
-│
-│  # ── Load / performance tests ──
-└── load/
-    ├── api-stress.yml             # Artillery API stress test
-    ├── websocket-stress.yml       # Artillery WebSocket stress test
-    ├── helpers.js                 # Load test helpers
-    ├── ws-helpers.js              # WS load test helpers
-    └── README.md                  # Load test documentation
-```
 
 **Test isolation model:**
 Each test file gets its own:
@@ -341,120 +261,24 @@ agents can each run `npm test` independently without port or DB conflicts.
   "test:watch": "vitest",
   "test:coverage": "vitest run --coverage",
   "test:e2e": "playwright test",
-  "test:all": "vitest run --coverage && playwright test",
+  "test:all": "vitest run && playwright test",
   "lint": "eslint . --max-warnings 50"
 }
 ```
-
-### Unit Tests — What to Cover
-
-**Game engine (`game.js`):**
-- Scoring: correct answer = 100 base points, wrong = 0
-- Speed bonus: linear decay from 100 → 0 over timer duration
-- Streak multiplier: x1 (0-2), x1.5 (3-5), x2 (6+)
-- Streak resets on wrong answer
-- Edge cases: answer at 0ms, answer at timeout, negative values
-
-**Daily challenge (`daily.js`):**
-- Same date always yields same puzzle (deterministic)
-- Different dates yield different puzzles
-- Date boundary behavior (midnight UTC)
-
-**Puzzle validation (`puzzles.js`):**
-- All puzzles have required fields: id, category, difficulty, type, sequence, answer, options, explanation
-- Answer is always in options array
-- Options has exactly 4 items
-- Sequence has 3-6 items
-- No duplicate puzzle IDs
-- Difficulty is 1, 2, or 3
-
-**Auth middleware (`auth.js`):**
-- Valid JWT token → sets req.user with id, username, role
-- Expired JWT → 401
-- Malformed JWT → 401
-- Valid API key → sets req.user as system
-- Invalid API key → 401
-- No auth header → 401
-- requireSystem rejects non-system users with 403
-- optionalAuth continues without user when no token provided
-
-### Integration Tests — API Endpoints
-
-Every endpoint must have tests for:
-1. **Happy path** — correct request returns expected response
-2. **Auth enforcement** — request without auth returns 401
-3. **Validation** — bad input returns 400 with meaningful error
-4. **Edge cases** — empty body, missing fields, boundary values
-
-**Specific coverage:**
-
-| Endpoint | Tests |
-|---|---|
-| `POST /api/auth/register` | Success, duplicate username (409), short password (400), rate limit (429) |
-| `POST /api/auth/login` | Success, wrong password (401), non-existent user (401), rate limit (429) |
-| `GET /api/auth/me` | Valid token, expired token, no token |
-| `POST /api/scores` | Submit score, invalid mode (400), no auth (401) |
-| `GET /api/scores/leaderboard` | All/weekly/daily periods, requires auth, limit capping |
-| `GET /api/scores/me` | User's scores + stats, no auth (401) |
-| `POST /api/matches` | Create room, no auth (401) |
-| `POST /api/matches/join` | Join room, invalid code (404), no auth (401) |
-| `GET /api/matches/:id` | Match status, no auth (401) |
-| `GET /api/matches/history` | Match history, no auth (401) |
-| `GET /api/health` | System API key → deep health JSON, JWT user → 403, no auth → 401 |
-
-**WebSocket tests:**
-- Connect with valid JWT token
-- Reject connection with invalid token
-- Join room flow: join → matched event
-- Full match: both players answer all rounds → gameOver
-- N-player match: 4 players join → host starts → all answer → full rankings
-- Forfeit: one player disconnects → dropped after 30s → match continues with remaining
-- Last player standing: all but one disconnect → match ends, last player wins
-- Reconnection: disconnect + reconnect within 30s → resume match with full state restore
-- Host transfer: host disconnects in lobby → next player becomes host
-- Full room: join when room at max_players → error response
-- Invalid message types → error response
-
-### E2E Tests — Critical User Flows
-
-Run with Playwright against a live server instance (started in test setup):
-
-1. **Free play flow:**
-   - Load home screen → click Free Play → select category → play 10 rounds → see game over → verify score displayed
-
-2. **Daily challenge flow:**
-   - Load home → click Daily Challenge → answer → see result → verify share text → reload → verify locked (can't replay)
-
-3. **Auth flow:**
-   - Register new user → verify logged in → reload page → verify still logged in (token persisted) → log out
-
-4. **Multiplayer flow:**
-   - Register 2+ users → User A creates room (configures max players, rounds) → Users B-D join → Host starts → all play rounds → full rankings displayed with placements
-
-5. **Leaderboard flow:**
-   - Register → play free play → submit score → navigate to leaderboard → verify score appears
-
-6. **Keyboard navigation:**
-   - Navigate entire game using only keyboard (Tab, Enter, 1-4 number keys)
 
 ### Test Runner
 
 Tests use Vitest with supertest for API and ws for WebSocket testing. Run with `npm test`. Each suite gets an isolated temp database and random port. Tests are safe to run in parallel across worktrees.
 
-### Phase 2 — Automated Tests
-- Use Vitest as the test framework (fast, ESM-native, built-in coverage)
-- API endpoint tests with `supertest`
-- WebSocket integration tests with `ws` client
-- `npm test` runs the full unit + integration suite
-- `npm run test:coverage` reports line/branch/function coverage
-- Tests must pass before merging any PR
+### Validation Before Pushing
 
-### Phase 3 — Container & Deployment Tests
-- **Container tests:** `docker compose up` → verify health endpoint responds, game loads, WebSocket connects
-- **Staging smoke tests:** Automated in CI/CD after staging deploy — hit key endpoints, verify 200 responses
-- **Prod verification tests:** After production deploy — health check + smoke tests, auto-rollback on failure
-- **Approval gate:** Manual approval required before promoting staging → production (GitHub Environment protection rules)
-- **Health monitor:** GitHub Actions cron job every 5 minutes validates production health, creates issues on failure
+Run the full validation sequence before pushing a branch:
+
+```bash
+npm run lint && npm test && npm run test:e2e
+```
+
+All three must pass. CI runs the same checks for PRs that trigger the workflow; docs-only changes may be skipped.
 
 ### Test Data Management
 - Tests use an **isolated temp-directory SQLite database** via `GWN_DB_PATH` — never the real `data/game.db`
@@ -588,318 +412,155 @@ chore: initialize npm project with express and dependencies
 ```
 
 ### When to Commit
-Commit after every meaningful, working change. Specifically:
-- After completing each todo/step in the plan
-- After adding a new screen or feature
-- After fixing a bug
-- After adding tests
-- **Do not** commit broken/half-done work
-- **All commits go on feature branches** — never directly on `main`
+Commit locally after every meaningful, working change — each commit should be a self-contained unit that explains *what* changed and *why*. This creates a clear trail of reasoning on the feature branch.
+
+**Commit on the feature branch after:**
+- Each logical step (e.g., "extract phase content to CONTEXT.md", then "remove extracted content from INSTRUCTIONS.md")
+- Adding or updating a feature, fixing a bug, adding tests, refactoring
+- Each round of PR review fixes
+
+**Commit messages must be descriptive** — they are the audit trail for what happened and why. Use conventional commit format (see above).
+
+**Do not** batch unrelated changes into one commit. Two distinct actions = two commits.
 
 ### Agent Progress Reporting
 
-**All task work happens in background agents on worktrees — never in the main session.** The orchestrating agent dispatches work to background task agents, each running in its own worktree slot. Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
+All task work happens in background agents on worktrees — never in the main session. Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
 
 Background agents **must** report progress to the orchestrating agent:
-- **On start:** "Starting task X in wt-N on branch feat/<name>"
-- **On milestone:** "Task X: completed <step>, running validation..."
+- **On start:** "Starting task X in wt-N on branch feat/\<name\>"
+- **On milestone:** "Task X: completed \<step\>, running validation..."
 - **On validation pass:** "Task X: lint ✓ test ✓ e2e ✓ — creating PR"
-- **On PR created:** "Task X: PR #<N> created, requesting Copilot review"
-- **On review loop:** "Task X: Copilot review round <N> — fixing <count> issues"
-- **On ready:** "Task X: PR #<N> ready for merge (Copilot approved, CI green)"
+- **On PR created:** "Task X: PR #\<N\> created, requesting Copilot review"
+- **On review loop:** "Task X: Copilot review round \<N\> — fixing \<count\> issues"
+- **On ready:** "Task X: PR #\<N\> ready for merge (Copilot approved, CI green)"
 
-The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently:
-- Poll background agents periodically and report milestone updates
-- Relay key status changes: validation passed, PR created, review in progress, ready for merge
-- When multiple tasks run in parallel, provide a summary table of all task statuses
-- On completion, report the result and ask for next steps (e.g., "Shall I merge?")
+The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
-The orchestrating agent **waits for "ready for merge"** before merging and must not proceed with dependent work until the PR is merged and `main` is pulled.
-
-### Branch Strategy
-
-**All changes go through pull requests. No exceptions. No direct commits to `main`.**
-
+### Branch Strategy & Merge Model
+- **No direct commits to `main`** — all code changes go through pull requests, no exceptions
 - Feature branches: `feat/<step-id>` (e.g., `feat/puzzle-expansion`, `feat/mp-game-logic`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
   2. **Unit + integration tests:** `npm test` (vitest)
   3. **E2E tests:** `npm run test:e2e`
+- **PRs are squash-merged** into `main` — the many granular feature-branch commits collapse into one clean commit on main. The squash commit message summarizes the overall change.
 - Branch protection rules on `main`:
   - Require PR with review before merging
-  - Require CI status checks to pass (`lint`, `test`, `e2e`) — CI uses `paths-ignore` for docs-only PRs; if branch protection requires these checks, a separate always-on workflow or conditional job approach may be needed
+  - Require CI status checks to pass (`lint`, `test`, `e2e`) — CI uses `paths-ignore` for docs-only PRs
+
   - No force pushes
   - No direct commits
 
+### Agent Work Model
+
+The **main agent** works in the main checkout (`C:\src\guesswhatisnext<suffix>`) but **does not make code changes there**. Its role is:
+- Communicating with the human user (clarifying requirements, reporting progress)
+- Planning and decomposing work into tasks
+- Delegating implementation to sub-agents working in worktree slots
+- Orchestrating: tracking sub-agent progress, pulling merged changes, resolving cross-task issues
+
+**All code changes** — features, fixes, tests, docs, refactoring — are done by **sub-agents in worktree slots**. Each sub-agent gets a worktree with a meaningful branch name (e.g., `feat/lean-instructions`, `fix/ws-reconnect`). This keeps `main` clean and ensures every change flows through a PR.
+
 ### Parallel Agent Workflow
 
-**All worktree work runs as background tasks.** The orchestrating agent launches each task agent in the background, continues with other work or launches additional parallel tasks, and is notified when each completes. The orchestrating agent never blocks waiting for a worktree agent — it monitors progress via notifications and acts on "ready for merge" signals.
+All worktree work runs as background tasks. The orchestrating agent launches each task agent in the background and is notified when each completes. Use **fixed-name worktree slots** (`wt-1` through `wt-4`) with task-specific branch names.
+The branch name carries the task meaning — the folder name is just a stable slot.
 
-When running multiple AI agents in parallel to implement independent tasks:
+**Worktree root naming:** `gwn<suffix>-worktrees` where `<suffix>` is the text after the
+repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix `_copilot2`
+→ root `gwn_copilot2-worktrees`). If clone matches repo name exactly, suffix is empty.
 
-**1. Worktree slots (fixed folders, reusable across tasks):**
-
-Use **fixed-name worktree slots** (`wt-1` through `wt-4`) to avoid filesystem permission
-re-approval every time a new task starts. The branch name carries the task meaning —
-the folder name is just a stable slot.
-
-**Worktree root folder naming convention:**
-
-The worktree root folder is derived from the clone folder name to ensure
-multiple clones of the same repo can coexist without collisions:
-
-```
-gwn<suffix>-worktrees
-```
-
-Where `<suffix>` is the remaining text after removing the repo name from the clone
-folder name (including any separator like `_`). If the clone folder name matches
-the repo name exactly, `<suffix>` is empty.
-
-| Clone folder | Repo name | Suffix | Worktree root |
-|---|---|---|---|
-| `guesswhatisnext` | `guesswhatisnext` | *(empty)* | `gwn-worktrees` |
-| `guesswhatisnext_copilot2` | `guesswhatisnext` | `_copilot2` | `gwn_copilot2-worktrees` |
-| `guesswhatisnext_test` | `guesswhatisnext` | `_test` | `gwn_test-worktrees` |
-
-This keeps each agent's worktrees isolated even when multiple Copilot sessions
-work on the same repo simultaneously.
-
-```powershell
-# One-time setup: create worktree directory alongside the main repo
-# (replace <suffix> per the naming convention above)
-mkdir C:\src\gwn<suffix>-worktrees
-
-# Create fixed slots with task-specific branches
-git worktree add -b feat/puzzle-expansion C:\src\gwn<suffix>-worktrees\wt-1 main
-git worktree add -b feat/azure-infra      C:\src\gwn<suffix>-worktrees\wt-2 main
-git worktree add -b feat/mp-game-logic    C:\src\gwn<suffix>-worktrees\wt-3 main
-git worktree add -b feat/mp-lobby-ui      C:\src\gwn<suffix>-worktrees\wt-4 main
-
-# Check which slot has which branch
-git worktree list
-```
-
-**Recycling a slot for a new task:**
-```powershell
-cd C:\src\guesswhatisnext<suffix>
-
-# Remove the old branch from the slot (keeps the folder)
-git worktree remove C:\src\gwn<suffix>-worktrees\wt-1 --force
-git branch -d feat/old-task
-
-# Reassign the slot to a new branch
-git worktree add -b feat/new-task C:\src\gwn<suffix>-worktrees\wt-1 main
-```
+| Clone folder | Suffix | Worktree root |
+|---|---|---|
+| `guesswhatisnext` | *(empty)* | `gwn-worktrees` |
+| `guesswhatisnext_copilot2` | `_copilot2` | `gwn_copilot2-worktrees` |
 
 | Slot | Path | Port | Purpose |
 |---|---|---|---|
-| main | `C:\src\guesswhatisnext<suffix>` | 3000 | Primary repo, sequential work |
-| wt-1 | `C:\src\gwn<suffix>-worktrees\wt-1` | 3001 | Parallel agent slot 1 |
-| wt-2 | `C:\src\gwn<suffix>-worktrees\wt-2` | 3002 | Parallel agent slot 2 |
-| wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Parallel agent slot 3 |
-| wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Parallel agent slot 4 |
+| main | `C:\src\guesswhatisnext<suffix>` | 3000 | Orchestration only — no code changes |
+| wt-1 | `C:\src\gwn<suffix>-worktrees\wt-1` | 3001 | Sub-agent slot 1 |
+| wt-2 | `C:\src\gwn<suffix>-worktrees\wt-2` | 3002 | Sub-agent slot 2 |
+| wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Sub-agent slot 3 |
+| wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Sub-agent slot 4 |
 
-**2. Agent environment setup (each worktree):**
+**Agent setup:** Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
 
-Every worktree is a full code checkout but lacks `node_modules/` and `data/`.
-Agents must bootstrap their worktree before working:
+**Branch lifecycle:**
+1. Work on `feat/<task-name>` branch in slot
+2. **Commit after each meaningful step** with a descriptive message — don't wait until the end
+3. Run full validation before pushing: `npm run lint && npm test && npm run test:e2e`
+4. Push branch to origin
+5. Create PR: `gh pr create --base main --head feat/<task-name>`
+6. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
+7. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
+8. After CI passes and review approved, **squash-merge** via GitHub UI or `gh pr merge --squash`
+9. Main orchestrating agent pulls after each merge: `git pull`
 
-```powershell
-cd C:\src\gwn<suffix>-worktrees\wt-X
+**Recycling slots:** `git worktree remove <path> --force` → `git branch -d feat/old-task` → `git worktree add -b feat/new-task <path> main`
 
-# Install dependencies
-npm install
+**Copilot PR Review Policy:**
+- Every PR must be reviewed by Copilot before merging
+- Categorize comments as **Fix** (real bugs, security, correctness), **Skip** (cosmetic, by-design), or **Accept suggestion** (correct code improvement)
+- Fix valid issues, reply with rationale on each thread, resolve all threads
+- If Copilot re-reviews after fixes, repeat the cycle
 
-# Set unique port (avoid port 3000 conflicts between agents)
-$env:PORT = "300X"   # wt-1 → 3001, wt-2 → 3002, etc.
+**Copilot Review — Detailed Workflow:**
 
-# Database is auto-created on first server start at data/game.db
-# Each worktree gets its own independent database — full isolation
-```
+Requesting review (requires gh CLI ≥ 2.88.0): `gh pr edit <PR#> --add-reviewer "@copilot"`
 
-**3. Testing in worktrees:**
-
-Each worktree is fully self-contained for testing:
-- **Unit/integration tests**: `npm test` — uses temp DB via `GWN_DB_PATH` env var, random port via `supertest` (port 0). Tests run in complete isolation with no shared state.
-- **Manual verification**: `$env:PORT=300X; node server/index.js` — each worktree uses its own port and database.
-- **DB isolation**: The test helper (`tests/helper.js`) creates a temp directory per test suite with its own SQLite database. No cross-test or cross-worktree contamination.
-
-Test helper details:
-```
-tests/helper.js
-├── setup()     → creates temp dir, sets GWN_DB_PATH, boots server on port 0
-├── teardown()  → closes DB, stops server, removes temp dir
-├── getAgent()  → returns supertest agent bound to test server
-└── registerUser() → helper to create auth'd test user
-```
-
-**4. Commit, push, and PR workflow:**
-
-All work happens in worktree branches. Agents **never** merge to main directly.
-
-```
-Agent in wt-X:
-  1. Work on feat/<task-name> branch
-  2. Run full validation suite:
-     npm run lint && npm test && npm run test:e2e
-  3. git add -A && git commit
-  4. git push -u origin feat/<task-name>
-  5. Create PR:
-     gh pr create --base main --head feat/<task-name> --title "<title>" --body "<description>"
-  6. Request Copilot review:
-     gh pr edit <PR#> --add-reviewer "@copilot"
-  7. Enter Copilot review loop (see below)
-  8. Report to orchestrating agent: "PR #<N> ready for merge"
-```
-
-The **main orchestrating agent** merges PRs and pulls:
-```
-Main agent (after wt-X reports PR ready):
-  gh pr merge <PR#> --squash --delete-branch
-  cd C:\src\guesswhatisnext
-  git pull
-```
-
-**Merge ordering:** First-done merges first. Each subsequent agent may need to
-rebase or merge main before pushing:
-```
-Agent in wt-Y (if main has moved since branch creation):
-  git fetch origin main
-
-  # Option A: merge (preserves history, normal push)
-  git merge origin/main --no-edit
-  npm run lint && npm test && npm run test:e2e
-  git push
-
-  # Option B: rebase (linear history, requires force-push)
-  git rebase origin/main
-  npm run lint && npm test && npm run test:e2e
-  git push --force-with-lease
-```
-
-**10. Copilot PR Review Policy:**
-
-Every PR **must** be reviewed by GitHub Copilot. The review loop continues until Copilot reports **zero issues**. No PR is merged with unresolved Copilot feedback.
-
-**Requesting review (requires gh CLI ≥ 2.88.0):**
-```powershell
-gh pr edit <PR#> --add-reviewer "@copilot"
-```
-
-**Review loop (mandatory — repeat until clean):**
+**Review loop (repeat until clean):**
 1. Read all review comments and suggestions
-2. Assess each comment — categorize as **Fix**, **Skip**, or **Accept suggestion**
-3. For each comment, reply with the decision and rationale
-4. Fix valid issues, commit, and push
-5. Resolve all threads (fixed or acknowledged)
-6. Re-request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-7. **Repeat from step 1** until Copilot approves with no new comments
-8. Only then report PR as ready for merge
-
-**Assessment criteria:**
-- **Fix**: Real bugs, security issues, correctness problems, missing error handling that could cause silent failures
-- **Skip**: Cosmetic concerns, extremely unlikely edge cases (e.g., port 0), style preferences already covered by lint, or by-design decisions
-- **Accept suggestion**: When Copilot provides a complete code suggestion that is correct and improves the code
+2. Categorize each as **Fix** (real bugs, security, correctness), **Skip** (cosmetic, by-design), or **Accept suggestion** (correct code improvement)
+3. Reply to each comment with disposition and rationale, then fix valid issues
+4. Resolve all threads (fixed or acknowledged) — always reply BEFORE resolving
+5. Re-request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
+6. Repeat from step 1 until Copilot approves with no new comments
 
 **Replying to review comments (REST API):**
 ```powershell
-# Reply to a specific review comment thread
 gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/comments/{COMMENT_ID}/replies --method POST -f "body=YOUR_REPLY"
 ```
 
-**Reply message conventions:**
-- **Fixed**: Reference the commit hash and describe what changed. Example: "Fixed in commit abc1234: replaced req.connection with req.socket throughout."
-- **Acknowledged (by design)**: Explain why the current approach is intentional. Example: "Acknowledged — telemetry.js must load before logger.js, so console.* is intentional. Comment on line 47 explains this."
-- **Not applicable**: When the reviewer's observation is factually incorrect about the current code. Example: "Verified: @opentelemetry/api IS listed in package.json dependencies."
-- **Duplicate**: Reference the original thread. Example: "Duplicate of thread on line 187 — see that thread for the full rationale."
+**Reply conventions:** Fixed → reference commit hash. Acknowledged (by design) → explain rationale. Not applicable → note why observation is incorrect. Duplicate → reference original thread.
 
 **Resolving review threads (GraphQL API):**
 ```powershell
-# Get all unresolved thread IDs
+# Get unresolved thread IDs
 gh api graphql -f query='{ repository(owner: "henrik-me", name: "guesswhatisnext") { pullRequest(number: {PR#}) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { databaseId path } } } } } } }'
 
-# Resolve a single thread
+# Resolve a thread
 gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THREAD_ID" }) { thread { isResolved } } }'
 ```
 
-**Important:** Always reply BEFORE resolving. A resolved thread without a reply looks like the comment was dismissed without consideration. Every thread must have a reply explaining the disposition (fixed, acknowledged, or not applicable) before being resolved.
+**Large-diff PR behavior:** On large diffs, Copilot may re-post comments on unchanged lines. When comments reference already-fixed code, reply with the fix commit hash and resolve.
 
-**Large-diff PR behavior:** On PRs with large diffs, Copilot may re-post comments on unchanged lines across multiple review rounds. When comments reference code that was already fixed in a previous commit, reply with the fix commit hash and resolve. Do not keep iterating — resolve stale threads after verifying the fix is in the current code.
-
-**Agents creating PRs must request Copilot review as part of their PR creation step.**
-
-**5. Merge order and conflict resolution:**
-- Merge zero-conflict branches first (e.g., new-files-only tasks like infra)
-- For branches that touch shared files (`index.html`, `app.js`, `style.css`):
-  - Merge one at a time
-  - After each merge, run `npm test` to verify
-  - Resolve conflicts manually if needed (typically additive — HTML sections, CSS rules, route registrations)
+**Merge conflict guidelines:**
+- Merge zero-conflict branches first (e.g., new-files-only tasks)
+- For shared files: merge one at a time, run `npm test` after each
+- Resolve conflicts manually if needed (typically additive — HTML sections, CSS rules, route registrations)
 - **Never run in parallel**: tasks that modify the same function body
 
-**6. Worktree slot cleanup (between task batches):**
-```powershell
-# Remove all worktrees but keep the folder structure for reuse
-git worktree remove C:\src\gwn<suffix>-worktrees\wt-1 --force
-git worktree remove C:\src\gwn<suffix>-worktrees\wt-2 --force
-# ... etc
-
-# Delete merged branches
-git branch -d feat/puzzle-expansion feat/azure-infra
-
-# Prune stale worktree references
-git worktree prune
-```
-
-**7. High-conflict files to watch:**
-These files are modified by almost every feature — expect merge work:
-- `server/index.js` — route registration, middleware setup
-- `server/app.js` — app factory, route wiring
-- `server/db/schema.sql` — table definitions
-- `server/db/connection.js` — migrations, seeding
-- `public/index.html` — new screens, buttons
-- `public/js/app.js` — event handlers, screen navigation
-- `public/css/style.css` — new component styles
-- `server/ws/matchHandler.js` — multiplayer logic
-
-**8. Ideal parallel grouping:**
-Group tasks to minimize file overlap:
+**Parallel grouping rules:**
 - ✅ Backend-only tasks (different route files) can safely parallelize
 - ✅ Tasks creating only new files (infra, new routes) are always safe
 - ⚠️ Tasks that both add HTML screens will conflict in `index.html`
 - ⚠️ Tasks that both modify `matchHandler.js` should be sequential
 - ❌ Never parallelize two tasks that both rewrite the same function
 
-**9. Lessons learned from parallel execution:**
-
-| Issue | Cause | Prevention |
-|---|---|---|
-| Agents commit each other's changes | Shared worktree, agents run `git add -A` | Use worktrees — each has its own filesystem |
-| Health endpoint bundled into wrong commit | Both modified `server/index.js` | Separate worktrees eliminate this entirely |
-| Agents compete for port 3000 | Each agent starts server to verify | Assign unique ports per worktree (300X) |
-| Schema migrations conflict | Multiple agents add columns/tables | Review combined schema after all merges |
-| Test file merge conflicts | Multiple agents add test files | Tests are additive — auto-merge usually works |
-| Folder permissions re-prompted | Task-named worktree folders change each time | Use fixed slots (wt-1..wt-4), recycle with new branches |
-
 ### Deployment Environments
 | Environment | Trigger | Approval | Infrastructure | Rollback |
 |---|---|---|---|---|
 | **Local** | `docker compose up` or `npm start` | None | Developer machine | N/A |
-| **Ephemeral staging** | Hourly cron (if main has new commits) | Automatic | GitHub Actions (container in workflow) | N/A (ephemeral) |
+| **Ephemeral staging** | Push to main + workflow_dispatch (gated by `STAGING_AUTO_DEPLOY`) | Automatic | GitHub Actions (container in workflow) | N/A (ephemeral) |
 | **Azure staging** | After ephemeral validation passes | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-staging | Redeploy previous SHA-tagged image |
 | **Production** | After Azure staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-prod | Auto-rollback to previous SHA-tagged image |
 
 ### CI/CD Pipeline Overview
 
-**PR checks (ci.yml):** Lint and test run in parallel on every pull request. No Docker build — fast feedback.
-
-**Staging pipeline (staging-deploy.yml — planned):** Runs hourly via cron. Checks if `main` has new commits since last run. If yes: fast-forwards `release/staging` branch to main HEAD, builds Docker image, pushes to GHCR, runs ephemeral smoke tests in GitHub Actions container. With manual approval, deploys to Azure staging.
-
-**Production pipeline (prod-deploy.yml — planned):** Manually triggered (`workflow_dispatch`) from `release/staging` branch. Can only run when the staging environment is green. Deploys the same image already validated in staging to production. Verifies health, auto-rolls back on failure.
+**PR checks (ci.yml):** Lint, test, and E2E checks run on every pull request. No Docker build — fast feedback.
 
 **Push to `main`:** Does **not** trigger any deployment. All deployments flow through the staging pipeline first.
-
-**Legacy pipeline (ci-cd.yml):** Will be gutted — deploy/staging/production jobs removed. Push-to-main no longer deploys anywhere.
 
 ### Rollback Policy
 - Docker images are tagged with git SHA (`ghcr.io/henrik-me/guesswhatisnext:<sha>`) — every version is recoverable
@@ -910,27 +571,10 @@ Group tasks to minimize file overlap:
 
 ---
 
-## 6. Puzzle Authoring Guide
-
-When adding new puzzles to `puzzles.js`:
-
-1. Every puzzle must have: `id`, `category`, `difficulty` (1–3), `type`, `sequence`, `answer`, `options`, `explanation`
-2. `answer` must appear exactly once in `options`
-3. `options` must have exactly 4 items
-4. `sequence` must have 3–6 items
-5. `difficulty` guide:
-   - **1**: Obvious patterns (counting, colors, alphabet)
-   - **2**: Requires domain knowledge (moon phases, music scales)
-   - **3**: Lateral thinking or obscure patterns
-6. For image puzzles: paths are relative to `img/` directory
-7. Write a clear `explanation` — players see it after answering
-
----
-
-## 7. Performance & Accessibility
+## 6. Performance & Accessibility
 
 ### Performance
-- No heavy libraries — total JS payload should stay under 50KB (Phase 1)
+- No heavy libraries — total JS payload should stay under 50KB
 - Images: use compressed formats (WebP preferred, PNG fallback), max 200KB each
 - Preload next puzzle's images while current round is active
 
@@ -941,45 +585,3 @@ When adding new puzzles to `puzzles.js`:
 - Reduced motion: respect `prefers-reduced-motion` media query
 - Emoji sequences: include `aria-label` describing the item for screen readers
 
----
-
-## 8. Tools & Frameworks Evaluated
-
-This section documents tools and frameworks that were evaluated for the project, including those adopted and those deferred.
-
-### Adopted
-
-| Tool | Purpose | Notes |
-|---|---|---|
-| Express 5 | HTTP server + API routes | v5.2.1 — note `/{*path}` wildcard syntax (not `*`) |
-| better-sqlite3 | SQLite driver | WAL mode, synchronous API, good for single-server |
-| ws | WebSocket server | Lightweight, no socket.io overhead |
-| bcryptjs | Password hashing | Pure JS, 10 rounds |
-| jsonwebtoken | JWT auth tokens | 7-day expiry, secret from env var |
-| Docker | Containerization | Same Dockerfile for local dev, staging, and production |
-| GitHub Container Registry | Image storage | Free, integrated with GitHub Actions |
-| Azure Container Apps | Hosting (staging + prod) | Consumption plan, scale-to-zero, WebSocket support |
-| GitHub Actions | CI/CD + health monitoring | Build, deploy, smoke tests, cron-based health checks |
-| ESLint | Linting | Flat config (`eslint.config.mjs`), `@eslint/js` recommended + custom rules |
-
-### Evaluated & Deferred
-
-#### Squad (bradygaster/squad) — Multi-Agent AI Orchestration
-
-**What it is:** An AI development team orchestration framework for GitHub Copilot. Defines specialist agents (Lead, Frontend, Backend, Tester) that persist in the repo as `.squad/` files, accumulate knowledge across sessions, run tasks in parallel, and route work automatically.
-
-**Repository:** https://github.com/bradygaster/squad
-
-**Status:** Alpha (v0.9.1 as of 2026-03-25). APIs and CLI commands may change between releases.
-
-**Why deferred:**
-1. **Project scale** — Single developer with well-defined tasks and clear dependency chains. Squad is designed for larger teams with many parallel workstreams.
-2. **Alpha stability** — Breaking changes expected between releases.
-3. **Documentation overlap** — INSTRUCTIONS.md, CONTEXT.md, and plan.md already serve the purpose of Squad's decision logging and agent knowledge persistence.
-4. **Setup cost vs. benefit** — Configuring agents, routing rules, and casting takes time that doesn't proportionally accelerate a 12-task backlog.
-
-**Revisit when:**
-- Squad reaches beta/stable
-- Project gains multiple active contributors
-- We enter an open-ended feature phase without clear dependency chains
-- Puzzle content expansion (step 28) could benefit from a specialized "Content Creator" agent

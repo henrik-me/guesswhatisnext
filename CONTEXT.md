@@ -2,7 +2,7 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-04-02
+> **Last updated:** 2026-04-09
 
 ---
 
@@ -30,7 +30,30 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 **Future workflow (post-branch-protection):** Agent pushes branch → creates PR → CI + review → merge via GH UI.
 
 **PR Review Comment Resolution:**
-Every Copilot review comment thread must be replied to with a meaningful message (fix commit reference, acknowledgment, or explanation) and then resolved via the GraphQL API. See INSTRUCTIONS.md §10 for API commands and reply conventions. Threads are never left unresolved — even "by design" decisions get an explicit reply before resolution.
+Every Copilot review comment thread must be replied to with a meaningful message (fix commit reference, acknowledgment, or explanation) and then resolved via the GraphQL API. See the Copilot review policy in INSTRUCTIONS.md under Git workflow for API commands and reply conventions. Threads are never left unresolved — even "by design" decisions get an explicit reply before resolution.
+
+### Lessons Learned from Parallel Execution
+
+| Issue | Cause | Prevention |
+|---|---|---|
+| Agents commit each other's changes | Shared worktree, agents run `git add -A` | Use worktrees — each has its own filesystem |
+| Health endpoint bundled into wrong commit | Both modified `server/index.js` | Separate worktrees eliminate this entirely |
+| Agents compete for port 3000 | Each agent starts server to verify | Assign unique ports per worktree (300X) |
+| Schema migrations conflict | Multiple agents add columns/tables | Review combined schema after all merges |
+| Test file merge conflicts | Multiple agents add test files | Tests are additive — auto-merge usually works |
+| Folder permissions re-prompted | Task-named worktree folders change each time | Use fixed slots (wt-1..wt-4), recycle with new branches |
+
+### High-Conflict Files
+
+These files are modified by almost every feature — expect merge work:
+- `server/index.js` — route registration, middleware setup
+- `server/app.js` — app factory, route wiring
+- `server/db/schema.sql` — table definitions
+- `server/db/connection.js` — migrations, seeding
+- `public/index.html` — new screens, buttons
+- `public/js/app.js` — event handlers, screen navigation
+- `public/css/style.css` — new component styles
+- `server/ws/matchHandler.js` — multiplayer logic
 
 ## Known Issues
 
@@ -152,7 +175,7 @@ Every Copilot review comment thread must be replied to with a meaningful message
 |---|---|---|---|---|
 | 51 | Simplify Dockerfile | ✅ Done | — | Single-stage node:22-slim; better-sqlite3 has prebuilds, no build tools needed |
 | 52 | Slim down PR CI checks | ✅ Done | 51 | New ci.yml with parallel lint + test only; no Docker build in PR checks |
-| 53 | Remove push-to-main deploy pipeline | ✅ Done | 52 | ci-cd.yml gutted to disabled placeholder; push to main no longer triggers any deployment |
+| 53 | Remove push-to-main deploy pipeline | ✅ Done | 52 | ci-cd.yml removed from tree; push to main no longer triggers any deployment |
 | 54 | Staging deploy on merge | ✅ Done | 53 | New staging-deploy.yml: triggers on push to main, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, fast-forwards release/staging, then (with manual approval) deploys to Azure staging |
 | 55 | Manual production deploy workflow | ✅ Done | 54 | prod-deploy.yml: manual workflow_dispatch with image tag + confirmation, validates image exists in GHCR, deploys to production environment (with approval gate), runs health verification, auto-rollback on failure (PR #21) |
 | 56 | Unified infra setup script | ⬜ Pending | 55 | Merge deploy.sh + setup-github.sh into one script: auto-generates secrets, creates Azure service principal, sets all GitHub secrets/variables, runs verification health check |
@@ -414,15 +437,159 @@ Consolidate dev server scripts, integrate log capture into e2e tests, and add CI
 
 **Parallelism:** 91 first, then 92+93+94 can run in parallel.
 
+---
+
+## Current Codebase State
+
+### GitHub Actions Workflows
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `ci.yml` | PR to main | Lint + test + E2E (parallel) |
+| `staging-deploy.yml` | Push to main + workflow_dispatch | Build, push GHCR, smoke tests, deploy Azure staging |
+| `prod-deploy.yml` | workflow_dispatch only | Deploy validated image to production with approval gate |
+| `load-test.yml` | workflow_dispatch + weekly schedule | Artillery API + WS stress tests |
+| `health-monitor.yml` | Every 6 hours + workflow_dispatch | Azure API health checks, creates issues on failure |
+
+Note: `ci-cd.yml` has been removed from the tree.
+
+### Test Inventory
+
+**Vitest (26 suites, 241 tests):**
+
+| Suite | Tests | Suite | Tests |
+|---|---|---|---|
+| achievements | 4 | mssql-adapter | 34 |
+| admin-endpoints | 10 | nplayer | 4 |
+| auth | 11 | opentelemetry | 7 |
+| e2e-multiplayer | 10 | promotion-and-roles | 14 |
+| e2e-singleplayer | 4 | puzzles | 6 |
+| error-handler | 9 | reconnection | 4 |
+| feature-flags | 4 | rematch | 4 |
+| features | 4 | scores | 8 |
+| health | 3 | security | 8 |
+| log-format | 4 | spectator | 10 |
+| logger | 21 | sqlite-adapter | 24 |
+| matches | 9 | submissions | 21 |
+| | | telemetry | 14 |
+| | | wal-cleanup | 5 |
+
+**Playwright E2E (6 specs, 21 tests):**
+
+| Spec | Tests |
+|---|---|
+| auth | 5 |
+| daily | 2 |
+| freeplay | 2 |
+| keyboard | 2 |
+| leaderboard | 1 |
+| telemetry | 9 |
+
+### Server Architecture
+
+```
+server/
+├── index.js              # Entry point, server startup
+├── app.js                # Express app factory, route wiring, middleware
+├── config.js             # Centralized env vars with startup validation
+├── logger.js             # Pino structured logging, OTel trace mixin
+├── telemetry.js          # OpenTelemetry SDK, Azure Monitor exporter
+├── achievements.js       # Achievement unlock logic
+├── categories.js         # Puzzle category definitions
+├── feature-flags.js      # Feature flag evaluation (submitPuzzle)
+├── puzzleData.js         # Bundled puzzle data
+├── routes/
+│   ├── auth.js           # /api/auth (register, login, me)
+│   ├── scores.js         # /api/scores (submit, leaderboard, multiplayer-lb, me)
+│   ├── matches.js        # /api/matches (create, join, history, get)
+│   ├── puzzles.js        # /api/puzzles (list)
+│   ├── achievements.js   # /api/achievements (list, me)
+│   ├── features.js       # /api/features (list)
+│   ├── submissions.js    # /api/submissions (submit, list, pending, review)
+│   ├── users.js          # /api/users (list, update-role)
+│   └── telemetry.js      # /api/telemetry (errors)
+├── middleware/
+│   ├── auth.js           # JWT + API key auth, optionalAuth, requireSystem
+│   └── security.js       # Helmet headers, HTTPS redirect, HSTS, CSP
+├── db/
+│   ├── index.js          # createDb() factory → returns adapter
+│   ├── base-adapter.js   # Shared interface + parameter translation
+│   ├── sqlite-adapter.js # SQLite implementation (sync → promisified)
+│   ├── mssql-adapter.js  # Azure SQL implementation (native async)
+│   ├── connection.js     # Legacy connection module
+│   ├── schema.sql        # Reference schema
+│   ├── seed-puzzles.js   # Puzzle seeding
+│   └── migrations/
+│       ├── _tracker.js   # Migration version table + runner
+│       ├── index.js      # Migration loader
+│       ├── 001-initial.js
+│       ├── 002-add-role.js
+│       ├── 003-add-max-players.js
+│       └── 004-add-submitted-by.js
+└── ws/
+    └── matchHandler.js   # WebSocket multiplayer logic
+```
+
+**Additional endpoints:** `/api/health`, `/healthz`, `/api/admin/drain`, `/api/admin/init-db`
+
+### Database Tables
+
+`users`, `scores`, `matches`, `match_players`, `match_rounds`, `achievements`, `user_achievements`, `puzzles`, `puzzle_submissions`
+
+### Client Architecture
+
+```
+public/
+├── index.html            # SPA shell
+├── manifest.json         # PWA manifest
+├── offline.html          # Offline fallback page
+├── sw.js                 # Service worker (offline support)
+├── js/
+│   ├── app.js            # Event handlers, screen navigation
+│   ├── game.js           # Game engine
+│   ├── daily.js          # Daily challenge logic
+│   ├── puzzles.js        # Client-side puzzle data
+│   ├── audio.js          # Web Audio API sounds
+│   ├── storage.js        # LocalStorage helpers
+│   └── sw-register.js    # Service worker registration
+├── css/                  # Stylesheets
+└── img/                  # Image assets (SVG puzzles)
+```
+
+### Feature Flags
+
+- `submitPuzzle`: default-off, percentage rollout, user targeting, overrides disabled in prod/staging
+
+### Dev Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/dev-server.js` | Unified dev server with HTTPS + log capture |
+| `scripts/dev-https.js` | HTTPS monkey-patch for local dev |
+| `scripts/health-check.ps1` | Windows health check script |
+| `scripts/health-check.sh` | Unix health check script |
+
+### GitHub Configuration
+
+- `.github/CODEOWNERS` — code ownership rules
+- `.github/copilot-instructions.md` — Copilot context
+- `.github/pull_request_template.md` — PR template
+
+### Infrastructure
+
+- `infra/deploy.sh` / `infra/deploy.ps1` — Azure deployment scripts
+- `infra/setup-github.sh` / `infra/setup-github.ps1` — GitHub secrets/variables setup
+- `infra/README.md` — Infrastructure documentation
+
 ### Deployment Architecture
 
 ```
-  Developer pushes to main
+  Developer opens PR targeting main
          │
          ▼
   ┌──────────────────────────────────────────────────────────────┐
   │  PR checks (ci.yml)                                         │
-  │  [Lint] + [Test]  (parallel)                                │
+  │  [Lint] + [Test] + [E2E]  (parallel)                        │
   └──────────────────────────────────────────────────────────────┘
 
   Manual trigger (staging-deploy.yml — auto-deploy disabled in PR #41)
@@ -463,7 +630,7 @@ Consolidate dev server scripts, integrate log capture into e2e tests, and add CI
                                   │  Auto-rollback on fail│
                                   └───────────────────────┘
                                              ▲
-  GitHub Actions Health Monitor (every 5 min)┘
+  GitHub Actions Health Monitor (every 6 hours)┘
          │ on failure → GitHub Issue
 ```
 
@@ -492,7 +659,7 @@ Consolidate dev server scripts, integrate log capture into e2e tests, and add CI
 | Host disconnect (lobby) | Auto-transfer to next player | Prevents room death from host leaving |
 | Player disconnect (active) | 30s reconnect → drop (score frozen) | Match continues for remaining players (≥2) |
 | Winner logic | Full ranking with tie handling | Placements (1st/2nd/3rd…) instead of binary win/lose |
-| Spectator mode | Deferred | Not needed for initial N-player support; add later |
+| Spectator mode | ✅ Done (Phase 8) | Read-only WS, spectator count in lobby, spectator badge, dedicated tests |
 | Rematch flow | Host "New Match" → auto-join lobby | Simpler than N-player ready-up counting |
 
 ### Key Design Decisions (Phase 10 — CI/CD Pipeline Rework)
@@ -568,6 +735,33 @@ Consolidate dev server scripts, integrate log capture into e2e tests, and add CI
 - Project gains multiple active contributors
 - We enter an open-ended feature development phase without clear dependency chains
 
+## Adopted Tools & Minimum Versions
+
+> Versions below are minimum versions matching the semver ranges in `package.json`.
+
+| Tool | Purpose | Notes |
+|---|---|---|
+| Express 5 | HTTP server + API routes | v5.2.1 — note `/{*path}` wildcard syntax (not `*`) |
+| better-sqlite3 | SQLite driver | v12.8.0 — WAL mode, synchronous API, good for single-server |
+| ws | WebSocket server | v8.20.0 — Lightweight, no socket.io overhead |
+| bcryptjs | Password hashing | v3.0.3 — Pure JS, 10 rounds |
+| jsonwebtoken | JWT auth tokens | v9.0.3 — 7-day expiry, secret from env var |
+| mssql | Azure SQL driver | v12.2.1 — connection pooling, parameterized queries |
+| pino | Structured logging | v10.3.1 — JSON in prod, pretty-print in dev |
+| pino-http | HTTP request logging | v11.0.0 — auto-logs requests, ignores health/telemetry/static |
+| @opentelemetry/sdk-node | Distributed tracing | v0.214.0 — auto-instruments HTTP/Express/DB |
+| @azure/monitor-opentelemetry-exporter | Azure Monitor export | v1.0.0-beta.32 — sends traces to App Insights |
+| helmet | Security headers | v8.1.0 — HSTS, CSP with wss:, HTTPS redirect |
+| express-rate-limit | Rate limiting | v8.3.1 — auth endpoints, telemetry, submissions |
+| Docker | Containerization | Same Dockerfile for local dev, staging, and production |
+| GitHub Container Registry | Image storage | Free, integrated with GitHub Actions |
+| Azure Container Apps | Hosting (staging + prod) | Consumption plan, scale-to-zero, WebSocket support |
+| GitHub Actions | CI/CD + health monitoring | Build, deploy, smoke tests, cron-based health checks |
+| ESLint | Linting | v10.1.0 — flat config (`eslint.config.mjs`), `@eslint/js` recommended + custom rules |
+| Vitest | Unit/integration tests | v4.1.2 — fast, ESM-native, built-in coverage |
+| Playwright | Browser E2E tests | v1.58.2 — Chromium, full UI flow testing |
+| supertest | HTTP test agent | v7.2.2 — Express endpoint testing |
+
 ## Active Design Notes
 
 These should be kept in mind throughout Phase 1 development:
@@ -577,6 +771,23 @@ These should be kept in mind throughout Phase 1 development:
 - [x] Answer submission uses callbacks (not direct DOM writes)
 - [x] Screen navigation supports adding new screens without refactoring
 - [x] No global mutable state — single state object pattern
+
+---
+
+## Puzzle Authoring Guide
+
+When adding new puzzles to `puzzles.js`:
+
+1. Every puzzle must have: `id`, `category`, `difficulty` (1–3), `type`, `sequence`, `answer`, `options`, `explanation`
+2. `answer` must appear exactly once in `options`
+3. `options` must have exactly 4 items
+4. `sequence` must have 3–6 items
+5. `difficulty` guide:
+   - **1**: Obvious patterns (counting, colors, alphabet)
+   - **2**: Requires domain knowledge (moon phases, music scales)
+   - **3**: Lateral thinking or obscure patterns
+6. For image puzzles: paths are relative to `img/` directory
+7. Write a clear `explanation` — players see it after answering
 
 ---
 
