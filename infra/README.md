@@ -127,8 +127,11 @@ Create two environments under **Settings → Environments**:
 
 ### 4. GHCR Authentication
 
-GitHub Actions uses `GITHUB_TOKEN` automatically for GHCR. Ensure the package
-visibility is set correctly:
+CI workflows use `GITHUB_TOKEN` for pushing images to GHCR. However, the
+deploy workflows (`staging-deploy.yml`, `prod-deploy.yml`) also use `GHCR_PAT`
+and `GHCR_USERNAME` for Azure Container Apps registry authentication and image
+validation. Both the PAT secret and username variable are listed in the tables
+above.
 
 ```bash
 # If needed, grant the repository access to the container package
