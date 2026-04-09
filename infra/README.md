@@ -299,7 +299,13 @@ Navigate to **Settings → Secrets and variables → Actions → Variables** and
 | `STAGING_URL` | Staging application URL (e.g. `https://gwn-staging.<region>.azurecontainerapps.io`) |
 | `GHCR_USERNAME` | GitHub username for container registry access |
 | `STAGING_AUTO_DEPLOY` | Set to `true` to enable auto-deploy to staging on merge to main |
-| `CANONICAL_HOST` | Hostname used by the app (host portion of the deployed URL, without `https://`). For staging, the deploy workflow derives it from `STAGING_URL` if not set. For production, this must be set explicitly. Override for custom domain mappings. |
+| `CANONICAL_HOST` | Hostname used by the app (host portion of the deployed URL, without `https://`). For staging, the deploy workflow derives it from `STAGING_URL` if not set. For production, set this explicitly to the production hostname. |
+
+> **Important:** Defining `CANONICAL_HOST` as a GitHub Actions variable is only effective
+> if your deploy workflow passes it through to the Azure Container App environment. If
+> `prod-deploy.yml` does not inject this value, add `CANONICAL_HOST` directly to the
+> **gwn-production** Container App environment variables in Azure (e.g. via
+> `az containerapp update --set-env-vars CANONICAL_HOST=<host>`).
 
 ### Environments
 
