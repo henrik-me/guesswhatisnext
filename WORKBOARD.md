@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-09T21:28Z
+> **Last updated:** 2026-04-09T21:53Z
 
 ## Orchestrators
 
@@ -15,7 +15,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS16 | Docs Optimization | Address PR #102 review gaps + workboard/instructions updates | yoga-gwn | wt-1 | yoga-gwn/cs16-docs-optimization | — | 2026-04-09 |
+| CS16 | Docs Optimization | Address PR #102 review gaps + workboard/instructions updates | yoga-gwn | wt-1 | yoga-gwn/cs16-docs-optimization | #111 | 2026-04-09 |
 
 ## Queued (ready, no dependencies blocking)
 
