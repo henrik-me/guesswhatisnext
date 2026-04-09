@@ -347,3 +347,22 @@ This keeps the pattern consistent across all pages without duplicating timer log
 - Squad reaches beta/stable release
 - Project gains multiple active contributors
 - We enter an open-ended feature development phase without clear dependency chains
+
+---
+
+## Model Evaluation
+
+Recommendations based on benchmark results comparing claude-opus-4.6, claude-sonnet-4.6, gpt-5.4, and gpt-5.3-codex on identical coding tasks (claude-haiku-4.5 included for exploration based on separate cost/speed evaluation):
+
+| Task Type | Recommended Model | Rationale |
+|---|---|---|
+| **Orchestration / planning** | claude-opus-4.6 | Best instruction following, fastest, manages complex workflows without extra prompting |
+| **Quick iteration / convention-heavy coding** | claude-opus-4.6 | 2x speed advantage, fewest review comments, strong convention compliance |
+| **Deep refactoring / architecture** | gpt-5.4 | Bolder design choices (immutable patterns, DRY helpers, proactive cleanup), more thorough |
+| **Test authoring** | gpt-5.4 | More thorough coverage (reason verification, hermetic env vars, DRY test factories, edge cases) |
+| **Exploration / research** | claude-haiku-4.5 | Cost-effective for read-only codebase analysis |
+
+**Key observations:**
+- GPT models require more explicit procedural prompting for workflow steps (e.g., review loop polling). Always include the full Sub-Agent Checklist when dispatching GPT-based sub-agents.
+- Claude models better internalize workflow instructions from high-level descriptions.
+- These recommendations are based on benchmark results from April 2026 and should be re-evaluated periodically as models improve.
