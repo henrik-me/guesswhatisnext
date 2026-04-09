@@ -11,6 +11,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 |----------|---------|-------------|--------|
 | yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active |
 | yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active |
+| yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active |
 
 ## Active Work
 
