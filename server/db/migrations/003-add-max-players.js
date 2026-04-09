@@ -24,7 +24,11 @@ module.exports = {
       `);
       await db.exec(`
         IF COL_LENGTH('matches', 'host_user_id') IS NULL
-          ALTER TABLE matches ADD host_user_id INT REFERENCES users(id);
+          ALTER TABLE matches ADD host_user_id INT;
+      `);
+      await db.exec(`
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_matches_host_user_id')
+          ALTER TABLE matches ADD CONSTRAINT FK_matches_host_user_id FOREIGN KEY (host_user_id) REFERENCES users(id);
       `);
     } else {
       try {

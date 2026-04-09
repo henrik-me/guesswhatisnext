@@ -357,7 +357,7 @@ function createServer() {
       } catch (err) {
         dbInitialized = false;
         const db = isAdapterInitialized() ? await getDbAdapter() : null;
-        const dialect = db && db.dialect;
+        const dialect = db ? db.dialect : config.DB_BACKEND;
 
         let isRetryable;
         if (dialect === 'mssql') {

@@ -118,27 +118,27 @@ CREATE TABLE puzzle_submissions (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_scores_user')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_scores_user' AND object_id = OBJECT_ID('scores'))
   CREATE INDEX idx_scores_user ON scores(user_id);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_scores_mode_date')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_scores_mode_date' AND object_id = OBJECT_ID('scores'))
   CREATE INDEX idx_scores_mode_date ON scores(mode, played_at);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_scores_leaderboard')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_scores_leaderboard' AND object_id = OBJECT_ID('scores'))
   CREATE INDEX idx_scores_leaderboard ON scores(mode, score DESC);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_matches_room')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_matches_room' AND object_id = OBJECT_ID('matches'))
   CREATE INDEX idx_matches_room ON matches(room_code);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_matches_status')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_matches_status' AND object_id = OBJECT_ID('matches'))
   CREATE INDEX idx_matches_status ON matches(status);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_user_achievements_user')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_user_achievements_user' AND object_id = OBJECT_ID('user_achievements'))
   CREATE INDEX idx_user_achievements_user ON user_achievements(user_id);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzles_category')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzles_category' AND object_id = OBJECT_ID('puzzles'))
   CREATE INDEX idx_puzzles_category ON puzzles(category);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzles_difficulty')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzles_difficulty' AND object_id = OBJECT_ID('puzzles'))
   CREATE INDEX idx_puzzles_difficulty ON puzzles(difficulty);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzles_active')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzles_active' AND object_id = OBJECT_ID('puzzles'))
   CREATE INDEX idx_puzzles_active ON puzzles(active);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzle_submissions_user')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzle_submissions_user' AND object_id = OBJECT_ID('puzzle_submissions'))
   CREATE INDEX idx_puzzle_submissions_user ON puzzle_submissions(user_id);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzle_submissions_status')
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_puzzle_submissions_status' AND object_id = OBJECT_ID('puzzle_submissions'))
   CREATE INDEX idx_puzzle_submissions_status ON puzzle_submissions(status);
 `;
 
