@@ -127,8 +127,11 @@ function getFeatureOverride(feature, req = {}) {
 
   const headers = req.headers || {};
   const overrideHeaderName = feature.overrideHeader.toLowerCase();
-  const matchingHeaderName = Object.keys(headers).find((name) => String(name).toLowerCase() === overrideHeaderName);
-  const headerValue = matchingHeaderName ? headers[matchingHeaderName] : null;
+  const directHeaderValue = headers[overrideHeaderName];
+  const matchingHeaderName = directHeaderValue === undefined
+    ? Object.keys(headers).find((name) => String(name).toLowerCase() === overrideHeaderName)
+    : null;
+  const headerValue = directHeaderValue ?? (matchingHeaderName ? headers[matchingHeaderName] : null);
   const headerOverride = parseOverrideValue(headerValue);
   if (headerOverride !== null) return headerOverride;
 
