@@ -260,16 +260,17 @@ describe('evaluateFeatureDetailed', () => {
 });
 
 describe('header case-insensitivity for overrides', () => {
-  test('upper-case header name is still recognized', () => {
+  test('mixed-case overrideHeader definition matches lowercased incoming header', () => {
     const feature = {
       ...FEATURE_FLAGS.submitPuzzle,
       users: new Set(),
       rolloutPercentage: 0,
       allowOverride: true,
-      overrideHeader: 'x-gwn-feature-submit-puzzle',
+      // Feature definition uses mixed case; Express always lowercases incoming headers
+      overrideHeader: 'X-GWN-Feature-Submit-Puzzle',
     };
 
-    // Node/Express lowercases headers automatically, but our code also normalizes
+    // Express lowercases all request headers; our code normalizes via .toLowerCase() fallback
     const result = evaluateFeatureFlag(feature, {
       headers: { 'x-gwn-feature-submit-puzzle': 'true' },
     });
