@@ -36,7 +36,8 @@ guesswhatisnext/
 │   ├── ws/matchHandler.js          # WebSocket match engine (2–10 players)
 │   ├── db/
 │   │   ├── schema.sql              # SQLite table definitions
-│   │   └── connection.js           # DB init + query helpers
+│   │   ├── index.js                # DB factory / primary database entry point
+│   │   └── connection.js           # Legacy DB module
 │   └── middleware/auth.js          # JWT + API key verification middleware
 ├── data/                           # SQLite database (auto-created, git-ignored)
 ├── Dockerfile                      # Production container image
@@ -82,7 +83,7 @@ guesswhatisnext/
  │ git push│──────────────▶│ GitHub Actions │
  │ to main │              │               │
  └─────────┘              │ ┌───────────┐ │
-                          │ │ Lint+Test  │ │
+                          │ │Lint+Test+E2E│ │
                           │ └─────┬─────┘ │
                           │       │       │
                           │ ┌─────▼─────┐ │
@@ -123,7 +124,7 @@ guesswhatisnext/
                           │               │
                           │ ┌───────────┐ │               ▲
                           │ │ Health    │─┼───────────────┘
-                          │ │ Monitor   │ │  every 5 min
+                          │ │ Monitor   │ │  every 6 hours
                           │ │ (cron)    │ │  on failure → GH Issue
                           │ └───────────┘ │
                           └───────────────┘
@@ -545,7 +546,7 @@ gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THRE
 | Environment | Trigger | Approval | Infrastructure | Rollback |
 |---|---|---|---|---|
 | **Local** | `docker compose up` or `npm start` | None | Developer machine | N/A |
-| **Ephemeral staging** | Hourly cron (if main has new commits) | Automatic | GitHub Actions (container in workflow) | N/A (ephemeral) |
+| **Ephemeral staging** | Push to main + workflow_dispatch (gated by `STAGING_AUTO_DEPLOY`) | Automatic | GitHub Actions (container in workflow) | N/A (ephemeral) |
 | **Azure staging** | After ephemeral validation passes | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-staging | Redeploy previous SHA-tagged image |
 | **Production** | After Azure staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-prod | Auto-rollback to previous SHA-tagged image |
 

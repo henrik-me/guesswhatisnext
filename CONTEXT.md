@@ -740,10 +740,10 @@ public/
 | Tool | Purpose | Notes |
 |---|---|---|
 | Express 5 | HTTP server + API routes | v5.2.1 — note `/{*path}` wildcard syntax (not `*`) |
-| better-sqlite3 | SQLite driver | WAL mode, synchronous API, good for single-server |
-| ws | WebSocket server | Lightweight, no socket.io overhead |
-| bcryptjs | Password hashing | Pure JS, 10 rounds |
-| jsonwebtoken | JWT auth tokens | 7-day expiry, secret from env var |
+| better-sqlite3 | SQLite driver | v12.8.0 — WAL mode, synchronous API, good for single-server |
+| ws | WebSocket server | v8.20.0 — Lightweight, no socket.io overhead |
+| bcryptjs | Password hashing | v3.0.3 — Pure JS, 10 rounds |
+| jsonwebtoken | JWT auth tokens | v9.0.3 — 7-day expiry, secret from env var |
 | mssql | Azure SQL driver | v12.2.1 — connection pooling, parameterized queries |
 | pino | Structured logging | v10.3.1 — JSON in prod, pretty-print in dev |
 | pino-http | HTTP request logging | v11.0.0 — auto-logs requests, ignores health/telemetry/static |
