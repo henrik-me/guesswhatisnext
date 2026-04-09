@@ -46,14 +46,14 @@ az provider register --namespace Microsoft.OperationalInsights
 # 1. Login
 az login
 
-# 2. (Optional) Pre-set secrets — setup-github.ps1 auto-generates them if not set
-# $env:JWT_SECRET = New-SecureSecret 48
-# $env:SYSTEM_API_KEY = New-SecureSecret 32
+# 2. Set required environment variables (used by deploy.ps1 for Azure provisioning)
+$bytes48 = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes48); $env:JWT_SECRET = [Convert]::ToBase64String($bytes48)
+$bytes32 = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes32); $env:SYSTEM_API_KEY = [Convert]::ToBase64String($bytes32)
 
 # 3. Provision Azure resources
 .\infra\deploy.ps1
 
-# 4. Configure GitHub secrets and variables
+# 4. Configure GitHub secrets and variables (auto-generates GitHub secrets from env or fresh values)
 .\infra\setup-github.ps1
 ```
 
@@ -63,15 +63,15 @@ az login
 # 1. Login
 az login
 
-# 2. (Optional) Pre-set secrets — setup-github.sh auto-generates them if not set
-# export JWT_SECRET="$(openssl rand -base64 48)"
-# export SYSTEM_API_KEY="$(openssl rand -base64 32)"
+# 2. Set required environment variables (used by deploy.sh for Azure provisioning)
+export JWT_SECRET="$(openssl rand -base64 48)"
+export SYSTEM_API_KEY="$(openssl rand -base64 32)"
 
 # 3. Provision Azure resources
 chmod +x infra/deploy.sh
 ./infra/deploy.sh
 
-# 4. Configure GitHub secrets and variables
+# 4. Configure GitHub secrets and variables (auto-generates GitHub secrets from env or fresh values)
 chmod +x infra/setup-github.sh
 ./infra/setup-github.sh
 ```
