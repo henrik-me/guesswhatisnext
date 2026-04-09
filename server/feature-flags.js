@@ -6,26 +6,45 @@ const logger = require('./logger');
 const ENABLED_OVERRIDE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enable', 'enabled']);
 const DISABLED_OVERRIDE_VALUES = new Set(['0', 'false', 'no', 'off', 'disable', 'disabled']);
 
+function normalizeIdentifier(value) {
+  return String(value).trim().toLowerCase();
+}
+
+/**
+ * Clamp rollout percentage values to an integer in range 0-100.
+ * @param {unknown} value - Candidate percentage input.
+ * @returns {number} Clamped integer rollout percentage.
+ */
 function clampRolloutPercentage(value) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.min(100, parsed));
 }
 
+/**
+ * Parse a comma-separated user target list into a normalized key set.
+ * @param {unknown} value - Comma-separated user identifiers.
+ * @returns {Set<string>} Normalized target key set.
+ */
 function parseUserList(value) {
   return new Set(
     String(value || '')
       .split(',')
-      .map((item) => item.trim().toLowerCase())
+      .map((item) => normalizeIdentifier(item))
       .filter(Boolean),
   );
 }
 
+/**
+ * Parse a feature override value from query/header input.
+ * @param {unknown} value - Raw request override value.
+ * @returns {boolean|null} Parsed boolean override, or null when invalid.
+ */
 function parseOverrideValue(value) {
   const raw = Array.isArray(value) ? value[0] : value;
   if (raw === undefined || raw === null) return null;
 
-  const normalized = String(raw).trim().toLowerCase();
+  const normalized = normalizeIdentifier(raw);
   if (!normalized) return null;
   if (ENABLED_OVERRIDE_VALUES.has(normalized)) return true;
   if (DISABLED_OVERRIDE_VALUES.has(normalized)) return false;
@@ -44,6 +63,12 @@ const FEATURE_FLAGS = Object.freeze({
   }),
 });
 
+/**
+ * Resolve a feature flag configuration by name.
+ * @param {string} featureName - Feature flag key.
+ * @returns {object} Feature configuration.
+ * @throws {Error} When the feature name is unknown.
+ */
 function getFeatureDefinition(featureName) {
   const feature = FEATURE_FLAGS[featureName];
   if (!feature) {
@@ -57,25 +82,35 @@ function getTargetKeys(user) {
 
   const keys = [];
   if (user.id !== undefined && user.id !== null) {
-    keys.push(String(user.id).trim().toLowerCase());
+    keys.push(normalizeIdentifier(user.id));
   }
   if (user.username) {
-    keys.push(String(user.username).trim().toLowerCase());
+    keys.push(normalizeIdentifier(user.username));
   }
   return keys.filter(Boolean);
 }
 
+/**
+ * Build a stable identifier used for deterministic rollout bucketing.
+ * @param {object|null|undefined} user - Request user object.
+ * @returns {string|null} Stable rollout key or null when unavailable.
+ */
 function getStableRolloutKey(user) {
   if (!user) return null;
   if (user.id !== undefined && user.id !== null) {
-    return `id:${String(user.id).trim().toLowerCase()}`;
+    return `id:${normalizeIdentifier(user.id)}`;
   }
   if (user.username) {
-    return `user:${String(user.username).trim().toLowerCase()}`;
+    return `user:${normalizeIdentifier(user.username)}`;
   }
   return null;
 }
 
+/**
+ * Hash a stable rollout key into a deterministic bucket from 0 to 99.
+ * @param {string} stableKey - Stable rollout key.
+ * @returns {number} Rollout bucket value.
+ */
 function getRolloutBucket(stableKey) {
   let hash = 0;
   for (const char of String(stableKey || '')) {
@@ -92,7 +127,9 @@ function getFeatureOverride(feature, req = {}) {
   if (queryOverride !== null) return queryOverride;
 
   const headers = req.headers || {};
-  const headerValue = headers[feature.overrideHeader] ?? headers[feature.overrideHeader.toLowerCase()];
+  const expectedHeader = feature.overrideHeader.toLowerCase();
+  const headerKey = Object.keys(headers).find((key) => key.toLowerCase() === expectedHeader);
+  const headerValue = headerKey ? headers[headerKey] : undefined;
   const headerOverride = parseOverrideValue(headerValue);
   if (headerOverride !== null) return headerOverride;
 
@@ -104,6 +141,12 @@ function isUserTargeted(feature, user) {
   return getTargetKeys(user).some((key) => feature.users.has(key));
 }
 
+/**
+ * Evaluate a feature configuration for a given request context.
+ * @param {object} feature - Feature configuration object.
+ * @param {object} [req={}] - Express-like request context.
+ * @returns {{ enabled: boolean, reason: string }} Evaluation result.
+ */
 function evaluateFeatureFlag(feature, req = {}) {
   let enabled;
   let reason;
@@ -135,14 +178,38 @@ function evaluateFeatureFlag(feature, req = {}) {
     reason = 'default-off';
   }
 
-  logger.debug({ flag: feature.key, enabled, reason }, 'feature flag evaluated');
-  return enabled;
+  const result = { enabled, reason };
+  logger.debug({ flag: feature.key, enabled: result.enabled, reason: result.reason }, 'feature flag evaluated');
+  return result;
 }
 
+/**
+ * Evaluate a named feature and include the evaluated flag name in the response.
+ * @param {string} featureName - Feature flag key to evaluate.
+ * @param {object} [req={}] - Express-like request context.
+ * @returns {{ enabled: boolean, reason: string, flag: string }} Detailed evaluation result.
+ */
+function evaluateFeatureDetailed(featureName, req = {}) {
+  const feature = getFeatureDefinition(featureName);
+  const result = evaluateFeatureFlag(feature, req);
+  return { ...result, flag: featureName };
+}
+
+/**
+ * Evaluate whether a named feature is enabled for a request.
+ * @param {string} featureName - Feature flag key to evaluate.
+ * @param {object} [req={}] - Express-like request context.
+ * @returns {boolean} Whether the feature is enabled.
+ */
 function isFeatureEnabled(featureName, req = {}) {
-  return evaluateFeatureFlag(getFeatureDefinition(featureName), req);
+  return evaluateFeatureFlag(getFeatureDefinition(featureName), req).enabled;
 }
 
+/**
+ * Evaluate all configured feature flags for a request context.
+ * @param {object} [req={}] - Express-like request context.
+ * @returns {Record<string, boolean>} Map of feature names to enabled booleans.
+ */
 function getFeatureFlags(req = {}) {
   return Object.fromEntries(
     Object.keys(FEATURE_FLAGS).map((featureName) => [featureName, isFeatureEnabled(featureName, req)]),
@@ -152,6 +219,7 @@ function getFeatureFlags(req = {}) {
 module.exports = {
   FEATURE_FLAGS,
   clampRolloutPercentage,
+  evaluateFeatureDetailed,
   evaluateFeatureFlag,
   getFeatureFlags,
   getRolloutBucket,
