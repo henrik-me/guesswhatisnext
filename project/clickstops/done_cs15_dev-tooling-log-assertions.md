@@ -17,7 +17,7 @@
 
 - [x] All tasks done and merged — ✅ PRs #88, #93, #94
 - [x] README updated — N/A (internal dev tooling, not user-facing)
-- [x] INSTRUCTIONS.md updated — ✅ dev-server.js documented in CONTEXT.md codebase state
+- [x] INSTRUCTIONS.md updated — N/A (dev-server.js/tooling notes documented in CONTEXT.md codebase state)
 - [x] CONTEXT.md updated — ✅ Updated in close-out PR
 - [x] Tests added/updated — ✅ `tests/log-format.test.js` (4 tests), `tests/e2e/global-teardown.mjs` assertions
 - [x] Performance/load test evaluation — N/A (dev tooling)
