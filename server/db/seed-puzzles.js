@@ -14,8 +14,10 @@ async function seedPuzzles() {
 
   await db.transaction(async (tx) => {
     for (const p of puzzles) {
+      const existing = await tx.get('SELECT 1 AS ok FROM puzzles WHERE id = ?', [p.id]);
+      if (existing) continue;
       await tx.run(
-        `INSERT OR REPLACE INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active)
+        `INSERT INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [p.id, p.category, p.difficulty, p.type, JSON.stringify(p.sequence), p.answer, JSON.stringify(p.options), p.explanation]
       );
@@ -31,12 +33,6 @@ if (require.main === module) {
     try {
       const migrations = require('./migrations');
       const db = await getDbAdapter();
-      if (db.dialect === 'mssql') {
-        throw new Error(
-          'The seed-puzzles script does not support the MSSQL backend. ' +
-          'Configure a supported DB_BACKEND before running this script.'
-        );
-      }
       await db.migrate(migrations);
       await seedPuzzles();
     } catch (err) {

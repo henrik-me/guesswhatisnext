@@ -19,7 +19,7 @@
 | CS11-64a | Create Azure SQL server | ⬜ Pending | CS11-63v | Create the production logical server in the chosen region/tier; capture admin + server details. |
 | CS11-64b | Create serverless prod DB | ⬜ Pending | CS11-64a | Create the production DB on that server and capture the final DB name/connection parameters. |
 | CS11-64c | Configure firewall access | ⬜ Pending | CS11-64a | Allow Azure-hosted app access plus operator IP(s) for setup/testing. Parallel with CS11-64b once server exists. |
-| CS11-64d | Plan MSSQL schema bootstrap | ⬜ Pending | CS11-64b | Required before cutover: app startup still fails fast for MSSQL auto-init, so use manual migrations/seeding or enable an equivalent init path first. |
+| CS11-64d | Enable MSSQL schema bootstrap | ✅ Done | CS11-64b | Removed MSSQL fail-fast gate; dialect-aware migrations, seeding, and retry logic. |
 | CS11-64e | Add GitHub `DATABASE_URL` secret | ⬜ Pending | CS11-64b | Store the production connection string after the server + DB names are final. Parallel with CS11-64d. |
 | CS11-65 | Production deploy | ⬜ Pending | CS11-64 | Rollup for 65a–65c: wire workflow/env, deploy, then verify production. |
 | CS11-65a | Update `prod-deploy.yml` for MSSQL | ⬜ Pending | CS11-64 | Pass `DATABASE_URL` so production selects MSSQL; the workflow still uses `GWN_DB_PATH=/tmp/game.db` today. |

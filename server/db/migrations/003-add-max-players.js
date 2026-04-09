@@ -17,24 +17,30 @@ module.exports = {
   version: 3,
   name: 'add-max-players-and-host-to-matches',
   async up(db) {
-    try {
-      await db.exec('ALTER TABLE matches ADD COLUMN max_players INTEGER NOT NULL DEFAULT 2');
-    } catch (err) {
-      if (!isDuplicateColumnError(err)) throw err;
-    }
+    if (db.dialect === 'mssql') {
+      await db.exec(`
+        IF COL_LENGTH('matches', 'max_players') IS NULL
+          ALTER TABLE matches ADD max_players INT NOT NULL DEFAULT 2;
+      `);
+      await db.exec(`
+        IF COL_LENGTH('matches', 'host_user_id') IS NULL
+          ALTER TABLE matches ADD host_user_id INT REFERENCES users(id);
+      `);
+    } else {
+      try {
+        await db.exec('ALTER TABLE matches ADD COLUMN max_players INTEGER NOT NULL DEFAULT 2');
+      } catch (err) {
+        if (!isDuplicateColumnError(err)) throw err;
+      }
 
-    let hostColumnExists = false;
-    try {
-      await db.exec('ALTER TABLE matches ADD COLUMN host_user_id INTEGER REFERENCES users(id)');
-      hostColumnExists = true;
-    } catch (err) {
-      if (!isDuplicateColumnError(err)) throw err;
-      hostColumnExists = true; // column already existed
+      try {
+        await db.exec('ALTER TABLE matches ADD COLUMN host_user_id INTEGER REFERENCES users(id)');
+      } catch (err) {
+        if (!isDuplicateColumnError(err)) throw err;
+      }
     }
 
     // Backfill host_user_id — safe whether column was just added or already existed
-    if (hostColumnExists) {
-      await db.exec('UPDATE matches SET host_user_id = created_by WHERE host_user_id IS NULL');
-    }
+    await db.exec('UPDATE matches SET host_user_id = created_by WHERE host_user_id IS NULL');
   },
 };
