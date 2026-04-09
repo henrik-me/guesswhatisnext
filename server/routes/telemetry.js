@@ -1,0 +1,71 @@
+const express = require('express');
+const rateLimit = require('express-rate-limit');
+const { optionalAuth } = require('../middleware/auth');
+const logger = require('../logger');
+
+const router = express.Router();
+const telemetryJsonParser = express.json({ type: 'application/json' });
+
+function parseTelemetryJson(req, res, next) {
+  telemetryJsonParser(req, res, (err) => {
+    if (!err) return next();
+    if (err.type === 'entity.parse.failed' || err instanceof SyntaxError) {
+      return res.status(400).json({ error: 'Malformed JSON body' });
+    }
+    return next(err);
+  });
+}
+
+const errorReportLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  // req.ip respects trust proxy setting, giving the real client IP behind a reverse proxy
+  message: { error: 'Too many error reports, try again later' },
+});
+
+router.post('/errors', errorReportLimiter, optionalAuth, parseTelemetryJson, (req, res) => {
+  const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? req.body
+    : {};
+  const {
+    message,
+    source,
+    lineno,
+    colno,
+    stack,
+    type,
+  } = body;
+
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'message is required' });
+  }
+
+  const safeString = (val, maxLen) => (typeof val === 'string' ? val.substring(0, maxLen) : undefined);
+  const safeInt = (val) => (Number.isFinite(val) ? val : undefined);
+
+  const errorContext = {
+    component: 'client',
+    type: safeString(type, 50) || 'error',
+    source: safeString(source, 500) || 'unknown',
+    lineno: safeInt(lineno),
+    colno: safeInt(colno),
+    userId: req.user?.id || null,
+    userAgent: safeString(req.headers['user-agent'], 500),
+    remoteAddress: req.ip,
+  };
+
+  const truncatedStack = typeof stack === 'string' && stack.length > 0
+    ? stack.substring(0, 2000)
+    : undefined;
+
+  logger.warn(
+    { ...errorContext, ...(truncatedStack ? { stack: truncatedStack } : {}) },
+    `Client error: ${message.substring(0, 500)}`
+  );
+
+  res.status(204).end();
+});
+
+module.exports = router;

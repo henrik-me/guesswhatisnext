@@ -24,6 +24,14 @@ if (!externalBaseURL) {
 }
 const dbPath = path.join(tmpDir, 'test.db');
 
+// Capture server output to a log file for post-test assertions and CI artifacts.
+// Write to .playwright/ initially; global teardown copies into test-results/
+// (Playwright cleans its outputDir after the webServer starts).
+const serverLogPath = path.join('.playwright', 'server.log');
+if (!externalBaseURL) {
+  fs.mkdirSync('.playwright', { recursive: true });
+}
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30000,
@@ -35,6 +43,7 @@ export default defineConfig({
   use: {
     baseURL: externalBaseURL || 'http://localhost:3011',
     trace: 'retain-on-failure',
+    ...(externalBaseURL ? { extraHTTPHeaders: { 'X-Forwarded-Proto': 'https' } } : {}),
   },
   projects: [
     {
@@ -45,7 +54,7 @@ export default defineConfig({
   webServer: externalBaseURL
     ? undefined
     : {
-        command: 'node server/index.js',
+        command: `node scripts/dev-server.js --no-https --output ${serverLogPath}`,
         port: 3011,
         reuseExistingServer: false,
         env: {

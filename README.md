@@ -93,6 +93,12 @@ For development with auto-reload:
 npm run dev
 ```
 
+For production-like local testing (HTTPS + log capture):
+```bash
+npm run dev:full
+# → https://localhost:3443 (accept self-signed cert warning)
+```
+
 ### Admin Bootstrapping
 
 The first admin user must be bootstrapped. Two options:
@@ -113,6 +119,27 @@ The first admin user must be bootstrapped. Two options:
 
 Once promoted, admin users can manage other users' roles from the **🛡️ Moderation** screen in the UI. Note: after a role change, the user must log out and log back in for the new role to take effect (the role is stored in their JWT token).
 
+### Feature Flags
+
+This section documents the small central **server-side feature-flag system** introduced in PR #91, which safely ships incomplete or limited-access features without exposing them to everyone at once.
+
+- **Evaluation order:** start from the feature's configured default state; then apply a feature-specific request override only when that feature allows overrides in the current environment; otherwise apply explicit user targeting, then deterministic percentage rollout. If none of those change the result, the feature remains at its default state.
+- **Supported controls:** feature default state, specific-user targeting, deterministic percentage rollout, and optional query-param/header overrides for features that explicitly opt in. Targeting and percentage rollout may enable a feature even when its default state is off.
+- **Client/server model:** in branches that include PR #91, the client reads `/api/features` to hide or show gated UI, but server routes must still enforce the same flag
+
+**`submitPuzzle` feature-flag setup on PR #91**
+- Canonical feature-flag key: `submitPuzzle`
+- Hidden/disabled by default
+- Can be enabled for specific users and/or a rollout percentage
+- Request overrides are allowed for this feature only outside `production` and `staging`
+- Override identifiers for `submitPuzzle`: query param `ff_submit_puzzle`, header `x-gwn-feature-submit-puzzle`
+
+> Overrides are feature-specific and opt-in, not a global bypass. Only use them for features that explicitly define override support.
+>
+> `submitPuzzle` is the feature-flag key. The override names above are request identifiers, not alternate flag keys or UI route names.
+>
+> If your branch does not include PR #91 yet, `/api/features` and the documented `submitPuzzle` overrides will not be available there.
+
 ### Running with Docker
 
 ```bash
@@ -129,8 +156,14 @@ The container mounts `./data` for SQLite persistence and sets dev environment va
 ### Testing
 
 ```bash
-# Run all tests (66 tests across 11 suites)
+# Run unit + integration tests (vitest)
 npm test
+
+# Run E2E browser tests (Playwright)
+npm run test:e2e
+
+# Run everything (vitest + Playwright)
+npm run test:all
 
 # Watch mode (re-run on changes)
 npm run test:watch
@@ -143,6 +176,11 @@ npm run lint
 ```
 
 Tests are fully isolated — each suite gets its own temp database and random port. Safe to run in parallel across worktrees.
+
+### Known Issues
+
+- On Node >= 22.13, `npm ci` may install the optional `artillery` load-testing dependency and emit OpenTelemetry peer-dependency warnings. Those warnings come from optional load-testing dependencies that still pull older OTel metrics/exporter packages, while the application's runtime telemetry path uses newer OTel packages.
+- This is currently treated as non-blocking install noise for optional load-testing tooling. It does not affect the validated runtime telemetry path, and no dependency changes are planned right now. If you do not need load testing, `npm ci --omit=optional` avoids the warning by skipping optional dependencies such as `artillery`.
 
 ### Parallel Development (Worktrees)
 
@@ -317,8 +355,25 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 |---|---|
 | `npm start` | Start the server on port 3000 |
 | `npm run dev` | Start with auto-reload (--watch) |
+| `npm run dev:full` | HTTPS + log capture (recommended for testing) |
+| `npm run dev:log` | HTTP + log capture (plain HTTP with logging) |
 | `npm test` | Run tests |
 | `npm run lint` | Run ESLint (0 warnings target) |
+
+### Development Server Modes
+
+| Mode | Command | URL | Use Case |
+|---|---|---|---|
+| Quick iteration | `npm run dev` | http://localhost:3000 | Code changes with auto-reload |
+| Full local testing | `npm run dev:full` | https://localhost:3443 | Production-like: HTTPS, security headers, log capture |
+| HTTP + logging | `npm run dev:log` | http://localhost:3000 | Log analysis without HTTPS overhead |
+
+**`dev:full` (recommended for manual testing)** starts an HTTPS server with self-signed certificates, security headers active (including CSP, HSTS, and Permissions-Policy), and captures structured logs to `telemetry.log`. An HTTP server on port 3080 redirects to HTTPS, verifying the redirect middleware.
+
+All modes except `dev` capture logs to `telemetry.log` by default. Use `--no-log-file` to disable:
+```bash
+node scripts/dev-server.js --no-log-file
+```
 
 ---
 

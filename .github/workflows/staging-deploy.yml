@@ -70,8 +70,9 @@ jobs:
           PORT: 3000
           JWT_SECRET: ephemeral-smoke-test-secret
           SYSTEM_API_KEY: ephemeral-smoke-test-key
+          CANONICAL_HOST: localhost:3000
         options: >-
-          --health-cmd "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/api/health', {headers: {'X-API-Key': 'ephemeral-smoke-test-key'}}, (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1));\""
+          --health-cmd "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/api/health', {headers: {'X-API-Key': 'ephemeral-smoke-test-key', 'X-Forwarded-Proto': 'https'}}, (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1));\""
           --health-interval 5s
           --health-timeout 10s
           --health-retries 10
@@ -84,6 +85,7 @@ jobs:
             DB_STATUS="unreachable"
             if RESPONSE=$(curl -sf --connect-timeout 5 --max-time 10 \
               -H "X-API-Key: ephemeral-smoke-test-key" \
+              -H "X-Forwarded-Proto: https" \
               "http://localhost:3000/api/health"); then
               DB_STATUS=$(printf '%s' "$RESPONSE" | jq -r '.checks.database.status' 2>/dev/null || echo "unreachable")
             fi
@@ -101,6 +103,7 @@ jobs:
         run: |
           HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
             -H "X-API-Key: ephemeral-smoke-test-key" \
+            -H "X-Forwarded-Proto: https" \
             "http://localhost:3000/api/health")
           echo "Health check status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" != "200" ]; then
@@ -114,6 +117,7 @@ jobs:
           RESPONSE=$(curl -s -w '\n%{http_code}' \
             -X POST "http://localhost:3000/api/auth/register" \
             -H "Content-Type: application/json" \
+            -H "X-Forwarded-Proto: https" \
             -d "{\"username\": \"smoketest_${TIMESTAMP}\", \"password\": \"SmokeTest123!\"}")
           HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
           BODY=$(echo "$RESPONSE" | sed '$d')
@@ -131,6 +135,7 @@ jobs:
           RESPONSE=$(curl -s -w '\n%{http_code}' \
             -X POST "http://localhost:3000/api/scores" \
             -H "Content-Type: application/json" \
+            -H "X-Forwarded-Proto: https" \
             -H "Authorization: Bearer ${{ env.TOKEN }}" \
             -d '{"mode": "freeplay", "score": 100, "correctCount": 5, "totalRounds": 5, "bestStreak": 5}')
           HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
@@ -144,12 +149,39 @@ jobs:
       - name: Fetch puzzles
         run: |
           RESPONSE=$(curl -s -w '\n%{http_code}' \
+            -H "X-Forwarded-Proto: https" \
             -H "Authorization: Bearer ${{ env.TOKEN }}" \
             "http://localhost:3000/api/puzzles")
           HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
           echo "Puzzles endpoint status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" != "200" ]; then
             echo "::error::Puzzles endpoint failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Telemetry endpoint (valid error)
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
+            -X POST "http://localhost:3000/api/telemetry/errors" \
+            -H "Content-Type: application/json" \
+            -H "X-Forwarded-Proto: https" \
+            -d '{"message": "smoke-test-error", "type": "SmokeTestError"}')
+          echo "Telemetry valid payload status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "204" ]; then
+            echo "::error::Telemetry endpoint failed (expected 204, got $HTTP_STATUS)"
+            exit 1
+          fi
+
+      - name: Telemetry endpoint (invalid payload)
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
+            -X POST "http://localhost:3000/api/telemetry/errors" \
+            -H "Content-Type: application/json" \
+            -H "X-Forwarded-Proto: https" \
+            -d '{"type": "MissingMessage"}')
+          echo "Telemetry invalid payload status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != "400" ]; then
+            echo "::error::Telemetry validation failed (expected 400, got $HTTP_STATUS)"
             exit 1
           fi
 
@@ -273,6 +305,17 @@ jobs:
         uses: azure/cli@v2
         with:
           inlineScript: |
+            # Derive CANONICAL_HOST from STAGING_URL if not explicitly set
+            if [ -z "$CANONICAL_HOST" ] && [ -n "$STAGING_URL" ]; then
+              CANONICAL_HOST=$(echo "$STAGING_URL" | sed 's|^https\?://||' | sed 's|[/?#].*||' | sed 's|/$||')
+              export CANONICAL_HOST
+            fi
+            if [ -z "$CANONICAL_HOST" ]; then
+              echo "::error::CANONICAL_HOST not set. Configure vars.STAGING_URL or vars.CANONICAL_HOST in repository settings."
+              exit 1
+            fi
+            echo "Using CANONICAL_HOST=$CANONICAL_HOST"
+
             # Check if container app is stopped and start it if needed
             APP_STATE=$(az containerapp show --name gwn-staging --resource-group gwn-rg \
               --query "properties.runningStatus" -o tsv 2>/dev/null || echo "Unknown")
@@ -331,6 +374,8 @@ jobs:
                         value: "${JWT_SECRET}"
                       - name: SYSTEM_API_KEY
                         value: "${SYSTEM_API_KEY}"
+                      - name: CANONICAL_HOST
+                        value: "${CANONICAL_HOST}"
                       - name: GWN_DB_PATH
                         value: /tmp/game.db
                     resources:
@@ -355,6 +400,8 @@ jobs:
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          CANONICAL_HOST: ${{ vars.CANONICAL_HOST }}
+          STAGING_URL: ${{ vars.STAGING_URL }}
 
       - name: Switch traffic to new revision
         uses: azure/cli@v2

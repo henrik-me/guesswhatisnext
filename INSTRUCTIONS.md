@@ -136,6 +136,14 @@ guesswhatisnext/
 - **Storage layer** (`storage.js`) abstracts all persistence behind a clean API
 - **Server routes** handle HTTP API, middleware handles auth, WebSocket handler manages real-time matches
 
+### Feature Flag Rollouts
+
+The project uses a central feature-flag module for staged rollouts. The client mirrors flag state via `/api/features`, but guarded server routes still enforce the same flag server-side.
+
+- **Evaluation order:** default state → feature-specific request override (if opted in and environment allows) → explicit user targeting → deterministic percentage rollout
+- **Rollout stability:** percentage rollouts are deterministic per authenticated user
+- **Override policy:** each feature must explicitly opt in and define its own override names; overrides are never global
+
 ### File Organization
 - One module per file, one responsibility per module
 - Shared constants (timer duration, scoring multipliers, etc.) go in a `config` object at the top of the relevant file
@@ -212,9 +220,16 @@ guesswhatisnext/
 | **E2E tests** | All critical user flows | Playwright |
 | **Overall** | ≥ 80% line coverage across the project | `npm run test:coverage` |
 
-Tests **must pass** before any merge to `main`. CI/CD pipeline runs the full suite on every push.
+Tests **must pass** before any merge to `main`. The **full validation suite** is:
+
+1. **Lint:** `npm run lint` — ESLint with zero errors (warnings capped at 50)
+2. **Unit + integration tests:** `npm test` — Vitest, all must pass
+3. **E2E tests:** `npm run test:e2e` — Playwright browser tests
+
+CI runs all three in parallel on PRs that change application code (non-docs changes). Agents must run the full suite locally before pushing.
 
 ### Test Framework & Tools
+
 
 **Test isolation model:**
 Each test file gets its own:
@@ -266,7 +281,94 @@ All three must pass. CI runs the same checks on every PR.
 
 ---
 
-## 4. Git Workflow
+## 4. Logging Conventions
+
+The project uses **Pino** for structured JSON logging (`server/logger.js` singleton). All server code must use the logger — never `console.*` (except in `config.js` and the early bootstrap path in `telemetry.js`, where the logger is not yet available due to load order).
+
+### Log Levels
+
+| Level | When to use | Example |
+|---|---|---|
+| `fatal` | Process is about to crash — unrecoverable errors | Uncaught exception handler, out-of-memory |
+| `error` | Operation failed and could not be recovered | 5xx response, DB write failure, WebSocket crash |
+| `warn` | Handled anomaly that deserves attention | 4xx client error, rate limit hit, auth failure, deprecated usage |
+| `info` | Normal operational events worth recording | Server start, DB initialized, user registered, match created |
+| `debug` | Diagnostic detail useful during development | Route handler entry/exit, cache hit/miss, query timing |
+| `trace` | Ultra-verbose, rarely enabled | Full request/response bodies, internal state dumps |
+
+**Defaults per environment:**
+- **development:** `debug` (with pino-pretty for human-readable output)
+- **test:** `silent` (suppress all output during test runs)
+- **production / staging:** `info` (JSON, machine-parseable)
+- Override with `LOG_LEVEL` env var (validated: `fatal | error | warn | info | debug | trace | silent`)
+
+### Structured Context Guidelines
+
+Always pass a context object as the **first** argument to log methods, followed by a human-readable message:
+
+```js
+logger.info({ userId, matchId, rounds: 5 }, 'Match created');
+logger.warn({ err, status: 429, ip: req.ip }, 'Rate limit exceeded');
+logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled request error');
+```
+
+**What to include in context objects:**
+- `err` — the Error instance (Pino serialises it with message + stack automatically)
+- `userId` / `username` — who triggered the event
+- `matchId` / `roomCode` — relevant entity identifiers
+- `method`, `url`, `status` — HTTP request context
+- `requestId` — from `req.id` (assigned by pino-http)
+- `remoteAddress` — `req.ip` for rate-limiting / abuse tracking (logged per-request, not stored long-term)
+- Duration/timing values for performance-sensitive operations
+
+### Sensitive Data Handling
+
+**Redacted automatically** (via Pino `redact` config with `remove: true`):
+- `req.headers.authorization`
+- `req.headers.cookie`
+- `req.headers["x-api-key"]`
+- `req.headers["x-access-token"]`
+- `res.headers["set-cookie"]`
+
+**Never log these manually:**
+- Passwords, password hashes, or JWT secrets
+- Full JWT tokens (log a truncated prefix if needed for debugging)
+- Database connection strings
+- Raw request bodies that may contain user credentials
+- PII beyond username (no email, no IP addresses persisted to database, etc.)
+
+### Trace ID Correlation
+
+When OpenTelemetry is active (staging/production), the Pino mixin automatically attaches `trace_id` and `span_id` (snake_case) to each log entry via the OTel context. This allows correlating logs with distributed traces in Azure Monitor / Application Insights.
+
+- In development: no trace IDs by default (OTel SDK only activates when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set)
+- In staging/production: trace IDs appear automatically on every request-scoped log line (connection string is always set)
+- Manual log calls outside request scope won't have trace IDs unless you explicitly propagate context
+- The bootstrap only enables the HTTP and Express instrumentations; startup/shutdown failures are reported via the early console bootstrap path instead of surfacing as unhandled promise rejections
+
+### Client Error Reporting
+
+The `POST /api/telemetry/errors` endpoint accepts client-side errors (no auth required):
+- Rate limited: 10 requests/minute per IP
+- Required field: `message` (string)
+- Optional fields: `type`, `source`, `lineno`, `colno`, `stack`
+- Missing, empty, or non-JSON bodies return `400` with a validation error instead of throwing
+- Logged at `warn` level with `{ component: 'client' }` context
+- Authenticated requests include `userId` in the log entry
+- Client JS hooks: `window.onerror` and `unhandledrejection` handlers report errors (max 10 per minute, sliding window)
+
+### Request Logging
+
+Pino-http middleware logs every request/response automatically, with these exceptions (auto-logging ignore list):
+- `/api/health` and `/healthz` — health probes (too noisy)
+- `/api/telemetry/*` — telemetry endpoints (avoid recursion)
+- Static file extensions (`.css`, `.js`, `.map`, `.ico`, `.png`, etc.)
+
+In test mode, auto-logging is fully disabled to keep test output clean.
+
+---
+
+## 5. Git Workflow
 
 ### Repository Setup
 - Initialize with `git init` at project root
@@ -314,15 +416,32 @@ Commit locally after every meaningful, working change — each commit should be 
 
 **Do not** batch unrelated changes into one commit. Two distinct actions = two commits.
 
+### Agent Progress Reporting
+
+All task work happens in background agents on worktrees — never in the main session. Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
+
+Background agents **must** report progress to the orchestrating agent:
+- **On start:** "Starting task X in wt-N on branch feat/\<name\>"
+- **On milestone:** "Task X: completed \<step\>, running validation..."
+- **On validation pass:** "Task X: lint ✓ test ✓ e2e ✓ — creating PR"
+- **On PR created:** "Task X: PR #\<N\> created, requesting Copilot review"
+- **On review loop:** "Task X: Copilot review round \<N\> — fixing \<count\> issues"
+- **On ready:** "Task X: PR #\<N\> ready for merge (Copilot approved, CI green)"
+
+The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
+
 ### Branch Strategy & Merge Model
 - **No direct commits to `main`** — all code changes go through pull requests, no exceptions
 - Feature branches: `feat/<step-id>` (e.g., `feat/puzzle-expansion`, `feat/mp-game-logic`)
-- CI runs lint + tests (unit and e2e) on every PR
-- At least 1 approval required before merge
+- Every PR must pass the **full validation suite** before merge:
+  1. **Lint:** `npm run lint`
+  2. **Unit + integration tests:** `npm test` (vitest)
+  3. **E2E tests:** `npm run test:e2e`
 - **PRs are squash-merged** into `main` — the many granular feature-branch commits collapse into one clean commit on main. The squash commit message summarizes the overall change.
 - Branch protection rules on `main`:
   - Require PR with review before merging
-  - Require status checks to pass (lint, test (unit and e2e), build)
+  - Require CI status checks to pass (`lint`, `test`, `e2e`) — CI uses `paths-ignore` for docs-only PRs
+
   - No force pushes
   - No direct commits
 
@@ -338,7 +457,7 @@ The **main agent** works in the main checkout (`C:\src\guesswhatisnext<suffix>`)
 
 ### Parallel Agent Workflow
 
-Use **fixed-name worktree slots** (`wt-1` through `wt-4`) with task-specific branch names.
+All worktree work runs as background tasks. The orchestrating agent launches each task agent in the background and is notified when each completes. Use **fixed-name worktree slots** (`wt-1` through `wt-4`) with task-specific branch names.
 The branch name carries the task meaning — the folder name is just a stable slot.
 
 **Worktree root naming:** `gwn<suffix>-worktrees` where `<suffix>` is the text after the
@@ -378,6 +497,36 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 - Categorize comments as **Fix** (real bugs, security, correctness), **Skip** (cosmetic, by-design), or **Accept suggestion** (correct code improvement)
 - Fix valid issues, reply with rationale on each thread, resolve all threads
 - If Copilot re-reviews after fixes, repeat the cycle
+
+**Copilot Review — Detailed Workflow:**
+
+Requesting review (requires gh CLI ≥ 2.88.0): `gh pr edit <PR#> --add-reviewer "@copilot"`
+
+**Review loop (repeat until clean):**
+1. Read all review comments and suggestions
+2. Categorize each as **Fix** (real bugs, security, correctness), **Skip** (cosmetic, by-design), or **Accept suggestion** (correct code improvement)
+3. Reply to each comment with disposition and rationale, then fix valid issues
+4. Resolve all threads (fixed or acknowledged) — always reply BEFORE resolving
+5. Re-request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
+6. Repeat from step 1 until Copilot approves with no new comments
+
+**Replying to review comments (REST API):**
+```powershell
+gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/comments/{COMMENT_ID}/replies --method POST -f "body=YOUR_REPLY"
+```
+
+**Reply conventions:** Fixed → reference commit hash. Acknowledged (by design) → explain rationale. Not applicable → note why observation is incorrect. Duplicate → reference original thread.
+
+**Resolving review threads (GraphQL API):**
+```powershell
+# Get unresolved thread IDs
+gh api graphql -f query='{ repository(owner: "henrik-me", name: "guesswhatisnext") { pullRequest(number: {PR#}) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { databaseId path } } } } } } }'
+
+# Resolve a thread
+gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THREAD_ID" }) { thread { isResolved } } }'
+```
+
+**Large-diff PR behavior:** On large diffs, Copilot may re-post comments on unchanged lines. When comments reference already-fixed code, reply with the fix commit hash and resolve.
 
 **Merge conflict guidelines:**
 - Merge zero-conflict branches first (e.g., new-files-only tasks)
@@ -428,3 +577,4 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 - Screen reader support: ARIA labels on game state changes
 - Reduced motion: respect `prefers-reduced-motion` media query
 - Emoji sequences: include `aria-label` describing the item for screen readers
+

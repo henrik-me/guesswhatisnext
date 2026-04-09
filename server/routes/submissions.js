@@ -7,8 +7,10 @@
 
 const express = require('express');
 const { getDbAdapter } = require('../db');
+const { isFeatureEnabled } = require('../feature-flags');
 const { requireAuth, requireSystem } = require('../middleware/auth');
 const { VALID_CATEGORIES } = require('../categories');
+const logger = require('../logger');
 
 const router = express.Router();
 
@@ -42,6 +44,10 @@ function validateSubmission(body) {
 /** POST /api/submissions — submit a puzzle proposal (requires auth). */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
+    if (!isFeatureEnabled('submitPuzzle', req)) {
+      return res.status(403).json({ error: 'Submit puzzle feature is not enabled' });
+    }
+
     const error = validateSubmission(req.body);
     if (error) {
       return res.status(400).json({ error });
@@ -222,7 +228,7 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
         if (err && err.message === 'ALREADY_REVIEWED') {
           return res.status(409).json({ error: 'Submission has already been reviewed' });
         }
-        console.error('Error while approving submission %s:', id, err);
+        logger.error({ err, submissionId: id }, 'Error while approving submission');
         return res.status(500).json({ error: 'Internal server error' });
       }
 

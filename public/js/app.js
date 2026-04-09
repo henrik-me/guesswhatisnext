@@ -8,6 +8,63 @@ import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
 
+// Client-side error reporting (IIFE keeps internals private)
+(function initErrorReporting() {
+  const ERROR_ENDPOINT = '/api/telemetry/errors';
+  const MAX_ERRORS_PER_MINUTE = 10;
+  const WINDOW_MS = 60000;
+  let errorTimestamps = [];
+
+  function getAuthToken() {
+    try { return localStorage.getItem('gwn_auth_token'); } catch { return null; }
+  }
+
+  function reportError(payload) {
+    const now = Date.now();
+    errorTimestamps = errorTimestamps.filter(t => now - t < WINDOW_MS);
+    if (errorTimestamps.length >= MAX_ERRORS_PER_MINUTE) return;
+    errorTimestamps.push(now);
+    const token = getAuthToken();
+    // Use fetch with auth when available; fall back to sendBeacon for anonymous
+    if (token) {
+      fetch(ERROR_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => {}); // Swallow — error reporting must never break the app
+    } else if (navigator.sendBeacon) {
+      navigator.sendBeacon(ERROR_ENDPOINT, new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+    } else {
+      fetch(ERROR_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+  }
+
+  window.addEventListener('error', (event) => {
+    reportError({
+      message: event.message,
+      source: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+      stack: event.error?.stack,
+      type: 'error',
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    reportError({
+      message: reason?.message || String(reason),
+      stack: reason?.stack,
+      type: 'unhandledrejection',
+    });
+  });
+})();
+
 const screens = {};
 
 /** Currently selected difficulty for free-play. */
@@ -392,6 +449,7 @@ function init() {
 
   // Update auth display on home screen
   updateHomeAuthDisplay();
+  refreshFeatureFlags();
 
   // Validate stored token on startup (non-blocking)
   if (authToken) {
@@ -491,11 +549,13 @@ function init() {
         }
         break;
       case 'show-submit-puzzle':
-        if (isLoggedIn()) {
+        if (!isLoggedIn()) {
+          showScreen('auth');
+        } else if (isFeatureEnabled('submitPuzzle')) {
           showScreen('submit-puzzle');
           resetSubmitPuzzleForm();
         } else {
-          showScreen('auth');
+          showToast('Puzzle submissions are not enabled for your account yet');
         }
         break;
       case 'show-moderation':
@@ -904,11 +964,17 @@ let ws = null;
 let authToken = localStorage.getItem('gwn_auth_token');
 let authUsername = localStorage.getItem('gwn_auth_username');
 let authRole = localStorage.getItem('gwn_auth_role');
+const DEFAULT_FEATURE_FLAGS = Object.freeze({
+  submitPuzzle: false,
+});
+let featureFlags = { ...DEFAULT_FEATURE_FLAGS };
 let matchState = {
   roomCode: null,
   players: [],
   lobbyPlayers: [],
   isHost: false,
+  isSpectator: false,
+  spectatorCount: 0,
   myName: null,
   scores: {},
   disconnectedPlayers: new Set(),
@@ -923,6 +989,50 @@ function isLoggedIn() {
   return !!authToken;
 }
 
+function resetFeatureFlags() {
+  featureFlags = { ...DEFAULT_FEATURE_FLAGS };
+}
+
+function isFeatureEnabled(featureName) {
+  return !!featureFlags[featureName];
+}
+
+function getFeatureAwarePath(path) {
+  const params = new URLSearchParams(window.location.search);
+  const featureParams = new URLSearchParams();
+
+  for (const [key, value] of params.entries()) {
+    if (key.startsWith('ff_')) {
+      featureParams.append(key, value);
+    }
+  }
+
+  const query = featureParams.toString();
+  if (!query) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}${query}`;
+}
+
+async function refreshFeatureFlags() {
+  try {
+    const res = await apiFetch(getFeatureAwarePath('/api/features'));
+    if (!res.ok) {
+      resetFeatureFlags();
+      updateHomeAuthDisplay();
+      return;
+    }
+
+    const data = await res.json();
+    featureFlags = {
+      ...DEFAULT_FEATURE_FLAGS,
+      ...(data.features || {}),
+    };
+  } catch {
+    resetFeatureFlags();
+  }
+
+  updateHomeAuthDisplay();
+}
+
 /** Update home screen to reflect auth state. */
 function updateHomeAuthDisplay() {
   const row = document.querySelector('[data-bind="home-user-display"]');
@@ -933,7 +1043,7 @@ function updateHomeAuthDisplay() {
   if (isLoggedIn() && authUsername) {
     if (label) label.textContent = `👤 Logged in as ${authUsername}`;
     row.style.display = '';
-    if (submitBtn) submitBtn.style.display = '';
+    if (submitBtn) submitBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
     if (modBtn) modBtn.style.display = (authRole === 'admin' || authRole === 'system') ? '' : 'none';
   } else {
     row.style.display = 'none';
@@ -947,6 +1057,7 @@ function logout() {
   authToken = null;
   authUsername = null;
   authRole = null;
+  resetFeatureFlags();
   localStorage.removeItem('gwn_auth_token');
   localStorage.removeItem('gwn_auth_username');
   localStorage.removeItem('gwn_auth_role');
@@ -1090,7 +1201,7 @@ async function authAction(action) {
     passwordInput.value = '';
     bindText('auth-error', '');
 
-    updateHomeAuthDisplay();
+    await refreshFeatureFlags();
     submitPendingScores();
     showScreen('multiplayer');
   } catch {
@@ -1202,6 +1313,12 @@ function handleWSMessage(msg) {
         showAchievementToasts(msg.achievements);
       }
       break;
+    case 'spectator-joined':
+      onSpectatorJoined(msg);
+      break;
+    case 'spectator-count':
+      onSpectatorCount(msg);
+      break;
     case 'error':
       showToast(msg.message || 'Server error');
       break;
@@ -1287,12 +1404,12 @@ async function joinRoom(code) {
     matchState.roomCode = data.roomCode || roomCode;
     matchState.myName = authUsername;
 
-    // Join via WebSocket
+    // Join via WebSocket — server will assign player or spectator role
     ws.send(JSON.stringify({ type: 'join', roomCode: matchState.roomCode }));
 
-    // Show lobby
+    // Show lobby; spectator-joined WS message will transition to match screen
     bindText('lobby-room-code', matchState.roomCode);
-    bindText('lobby-status', 'Joining room...');
+    bindText('lobby-status', data.status === 'spectator' ? 'Joining as spectator...' : 'Joining room...');
     showScreen('lobby');
   } catch {
     showToast('Network error — is the server running?');
@@ -1302,6 +1419,10 @@ async function joinRoom(code) {
 /** Handle 'joined' — we successfully joined the room. */
 function onJoined(msg) {
   matchState.roomCode = msg.roomCode;
+  matchState.isSpectator = false;
+  matchState.spectatorCount = 0;
+  updateSpectatorUI();
+  updateSpectatorCountDisplay();
   if (!matchState.players.includes(authUsername)) {
     matchState.players.push(authUsername);
   }
@@ -1461,7 +1582,12 @@ function onRound(msg) {
     } else {
       btn.textContent = option;
     }
-    btn.addEventListener('click', () => handleMatchOptionClick(option, btn));
+    // Spectators cannot interact with options
+    if (matchState.isSpectator) {
+      btn.disabled = true;
+    } else {
+      btn.addEventListener('click', () => handleMatchOptionClick(option, btn));
+    }
     optContainer.appendChild(btn);
   });
 
@@ -1603,7 +1729,10 @@ function onGameOver(msg) {
     const myRank = myEntry ? myEntry.rank : null;
     const totalPlayers = msg.totalPlayers || rankings.length;
 
-    if (myRank === 1 && msg.isDraw) {
+    if (matchState.isSpectator || !myEntry) {
+      outcomeIcon = '👀';
+      outcomeTitle = 'Match Over';
+    } else if (myRank === 1 && msg.isDraw) {
       outcomeIcon = '🤝';
       outcomeTitle = "It's a Tie!";
     } else if (myRank === 1) {
@@ -1614,11 +1743,15 @@ function onGameOver(msg) {
       outcomeTitle = myRank === 1 ? 'You Win!' : `${ordinal(myRank)} Place`;
     }
 
-    // Show placement
+    // Show placement (skip for spectators)
     const placementEl = document.querySelector('[data-bind="match-placement"]');
     if (placementEl) {
-      placementEl.textContent = `Your placement: ${ordinal(myRank)} of ${totalPlayers} player${totalPlayers === 1 ? '' : 's'}`;
-      placementEl.style.display = '';
+      if (matchState.isSpectator || !myEntry) {
+        placementEl.style.display = 'none';
+      } else {
+        placementEl.textContent = `Your placement: ${ordinal(myRank)} of ${totalPlayers} player${totalPlayers === 1 ? '' : 's'}`;
+        placementEl.style.display = '';
+      }
     }
 
     // Render rankings table
@@ -1693,7 +1826,7 @@ function onGameOver(msg) {
   if (rematchBtn) {
     rematchBtn.textContent = gameOverIsHost ? '🔄 New Match' : '✅ Ready for Rematch';
     rematchBtn.disabled = false;
-    rematchBtn.style.display = forfeit ? 'none' : '';
+    rematchBtn.style.display = (forfeit || matchState.isSpectator) ? 'none' : '';
   }
   const startRematchBtn = document.querySelector('[data-action="start-rematch"]');
   if (startRematchBtn) {
@@ -1709,6 +1842,20 @@ function onGameOver(msg) {
   if (rematchStatus) {
     rematchStatus.style.display = 'none';
     rematchStatus.textContent = '';
+  }
+
+  // For spectators, update the placement text and ensure title/icon are correct
+  if (matchState.isSpectator) {
+    const placementEl = document.querySelector('[data-bind="match-placement"]');
+    if (placementEl) {
+      placementEl.textContent = '\u{1F440} You were spectating this match';
+      placementEl.style.display = '';
+    }
+    if (iconEl) iconEl.textContent = '👀';
+    if (titleEl) titleEl.textContent = 'Match Over';
+    if (hostIndicator) {
+      hostIndicator.style.display = 'none';
+    }
   }
 
   showScreen('match-over');
@@ -1742,6 +1889,8 @@ function resetMatchState() {
     players: [],
     lobbyPlayers: [],
     isHost: false,
+    isSpectator: false,
+    spectatorCount: 0,
     myName: null,
     scores: {},
     disconnectedPlayers: new Set(),
@@ -1911,6 +2060,80 @@ function onPlayerForfeited(msg) {
 function onHostTransferred(msg) {
   showToast(`👑 ${msg.newHost} is now the host`);
   matchState.isHost = (msg.newHost === authUsername);
+}
+
+/* ===========================
+   Spectator Logic
+   =========================== */
+
+/** Handle 'spectator-joined' — we are now spectating this match. */
+function onSpectatorJoined(msg) {
+  matchState.isSpectator = true;
+  matchState.roomCode = msg.roomCode;
+  matchState.spectatorCount = msg.spectatorCount || 0;
+  matchState.totalRounds = msg.totalRounds || 5;
+  matchState.currentRound = msg.currentRound || 0;
+
+  // Use player list to populate scores and track disconnected players
+  if (msg.players && Array.isArray(msg.players)) {
+    matchState.scores = {};
+    matchState.players = [];
+    matchState.disconnectedPlayers = new Set();
+    msg.players.forEach(p => {
+      matchState.scores[p.username] = p.score || 0;
+      matchState.players.push(p.username);
+      if (p.connected === false) {
+        matchState.disconnectedPlayers.add(p.username);
+      }
+    });
+  } else {
+    matchState.scores = msg.scores || {};
+    matchState.players = Object.keys(matchState.scores);
+  }
+
+  bindText('match-round', `Round ${matchState.currentRound + 1}/${matchState.totalRounds}`);
+  renderMatchScoreboard();
+  updateSpectatorUI();
+
+  showScreen('match');
+}
+
+/** Handle 'spectator-count' — updated spectator count. */
+function onSpectatorCount(msg) {
+  matchState.spectatorCount = msg.count || 0;
+  updateSpectatorCountDisplay();
+}
+
+/** Update spectator UI elements (badge, disabled controls). */
+function updateSpectatorUI() {
+  const badge = document.querySelector('[data-bind="spectator-badge"]');
+  if (badge) {
+    badge.style.display = matchState.isSpectator ? '' : 'none';
+  }
+  updateSpectatorCountDisplay();
+  if (matchState.isSpectator) {
+    const optContainer = document.querySelector('[data-bind="match-options"]');
+    if (optContainer) {
+      optContainer.querySelectorAll('.option-btn').forEach(btn => {
+        btn.disabled = true;
+      });
+    }
+  }
+}
+
+/** Update the spectator count display across all screens. */
+function updateSpectatorCountDisplay() {
+  const count = matchState.spectatorCount;
+  const text = count > 0 ? `👀 ${count} watching` : '';
+
+  document.querySelectorAll('[data-bind="spectator-count"]').forEach(el => {
+    el.textContent = text;
+    el.style.display = count > 0 ? '' : 'none';
+  });
+  document.querySelectorAll('[data-bind="lobby-spectator-count"]').forEach(el => {
+    el.textContent = text;
+    el.style.display = count > 0 ? '' : 'none';
+  });
 }
 
 /* ===========================
@@ -2276,7 +2499,7 @@ function initSubmitPuzzleForm() {
     }
 
     try {
-      const res = await apiFetch('/api/submissions', {
+      const res = await apiFetch(getFeatureAwarePath('/api/submissions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sequence, answer, explanation, difficulty, category }),

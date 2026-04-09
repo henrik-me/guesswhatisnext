@@ -5,6 +5,7 @@
 const { getAgent, setup, teardown, registerUser } = require('./helper');
 
 const SYSTEM_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
+const ENABLED_SUBMISSIONS_PATH = '/api/submissions?ff_submit_puzzle=1';
 
 let userToken;
 let userToken2;
@@ -20,7 +21,7 @@ beforeAll(async () => {
 afterAll(teardown);
 
 describe('POST /api/submissions', () => {
-  test('creates a submission with valid data', async () => {
+  test('rejects when submit-puzzle is disabled by default', async () => {
     const res = await getAgent()
       .post('/api/submissions')
       .set('Authorization', `Bearer ${userToken}`)
@@ -32,8 +33,41 @@ describe('POST /api/submissions', () => {
         category: 'Nature',
       });
 
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/not enabled/i);
+  });
+
+  test('creates a submission with valid data', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['🌑', '🌒', '🌓'],
+        answer: '🌔',
+        explanation: 'Moon phases progress from new to full.',
+        difficulty: 1,
+        category: 'Nature',
+      });
+
     expect(res.status).toBe(201);
     expect(res.body.id).toBeDefined();
+    expect(res.body.status).toBe('pending');
+  });
+
+  test('allows header override for submit-puzzle', async () => {
+    const res = await getAgent()
+      .post('/api/submissions')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-Gwn-Feature-Submit-Puzzle', 'enabled')
+      .send({
+        sequence: ['🥚', '🐣', '🐥'],
+        answer: '🐔',
+        explanation: 'Life stages of a chicken.',
+        difficulty: 1,
+        category: 'Nature',
+      });
+
+    expect(res.status).toBe(201);
     expect(res.body.status).toBe('pending');
   });
 
@@ -53,7 +87,7 @@ describe('POST /api/submissions', () => {
 
   test('rejects sequence with fewer than 3 elements', async () => {
     const res = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [1, 2],
@@ -69,7 +103,7 @@ describe('POST /api/submissions', () => {
 
   test('rejects missing answer', async () => {
     const res = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [1, 2, 3],
@@ -85,7 +119,7 @@ describe('POST /api/submissions', () => {
 
   test('rejects missing explanation', async () => {
     const res = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [1, 2, 3],
@@ -101,7 +135,7 @@ describe('POST /api/submissions', () => {
 
   test('rejects invalid difficulty', async () => {
     const res = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [1, 2, 3],
@@ -117,7 +151,7 @@ describe('POST /api/submissions', () => {
 
   test('rejects invalid category', async () => {
     const res = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [1, 2, 3],
@@ -135,7 +169,7 @@ describe('POST /api/submissions', () => {
 describe('GET /api/submissions', () => {
   beforeAll(async () => {
     await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: ['X', 'Y', 'Z'],
@@ -179,7 +213,7 @@ describe('GET /api/submissions', () => {
 describe('GET /api/submissions/pending', () => {
   beforeAll(async () => {
     await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [10, 20, 30],
@@ -217,7 +251,7 @@ describe('PUT /api/submissions/:id/review', () => {
   beforeAll(async () => {
     // Create a fresh submission to review
     const res = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: ['A', 'B', 'C'],
@@ -260,7 +294,7 @@ describe('PUT /api/submissions/:id/review', () => {
   test('rejects non-string reviewerNotes with 400', async () => {
     // Create a fresh submission to avoid conflict with already-reviewed ones
     const createRes = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [2, 4, 6],
@@ -299,7 +333,7 @@ describe('PUT /api/submissions/:id/review', () => {
   test('rejected submission shows reviewer notes in user list', async () => {
     // Create and reject a new submission
     const createRes = await getAgent()
-      .post('/api/submissions')
+      .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
         sequence: [10, 20, 30],

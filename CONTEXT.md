@@ -2,11 +2,11 @@
 
 This file tracks the current state of the project: what's been done, what's next, and any active decisions or blockers.
 
-> **Last updated:** 2026-03-30
+> **Last updated:** 2026-04-02
 
 ---
 
-## Project Status: ✅ Phases 1–5 Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
+## Project Status: ✅ Phases 1–5, 12–13, 15 (partial) Complete, Phase 6/8/10 Done — Phase 11 Active (Azure SQL Migration)
 
 ### Development Workflow
 
@@ -24,8 +24,18 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Available |
 | wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Available |
 
+**All implementation work runs as background task agents — the main session only orchestrates.** The orchestrating agent dispatches tasks to background agents in worktree slots, monitors progress via notifications, and merges approved PRs. It never directly edits code, runs tests, or creates PRs itself. The orchestrating agent actively relays background task progress to the user — status checks, milestone updates, and completion notifications rather than dispatching silently.
+
 **Current workflow (pre-branch-protection):** Agent pushes branch → merges to main on remote → pushes main.
 **Future workflow (post-branch-protection):** Agent pushes branch → creates PR → CI + review → merge via GH UI.
+
+**PR Review Comment Resolution:**
+Every Copilot review comment thread must be replied to with a meaningful message (fix commit reference, acknowledgment, or explanation) and then resolved via the GraphQL API. See INSTRUCTIONS.md §10 for API commands and reply conventions. Threads are never left unresolved — even "by design" decisions get an explicit reply before resolution.
+
+## Known Issues
+
+- On Node >= 22.13, when the optional `artillery` install is present, `npm ci` may emit OpenTelemetry peer-dependency warnings. These warnings come from optional load-testing dependencies that still pull older OTel metrics/exporter packages, while the application runtime telemetry path uses newer OTel packages.
+- This is currently treated as non-blocking install noise for optional load-testing tooling. It does not affect the validated runtime telemetry path, and no dependency changes are planned right now.
 
 ---
 
@@ -109,7 +119,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 |---|---|---|---|---|
 | 40 | Remove debug logging | ✅ Done | — | Stripped debug console.log from client code (PR #14) |
 | 41 | Environment variables | ✅ Done | — | server/config.js centralizes env vars with startup validation (PR #14) |
-| 42 | HTTPS & secure cookies | ⬜ Pending | 41 | TLS enforcement, WSS, secure headers |
+| 42 | HTTPS & secure headers | ✅ Done | 41 | Helmet headers, HTTPS redirect, HSTS, CSP with wss:, dev-https.js. JWT auth (no cookies). |
 
 ## Phase 7 — Quality & Testing
 
@@ -125,7 +135,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | 45 | Mobile PWA | ✅ Done | — | manifest.json, service worker, offline fallback (PR #15) |
 | 46 | Share links | ✅ Done | — | Deep link ?room=CODE, copy-link button (PR #15) |
 | 47 | Multiplayer sound effects | ✅ Done | — | Opponent answered, countdown, win/loss fanfare (PR #15) |
-| 48 | Spectator mode | 🔄 In PR | 42 | Read-only WS, spectator count in lobby |
+| 48 | Spectator mode | ✅ Done | 42 | Read-only WS, spectator count in lobby, spectator badge, dedicated tests |
 
 ## Phase 9 — Content & Growth
 
@@ -134,7 +144,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 | 49 | Puzzle expansion (200+) | ✅ Done | — | AI-assisted generation, broader categories. 504 puzzles in DB. |
 | 50 | Community puzzle submissions | ✅ Done | 49 | Submit form, moderation queue, attribution |
 
-**Parallelism:** Phase 6 is sequential. Phase 7 can start now; its dependencies (40 and 41) are done. Phase 8 tasks 45–47 done; 48 depends on 42. Phase 9 can start anytime. In Phase 10, the only remaining item is task 56.
+**Parallelism:** Phase 6 sequential (42 now done). Phase 7 done. Phase 8 all done. Phase 9 done. In Phase 10, the only remaining item is task 56.
 
 ## Phase 10 — CI/CD Pipeline Rework
 
@@ -169,7 +179,7 @@ During staging deployment testing, we discovered that **SQLite on Azure Files (S
 - Concurrency group kills manual dispatch → `cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}`
 - `STAGING_AUTO_DEPLOY` repo variable gates auto-deploy (set to `false`, opt-in with `true`)
 
-**Staging status:** ✅ Deployed and working (2026-03-31)
+**Staging status:** ✅ Deployed and working (2026-04-01). CANONICAL_HOST fix (PR #72) resolved deploy failures caused by missing env var after HTTPS enablement (PR #59).
 
 | # | Task | Status | Notes |
 |---|---|---|---|
@@ -314,10 +324,24 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 | 62 | Convert routes to async | ✅ Done | 61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 merged. |
 | 63 | Update tests for async | ✅ Done | 61b, 62 | Async test helpers. All 173 tests pass with SQLite adapter. PR #57 merged (combined with 62). |
 | 63v | Validate staging (post-async) | ✅ Done | 63 | Staging deploy + smoke tests + E2E all passed. 4 migrations applied, 504 puzzles seeded, async routes working. Run #23833160313. |
-| 64 | Provision Azure SQL | ⬜ Pending | 63v | Free-tier serverless DB. Firewall. GitHub secret. |
-| 65 | Production deploy | ⬜ Pending | 64 | Update prod-deploy.yml. First deploy + verify. |
+| 64 | Provision Azure SQL | ⬜ Pending | 63v | Rollup for 64a–64e: create prod Azure SQL, open access, define MSSQL init path, store GitHub secret. |
+| 64a | Create Azure SQL server | ⬜ Pending | 63v | Create the production logical server in the chosen region/tier; capture admin + server details. |
+| 64b | Create serverless prod DB | ⬜ Pending | 64a | Create the production DB on that server and capture the final DB name/connection parameters. |
+| 64c | Configure firewall access | ⬜ Pending | 64a | Allow Azure-hosted app access plus operator IP(s) for setup/testing. Parallel with 64b once server exists. |
+| 64d | Plan MSSQL schema bootstrap | ⬜ Pending | 64b | Required before cutover: app startup still fails fast for MSSQL auto-init, so use manual migrations/seeding or enable an equivalent init path first. |
+| 64e | Add GitHub `DATABASE_URL` secret | ⬜ Pending | 64b | Store the production connection string after the server + DB names are final. Parallel with 64d. |
+| 65 | Production deploy | ⬜ Pending | 64 | Rollup for 65a–65c: wire workflow/env, deploy, then verify production. |
+| 65a | Update `prod-deploy.yml` for MSSQL | ⬜ Pending | 64 | Pass `DATABASE_URL` so production selects MSSQL; the workflow still uses `GWN_DB_PATH=/tmp/game.db` today. |
+| 65b | First production deploy | ⬜ Pending | 65a | Run the first deploy with Azure SQL settings and the chosen MSSQL bootstrap process. |
+| 65c | Verify production | ⬜ Pending | 65b | Smoke test startup, read paths, auth, submit flow, and DB-backed writes against Azure SQL. |
 
-**Parallelism:** After 61a merges, three parallel tracks start:
+**Task ID scope:** IDs in this summary are phase-local; 65/65a–65c here refer to the Phase 11c production-deploy track.
+
+**Parallelism:** After 64a, 64b and 64c can move in parallel. After 64b, 64d and 64e can run in parallel. Task 65 stays sequential: 65a → 65b → 65c.
+
+**Suggested order:** 63v → 64a → (64b + 64c) → (64d + 64e) → 64 → 65a → 65b → 65c → 65
+
+**Phase 11a/11b parallelism history:** After 61a merges, three parallel tracks start:
 ```
 Main: 61a → merge → signal workers → orchestrate merges → 63v → 64 → 65
   wt-1: 61b (SQLite adapter + migrations)
@@ -331,11 +355,11 @@ Integrate E2E and load tests into CI/CD pipelines so they run automatically, not
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 65 | E2E tests in PR CI | ⬜ Pending | 43 | Add Playwright job to ci.yml: install Chromium, start server with temp DB, run `npx playwright test` in parallel with lint+test |
-| 66 | E2E tests in staging validation | ⬜ Pending | 65 | Run Playwright against ephemeral staging container in staging-deploy.yml after smoke tests pass |
-| 67 | Load test integration | ⬜ Pending | 44 | Decide where/when load tests run: on-demand workflow_dispatch, nightly schedule, or pre-prod gate. Add workflow accordingly. |
+| 65 | E2E tests in PR CI | ✅ Done | 43 | Playwright job in ci.yml with Chromium, runs in parallel with lint+test |
+| 66 | E2E tests in staging validation | ✅ Done | 65 | Playwright runs in staging-deploy.yml after smoke tests |
+| 67 | Load test integration | ✅ Done | 44 | load-test.yml: workflow_dispatch + weekly schedule, Artillery API + WS tests, HTML report artifact |
 
-**Parallelism:** Tasks 65 and 66 are sequential. Task 67 is independent and can start anytime after task 44 merges. Phase 12 depends on PRs #32 (task 43) and #34 (task 44) being merged first.
+**Parallelism:** All Phase 12 work complete.
 
 ## Phase 13 — Production-Grade Observability & Logging
 
@@ -343,21 +367,25 @@ Add structured logging, request tracing, client-side error reporting, and Azure 
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| 70 | Logger foundation + request logging | ⬜ Pending | — | Install Pino + pino-http + pino-pretty (dev). Create `server/logger.js` singleton, add `LOG_LEVEL` to config.js, add pino-http middleware before routes. JSON in staging/prod, pretty-print in dev. |
-| 71 | Centralized error handler + replace console.* | ⬜ Pending | 70 | Add Express error-handling middleware at end of chain. Replace all 22 `console.*` calls with structured `logger.*` at appropriate levels. |
-| 72 | Auth & user activity logging | ⬜ Pending | 70 | Log login/logout/registration at info, rate limits and auth failures at warn. Log WS connection/disconnection events. Add userId context to log entries. |
-| 73 | Client-side error reporting | ⬜ Pending | 70 | Create `POST /api/telemetry/errors` endpoint (rate-limited, no auth). Add `window.onerror` and `unhandledrejection` handlers in client JS. Batch/debounce (max 10/min per client). |
-| 74 | OpenTelemetry SDK + Azure Monitor | ⬜ Pending | 73 | Install `@opentelemetry/sdk-node` + `@azure/monitor-opentelemetry-exporter`. Create `server/telemetry.js` bootstrap. Auto-instrument HTTP/Express/DB. Provision App Insights (staging + prod). |
-| 75 | Environment-specific log configuration | ⬜ Pending | 74 | Dev: debug + pretty-print + no OTel. Staging: info + JSON + OTel → Azure Monitor. Prod: info + JSON + OTel + sensitive data redaction + trace ID correlation. |
-| 76 | Logging tests + documentation | ⬜ Pending | 75 | Unit tests for logger config, client error endpoint, error middleware. Update INSTRUCTIONS.md with logging conventions (when to use each level, structured context, correlation). |
+| 70 | Logger foundation + request logging | ✅ Complete | — | Install Pino + pino-http + pino-pretty (dev). Create `server/logger.js` singleton, add `LOG_LEVEL` to config.js, add pino-http middleware before routes. JSON in staging/prod, pretty-print in dev. |
+| 71 | Centralized error handler + replace console.* | ✅ Complete | 70 | Add Express error-handling middleware at end of chain. Replace all 22 `console.*` calls with structured `logger.*` at appropriate levels. |
+| 72 | Auth & user activity logging | ✅ Complete | 70 | Log login/logout/registration at info, rate limits and auth failures at warn. Log WS connection/disconnection events. Add userId context to log entries. |
+| 73 | Client-side error reporting | ✅ Complete | 70 | Create `POST /api/telemetry/errors` endpoint (rate-limited, no auth). Add `window.onerror` and `unhandledrejection` handlers in client JS. Batch/debounce (max 10/min per client). |
+| 74 | OpenTelemetry SDK + Azure Monitor | ✅ Complete | 73 | Install `@opentelemetry/sdk-node` + `@azure/monitor-opentelemetry-exporter`. Create `server/telemetry.js` bootstrap. Auto-instrument HTTP/Express/DB. Provision App Insights (staging + prod). |
+| 75 | Environment-specific log configuration | ✅ Complete | 74 | Dev: debug + pretty-print + no OTel. Staging: info + JSON + OTel → Azure Monitor. Prod: info + JSON + OTel + sensitive data redaction + trace ID correlation. |
+| 76 | Logging tests + documentation | ✅ Complete | 75 | Unit tests for logger config, client error endpoint, error middleware. Update INSTRUCTIONS.md with logging conventions (when to use each level, structured context, correlation). |
 
-**Parallelism:** Tasks 71, 72, and 73 can run in parallel after 70 is complete.
+**Parallelism:** All Phase 13 work complete.
 
 **Log Levels:** trace (ultra-verbose) → debug (dev diagnostics) → info (normal operations) → warn (handled anomalies) → error (failures) → fatal (process crash).
 
 ## Phase 14 — Community Puzzle Submission UX
 
 Improve the community puzzle submission experience for both submitters and admins. The backend API and basic UI exist but the feature feels hidden and incomplete — submit button only visible when logged in with no discovery path, no submission history, no public browsing, and minimal authoring tools.
+
+**Planned release control (PR #91):** `submitPuzzle` is gated by a small central feature-flag system on the PR #91 branch so the feature can stay hidden by default while rollout and UX work continue. Evaluation order there is: feature-specific request override (only when that feature allows it in the current environment) → default state → explicit user targeting → deterministic percentage rollout → disabled.
+
+**Planned `submitPuzzle` configuration (PR #91):** hidden/disabled by default; can be enabled for explicit users and/or a rollout percentage; request overrides are allowed only outside `production` and `staging`; override names are query param `ff_submit_puzzle` and header `x-gwn-feature-submit-puzzle`. Overrides are opt-in per feature, not a global bypass. `main` does not have that central flag path until PR #91 merges.
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
@@ -371,6 +399,20 @@ Improve the community puzzle submission experience for both submitters and admin
 | 87 | Image puzzle submissions | ⬜ Pending | 82 | Image upload support for image-type puzzles. Server-side validation (size, format). Storage (local in dev, Azure Blob in prod). Preview in authoring form and moderation. |
 
 **Parallelism:** Tasks 81 and 82 can run in parallel after 80. Tasks 83, 84, 85 can run in parallel after their dependencies. Task 87 is independent of 83–86 but requires 82.
+
+## Phase 15 — Dev Tooling & Log Assertions
+
+Consolidate dev server scripts, integrate log capture into e2e tests, and add CI log assertion tests.
+
+| # | Task | Status | Depends On | Notes |
+|---|---|---|---|---|
+| 90 | Unified dev server script | ✅ Done | — | `scripts/dev-server.js`: HTTPS + log capture by default. Replaces standalone `log-wrapper.js`. npm scripts: `dev:full`, `dev:log`. |
+| 91 | E2e log capture integration | ⬜ Pending | 90 | Playwright webServer uses dev-server.js to capture logs during test runs. Log file path configurable via env. |
+| 92 | Log assertion tests | ⬜ Pending | 91 | Post-test assertion: no ERROR-level entries during clean e2e run. Catches silent failures and unexpected error paths. |
+| 93 | CI log artifact upload | ⬜ Pending | 92 | On e2e failure in CI, upload captured log file as GitHub Actions artifact for debugging. |
+| 94 | Production log format validation | ⬜ Pending | 91 | Assert JSON structure in NODE_ENV=production mode: required fields (level, time, msg, req.id), no pretty-print leaking. |
+
+**Parallelism:** 91 first, then 92+93+94 can run in parallel.
 
 ### Deployment Architecture
 
@@ -458,14 +500,23 @@ Improve the community puzzle submission experience for both submitters and admin
 | Decision | Choice | Rationale |
 |---|---|---|
 | Docker base image | node:22-slim (single-stage) | better-sqlite3 ships prebuilt binaries; no python3/make/g++ needed. Simpler Dockerfile at cost of ~200MB vs ~100MB image |
-| PR CI checks | Lint + test only (no Docker build) | Docker build is slow, hits Docker Hub rate limits, and isn't needed for PR validation |
+| PR CI checks | Lint + test + E2E (no Docker build) | Docker build is slow, hits Docker Hub rate limits, and isn't needed for PR validation. E2E (Playwright) added in Phase 12. |
 | Push to main | No auto-deployment (disabled) | Auto-deploy temporarily disabled in PR #41 to avoid unintended deploys. Manual workflow_dispatch only for now. |
 | Staging branch strategy | Fast-forward release/staging to main HEAD | Simpler than cherry-picking; no history divergence; staging always matches main |
-| Staging trigger | Manual workflow_dispatch only | Was: auto on merge to main. Disabled in PR #41 while iterating on deploy. Re-enable after staging validated. |
+| Staging trigger | Manual workflow_dispatch only | Auto-deploy gated by STAGING_AUTO_DEPLOY repo variable (default false). Manual dispatch is the standard workflow; auto-deploy available when needed. |
 | Ephemeral staging | Docker container in GitHub Actions | $0 infra cost; sufficient for automated smoke tests (health, auth, scores) |
 | Azure staging | Behind manual approval after ephemeral passes | Persistent environment for manual QA; only promoted after automated validation |
 | Production deploy | Manual workflow_dispatch from release/staging | Production only deploys code that has been validated in staging; never directly from main |
 | Production gate | Requires staging environment green | Cannot trigger prod deploy unless the latest staging deployment succeeded |
+
+### Key Design Decisions (Phase 15 — Dev Tooling)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Dev server default | HTTPS + log capture | Production-like by default ensures security headers and logging are always validated during manual testing |
+| Log capture method | Child process with piped stdio | pino-pretty's ThreadStream bypasses shell pipelines; spawning as child with pipe is the only reliable capture method |
+| Script architecture | Wrapper spawns dev-https.js or server/index.js | Keeps HTTPS logic separate (monkey-patches http.createServer), log capture is orthogonal |
+| Watch mode | Only for --no-https | dev-https.js monkey-patches http.createServer once; --watch restart would re-patch incorrectly |
 
 ---
 
@@ -475,7 +526,7 @@ Improve the community puzzle submission experience for both submitters and admin
 |---|---|---|
 | Frontend stack | Vanilla HTML/CSS/JS | No build tools, fast iteration, lightweight |
 | Backend stack | Node.js + Express | Same language as frontend, easy WebSocket support |
-| Database | SQLite → PostgreSQL | Start simple, migrate when scaling |
+| Database | SQLite → Azure SQL | Start simple (SQLite for dev/staging), Azure SQL free tier for production. Adapter pattern supports both. |
 | Multiplayer | Both async + real-time | Leaderboards for casual, head-to-head for competitive |
 | Multi-player rooms | 2–10 players, host-controlled | Host creates room, configures settings, starts when ready |
 | Multi-player disconnect | Drop after 30s, match continues | Avoids ending match for all when one player leaves |

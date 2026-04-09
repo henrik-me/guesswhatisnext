@@ -7,6 +7,7 @@
 
 const { getDbAdapter } = require('./index');
 const puzzles = require('../puzzleData');
+const logger = require('../logger');
 
 async function seedPuzzles() {
   const db = await getDbAdapter();
@@ -21,7 +22,7 @@ async function seedPuzzles() {
     }
   });
 
-  console.log(`🧩 Seeded ${puzzles.length} puzzles into database`);
+  logger.info({ count: puzzles.length }, 'Puzzles seeded into database');
 }
 
 // Run directly
@@ -39,7 +40,7 @@ if (require.main === module) {
       await db.migrate(migrations);
       await seedPuzzles();
     } catch (err) {
-      console.error('❌ Seed failed:', err.message);
+      logger.error({ err }, 'Seed failed');
       process.exitCode = 1;
     } finally {
       try {
