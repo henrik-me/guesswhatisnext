@@ -2,7 +2,7 @@
 
 This document defines architecture decisions, coding standards, testing strategy, and git workflow for the **Guess What's Next** project.
 
-For project phases, task plans, detailed test specifications, tool evaluations, and current status, see **CONTEXT.md**.
+For project phases, task plans, detailed test specifications, tool evaluations, and current status, see **CONTEXT.md**. For live work coordination, see **WORKBOARD.md**. For architecture decisions and learnings, see **LEARNINGS.md**.
 
 ---
 
@@ -468,7 +468,7 @@ NOT allowed on main checkout:
 - No `git push` from main
 - No merge conflict resolution — if `git pull` conflicts, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
-**Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `feat/lean-instructions`, `fix/ws-reconnect`).
+**Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
 
 Sub-agents are responsible for:
 - All file changes (code, docs, config) and all commits/pushes
@@ -514,6 +514,81 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 9. Main orchestrating agent pulls after each merge: `git pull`
 
 **Recycling slots:** `git worktree remove <path> --force` → `git branch -d feat/old-task` → `git worktree add -b feat/new-task <path> main`
+
+### Clickstop & Task Management
+
+**Clickstops** are the unit of deliverable work — each represents a feature, capability, or related set of changes. **Tasks** are the breakdown within a clickstop.
+
+#### Task IDs
+Format: `CS<clickstop#>-<task#>` (e.g., `CS11-64`, `CS14-82`). Used in branch names, commit messages, PR titles, and WORKBOARD.md.
+
+#### Task Statuses
+- ⬜ Pending — not started, may have unmet dependencies
+- 🔜 Ready — dependencies met, can be picked up
+- 🔄 In Progress — claimed by an agent (see WORKBOARD.md)
+- ✅ Done — merged to main
+- 🚫 Blocked — explain why in Notes column
+
+#### Agent Identification
+Every orchestrating agent has a unique ID: `{machine-short}-{repo-suffix}`
+- **Machine short**: lowercase, first meaningful segment of hostname (e.g., `HENRIKM-YOGA` → `yoga`)
+- **Repo suffix**: derived from clone folder (e.g., `guesswhatisnext` → `gwn`, `guesswhatisnext_copilot2` → `gwn-c2`)
+- Override via `GWN_AGENT_MACHINE` env var if hostname is unhelpful
+
+#### Naming Conventions
+
+**Branches:** `{agent-id}/{task-id}-{description}`
+```
+yoga-gwn/cs11-64-provision-azure-sql
+yoga-gwn-c2/cs14-82-authoring-form
+```
+
+**Commits:** Include `Agent:` trailer
+```
+feat(cs11-64): provision Azure SQL server
+
+Agent: yoga-gwn/wt-1
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+```
+
+**PR titles:** `cs{N}-{task#}: description`
+**PR descriptions:** Include agent metadata block:
+```
+## Task: CS11-64 — Provision Azure SQL
+**Clickstop:** CS11 — Database Migration
+**Agent:** yoga-gwn/wt-1
+```
+
+#### Clickstop Completion Checklist
+
+Every clickstop must satisfy ALL of these before marking complete:
+- [ ] All tasks done and merged
+- [ ] README updated (if user-facing changes)
+- [ ] INSTRUCTIONS.md updated (if architectural/workflow changes)
+- [ ] CONTEXT.md updated with final state
+- [ ] Tests added/updated, coverage measured
+- [ ] Performance/load test evaluation (if applicable)
+- [ ] Data structure changes documented
+- [ ] Staging deployed and verified
+- [ ] Production deployed and verified (or N/A with documented reason)
+
+Filled-in checklists are recorded in the clickstop's archive file upon completion.
+
+#### WORKBOARD.md
+
+The live coordination file. Rules:
+- Only orchestrating agents write to WORKBOARD.md
+- Sub-agents read it for awareness but never edit it
+- Updated after every task start, complete, or block event
+- Contains: orchestrator table, active work, queued tasks, recently completed
+- Kept small (<100 lines) — only active + recent items
+
+#### Completed Clickstop Archival
+
+When a clickstop is fully complete:
+1. Create `project/clickstops/completed_clickstop_{kebab-name}.md` with full task table, design decisions, filled-in completion checklist, and notes
+2. Replace the clickstop's section in CONTEXT.md with a 2-4 line summary linking to the archive file
+3. Update the clickstop summary table status
 
 **Copilot PR Review Policy:**
 - Every PR must be reviewed by Copilot before merging
