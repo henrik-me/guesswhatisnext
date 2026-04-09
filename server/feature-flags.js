@@ -25,7 +25,7 @@ function clampRolloutPercentage(value) {
 /**
  * Parse a comma-separated list of user identifiers.
  *
- * @param {string} value - Comma-separated user identifiers.
+ * @param {*} value - Comma-separated user identifiers.
  * @returns {Set<string>} Normalized user identifiers.
  */
 function parseUserList(value) {
@@ -127,11 +127,13 @@ function getFeatureOverride(feature, req = {}) {
 
   const headers = req.headers || {};
   const overrideHeaderName = feature.overrideHeader.toLowerCase();
-  const directHeaderValue = headers[overrideHeaderName];
-  const matchingHeaderName = directHeaderValue === undefined
-    ? Object.keys(headers).find((name) => String(name).toLowerCase() === overrideHeaderName)
-    : null;
-  const headerValue = directHeaderValue ?? (matchingHeaderName ? headers[matchingHeaderName] : null);
+  const expressHeaderValue = typeof req.get === 'function' ? req.get(feature.overrideHeader) : undefined;
+  let headerValue = expressHeaderValue ?? headers[overrideHeaderName];
+  if (headerValue === undefined && typeof req.get !== 'function') {
+    const matchingHeaderName = Object.keys(headers).find((name) => String(name).toLowerCase() === overrideHeaderName);
+    headerValue = matchingHeaderName ? headers[matchingHeaderName] : null;
+  }
+
   const headerOverride = parseOverrideValue(headerValue);
   if (headerOverride !== null) return headerOverride;
 
