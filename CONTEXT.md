@@ -589,7 +589,7 @@ public/
          ▼
   ┌──────────────────────────────────────────────────────────────┐
   │  PR checks (ci.yml)                                         │
-  │  [Lint] + [Test]  (parallel)                                │
+  │  [Lint] + [Test] + [E2E]  (parallel)                        │
   └──────────────────────────────────────────────────────────────┘
 
   Manual trigger (staging-deploy.yml — auto-deploy disabled in PR #41)
