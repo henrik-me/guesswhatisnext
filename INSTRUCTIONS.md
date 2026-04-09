@@ -439,7 +439,7 @@ Background agents **must** report progress to the orchestrating agent:
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
 ### Branch Strategy & Merge Model
-- **No direct commits to `main`** — all code changes go through pull requests, no exceptions. **Exception:** WORKBOARD.md updates are committed directly on main by orchestrating agents (see § WORKBOARD.md — Live Coordination below).
+- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates committed directly on `main` by orchestrating agents (see § WORKBOARD.md — Live Coordination below).
 - Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
@@ -604,7 +604,7 @@ Agent: {agent-id}
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```
 
-**Conflict handling:** Since multiple orchestrators may update WORKBOARD.md concurrently, conflicts are possible. Orchestrators should `git pull` before updating, and if a conflict occurs, resolve it by keeping both agents' entries (additive merge).
+**Conflict handling:** Since multiple orchestrators may update WORKBOARD.md concurrently, conflicts are possible. Orchestrators should `git pull` before updating. If a conflict occurs **only in `WORKBOARD.md`**, this is the one exception to the general "do not resolve merge conflicts in the main checkout" rule: resolve it by keeping both agents' entries (additive merge), then complete the workboard-only update. If the pull produces conflicts in any other file, abort the merge and follow the normal abort + worktree workflow instead.
 
 #### CONTEXT.md — Project State Updates
 
