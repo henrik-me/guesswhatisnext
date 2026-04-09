@@ -483,40 +483,28 @@ This keeps `main` clean and ensures every change flows through a PR.
 When the orchestrator launches a sub-agent, the prompt **MUST** include all of the following:
 
 1. **Read instructions first:** Every sub-agent prompt must start with: "Read INSTRUCTIONS.md in the repository root before starting any work."
-2. **Task description:** Clear, complete description of what to implement — include acceptance criteria, affected files, and any edge cases.
-3. **Worktree context:** Which slot (`wt-N`), branch name, and port number (`300N`).
+2. **Task description:** Clear, complete description including task ID (e.g., CS11-64), acceptance criteria, affected files, and edge cases.
+3. **Worktree context:** Which slot (`wt-N`), branch name using `{agent-id}/{task-id}-{description}` format, and port number (`300N`).
 4. **Validation command:** `npm run lint && npm test && npm run test:e2e`
-5. **PR workflow:** Create PR, request Copilot review, complete full review loop.
-6. **Review loop reminder:** Reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments.
+5. **PR workflow:** Create PR with task ID in title (e.g., `cs11-64: description`), include agent metadata block in description, request Copilot review, complete full review loop.
+6. **Commit conventions:** Use `Agent:` trailer in all commits. Conventional commit format with task scope (e.g., `feat(cs11-64): description`).
+7. **Review loop reminder:** Reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments.
 
 **Sub-Agent Checklist** (include verbatim in every sub-agent prompt):
 1. Read INSTRUCTIONS.md in the repository root before starting any work
-2. Run `npm install` in worktree
-3. Set `$env:PORT = "300N"` for the assigned slot
-4. Implement the task (commit after each meaningful step)
-5. Run full validation: `npm run lint && npm test && npm run test:e2e`
-6. Push branch and create PR: `gh pr create --base main`
-7. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-8. Wait for review (poll per "Waiting for Copilot Review (CRITICAL)" section — do NOT skip this)
-9. Address all review comments (reply + fix + resolve threads)
-10. Re-request review and repeat until clean
-11. Report completion with PR number and summary
+2. Read WORKBOARD.md for current project context and active work
+3. Run `npm install` in worktree
+4. Set `$env:PORT = "300N"` for the assigned slot
+5. Implement the task (commit after each meaningful step with `Agent:` trailer)
+6. Run full validation: `npm run lint && npm test && npm run test:e2e`
+7. Push branch and create PR with task ID in title and agent metadata in description
+8. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
+9. Wait for review (poll per "Waiting for Copilot Review" section — do NOT skip this)
+10. Address all review comments (reply + fix + resolve threads)
+11. Re-request review and repeat until clean
+12. Report completion with PR number and summary
 
-**Model Usage Guidance:**
-
-Recommendations based on benchmark results comparing claude-opus-4.6, claude-sonnet-4.6, gpt-5.4, and gpt-5.3-codex on identical coding tasks (claude-haiku-4.5 included for exploration based on separate cost/speed evaluation):
-
-| Task Type | Recommended Model | Rationale |
-|---|---|---|
-| **Orchestration / planning** | claude-opus-4.6 | Best instruction following, fastest, manages complex workflows without extra prompting |
-| **Quick iteration / convention-heavy coding** | claude-opus-4.6 | 2x speed advantage, fewest review comments, strong convention compliance |
-| **Deep refactoring / architecture** | gpt-5.4 | Bolder design choices (immutable patterns, DRY helpers, proactive cleanup), more thorough |
-| **Test authoring** | gpt-5.4 | More thorough coverage (reason verification, hermetic env vars, DRY test factories, edge cases) |
-| **Exploration / research** | claude-haiku-4.5 | Cost-effective for read-only codebase analysis |
-
-**Important:** GPT models require more explicit procedural prompting for workflow steps (e.g., review loop polling). Always include the full Sub-Agent Checklist when dispatching GPT-based sub-agents. Claude models better internalize workflow instructions from high-level descriptions.
-
-These recommendations are based on benchmark results from April 2026 and should be re-evaluated periodically as models improve.
+**Model selection:** GPT models require more explicit procedural prompting for workflow steps (e.g., review loop polling). Always include the full Sub-Agent Checklist when dispatching GPT-based sub-agents. Claude models better internalize workflow instructions from high-level descriptions. See LEARNINGS.md for detailed model evaluation results and task-specific recommendations.
 
 ### Parallel Agent Workflow
 
