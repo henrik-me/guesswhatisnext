@@ -548,7 +548,7 @@ public/
 │   ├── app.js            # Event handlers, screen navigation
 │   ├── game.js           # Game engine
 │   ├── daily.js          # Daily challenge logic
-│   ├── puzzles.js        # Puzzle data loader
+│   ├── puzzles.js        # Client-side puzzle data
 │   ├── audio.js          # Web Audio API sounds
 │   ├── storage.js        # LocalStorage helpers
 │   └── sw-register.js    # Service worker registration

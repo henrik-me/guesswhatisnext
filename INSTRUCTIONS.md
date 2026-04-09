@@ -409,7 +409,7 @@ chore: initialize npm project with express and dependencies
 Commit locally after every meaningful, working change — each commit should be a self-contained unit that explains *what* changed and *why*. This creates a clear trail of reasoning on the feature branch.
 
 **Commit on the feature branch after:**
-- Each logical step (e.g., "extract phase content to context2.md", then "remove extracted content from INSTRUCTIONS.md")
+- Each logical step (e.g., "extract phase content to CONTEXT.md", then "remove extracted content from INSTRUCTIONS.md")
 - Adding or updating a feature, fixing a bug, adding tests, refactoring
 - Each round of PR review fixes
 
