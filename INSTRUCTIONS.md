@@ -2,7 +2,7 @@
 
 This document defines architecture decisions, coding standards, testing strategy, and git workflow for the **Guess What's Next** project.
 
-For project phases, task plans, detailed test specifications, tool evaluations, and current status, see **CONTEXT.md**.
+For clickstops, task plans, detailed test specifications, tool evaluations, and current project state, see **CONTEXT.md**. For live work coordination, see **WORKBOARD.md**. For architecture decisions and learnings, see **LEARNINGS.md**.
 
 ---
 
@@ -428,18 +428,18 @@ Commit locally after every meaningful, working change — each commit should be 
 All task work happens in background agents on worktrees — never in the main session. Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
 
 Background agents **must** report progress to the orchestrating agent:
-- **On start:** "Starting task X in wt-N on branch feat/\<name\>"
-- **On milestone:** "Task X: completed \<step\>, running validation..."
-- **On validation pass:** "Task X: lint ✓ test ✓ e2e ✓ — creating PR"
-- **On PR created:** "Task X: PR #\<N\> created, requesting Copilot review"
-- **On review loop:** "Task X: Copilot review round \<N\> — fixing \<count\> issues"
-- **On ready:** "Task X: PR #\<N\> ready for merge (Copilot approved, CI green)"
+- **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
+- **On milestone:** "CS11-64: completed \<step\>, running validation..."
+- **On validation pass:** "CS11-64: lint ✓ test ✓ e2e ✓ — creating PR"
+- **On PR created:** "CS11-64: PR #\<N\> created, requesting Copilot review"
+- **On review loop:** "CS11-64: Copilot review round \<N\> — fixing \<count\> issues"
+- **On ready:** "CS11-64: PR #\<N\> ready for merge (Copilot approved, CI green)"
 
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
 ### Branch Strategy & Merge Model
 - **No direct commits to `main`** — all code changes go through pull requests, no exceptions
-- Feature branches: `feat/<step-id>` (e.g., `feat/puzzle-expansion`, `feat/mp-game-logic`)
+- Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
   2. **Unit + integration tests:** `npm test` (vitest)
@@ -468,7 +468,7 @@ NOT allowed on main checkout:
 - No `git push` from main
 - No merge conflict resolution — if `git pull` conflicts, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
-**Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `feat/lean-instructions`, `fix/ws-reconnect`).
+**Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
 
 Sub-agents are responsible for:
 - All file changes (code, docs, config) and all commits/pushes
@@ -503,17 +503,109 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 **Agent setup:** Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
 
 **Branch lifecycle:**
-1. Work on `feat/<task-name>` branch in slot
+1. Work on `{agent-id}/{task-id}-{description}` branch in slot
 2. **Commit after each meaningful step** with a descriptive message — don't wait until the end
 3. Run full validation before pushing: `npm run lint && npm test && npm run test:e2e`
 4. Push branch to origin
-5. Create PR: `gh pr create --base main --head feat/<task-name>`
+5. Create PR: `gh pr create --base main --head {agent-id}/{task-id}-{description}`
 6. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
 7. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
 8. After CI passes and review approved, **squash-merge** via GitHub UI or `gh pr merge --squash`
 9. Main orchestrating agent pulls after each merge: `git pull`
 
-**Recycling slots:** `git worktree remove <path> --force` → `git branch -d feat/old-task` → `git worktree add -b feat/new-task <path> main`
+**Recycling slots:** `git worktree remove <path> --force` → `git branch -d old-branch` → `git worktree add -b new-branch <path> main`
+
+### Clickstop & Task Management
+
+**Clickstops** are the unit of deliverable work — each represents a feature, capability, or related set of changes. **Tasks** are the breakdown within a clickstop.
+
+#### Task IDs
+Format: `CS<clickstop#>-<task#>` (e.g., `CS11-64`, `CS14-82`). Used in branch names, commit messages, PR titles, and WORKBOARD.md.
+
+#### Task Statuses
+- ⬜ Pending — not started, may have unmet dependencies
+- 🔜 Ready — dependencies met, can be picked up
+- 🔄 In Progress — claimed by an agent (see WORKBOARD.md)
+- ✅ Done — merged to main
+- 🚫 Blocked — explain why in Notes column
+
+#### Agent Identification
+Every orchestrating agent has a unique ID: `{machine-short}-{repo-suffix}`
+- **Machine short**: lowercase, first meaningful segment of hostname (e.g., `HENRIKM-YOGA` → `yoga`)
+- **Repo suffix**: derived from clone folder (e.g., `guesswhatisnext` → `gwn`, `guesswhatisnext_copilot2` → `gwn-c2`)
+- Override via `GWN_AGENT_MACHINE` env var if hostname is unhelpful
+
+#### Naming Conventions
+
+Task IDs use uppercase in documentation and tables (`CS11-64`) but are normalized to **lowercase** in branches and commit scopes (`cs11-64`).
+
+**Branches:** `{agent-id}/{task-id}-{description}`
+```
+yoga-gwn/cs11-64-provision-azure-sql
+yoga-gwn-c2/cs14-82-authoring-form
+```
+
+**Commits:** Include `Agent:` trailer
+```
+feat(cs11-64): provision Azure SQL server
+
+Agent: yoga-gwn/wt-1
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+```
+
+**PR titles:** `cs{N}-{task#}: description`
+**PR descriptions:** Include agent metadata block:
+```
+## Task: CS11-64 — Provision Azure SQL
+**Clickstop:** CS11 — Database Migration
+**Agent:** yoga-gwn/wt-1
+```
+
+#### Clickstop Completion Checklist
+
+Every clickstop must satisfy ALL of these before marking complete:
+- [ ] All tasks done and merged
+- [ ] README updated (if user-facing changes)
+- [ ] INSTRUCTIONS.md updated (if architectural/workflow changes)
+- [ ] CONTEXT.md updated with final state
+- [ ] Tests added/updated, coverage measured
+- [ ] Performance/load test evaluation (if applicable)
+- [ ] Data structure changes documented
+- [ ] Staging deployed and verified
+- [ ] Production deployed and verified (or N/A with documented reason)
+
+Filled-in checklists are recorded in the clickstop's archive file upon completion.
+
+#### WORKBOARD.md
+
+The live coordination file. Rules:
+- Only orchestrating agents write to WORKBOARD.md
+- Sub-agents read it for awareness but never edit it
+- Updated after every task start, complete, or block event
+- Contains: orchestrator table, active work, queued tasks, recently completed
+- Kept small (<100 lines) — only active + recent items
+
+#### Clickstop File Lifecycle
+
+Each clickstop gets a detail file in `project/clickstops/` with a status prefix:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `planned_` | Defined but no tasks started | `planned_cs14_community-puzzle-ux.md` |
+| `active_` | Has work in progress | `active_cs11_database-migration.md` |
+| `done_` | Fully complete | `done_cs10_cicd-pipeline.md` |
+
+**File format:** Each file contains the clickstop title, status, goal, full task table (with CS-prefixed IDs), design decisions, and notes (parallelism, architecture details).
+
+**Lifecycle transitions:**
+
+1. **New clickstop defined** → create `planned_{cs-id}_{kebab-name}.md` with task table and design notes. Add a summary row to the CONTEXT.md clickstop summary table linking to the file.
+2. **First task starts** → rename file from `planned_` to `active_` (use `git mv`). Update the CONTEXT.md summary row status and link.
+3. **All tasks complete** → rename file from `active_` to `done_` (use `git mv`). Update the CONTEXT.md summary row. Fill in the completion checklist inside the file. Replace the CONTEXT.md section with a 2-4 line summary linking to the archive.
+
+CONTEXT.md always contains only a short summary (2-4 lines) per clickstop with a link to the detail file. Full task tables, design decisions, and architecture details live in the clickstop files.
+
+Legacy archives from before CS0 may omit the completion checklist.
 
 **Copilot PR Review Policy:**
 - Every PR must be reviewed by Copilot before merging
