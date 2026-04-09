@@ -3,6 +3,11 @@
 **Status:** ✅ Complete* (CS10-56 still pending)
 **Completed:** Phase 10 complete except CS10-56
 
+> **Note:** This clickstop is archived as "complete" because all core pipeline work is done.
+> Task CS10-56 (unified infra setup script) remains pending and is tracked on
+> [WORKBOARD.md](../../WORKBOARD.md) as a queued item. Once CS10-56 merges, the asterisk
+> will be removed.
+
 ## Tasks
 
 | # | Task | Status | Depends On | Notes |

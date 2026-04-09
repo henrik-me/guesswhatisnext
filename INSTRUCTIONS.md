@@ -428,12 +428,12 @@ Commit locally after every meaningful, working change — each commit should be 
 All task work happens in background agents on worktrees — never in the main session. Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
 
 Background agents **must** report progress to the orchestrating agent:
-- **On start:** "Starting task X in wt-N on branch feat/\<name\>"
-- **On milestone:** "Task X: completed \<step\>, running validation..."
-- **On validation pass:** "Task X: lint ✓ test ✓ e2e ✓ — creating PR"
-- **On PR created:** "Task X: PR #\<N\> created, requesting Copilot review"
-- **On review loop:** "Task X: Copilot review round \<N\> — fixing \<count\> issues"
-- **On ready:** "Task X: PR #\<N\> ready for merge (Copilot approved, CI green)"
+- **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
+- **On milestone:** "CS11-64: completed \<step\>, running validation..."
+- **On validation pass:** "CS11-64: lint ✓ test ✓ e2e ✓ — creating PR"
+- **On PR created:** "CS11-64: PR #\<N\> created, requesting Copilot review"
+- **On review loop:** "CS11-64: Copilot review round \<N\> — fixing \<count\> issues"
+- **On ready:** "CS11-64: PR #\<N\> ready for merge (Copilot approved, CI green)"
 
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
