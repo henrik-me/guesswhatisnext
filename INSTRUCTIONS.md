@@ -668,7 +668,7 @@ Polling procedure:
    ```powershell
    $reviewCountAfter = gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
    ```
-5. If `$reviewCountAfter` > `$reviewCountBefore`, a new review exists — proceed to read comments
+5. If `$reviewCountAfter` is greater than `$reviewCountBefore`, a new review exists — proceed to read comments
 6. If the count has not incremented, repeat from step 3 (up to **10 times** — 10 minutes total)
 7. After 10 attempts, report a timeout to the orchestrating agent
 
