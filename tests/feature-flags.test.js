@@ -61,7 +61,7 @@ describe('feature flag evaluation', () => {
     expect(evaluateFeatureFlag({ ...FEATURE_FLAGS.submitPuzzle, users: new Set(), rolloutPercentage: 100 }, { user: boundaryUser })).toBe(true);
   });
 
-  test('returns rollout-no-key reason for anonymous users during rollout', () => {
+  test('does not include anonymous users in percentage rollouts', () => {
     const feature = {
       ...FEATURE_FLAGS.submitPuzzle,
       users: new Set(),
