@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-09T23:14Z
+> **Last updated:** 2026-04-09T23:16Z
 
 ## Orchestrators
 
@@ -16,7 +16,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| — | — | No active tasks | — | — | — | — | — |
+| CS11-64 | Database Migration | Provision Azure SQL (64a–64e) | yoga-gwn | wt-1 | yoga-gwn/cs11-64-provision-azure-sql | — | 2026-04-09 |
 
 ## Queued (ready, no dependencies blocking)
 
