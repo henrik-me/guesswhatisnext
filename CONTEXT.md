@@ -32,6 +32,29 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 **PR Review Comment Resolution:**
 Every Copilot review comment thread must be replied to with a meaningful message (fix commit reference, acknowledgment, or explanation) and then resolved via the GraphQL API. See INSTRUCTIONS.md §10 for API commands and reply conventions. Threads are never left unresolved — even "by design" decisions get an explicit reply before resolution.
 
+### Lessons Learned from Parallel Execution
+
+| Issue | Cause | Prevention |
+|---|---|---|
+| Agents commit each other's changes | Shared worktree, agents run `git add -A` | Use worktrees — each has its own filesystem |
+| Health endpoint bundled into wrong commit | Both modified `server/index.js` | Separate worktrees eliminate this entirely |
+| Agents compete for port 3000 | Each agent starts server to verify | Assign unique ports per worktree (300X) |
+| Schema migrations conflict | Multiple agents add columns/tables | Review combined schema after all merges |
+| Test file merge conflicts | Multiple agents add test files | Tests are additive — auto-merge usually works |
+| Folder permissions re-prompted | Task-named worktree folders change each time | Use fixed slots (wt-1..wt-4), recycle with new branches |
+
+### High-Conflict Files
+
+These files are modified by almost every feature — expect merge work:
+- `server/index.js` — route registration, middleware setup
+- `server/app.js` — app factory, route wiring
+- `server/db/schema.sql` — table definitions
+- `server/db/connection.js` — migrations, seeding
+- `public/index.html` — new screens, buttons
+- `public/js/app.js` — event handlers, screen navigation
+- `public/css/style.css` — new component styles
+- `server/ws/matchHandler.js` — multiplayer logic
+
 ## Known Issues
 
 - On Node >= 22.13, when the optional `artillery` install is present, `npm ci` may emit OpenTelemetry peer-dependency warnings. These warnings come from optional load-testing dependencies that still pull older OTel metrics/exporter packages, while the application runtime telemetry path uses newer OTel packages.
@@ -568,6 +591,31 @@ Consolidate dev server scripts, integrate log capture into e2e tests, and add CI
 - Project gains multiple active contributors
 - We enter an open-ended feature development phase without clear dependency chains
 
+## Adopted Tools & Versions
+
+| Tool | Purpose | Notes |
+|---|---|---|
+| Express 5 | HTTP server + API routes | v5.2.1 — note `/{*path}` wildcard syntax (not `*`) |
+| better-sqlite3 | SQLite driver | WAL mode, synchronous API, good for single-server |
+| ws | WebSocket server | Lightweight, no socket.io overhead |
+| bcryptjs | Password hashing | Pure JS, 10 rounds |
+| jsonwebtoken | JWT auth tokens | 7-day expiry, secret from env var |
+| mssql | Azure SQL driver | v12.2.1 — connection pooling, parameterized queries |
+| pino | Structured logging | v10.3.1 — JSON in prod, pretty-print in dev |
+| pino-http | HTTP request logging | v11.0.0 — auto-logs requests, ignores health/telemetry/static |
+| @opentelemetry/sdk-node | Distributed tracing | v0.214.0 — auto-instruments HTTP/Express/DB |
+| @azure/monitor-opentelemetry-exporter | Azure Monitor export | v1.0.0-beta.32 — sends traces to App Insights |
+| helmet | Security headers | v8.1.0 — HSTS, CSP with wss:, HTTPS redirect |
+| express-rate-limit | Rate limiting | v8.3.1 — auth endpoints, telemetry, submissions |
+| Docker | Containerization | Same Dockerfile for local dev, staging, and production |
+| GitHub Container Registry | Image storage | Free, integrated with GitHub Actions |
+| Azure Container Apps | Hosting (staging + prod) | Consumption plan, scale-to-zero, WebSocket support |
+| GitHub Actions | CI/CD + health monitoring | Build, deploy, smoke tests, cron-based health checks |
+| ESLint | Linting | v10.1.0 — flat config (`eslint.config.mjs`), `@eslint/js` recommended + custom rules |
+| Vitest | Unit/integration tests | v4.1.2 — fast, ESM-native, built-in coverage |
+| Playwright | Browser E2E tests | v1.58.2 — Chromium, full UI flow testing |
+| supertest | HTTP test agent | v7.2.2 — Express endpoint testing |
+
 ## Active Design Notes
 
 These should be kept in mind throughout Phase 1 development:
@@ -577,6 +625,23 @@ These should be kept in mind throughout Phase 1 development:
 - [x] Answer submission uses callbacks (not direct DOM writes)
 - [x] Screen navigation supports adding new screens without refactoring
 - [x] No global mutable state — single state object pattern
+
+---
+
+## Puzzle Authoring Guide
+
+When adding new puzzles to `puzzles.js`:
+
+1. Every puzzle must have: `id`, `category`, `difficulty` (1–3), `type`, `sequence`, `answer`, `options`, `explanation`
+2. `answer` must appear exactly once in `options`
+3. `options` must have exactly 4 items
+4. `sequence` must have 3–6 items
+5. `difficulty` guide:
+   - **1**: Obvious patterns (counting, colors, alphabet)
+   - **2**: Requires domain knowledge (moon phases, music scales)
+   - **3**: Lateral thinking or obscure patterns
+6. For image puzzles: paths are relative to `img/` directory
+7. Write a clear `explanation` — players see it after answering
 
 ---
 
