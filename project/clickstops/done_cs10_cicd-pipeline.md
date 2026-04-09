@@ -1,12 +1,7 @@
 # Clickstop CS10: CI/CD Pipeline
 
-**Status:** ✅ Complete* (CS10-56 still pending)
-**Completed:** Phase 10 complete except CS10-56
-
-> **Note:** This clickstop is archived as "complete" because all core pipeline work is done.
-> Task CS10-56 (unified infra setup script) remains pending and is tracked on
-> [WORKBOARD.md](../../WORKBOARD.md) as a queued item. Once CS10-56 merges, the asterisk
-> will be removed.
+**Status:** ✅ Complete
+**Completed:** Phase 10 complete
 
 ## Tasks
 
@@ -17,7 +12,7 @@
 | CS10-53 | Remove push-to-main deploy pipeline | ✅ Done | CS10-52 | ci-cd.yml removed from tree; push to main no longer triggers any deployment |
 | CS10-54 | Staging deploy on merge | ✅ Done | CS10-53 | New staging-deploy.yml: triggers on push to main, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, fast-forwards release/staging, then (with manual approval) deploys to Azure staging |
 | CS10-55 | Manual production deploy workflow | ✅ Done | CS10-54 | prod-deploy.yml: manual workflow_dispatch with image tag + confirmation, validates image exists in GHCR, deploys to production environment (with approval gate), runs health verification, auto-rollback on failure (PR #21) |
-| CS10-56 | Unified infra setup script | ⬜ Pending | CS10-55 | Merge deploy.sh + setup-github.sh into one script: auto-generates secrets, creates Azure service principal, sets all GitHub secrets/variables, runs verification health check |
+| CS10-56 | Unified infra setup script | ✅ Done | CS10-55 | deploy.sh + deploy.ps1 unified bootstrap: auto-generates secrets, creates SP, sets GitHub secrets/vars, health check. PR #98 merged. |
 
 ### CS10b — SQLite on Azure Files SMB Fix (COMPLETE)
 
