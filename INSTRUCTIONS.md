@@ -588,7 +588,7 @@ The live coordination file. Rules:
 #### Completed Clickstop Archival
 
 When a clickstop is fully complete:
-1. Create `project/clickstops/done_{CS-ID}_{kebab-name}.md` (e.g., `done_cs11_database-migration.md`) with full task table, design decisions, filled-in completion checklist, and notes. The `done_` prefix + CS ID enables proper sorting/ordering in the filesystem.
+1. Create `project/clickstops/done_{CS-ID}_{kebab-name}.md` (e.g., `done_cs11_database-migration.md`) with full task table, design decisions, and notes. Include a filled-in completion checklist if applicable (legacy archives from before CS0 may omit it). The `done_` prefix + CS ID enables proper sorting/ordering in the filesystem.
 2. Replace the clickstop's section in CONTEXT.md with a 2-4 line summary linking to the archive file
 3. Update the clickstop summary table status
 

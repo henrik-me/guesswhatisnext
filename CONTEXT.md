@@ -53,8 +53,8 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 
 **All implementation work runs as background task agents — the main session only orchestrates.** The orchestrating agent dispatches tasks to background agents in worktree slots, monitors progress via notifications, and merges approved PRs. It never directly edits code, runs tests, or creates PRs itself. The orchestrating agent actively relays background task progress to the user — status checks, milestone updates, and completion notifications rather than dispatching silently.
 
-**Current workflow (pre-branch-protection):** Agent pushes branch → merges to main on remote → pushes main.
-**Future workflow (post-branch-protection):** Agent pushes branch → creates PR → CI + review → merge via GH UI.
+**Current workflow (pre-branch-protection):** Agent pushes branch → creates PR → Copilot review → merges PR via GitHub (no direct pushes to main).
+**Future workflow (post-branch-protection):** Agent pushes branch → creates PR → CI + Copilot review → merge via GH UI.
 
 **PR Review Comment Resolution:**
 Every Copilot review comment thread must be replied to with a meaningful message (fix commit reference, acknowledgment, or explanation) and then resolved via the GraphQL API. See the Copilot review policy in INSTRUCTIONS.md under Git workflow for API commands and reply conventions. Threads are never left unresolved — even "by design" decisions get an explicit reply before resolution.

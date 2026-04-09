@@ -227,8 +227,8 @@ SQLite's default transaction isolation is SERIALIZABLE. Azure SQL defaults to RE
 ### bcrypt in System User Seeding
 The system user seed hashes the `SYSTEM_API_KEY` with bcrypt on every fresh DB init. This is CPU-intensive (~100ms). In the async world, use `bcrypt.hash()` (async) instead of `bcrypt.hashSync()`.
 
-### No DELETE Statements in Codebase
-The current codebase has no SQL DELETE statements. Data grows indefinitely. With Azure SQL's 32GB free tier limit, this could eventually be an issue. Consider adding a data retention policy (e.g., archive old matches after 90 days).
+### No DELETE Statements in Application Code
+The current application/server code does not issue SQL `DELETE` statements, so production data grows indefinitely. Test code may still use `DELETE FROM ...` for cleanup. With Azure SQL's 32GB free tier limit, this could eventually be an issue. Consider adding a data retention policy (e.g., archive old matches after 90 days).
 
 ### Rollback Strategy for Schema Migrations
 Each migration has `down()` but it's never auto-called. If a migration breaks production:
