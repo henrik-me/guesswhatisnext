@@ -3,13 +3,14 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-09T23:08Z
+> **Last updated:** 2026-04-09T23:12Z
 
 ## Orchestrators
 
 | Agent ID | Machine | Repo Folder | Status |
 |----------|---------|-------------|--------|
 | yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active |
+| yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active |
 
 ## Active Work
 
