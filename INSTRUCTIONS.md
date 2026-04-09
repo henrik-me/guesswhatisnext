@@ -401,6 +401,7 @@ Use **conventional commits** for clear, parseable history:
 | `test` | Adding or updating tests |
 | `docs` | Documentation changes |
 | `chore` | Config, dependencies, tooling |
+| `workboard` | WORKBOARD.md coordination updates (direct-commit on main) |
 
 **Examples:**
 ```
@@ -438,7 +439,7 @@ Background agents **must** report progress to the orchestrating agent:
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
 ### Branch Strategy & Merge Model
-- **No direct commits to `main`** — all code changes go through pull requests, no exceptions
+- **No direct commits to `main`** — all code changes go through pull requests, no exceptions. **Exception:** WORKBOARD.md updates are committed directly on main by orchestrating agents (see § WORKBOARD.md — Live Coordination below).
 - Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
@@ -450,7 +451,7 @@ The orchestrating agent **must actively relay progress to the user** — never d
   - Require CI status checks to pass (`lint`, `test`, `e2e`) — CI uses `paths-ignore` for docs-only PRs
 
   - No force pushes
-  - No direct commits
+  - No direct commits (except WORKBOARD.md by orchestrating agents)
 
 ### Agent Work Model
 
@@ -464,8 +465,8 @@ Allowed on main checkout:
 - Planning, decomposing, and delegating work to sub-agents
 
 NOT allowed on main checkout:
-- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`)
-- No `git push` from main
+- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates are committed and pushed directly from main
+- No `git push` from main (except WORKBOARD.md updates)
 - No merge conflict resolution — if `git pull` conflicts, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
 **Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
