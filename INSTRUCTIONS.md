@@ -466,7 +466,7 @@ Allowed on main checkout:
 NOT allowed on main checkout:
 - No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`)
 - No `git push` from main
-- No merge conflict resolution — if `git pull` conflicts, abort (`git merge --abort`) and handle the rebase in a worktree instead
+- No merge conflict resolution — if `git pull` conflicts, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
 **Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `feat/lean-instructions`, `fix/ws-reconnect`).
 
