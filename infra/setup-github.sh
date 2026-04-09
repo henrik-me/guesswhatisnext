@@ -32,10 +32,37 @@ SP_JSON=$(az ad sp create-for-rbac \
 echo "$SP_JSON" | gh secret set AZURE_CREDENTIALS --repo "$REPO"
 echo "  ✓ AZURE_CREDENTIALS set as GitHub secret"
 
-# ─── 2. Get deployed URLs ────────────────────────────────────────────────────
+# ─── 2. Set app secrets in GitHub ─────────────────────────────────────────────
 
 echo ""
-echo "→ Step 2: Retrieve deployed URLs"
+echo "→ Step 2: App secrets"
+
+set_or_generate_secret() {
+  local name="$1"
+  local byte_length="$2"
+  local env_val="${!name:-}"
+
+  if [ -n "$env_val" ]; then
+    echo "$env_val" | gh secret set "$name" --repo "$REPO"
+    echo "  ✓ $name set from environment variable"
+  else
+    existing=$(gh secret list --repo "$REPO" --json name --jq '.[].name' 2>/dev/null | grep -x "$name" || true)
+    if [ -n "$existing" ]; then
+      echo "  ✓ $name already exists, skipping"
+    else
+      openssl rand -base64 "$byte_length" | gh secret set "$name" --repo "$REPO"
+      echo "  ✓ $name generated and set"
+    fi
+  fi
+}
+
+set_or_generate_secret "JWT_SECRET" 48
+set_or_generate_secret "SYSTEM_API_KEY" 32
+
+# ─── 3. Get deployed URLs ────────────────────────────────────────────────────
+
+echo ""
+echo "→ Step 3: Retrieve deployed URLs"
 
 STAGING_FQDN=$(az containerapp show \
   --name gwn-staging \
@@ -59,29 +86,35 @@ else
   echo "  Staging:    $STAGING_URL"
   echo "  Production: $PROD_URL"
 
-  # Set as repo-level variables (environments may not be available on free plan)
+  # STAGING_URL as variable (staging-deploy.yml reads vars.STAGING_URL)
+  # PROD_URL as secret (health-monitor.yml reads secrets.PROD_URL)
   echo "$STAGING_URL" | gh variable set STAGING_URL --repo "$REPO" 2>/dev/null || \
     echo "  ⚠ Could not set STAGING_URL variable (may need environment-level config)"
-  echo "$PROD_URL" | gh variable set PROD_URL --repo "$REPO" 2>/dev/null || \
-    echo "  ⚠ Could not set PROD_URL variable (may need environment-level config)"
-  echo "  ✓ URLs set as GitHub variables"
+  echo "$PROD_URL" | gh secret set PROD_URL --repo "$REPO" 2>/dev/null || \
+    echo "  ⚠ Could not set PROD_URL secret (may need environment-level config)"
+  echo "  ✓ STAGING_URL set as GitHub variable"
+  echo "  ✓ PROD_URL set as GitHub secret"
 fi
 
-# ─── 3. Summary ──────────────────────────────────────────────────────────────
+# ─── 4. Summary ──────────────────────────────────────────────────────────────
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "GitHub Secrets (set automatically):"
 echo "  ✓ AZURE_CREDENTIALS — service principal for Azure deployments"
-echo "  ✓ JWT_SECRET — set previously"
-echo "  ✓ SYSTEM_API_KEY — set previously"
+echo "  ✓ JWT_SECRET"
+echo "  ✓ SYSTEM_API_KEY"
+echo "  ✓ PROD_URL (if container apps were found)"
+echo ""
+echo "GitHub Variables:"
+echo "  ✓ STAGING_URL (if container apps were found)"
 echo ""
 echo "Manual steps remaining:"
 echo "  1. Create 'staging' environment:  Settings → Environments → New"
 echo "     - Add STAGING_URL variable if not set above"
 echo "  2. Create 'production' environment:  Settings → Environments → New"
-echo "     - Add PRODUCTION_URL variable if not set above"
+echo "     - Add PROD_URL secret if not set above"
 echo "     - Enable 'Required reviewers' for manual approval gate"
 echo "  3. (Optional) Enable branch protection / rulesets on 'main'"
 echo ""
