@@ -50,6 +50,15 @@ describe('GET /api/features', () => {
     expect(res.body).toHaveProperty('features.submitPuzzle', true);
   });
 
+  test('ignores invalid query param overrides', async () => {
+    const res = await getAgent()
+      .get('/api/features?ff_submit_puzzle=maybe')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('features.submitPuzzle', false);
+  });
+
   test('applies header overrides outside production', async () => {
     const res = await getAgent()
       .get('/api/features')
