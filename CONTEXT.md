@@ -81,7 +81,7 @@ Improve puzzle submission discovery, authoring, moderation, and notifications. F
 
 ## Clickstop CS15 — Dev Tooling & Log Assertions
 
-✅ Complete. Unified dev server script (`scripts/dev-server.js`), e2e log capture via Playwright, log assertion tests (`global-teardown.mjs`), CI artifact upload, and production log format validation (`tests/log-format.test.js`). Merged in PRs #88, #93, #94. See [archive](project/clickstops/done_cs15_dev-tooling-log-assertions.md).
+✅ Complete. Unified dev server script (`scripts/dev-server.js`), e2e log capture via Playwright, log assertion tests (`tests/e2e/global-teardown.mjs`), CI artifact upload, and production log format validation (`tests/log-format.test.js`). Merged in PRs #88, #93, #94. See [archive](project/clickstops/done_cs15_dev-tooling-log-assertions.md).
 
 ---
 
