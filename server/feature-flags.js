@@ -6,26 +6,48 @@ const logger = require('./logger');
 const ENABLED_OVERRIDE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enable', 'enabled']);
 const DISABLED_OVERRIDE_VALUES = new Set(['0', 'false', 'no', 'off', 'disable', 'disabled']);
 
+function normalizeIdentifier(value) {
+  return String(value).trim().toLowerCase();
+}
+
+/**
+ * Clamp a rollout percentage to an integer from 0-100.
+ *
+ * @param {string|number|null|undefined} value - Candidate rollout percentage.
+ * @returns {number} Clamped rollout percentage.
+ */
 function clampRolloutPercentage(value) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.min(100, parsed));
 }
 
+/**
+ * Parse a comma-separated list of user identifiers.
+ *
+ * @param {string} value - Comma-separated user identifiers.
+ * @returns {Set<string>} Normalized user identifiers.
+ */
 function parseUserList(value) {
   return new Set(
     String(value || '')
       .split(',')
-      .map((item) => item.trim().toLowerCase())
+      .map((item) => normalizeIdentifier(item))
       .filter(Boolean),
   );
 }
 
+/**
+ * Parse a feature-flag override value from request input.
+ *
+ * @param {string|string[]|null|undefined} value - Raw override value.
+ * @returns {boolean|null} Parsed boolean override, or null if invalid/missing.
+ */
 function parseOverrideValue(value) {
   const raw = Array.isArray(value) ? value[0] : value;
   if (raw === undefined || raw === null) return null;
 
-  const normalized = String(raw).trim().toLowerCase();
+  const normalized = normalizeIdentifier(raw);
   if (!normalized) return null;
   if (ENABLED_OVERRIDE_VALUES.has(normalized)) return true;
   if (DISABLED_OVERRIDE_VALUES.has(normalized)) return false;
@@ -57,25 +79,37 @@ function getTargetKeys(user) {
 
   const keys = [];
   if (user.id !== undefined && user.id !== null) {
-    keys.push(String(user.id).trim().toLowerCase());
+    keys.push(normalizeIdentifier(user.id));
   }
   if (user.username) {
-    keys.push(String(user.username).trim().toLowerCase());
+    keys.push(normalizeIdentifier(user.username));
   }
   return keys.filter(Boolean);
 }
 
+/**
+ * Build a stable rollout key for deterministic bucket assignment.
+ *
+ * @param {{id?: string|number, username?: string}|null|undefined} user - Request user.
+ * @returns {string|null} Stable rollout key, or null when unavailable.
+ */
 function getStableRolloutKey(user) {
   if (!user) return null;
   if (user.id !== undefined && user.id !== null) {
-    return `id:${String(user.id).trim().toLowerCase()}`;
+    return `id:${normalizeIdentifier(user.id)}`;
   }
   if (user.username) {
-    return `user:${String(user.username).trim().toLowerCase()}`;
+    return `user:${normalizeIdentifier(user.username)}`;
   }
   return null;
 }
 
+/**
+ * Hash a stable key into rollout bucket range [0, 99].
+ *
+ * @param {string} stableKey - Stable user key.
+ * @returns {number} Deterministic rollout bucket.
+ */
 function getRolloutBucket(stableKey) {
   let hash = 0;
   for (const char of String(stableKey || '')) {
@@ -104,6 +138,13 @@ function isUserTargeted(feature, user) {
   return getTargetKeys(user).some((key) => feature.users.has(key));
 }
 
+/**
+ * Evaluate a feature flag definition for the current request.
+ *
+ * @param {object} feature - Feature flag definition.
+ * @param {object} [req={}] - Request-like object with user/query/headers.
+ * @returns {{ enabled: boolean, reason: string }} Evaluation result.
+ */
 function evaluateFeatureFlag(feature, req = {}) {
   let enabled;
   let reason;
@@ -135,14 +176,42 @@ function evaluateFeatureFlag(feature, req = {}) {
     reason = 'default-off';
   }
 
-  logger.debug({ flag: feature.key, enabled, reason }, 'feature flag evaluated');
-  return enabled;
+  const evaluation = { enabled, reason };
+  logger.debug({ flag: feature.key, ...evaluation }, 'feature flag evaluated');
+  return evaluation;
 }
 
+/**
+ * Evaluate a feature by name with detailed output.
+ *
+ * @param {string} featureName - Feature flag key.
+ * @param {object} [req={}] - Request-like object with user/query/headers.
+ * @returns {{ enabled: boolean, reason: string, flag: string }} Evaluation details.
+ */
+function evaluateFeatureDetailed(featureName, req = {}) {
+  return {
+    ...evaluateFeatureFlag(getFeatureDefinition(featureName), req),
+    flag: featureName,
+  };
+}
+
+/**
+ * Evaluate whether a feature is enabled for a request.
+ *
+ * @param {string} featureName - Feature flag key.
+ * @param {object} [req={}] - Request-like object with user/query/headers.
+ * @returns {boolean} Whether the feature is enabled.
+ */
 function isFeatureEnabled(featureName, req = {}) {
-  return evaluateFeatureFlag(getFeatureDefinition(featureName), req);
+  return evaluateFeatureFlag(getFeatureDefinition(featureName), req).enabled;
 }
 
+/**
+ * Evaluate all configured feature flags for a request.
+ *
+ * @param {object} [req={}] - Request-like object with user/query/headers.
+ * @returns {Record<string, boolean>} Map of feature keys to booleans.
+ */
 function getFeatureFlags(req = {}) {
   return Object.fromEntries(
     Object.keys(FEATURE_FLAGS).map((featureName) => [featureName, isFeatureEnabled(featureName, req)]),
@@ -152,6 +221,7 @@ function getFeatureFlags(req = {}) {
 module.exports = {
   FEATURE_FLAGS,
   clampRolloutPercentage,
+  evaluateFeatureDetailed,
   evaluateFeatureFlag,
   getFeatureFlags,
   getRolloutBucket,
