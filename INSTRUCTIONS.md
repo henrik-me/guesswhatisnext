@@ -478,6 +478,46 @@ Sub-agents are responsible for:
 
 This keeps `main` clean and ensures every change flows through a PR.
 
+**Sub-Agent Briefing Requirements:**
+
+When the orchestrator launches a sub-agent, the prompt **MUST** include all of the following:
+
+1. **Read instructions first:** Every sub-agent prompt must start with: "Read INSTRUCTIONS.md in the repository root before starting any work."
+2. **Task description:** Clear, complete description of what to implement — include acceptance criteria, affected files, and any edge cases.
+3. **Worktree context:** Which slot (`wt-N`), branch name, and port number (`300N`).
+4. **Validation command:** `npm run lint && npm test && npm run test:e2e`
+5. **PR workflow:** Create PR, request Copilot review, complete full review loop.
+6. **Review loop reminder:** Reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments.
+
+**Sub-Agent Checklist** (include verbatim in every sub-agent prompt):
+1. Read INSTRUCTIONS.md in the repository root before starting any work
+2. Run `npm install` in worktree
+3. Set `$env:PORT = "300X"` for the assigned slot
+4. Implement the task (commit after each meaningful step)
+5. Run full validation: `npm run lint && npm test && npm run test:e2e`
+6. Push branch and create PR: `gh pr create --base main`
+7. Request Copilot review: `gh pr edit {PR#} --add-reviewer "@copilot"`
+8. Wait for review (poll per "Waiting for Copilot Review (CRITICAL)" section — do NOT skip this)
+9. Address all review comments (reply + fix + resolve threads)
+10. Re-request review and repeat until clean
+11. Report completion with PR number and summary
+
+**Model Usage Guidance:**
+
+Recommendations based on benchmark results comparing claude-opus-4.6, claude-sonnet-4.6, gpt-5.4, and gpt-5.3-codex on identical coding tasks:
+
+| Task Type | Recommended Model | Rationale |
+|---|---|---|
+| **Orchestration / planning** | claude-opus-4.6 | Best instruction following, fastest, manages complex workflows without extra prompting |
+| **Quick iteration / convention-heavy coding** | claude-opus-4.6 | 2x speed advantage, fewest review comments, strong convention compliance |
+| **Deep refactoring / architecture** | gpt-5.4 | Bolder design choices (immutable patterns, DRY helpers, proactive cleanup), more thorough |
+| **Test authoring** | gpt-5.4 | More thorough coverage (reason verification, hermetic env vars, DRY test factories, edge cases) |
+| **Exploration / research** | claude-haiku-4.5 | Cost-effective for read-only codebase analysis |
+
+**Important:** GPT models require more explicit procedural prompting for workflow steps (e.g., review loop polling). Always include the full Sub-Agent Checklist when dispatching GPT-based sub-agents. Claude models better internalize workflow instructions from high-level descriptions.
+
+These recommendations are based on benchmark results from April 2026 and should be re-evaluated periodically as models improve.
+
 ### Parallel Agent Workflow
 
 All worktree work runs as background tasks. The orchestrating agent launches each task agent in the background and is notified when each completes. Use **fixed-name worktree slots** (`wt-1` through `wt-4`) with task-specific branch names.
@@ -624,6 +664,35 @@ Requesting review (requires gh CLI ≥ 2.88.0): `gh pr edit <PR#> --add-reviewer
 4. Resolve all threads (fixed or acknowledged) — always reply BEFORE resolving
 5. Re-request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
 6. Repeat from step 1 until Copilot approves with no new comments
+
+**Waiting for Copilot Review (CRITICAL):**
+
+After requesting review with `gh pr edit <PR#> --add-reviewer "@copilot"`, Copilot takes **2–5 minutes** to post its review. You **MUST** wait for the review to appear before proceeding. Do not assume an empty review list means approval — it means Copilot hasn't responded yet.
+
+Polling procedure:
+1. Record the current review count before requesting (re-)review:
+   ```powershell
+   $reviewCountBefore = gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == \"copilot-pull-request-reviewer\")] | length'
+   ```
+2. Request review: `gh pr edit <PR#> --add-reviewer "@copilot"`
+3. Wait 60 seconds: `Start-Sleep -Seconds 60`
+4. Check if a new review has been posted:
+   ```powershell
+   $reviewCountAfter = gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == \"copilot-pull-request-reviewer\")] | length'
+   ```
+5. If `$reviewCountAfter` > `$reviewCountBefore`, a new review exists — proceed to read comments
+6. If the count has not incremented, repeat from step 3 (up to **10 times** — 10 minutes total)
+7. After 10 attempts, report a timeout to the orchestrating agent
+
+Check the latest review state:
+```powershell
+gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == \"copilot-pull-request-reviewer\")] | last | .state'
+```
+- `APPROVED` — Copilot is satisfied, PR is ready to merge
+- `CHANGES_REQUESTED` — read the review comments and address them
+- `COMMENTED` — informational feedback, review the comments
+
+**DO NOT** conclude "no review comments" without first confirming a new Copilot review has been posted after your most recent push. A missing review means Copilot hasn't responded yet — not that there are no comments.
 
 **Replying to review comments (REST API):**
 ```powershell
