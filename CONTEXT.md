@@ -29,7 +29,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/done_cs12_test-infrastructure.md) |
 | CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done_cs13_observability-logging.md) |
 | CS14 | Community Puzzle Submission UX | ⬜ Planned | 0/8 | [details](project/clickstops/planned_cs14_community-puzzle-ux.md) |
-| CS15 | Dev Tooling & Log Assertions | 🔄 Active | 1/5 | [details](project/clickstops/active_cs15_dev-tooling-log-assertions.md) |
+| CS15 | Dev Tooling & Log Assertions | ✅ Complete | 5/5 | [details](project/clickstops/done_cs15_dev-tooling-log-assertions.md) |
 | CS16 | Docs Optimization & Cleanup | ✅ Complete | 4/4 | [details](project/clickstops/done_cs16_docs-optimization.md) |
 
 ---
@@ -81,7 +81,7 @@ Improve puzzle submission discovery, authoring, moderation, and notifications. F
 
 ## Clickstop CS15 — Dev Tooling & Log Assertions
 
-Unified dev server script done (CS15-90). Remaining: e2e log capture, log assertion tests, CI artifact upload, production log format validation. See [full details](project/clickstops/active_cs15_dev-tooling-log-assertions.md).
+✅ Complete. Unified dev server script (`scripts/dev-server.js`), e2e log capture via Playwright, log assertion tests (`global-teardown.mjs`), CI artifact upload, and production log format validation (`tests/log-format.test.js`). Merged in PRs #88, #93, #94. See [archive](project/clickstops/done_cs15_dev-tooling-log-assertions.md).
 
 ---
 
