@@ -120,7 +120,10 @@ function evaluateFeatureFlag(feature, req = {}) {
     reason = 'user-targeted';
   } else if (feature.rolloutPercentage > 0) {
     const stableKey = getStableRolloutKey(req.user);
-    if (stableKey && getRolloutBucket(stableKey) < feature.rolloutPercentage) {
+    if (!stableKey) {
+      enabled = false;
+      reason = 'rollout-no-key';
+    } else if (getRolloutBucket(stableKey) < feature.rolloutPercentage) {
       enabled = true;
       reason = 'rollout';
     } else {
