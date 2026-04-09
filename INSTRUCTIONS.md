@@ -401,6 +401,7 @@ Use **conventional commits** for clear, parseable history:
 | `test` | Adding or updating tests |
 | `docs` | Documentation changes |
 | `chore` | Config, dependencies, tooling |
+| `workboard` | WORKBOARD.md coordination updates (direct-commit on main) |
 
 **Examples:**
 ```
@@ -438,7 +439,7 @@ Background agents **must** report progress to the orchestrating agent:
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
 ### Branch Strategy & Merge Model
-- **No direct commits to `main`** — all code changes go through pull requests, no exceptions
+- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates committed directly on `main` by orchestrating agents (see § WORKBOARD.md — Live Coordination below).
 - Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
@@ -450,7 +451,7 @@ The orchestrating agent **must actively relay progress to the user** — never d
   - Require CI status checks to pass (`lint`, `test`, `e2e`) — CI uses `paths-ignore` for docs-only PRs
 
   - No force pushes
-  - No direct commits
+  - No direct commits (except WORKBOARD.md by orchestrating agents)
 
 ### Agent Work Model
 
@@ -464,9 +465,9 @@ Allowed on main checkout:
 - Planning, decomposing, and delegating work to sub-agents
 
 NOT allowed on main checkout:
-- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`)
-- No `git push` from main
-- No merge conflict resolution — if `git pull` conflicts, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
+- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates are committed and pushed directly from main
+- No `git push` from main (except WORKBOARD.md updates)
+- No merge conflict resolution on main, **except for conflicts confined to `WORKBOARD.md` and handled per the WORKBOARD.md conflict-handling guidance** — if `git pull` conflicts on anything else, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
 **Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
 
@@ -604,14 +605,49 @@ Every clickstop must satisfy ALL of these before marking complete:
 
 Filled-in checklists are recorded in the clickstop's archive file upon completion.
 
-#### WORKBOARD.md
+#### WORKBOARD.md — Live Coordination
 
-The live coordination file. Rules:
-- Only orchestrating agents write to WORKBOARD.md
-- Sub-agents read it for awareness but never edit it
-- Updated after every task start, complete, or block event
-- Contains: orchestrator table, active work, queued tasks, recently completed
-- Kept small (<100 lines) — only active + recent items
+WORKBOARD.md is the real-time coordination file for multi-agent work. It tracks who is working on what, right now.
+
+**Direct commit on main (no PR required):**
+Unlike other project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. This enables fast task assignment without PR review overhead. The workboard must be updated immediately when:
+- An orchestrator claims a task (add to Active Work)
+- A task completes or is blocked (move between sections)
+- An orchestrator starts or stops a session (update Orchestrators table)
+
+**Update frequency:** Orchestrators should update WORKBOARD.md often — at minimum on task start, task complete, and session start/end. Between those events, update whenever meaningful progress occurs (e.g., PR created, review round complete).
+
+**Task locking:** When a task appears in Active Work assigned to an agent ID, no other orchestrator may pick up that task. The assignment is a lock. If an orchestrator crashes or stops working:
+- The task remains assigned in WORKBOARD.md
+- When that orchestrator restarts, it reads WORKBOARD.md, finds its assigned tasks, and resumes work
+- There is no automated process for reassigning stalled tasks — a human must manually update WORKBOARD.md to release the lock if an orchestrator is permanently unavailable
+
+**Clickstop assignment:** An entire clickstop can be assigned to one orchestrator. When a clickstop is assigned, all tasks within it belong to that orchestrator. Other orchestrators must not pick up individual tasks from an assigned clickstop unless explicitly released.
+
+**Commit convention for workboard updates:**
+```
+workboard: <brief description of change>
+
+Agent: {agent-id}
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+```
+
+**Conflict handling:** Since multiple orchestrators may update WORKBOARD.md concurrently, conflicts are possible. Orchestrators should `git pull` before updating. If a conflict occurs **only in `WORKBOARD.md`**, this is the one exception to the general "do not resolve merge conflicts in the main checkout" rule: resolve it by keeping both agents' entries (additive merge), then complete the workboard-only update. If the pull produces conflicts in any other file, abort the merge and follow the normal abort + worktree workflow instead.
+
+#### CONTEXT.md — Project State Updates
+
+CONTEXT.md tracks clickstop summaries and current project state. Updates to CONTEXT.md **require PR review** because:
+- It defines the project's roadmap and task dependencies
+- Multiple agents reference it for planning decisions
+- Errors in CONTEXT.md can cause agents to work on wrong tasks or miss dependencies
+
+**When to update CONTEXT.md:**
+- Clickstop status changes (planned → active → done)
+- Task count changes (new tasks added, tasks completed)
+- Codebase state section updates (new routes, test counts, workflows)
+- Blocker/known issue changes
+
+CONTEXT.md updates are typically bundled into the PR that completes the relevant task. Stand-alone CONTEXT.md updates (e.g., adding a new clickstop) go through their own PR.
 
 #### Clickstop File Lifecycle
 

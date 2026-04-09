@@ -30,6 +30,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done_cs13_observability-logging.md) |
 | CS14 | Community Puzzle Submission UX | ⬜ Planned | 0/8 | [details](project/clickstops/planned_cs14_community-puzzle-ux.md) |
 | CS15 | Dev Tooling & Log Assertions | 🔄 Active | 1/5 | [details](project/clickstops/active_cs15_dev-tooling-log-assertions.md) |
+| CS16 | Docs Optimization & Cleanup | ✅ Complete | 4/4 | [details](project/clickstops/done_cs16_docs-optimization.md) |
 
 ---
 
