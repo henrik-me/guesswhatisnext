@@ -1,0 +1,349 @@
+# Learnings & Decisions
+
+This file captures accumulated knowledge, architecture decisions, risk analyses, and tool evaluations across all clickstops.
+
+> **Last updated:** 2026-04-09
+
+---
+
+## Operational Learnings
+
+### Lessons Learned from Parallel Execution
+
+| Issue | Cause | Prevention |
+|---|---|---|
+| Agents commit each other's changes | Shared worktree, agents run `git add -A` | Use worktrees — each has its own filesystem |
+| Health endpoint bundled into wrong commit | Both modified `server/index.js` | Separate worktrees eliminate this entirely |
+| Agents compete for port 3000 | Each agent starts server to verify | Assign unique ports per worktree (300X) |
+| Schema migrations conflict | Multiple agents add columns/tables | Review combined schema after all merges |
+| Test file merge conflicts | Multiple agents add test files | Tests are additive — auto-merge usually works |
+| Folder permissions re-prompted | Task-named worktree folders change each time | Use fixed slots (wt-1..wt-4), recycle with new branches |
+
+### High-Conflict Files
+
+These files are modified by almost every feature — expect merge work:
+- `server/index.js` — route registration, middleware setup
+- `server/app.js` — app factory, route wiring
+- `server/db/schema.sql` — table definitions
+- `server/db/connection.js` — migrations, seeding
+- `public/index.html` — new screens, buttons
+- `public/js/app.js` — event handlers, screen navigation
+- `public/css/style.css` — new component styles
+- `server/ws/matchHandler.js` — multiplayer logic
+
+---
+
+## Architecture Decisions
+
+### Key Decisions Made
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Frontend stack | Vanilla HTML/CSS/JS | No build tools, fast iteration, lightweight |
+| Backend stack | Node.js + Express | Same language as frontend, easy WebSocket support |
+| Database | SQLite → Azure SQL | Start simple (SQLite for dev/staging), Azure SQL free tier for production. Adapter pattern supports both. |
+| Multiplayer | Both async + real-time | Leaderboards for casual, head-to-head for competitive |
+| Multi-player rooms | 2–10 players, host-controlled | Host creates room, configures settings, starts when ready |
+| Multi-player disconnect | Drop after 30s, match continues | Avoids ending match for all when one player leaves |
+| Multi-player rankings | Full placement with ties | More meaningful than binary win/lose for N players |
+| Puzzle format | Emoji/text + images | Start with emoji, layer in images |
+| Timing | Timed rounds, speed bonus | Adds excitement and skill differentiation |
+| Staging infra | Container Apps (not F1) | Environment parity with prod, same Dockerfile + deploy method |
+| Production infra | Container Apps (Consumption) | Pay-per-use, scale-to-zero, WebSocket support |
+| Container registry | GitHub Container Registry | Free for private repos, integrated with GH Actions |
+| CI/CD promotion | Build once, promote image | Same image bytes in staging and prod — no rebuild, no drift |
+| Staging→Prod gate | GH Environment manual approval | Prevents untested code reaching production |
+| SQLite on Azure Files | **Broken — use local filesystem** | Azure Files (SMB) does not support POSIX file locking (fcntl). Every lock attempt returns SQLITE_BUSY. EXCLUSIVE locking, unix-none VFS, and URI filenames all failed. Solution: `GWN_DB_PATH=/tmp/game.db` for local filesystem. |
+| DB initialization | Self-init on startup | GitHub Actions can't reach Azure Container App URLs. az exec requires TTY. Self-init retry loop eliminates cross-network dependency. |
+| Deploy verification | Revision state + az logs grep | Direct HTTP (curl) times out from GH Actions. az containerapp exec needs TTY. Use az CLI for all verification. |
+| Database abstraction | Adapter pattern (SQLite + Azure SQL) | Routes use `await db.get/all/run()` with `?` params. Adapters handle dialect. Versioned migrations replace try/catch ALTER TABLE. |
+| Production database | Azure SQL free tier | Persistent, reliable, no SMB issues. Auto-pause when idle → $0 cost. Staging stays on ephemeral SQLite. |
+| AI orchestration | Copilot CLI (not Squad) | Squad evaluated but deferred — see Tools Evaluated below |
+
+### CS3 — Security & Game Features
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| System auth | API key (X-API-Key header) | Simple, no JWT expiry concerns for automated clients |
+
+### CS4 — Infrastructure & Deployment
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Staging host | Container Apps (Consumption) | Environment parity with prod, scale-to-zero, full WebSocket support |
+| Production host | Container Apps (Consumption) | Pay-per-use, scale-to-zero, WebSocket support |
+| Container registry | GitHub Container Registry | Free for private repos, integrated with GH Actions |
+| Staging→Prod gate | GH Environment manual approval | Prevents untested code reaching production |
+| Health monitoring | GitHub Actions cron | No extra infra, creates issues in same repo |
+
+### CS5 — Multi-Player Expansion
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Max players per room | 2–10 (host configurable) | Flexible; 2 preserves current behavior, 10 caps complexity |
+| Room host model | Creator is host, controls start | Clean UX; host decides when enough players have joined |
+| Host disconnect (lobby) | Auto-transfer to next player | Prevents room death from host leaving |
+| Player disconnect (active) | 30s reconnect → drop (score frozen) | Match continues for remaining players (≥2) |
+| Winner logic | Full ranking with tie handling | Placements (1st/2nd/3rd…) instead of binary win/lose |
+| Spectator mode | ✅ Done (Phase 8) | Read-only WS, spectator count in lobby, spectator badge, dedicated tests |
+| Rematch flow | Host "New Match" → auto-join lobby | Simpler than N-player ready-up counting |
+
+### CS10 — CI/CD Pipeline Rework
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Docker base image | node:22-slim (single-stage) | better-sqlite3 ships prebuilt binaries; no python3/make/g++ needed. Simpler Dockerfile at cost of ~200MB vs ~100MB image |
+| PR CI checks | Lint + test + E2E (no Docker build) | Docker build is slow, hits Docker Hub rate limits, and isn't needed for PR validation. E2E (Playwright) added in Phase 12. |
+| Push to main | No auto-deployment (disabled) | Auto-deploy temporarily disabled in PR #41 to avoid unintended deploys. Manual workflow_dispatch only for now. |
+| Staging branch strategy | Fast-forward release/staging to main HEAD | Simpler than cherry-picking; no history divergence; staging always matches main |
+| Staging trigger | Manual workflow_dispatch only | Auto-deploy gated by STAGING_AUTO_DEPLOY repo variable (default false). Manual dispatch is the standard workflow; auto-deploy available when needed. |
+| Ephemeral staging | Docker container in GitHub Actions | $0 infra cost; sufficient for automated smoke tests (health, auth, scores) |
+| Azure staging | Behind manual approval after ephemeral passes | Persistent environment for manual QA; only promoted after automated validation |
+| Production deploy | Manual workflow_dispatch from release/staging | Production only deploys code that has been validated in staging; never directly from main |
+| Production gate | Requires staging environment green | Cannot trigger prod deploy unless the latest staging deployment succeeded |
+
+### CS15 — Dev Tooling
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Dev server default | HTTPS + log capture | Production-like by default ensures security headers and logging are always validated during manual testing |
+| Log capture method | Child process with piped stdio | pino-pretty's ThreadStream bypasses shell pipelines; spawning as child with pipe is the only reliable capture method |
+| Script architecture | Wrapper spawns dev-https.js or server/index.js | Keeps HTTPS logic separate (monkey-patches http.createServer), log capture is orthogonal |
+| Watch mode | Only for --no-https | dev-https.js monkey-patches http.createServer once; --watch restart would re-patch incorrectly |
+
+---
+
+## Risk Analysis
+
+### WebSocket Handler — Architecture Analysis & Decisions
+
+#### Current State (server/ws/matchHandler.js)
+The WS handler is a 1000-line file with **4 pieces of in-memory state** (`rooms`, `disconnected`, `rematchRequests`, `finishedRooms`) and **~15 DB call sites**. The critical insight:
+
+**In-memory state is already the source of truth for live games. DB is best-effort persistence.**
+
+| DB Call | When | Classification | Can Fail Silently? |
+|---|---|---|---|
+| `selectRandomPuzzles()` | Match start | **Critical path** | ❌ No puzzles = no game |
+| `SELECT match metadata` | Player joins | Read-only | ✅ Falls back to defaults |
+| `UPDATE matches SET status='active'` | Match start | Fire-and-forget | ✅ Game proceeds in memory |
+| `SELECT match id` + `INSERT match_round` | Round start | Fire-and-forget | ✅ Round plays without DB |
+| `UPDATE matches SET status='finished'` | Match end | Fire-and-forget | ✅ Results already broadcast |
+| `UPDATE match_players SET score=...` | Match end | Fire-and-forget | ✅ Scores already shown via WS |
+| `checkAndUnlockAchievements()` | Match end | Fire-and-forget | ✅ Can retry later |
+| `UPDATE matches SET host_user_id=...` | Disconnect/transfer | Fire-and-forget | ✅ In-memory host is authoritative |
+| `INSERT matches` + `INSERT match_players` | Rematch | Fire-and-forget | ✅ Game starts in memory regardless |
+
+**Only 1 out of ~15 DB calls is critical-path.** Everything else can be queued.
+
+#### Risk 1: Puzzle Selection Is the Only Blocking DB Call
+`selectRandomPuzzles(count)` runs `SELECT ... FROM puzzles ORDER BY RANDOM() LIMIT ?`. If DB is cold, this blocks match start for 10-30s.
+
+**Decision: Pre-warm puzzle cache on startup.**
+- Load all puzzles into memory at boot (same as client-side already does)
+- `selectRandomPuzzles()` draws from the in-memory cache, zero DB latency
+- Refresh cache periodically (e.g., every hour) or on admin signal
+- This eliminates the ONLY critical-path DB call from the WS handler
+
+#### Risk 2: No Transactions Around Multi-Step Writes
+`endMatch()` does 3 separate DB writes (update match, update each player's score). `handleRematchStartConfirm()` does INSERT match + INSERT players without a transaction. Partial writes are possible.
+
+**Decision: Wrap multi-step writes in transactions.**
+- `endMatch()`: single transaction for match status + all player scores
+- `handleRematchStartConfirm()`: single transaction for match + players
+- In the async adapter, transactions use `BEGIN`/`COMMIT`/`ROLLBACK` with proper error handling
+- Since these are fire-and-forget, a failed transaction just means the match isn't persisted — game already happened
+
+#### Risk 3: Sync→Async Conversion of WS Message Handlers
+Currently, WS `message` handlers are synchronous. With async DB, every handler that touches DB becomes `async`. The risk: unhandled promise rejections crashing the process, or race conditions from concurrent async operations on the same room.
+
+**Decision: Write queue per room.**
+- Each room gets a serial write queue (simple promise chain)
+- Game logic stays synchronous (in-memory state mutations) — no `await` in the hot path
+- DB writes are enqueued as fire-and-forget async tasks that execute serially per room
+- This prevents: interleaved writes, unhandled rejections, and async race conditions
+- Pattern: `room.persistQueue = room.persistQueue.then(() => persistMatchEnd(roomCode)).catch(log)`
+
+#### Risk 4: Reconnection Relies on In-Memory State
+`handleJoin()` on reconnect checks `rooms` Map and `disconnected` Map — both in-memory. If the container restarts (scale-to-zero, redeploy), all in-memory state is lost and active matches die.
+
+**Decision: Accept this limitation (already the case today).**
+- Container Apps scale-to-zero kills all WS connections and in-memory state
+- Matches are ephemeral by nature — a 5-minute game lost to restart is acceptable
+- Future enhancement (not Phase 11): optional match state checkpointing to DB for crash recovery
+- Client already has reconnect logic with 5 retries — this handles transient disconnects
+
+#### Risk 5: Error Handling Is Silent
+Most DB calls in the WS handler have empty `catch` blocks or no error handling at all. Errors are swallowed silently.
+
+**Decision: Add structured logging for failed persistence.**
+- Fire-and-forget writes should log failures (room code, operation, error) but NOT crash the game
+- Add a `/api/admin/persistence-health` endpoint that reports recent failures
+- Track a counter of "unpersisted matches" — if it grows, investigate
+
+#### Architectural Summary for WS Handler Migration
+
+```
+┌─────────────────────────────────────┐
+│ WS Message Handler (synchronous)    │
+│ - Validate message                  │
+│ - Mutate in-memory room state       │
+│ - Broadcast results to players      │
+│ - Enqueue DB write (fire & forget)  │
+└──────────────┬──────────────────────┘
+               │ enqueue
+               ▼
+┌─────────────────────────────────────┐
+│ Room Persist Queue (async, serial)  │
+│ - Executes DB writes one at a time  │
+│ - Logs failures, never throws       │
+│ - Transactions for multi-step ops   │
+└──────────────┬──────────────────────┘
+               │ await db.run(...)
+               ▼
+┌─────────────────────────────────────┐
+│ Database Adapter (async)            │
+│ - SQLite or Azure SQL               │
+│ - Connection pool management        │
+│ - Parameter translation             │
+└─────────────────────────────────────┘
+```
+
+**Key principle: The WS game engine has ZERO awaits. All DB interaction is post-broadcast, queued, and fault-tolerant.**
+
+---
+
+## Azure SQL Considerations
+
+### Connection Pool Sizing
+Azure SQL free tier has limited concurrent connections. The `mssql` package uses connection pooling — need to size appropriately: `min: 0, max: 10` is a safe default. Pool exhaustion would cause 503s, so need proper error handling and pool health monitoring.
+
+### Prepared Statements / Query Caching
+SQLite's `db.prepare()` compiles and caches SQL. The `mssql` package uses parameterized queries but doesn't have the same prepare/cache model. For hot paths (leaderboard, puzzle fetch), consider using `mssql`'s `PreparedStatement` class for performance.
+
+### Transaction Semantics
+SQLite's default transaction isolation is SERIALIZABLE. Azure SQL defaults to READ COMMITTED. The WS handler's fire-and-forget writes don't need SERIALIZABLE (they're append-only status updates). HTTP routes that read aggregated data (leaderboard, profile stats) work fine with READ COMMITTED. No isolation level override needed for current use cases.
+
+### bcrypt in System User Seeding
+The system user seed hashes the `SYSTEM_API_KEY` with bcrypt on every fresh DB init. This is CPU-intensive (~100ms). In the async world, use `bcrypt.hash()` (async) instead of `bcrypt.hashSync()`.
+
+### No DELETE Statements in Codebase
+The current codebase has no SQL DELETE statements. Data grows indefinitely. With Azure SQL's 32GB free tier limit, this could eventually be an issue. Consider adding a data retention policy (e.g., archive old matches after 90 days).
+
+### Rollback Strategy for Schema Migrations
+Each migration has `down()` but it's never auto-called. If a migration breaks production:
+1. Deploy rolls back to previous image (previous code + new schema)
+2. This only works if migrations are backward-compatible
+3. **Rule**: migrations must be additive (add columns, not rename/remove). Destructive changes need a two-phase deploy.
+
+---
+
+## Auto-Pause UX Strategy
+
+### Auto-Pause Latency — Graceful UI Strategy
+
+Azure SQL serverless auto-pauses after ~1 hour of inactivity. Cold-start resume takes 10-30 seconds. **No keep-alive pings** — accept the latency and make it delightful.
+
+#### Why This Is Manageable
+- **Home screen + single-player game need zero DB calls.** Puzzles are bundled locally, high scores in localStorage. A returning user can immediately play without waiting.
+- **Only DB-backed features are affected:** profile, leaderboard, achievements, multiplayer lobby, score submission.
+- **The app already has loading states** for profile ("Loading profile..."), leaderboard ("Loading"), achievements ("Loading achievements..."), and lobby (spinner + "Waiting for opponent..."). These just need personality.
+
+#### Pattern: Progressive Friendly Messages
+Replace static "Loading..." text with a timed escalation sequence:
+
+| Elapsed | Message style | Example (profile) |
+|---|---|---|
+| 0-2s | Normal loading | "Loading profile..." |
+| 3-5s | Casual reassurance | "Still loading — gathering your stats..." |
+| 6-10s | Warm + engaging | "This is taking a moment. How about counting to 5? 🎲" |
+| 11-20s | Interactive / playful | "Almost there! While you wait — what's the next number: 2, 4, 8, ...?" |
+| 20-30s | Honest + encouraging | "The database was napping 😴 — waking it up now. Should be just a moment!" |
+| 30s+ | Graceful degradation | Show cached data if available, or "Taking longer than expected — [Retry]" |
+
+Each page/feature gets its own message set appropriate to context:
+- **Profile:** "Looking up your stats...", "Digging through your game history...", "Your profile data is warming up ☕"
+- **Leaderboard:** "Fetching the rankings...", "Tallying up everyone's scores...", "The leaderboard keeper is on a coffee break ☕"
+- **Achievements:** "Checking your trophy case...", "Polishing your badges... ✨"
+- **Multiplayer lobby (creating):** "Setting up your game room...", "Arranging the puzzle table...", "Almost ready to play!"
+- **Score submission:** Store results in localStorage immediately, push to server in background. If server is cold, queue and retry. User never waits for score persistence.
+
+#### Pattern: Local-First for Score Submission
+After a game ends (single-player or multiplayer):
+1. Save score to `localStorage` immediately → user sees their result with zero latency
+2. Queue a background `POST /api/scores` — if it fails (503, timeout), retry with exponential backoff
+3. Show a subtle indicator ("Score saved ✓" → "Syncing to leaderboard..." → "Synced ✓")
+4. If user navigates to leaderboard before sync completes, show local scores alongside server data
+
+#### Pattern: Multiplayer — Deferred Persistence
+During an active multiplayer match:
+- **All game state lives in-memory** (the `rooms` Map) — no DB call blocks gameplay
+- Score updates, round results, and game-over are broadcast via WebSocket from in-memory state
+- DB persistence (match status, player scores, achievements) happens **after** broadcasting results
+- If DB is cold/slow, the game proceeds normally — persistence catches up in the background
+- On game-over, show results immediately from WS data, then "Saving to leaderboard..." indicator
+
+#### Implementation: `ProgressiveLoader` Component
+A reusable JS module that wraps any async fetch with timed message escalation:
+```javascript
+// Usage: progressiveLoad(fetchFn, containerEl, messageSet)
+// messageSet = [{ after: 0, msg: '...' }, { after: 5000, msg: '...' }, ...]
+// Returns the fetch result; messages auto-clear on completion
+```
+This keeps the pattern consistent across all pages without duplicating timer logic.
+
+---
+
+## Tools & Versions
+
+### Adopted Tools & Minimum Versions
+
+> Versions below are minimum versions matching the semver ranges in `package.json`.
+
+| Tool | Purpose | Notes |
+|---|---|---|
+| Express 5 | HTTP server + API routes | v5.2.1 — note `/{*path}` wildcard syntax (not `*`) |
+| better-sqlite3 | SQLite driver | v12.8.0 — WAL mode, synchronous API, good for single-server |
+| ws | WebSocket server | v8.20.0 — Lightweight, no socket.io overhead |
+| bcryptjs | Password hashing | v3.0.3 — Pure JS, 10 rounds |
+| jsonwebtoken | JWT auth tokens | v9.0.3 — 7-day expiry, secret from env var |
+| mssql | Azure SQL driver | v12.2.1 — connection pooling, parameterized queries |
+| pino | Structured logging | v10.3.1 — JSON in prod, pretty-print in dev |
+| pino-http | HTTP request logging | v11.0.0 — auto-logs requests, ignores health/telemetry/static |
+| @opentelemetry/sdk-node | Distributed tracing | v0.214.0 — auto-instruments HTTP/Express/DB |
+| @azure/monitor-opentelemetry-exporter | Azure Monitor export | v1.0.0-beta.32 — sends traces to App Insights |
+| helmet | Security headers | v8.1.0 — HSTS, CSP with wss:, HTTPS redirect |
+| express-rate-limit | Rate limiting | v8.3.1 — auth endpoints, telemetry, submissions |
+| Docker | Containerization | Same Dockerfile for local dev, staging, and production |
+| GitHub Container Registry | Image storage | Free, integrated with GitHub Actions |
+| Azure Container Apps | Hosting (staging + prod) | Consumption plan, scale-to-zero, WebSocket support |
+| GitHub Actions | CI/CD + health monitoring | Build, deploy, smoke tests, cron-based health checks |
+| ESLint | Linting | v10.1.0 — flat config (`eslint.config.mjs`), `@eslint/js` recommended + custom rules |
+| Vitest | Unit/integration tests | v4.1.2 — fast, ESM-native, built-in coverage |
+| Playwright | Browser E2E tests | v1.58.2 — Chromium, full UI flow testing |
+| supertest | HTTP test agent | v7.2.2 — Express endpoint testing |
+
+---
+
+## Tools Evaluated
+
+### Squad (bradygaster/squad) — Evaluated 2026-03-25, Deferred
+
+[Squad](https://github.com/bradygaster/squad) is a multi-agent AI orchestration framework for GitHub Copilot. It defines a team of AI agent specialists (Lead, Frontend, Backend, Tester, etc.) that persist in the repo as `.squad/` files, accumulate knowledge across sessions, run in parallel, and route tasks automatically.
+
+**Why not now:**
+- **Alpha software** — APIs and CLI commands may change between releases
+- **Overhead for project size** — Single developer, 12 well-defined remaining tasks with clear dependency chains. Squad is designed for larger teams/projects with many parallel workstreams
+- **Existing documentation overlap** — INSTRUCTIONS.md, CONTEXT.md, and plan.md already serve the role of Squad's `decisions.md` + agent `history.md`
+- **Limited parallelism benefit** — Most of our tasks have dependency chains; few are truly independent
+- **Setup cost** — Defining agents, routing rules, and casting configuration takes time better spent implementing
+
+**Where it could help (future):**
+- Puzzle content expansion — a "Content Creator" agent that learns puzzle schema
+- If the project goes open-source with multiple contributors
+- Long-running maintenance phase with many parallel feature tracks
+
+**Revisit criteria:**
+- Squad reaches beta/stable release
+- Project gains multiple active contributors
+- We enter an open-ended feature development phase without clear dependency chains
