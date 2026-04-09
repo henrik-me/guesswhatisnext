@@ -2,7 +2,7 @@
 
 This document defines architecture decisions, coding standards, testing strategy, and git workflow for the **Guess What's Next** project.
 
-For project phases, task plans, detailed test specifications, tool evaluations, and current status, see **CONTEXT.md**. For live work coordination, see **WORKBOARD.md**. For architecture decisions and learnings, see **LEARNINGS.md**.
+For clickstops, task plans, detailed test specifications, tool evaluations, and current project state, see **CONTEXT.md**. For live work coordination, see **WORKBOARD.md**. For architecture decisions and learnings, see **LEARNINGS.md**.
 
 ---
 
@@ -439,7 +439,7 @@ The orchestrating agent **must actively relay progress to the user** — never d
 
 ### Branch Strategy & Merge Model
 - **No direct commits to `main`** — all code changes go through pull requests, no exceptions
-- Feature branches: `feat/<step-id>` (e.g., `feat/puzzle-expansion`, `feat/mp-game-logic`)
+- Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
   2. **Unit + integration tests:** `npm test` (vitest)
@@ -503,17 +503,17 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 **Agent setup:** Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
 
 **Branch lifecycle:**
-1. Work on `feat/<task-name>` branch in slot
+1. Work on `{agent-id}/{task-id}-{description}` branch in slot
 2. **Commit after each meaningful step** with a descriptive message — don't wait until the end
 3. Run full validation before pushing: `npm run lint && npm test && npm run test:e2e`
 4. Push branch to origin
-5. Create PR: `gh pr create --base main --head feat/<task-name>`
+5. Create PR: `gh pr create --base main --head {agent-id}/{task-id}-{description}`
 6. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
 7. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
 8. After CI passes and review approved, **squash-merge** via GitHub UI or `gh pr merge --squash`
 9. Main orchestrating agent pulls after each merge: `git pull`
 
-**Recycling slots:** `git worktree remove <path> --force` → `git branch -d feat/old-task` → `git worktree add -b feat/new-task <path> main`
+**Recycling slots:** `git worktree remove <path> --force` → `git branch -d old-branch` → `git worktree add -b new-branch <path> main`
 
 ### Clickstop & Task Management
 

@@ -201,7 +201,7 @@ GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
 | CS11-61b | SQLite adapter + migrations | ✅ Done | CS11-61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–004`), `seed.js`. PR #55 merged. |
 | CS11-61c | mssql adapter | ✅ Done | CS11-61a | `mssql-adapter.js`. PR #56 merged. Not used until CS11-64. |
 | CS11-62 | Convert routes to async | ✅ Done | CS11-61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 merged. |
-| CS11-63 | Update tests for async | ✅ Done | CS11-61b, CS11-62 | Async test helpers. All 173 tests pass with SQLite adapter. PR #57 merged (combined with CS11-62). |
+| CS11-63 | Update tests for async | ✅ Done | CS11-61b, CS11-62 | Async test helpers. Test suite passes with SQLite adapter. PR #57 merged (combined with CS11-62). |
 | CS11-63v | Validate staging (post-async) | ✅ Done | CS11-63 | Staging deploy + smoke tests + E2E all passed. 4 migrations applied, 504 puzzles seeded, async routes working. Run #23833160313. |
 | CS11-64 | Provision Azure SQL | ⬜ Pending | CS11-63v | Rollup for 64a–64e: create prod Azure SQL, open access, define MSSQL init path, store GitHub secret. |
 | CS11-64a | Create Azure SQL server | ⬜ Pending | CS11-63v | Create the production logical server in the chosen region/tier; capture admin + server details. |

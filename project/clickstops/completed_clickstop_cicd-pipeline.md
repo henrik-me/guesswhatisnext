@@ -8,7 +8,7 @@
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
 | CS10-51 | Simplify Dockerfile | ✅ Done | — | Single-stage node:22-slim; better-sqlite3 has prebuilds, no build tools needed |
-| CS10-52 | Slim down PR CI checks | ✅ Done | CS10-51 | New ci.yml with parallel lint + test only; no Docker build in PR checks |
+| CS10-52 | Slim down PR CI checks | ✅ Done | CS10-51 | New ci.yml with parallel lint + test only; no Docker build in PR checks. E2E was added later in CS12. |
 | CS10-53 | Remove push-to-main deploy pipeline | ✅ Done | CS10-52 | ci-cd.yml removed from tree; push to main no longer triggers any deployment |
 | CS10-54 | Staging deploy on merge | ✅ Done | CS10-53 | New staging-deploy.yml: triggers on push to main, builds Docker image, pushes to GHCR, runs ephemeral smoke tests, fast-forwards release/staging, then (with manual approval) deploys to Azure staging |
 | CS10-55 | Manual production deploy workflow | ✅ Done | CS10-54 | prod-deploy.yml: manual workflow_dispatch with image tag + confirmation, validates image exists in GHCR, deploys to production environment (with approval gate), runs health verification, auto-rollback on failure (PR #21) |

@@ -8,7 +8,7 @@ Live coordination file for multi-agent work. Only orchestrating agents update th
 
 | Agent ID | Machine | Repo Folder | Status |
 |----------|---------|-------------|--------|
-| yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active |
+| yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext\<suffix> | 🟢 Active |
 
 ## Active Work
 
