@@ -1,20 +1,21 @@
 # Work Board
 
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
+Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-09
+> **Last updated:** 2026-04-09T21:20Z
 
 ## Orchestrators
 
 | Agent ID | Machine | Repo Folder | Status |
 |----------|---------|-------------|--------|
-| yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext\<suffix> | 🟢 Active |
+| yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active |
 
 ## Active Work
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| — | — | No active tasks | — | — | — | — | — |
+| CS16 | Docs Optimization | Address PR #102 review gaps + workboard/instructions updates | yoga-gwn | wt-1 | yoga-gwn/cs16-docs-optimization | — | 2026-04-09 |
 
 ## Queued (ready, no dependencies blocking)
 
@@ -27,5 +28,6 @@ Live coordination file for multi-agent work. Only orchestrating agents update th
 
 | Task ID | Description | Agent ID | PR | Merged |
 |---------|-------------|----------|----|--------|
+| CS0-102 | Restructure docs to clickstop system | yoga-gwn | #102 | 2026-04-09 |
 | CS0-101 | Clarify agent boundaries | yoga-gwn | #101 | 2026-04-09 |
 | CS0-100 | Consolidate context, update project state | yoga-gwn | #100 | 2026-04-09 |
