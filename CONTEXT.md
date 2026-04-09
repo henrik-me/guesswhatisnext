@@ -25,11 +25,11 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS8 | User Experience | ✅ Complete | 4/4 | [details](project/clickstops/done_cs8_user-experience.md) |
 | CS9 | Content & Growth | ✅ Complete | 2/2 | [details](project/clickstops/done_cs9_content-growth.md) |
 | CS10 | CI/CD Pipeline | ✅ Complete* | 5/6 | [details](project/clickstops/done_cs10_cicd-pipeline.md) |
-| CS11 | Database Migration | 🔄 Active | see below | — |
+| CS11 | Database Migration | 🔄 Active | 8/18 | [details](project/clickstops/active_cs11_database-migration.md) |
 | CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/done_cs12_test-infrastructure.md) |
 | CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done_cs13_observability-logging.md) |
-| CS14 | Community Puzzle Submission UX | ⬜ Planned | see below | — |
-| CS15 | Dev Tooling & Log Assertions | 🔄 Active | see below | — |
+| CS14 | Community Puzzle Submission UX | ⬜ Planned | 0/8 | [details](project/clickstops/planned_cs14_community-puzzle-ux.md) |
+| CS15 | Dev Tooling & Log Assertions | 🔄 Active | 1/5 | [details](project/clickstops/active_cs15_dev-tooling-log-assertions.md) |
 
 *CS10: task CS10-56 (unified infra script) still pending.
 
@@ -68,204 +68,21 @@ Every Copilot review comment thread must be replied to with a meaningful message
 
 ---
 
-## Clickstop CS11 — Database Abstraction + Azure SQL Migration
+## Clickstop CS11 — Database Migration
 
-### Goal
-Replace the tightly-coupled SQLite layer with a clean database abstraction that supports both SQLite (local dev, staging, tests) and Azure SQL (production). Eliminates SMB issues permanently, enables persistent production data, and supports proper schema migrations.
-
-### CS11a — Azure Files Cleanup (Quick Win)
-
-Remove all dead Azure Files / SMB volume mount references. Nothing uses them anymore.
-
-| File | Change |
-|------|--------|
-| `staging-deploy.yml` | Remove `volumes`, `volumeMounts`, `data-volume` blocks |
-| `prod-deploy.yml` | Same — deploy + rollback paths (4 blocks) |
-| `infra/deploy.sh` | Remove storage account/share creation, mount YAML |
-| `infra/deploy.ps1` | Same |
-| `infra/README.md` | Remove Azure Files documentation |
-| `Dockerfile` | Remove `RUN mkdir -p /app/data` |
-| `docker-compose.yml` | Remove `./data:/app/data` volume |
-| `server/db/connection.js` | Remove stale WAL/SHM cleanup, simplify comments |
-| `server/app.js` | Remove SMB lock release comments |
-
-**Azure resources to delete:** `gwn-storage-staging` and `gwn-storage-production` file shares, container app env storage links, and the storage account (if only used for these shares).
-
-### CS11b — Database Abstraction Layer
-
-#### Architecture: Repository Pattern with Adapter Interface
-
-```
-server/db/
-  index.js              — createDb(config) factory → returns adapter
-  base-adapter.js       — shared interface + parameter translation
-  sqlite-adapter.js     — SQLite implementation (sync → promisified)
-  mssql-adapter.js      — Azure SQL implementation (native async)
-  migrations/
-    _tracker.js         — migration version table + runner
-    001-initial.js      — full schema creation
-    002-add-role.js     — users.role column
-    003-add-max-players.js — matches.max_players, host_user_id
-  seed.js               — achievements, puzzles, system user
-```
-
-#### Adapter Interface (what routes use)
-
-```javascript
-const db = await createDb(config);
-
-await db.get(sql, params)          // single row or null
-await db.all(sql, params)          // array of rows
-await db.run(sql, params)          // { changes, lastId }
-await db.exec(rawSql)              // DDL (migrations)
-await db.transaction(async (tx) => { ... })
-await db.migrate()                 // run pending migrations
-await db.isHealthy()               // SELECT 1
-await db.close()
-```
-
-Routes never import `better-sqlite3` or `mssql` directly. They only use this interface.
-
-#### Parameter Translation (automatic)
-
-Routes write `?` placeholders everywhere. The adapter translates:
-- **SQLite**: passes through as-is
-- **Azure SQL**: rewrites `?` → `@p1, @p2, ...` and binds accordingly
-
-#### Versioned Migration System
-
-Replaces the current try/catch ALTER TABLE approach:
-- `_migrations` table tracks applied migrations: `(version, name, applied_at)`
-- Each migration file exports `async up(db)` and `async down(db)`
-- `up()` checks `db.dialect` for SQLite vs T-SQL differences
-- Migrations run on startup via `db.migrate()`; each wrapped in a transaction
-- New schema changes = new migration file → PR → deploy → auto-applied
-
-```javascript
-// migrations/001-initial.js
-module.exports = {
-  async up(db) {
-    if (db.dialect === 'sqlite') {
-      await db.exec('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, ...)');
-    } else {
-      await db.exec("IF OBJECT_ID('users') IS NULL CREATE TABLE users (id INT IDENTITY(1,1) PRIMARY KEY, ...)");
-    }
-  }
-};
-```
-
-#### SQL Dialect Differences (only in DDL / migrations)
-
-| Feature | SQLite | Azure SQL |
-|---------|--------|-----------|
-| Auto-increment | `INTEGER PRIMARY KEY AUTOINCREMENT` | `INT IDENTITY(1,1) PRIMARY KEY` |
-| Create if not exists | `CREATE TABLE IF NOT EXISTS` | `IF OBJECT_ID(...) IS NULL` |
-| Upsert | `INSERT OR REPLACE` | `MERGE` or `IF NOT EXISTS INSERT` |
-| Timestamps | `CURRENT_TIMESTAMP` | `GETDATE()` |
-| Text types | `TEXT` | `NVARCHAR(255)` / `NVARCHAR(MAX)` |
-
-Queries in routes (SELECT, INSERT, UPDATE) use standard SQL — work in both without changes.
-
-#### Config-Driven Backend Selection
-
-```javascript
-DB_BACKEND: process.env.DATABASE_URL ? 'mssql' : 'sqlite',
-DATABASE_URL: process.env.DATABASE_URL || null,
-GWN_DB_PATH: process.env.GWN_DB_PATH || 'data/game.db',
-```
-
-- `DATABASE_URL` present → Azure SQL (production)
-- `DATABASE_URL` absent → SQLite (local dev, staging, tests)
-
-### CS11c — Azure SQL Provisioning + Production Deploy
-
-| Step | Description |
-|------|-------------|
-| Provision | Azure SQL logical server + free-tier serverless DB (gwn-production). Firewall rules for Container Apps. Connection string as GitHub secret. |
-| Deploy workflow | `prod-deploy.yml`: add `DATABASE_URL` env var, remove volume mounts, add `GWN_DB_PATH=/tmp/game.db` fallback. |
-| First deploy | Trigger with staging-validated image tag. Verify health + DB connectivity. |
-
-**Azure SQL Free Tier Specs:**
-- 100,000 vCore-seconds/month (~28h compute)
-- 32 GB storage
-- Serverless auto-pause when idle → $0 cost
-- 1 free DB per subscription → use for production; staging stays ephemeral SQLite
-
-### CS11 Task Summary
-
-| # | Task | Status | Depends On | Notes |
-|---|---|---|---|---|
-| CS11-60 | Azure Files cleanup | ✅ Done | CS10-59 | Remove dead SMB references from all files. PR #49 merged. |
-| CS11-60v | Validate staging (post-cleanup) | ✅ Done | CS11-60 | Staging deploy + smoke tests all passed. DB self-init, user reg, score submit, puzzles all working. Run #23809714266. |
-| CS11-61a | Adapter interface + factory | ✅ Done | CS11-60v | `base-adapter.js`, `index.js` factory, config changes. PR #52 merged. |
-| CS11-61b | SQLite adapter + migrations | ✅ Done | CS11-61a | `sqlite-adapter.js`, migration system (`_tracker.js`, `001–004`), `seed.js`. PR #55 merged. |
-| CS11-61c | mssql adapter | ✅ Done | CS11-61a | `mssql-adapter.js`. PR #56 merged. Not used until CS11-64. |
-| CS11-62 | Convert routes to async | ✅ Done | CS11-61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 merged. |
-| CS11-63 | Update tests for async | ✅ Done | CS11-61b, CS11-62 | Async test helpers. Test suite passes with SQLite adapter. PR #57 merged (combined with CS11-62). |
-| CS11-63v | Validate staging (post-async) | ✅ Done | CS11-63 | Staging deploy + smoke tests + E2E all passed. 4 migrations applied, 504 puzzles seeded, async routes working. Run #23833160313. |
-| CS11-64 | Provision Azure SQL | ⬜ Pending | CS11-63v | Rollup for 64a–64e: create prod Azure SQL, open access, define MSSQL init path, store GitHub secret. |
-| CS11-64a | Create Azure SQL server | ⬜ Pending | CS11-63v | Create the production logical server in the chosen region/tier; capture admin + server details. |
-| CS11-64b | Create serverless prod DB | ⬜ Pending | CS11-64a | Create the production DB on that server and capture the final DB name/connection parameters. |
-| CS11-64c | Configure firewall access | ⬜ Pending | CS11-64a | Allow Azure-hosted app access plus operator IP(s) for setup/testing. Parallel with CS11-64b once server exists. |
-| CS11-64d | Plan MSSQL schema bootstrap | ⬜ Pending | CS11-64b | Required before cutover: app startup still fails fast for MSSQL auto-init, so use manual migrations/seeding or enable an equivalent init path first. |
-| CS11-64e | Add GitHub `DATABASE_URL` secret | ⬜ Pending | CS11-64b | Store the production connection string after the server + DB names are final. Parallel with CS11-64d. |
-| CS11-65 | Production deploy | ⬜ Pending | CS11-64 | Rollup for 65a–65c: wire workflow/env, deploy, then verify production. |
-| CS11-65a | Update `prod-deploy.yml` for MSSQL | ⬜ Pending | CS11-64 | Pass `DATABASE_URL` so production selects MSSQL; the workflow still uses `GWN_DB_PATH=/tmp/game.db` today. |
-| CS11-65b | First production deploy | ⬜ Pending | CS11-65a | Run the first deploy with Azure SQL settings and the chosen MSSQL bootstrap process. |
-| CS11-65c | Verify production | ⬜ Pending | CS11-65b | Smoke test startup, read paths, auth, submit flow, and DB-backed writes against Azure SQL. |
-
-**Parallelism:** After CS11-64a, CS11-64b and CS11-64c can move in parallel. After CS11-64b, CS11-64d and CS11-64e can run in parallel. Task CS11-65 stays sequential: 65a → 65b → 65c.
-
-**Suggested order:** CS11-63v → CS11-64a → (CS11-64b + CS11-64c) → (CS11-64d + CS11-64e) → CS11-64 → CS11-65a → CS11-65b → CS11-65c → CS11-65
-
-**CS11a/CS11b parallelism history:** After CS11-61a merges, three parallel tracks start:
-```
-Main: CS11-61a → merge → signal workers → orchestrate merges → CS11-63v → CS11-64 → CS11-65
-  wt-1: CS11-61b (SQLite adapter + migrations)
-  wt-2: CS11-61c (mssql adapter)
-  wt-3: CS11-62 (route conversion) → pull CS11-61b when merged → CS11-63 (test updates)
-```
+Database abstraction layer (SQLite + Azure SQL) with repository pattern, versioned migrations, and config-driven backend selection. Azure Files cleanup complete; async route conversion complete; Azure SQL provisioning and production deploy remaining. See [full details](project/clickstops/active_cs11_database-migration.md).
 
 ---
 
 ## Clickstop CS14 — Community Puzzle Submission UX
 
-Improve the community puzzle submission experience for both submitters and admins. The backend API and basic UI exist but the feature feels hidden and incomplete — submit button only visible when logged in with no discovery path, no submission history, no public browsing, and minimal authoring tools.
-
-**Planned release control (PR #91):** `submitPuzzle` is gated by a small central feature-flag system on the PR #91 branch so the feature can stay hidden by default while rollout and UX work continue. Evaluation order there is: feature-specific request override (only when that feature allows it in the current environment) → default state → explicit user targeting → deterministic percentage rollout → disabled.
-
-**Planned `submitPuzzle` configuration (PR #91):** hidden/disabled by default; can be enabled for explicit users and/or a rollout percentage; request overrides are allowed only outside `production` and `staging`; override names are query param `ff_submit_puzzle` and header `x-gwn-feature-submit-puzzle`. Overrides are opt-in per feature, not a global bypass. `main` does not have that central flag path until PR #91 merges.
-
-> **Note:** Puzzle authoring format reference is in the [CS9 archive](project/clickstops/done_cs9_content-growth.md).
-
-| # | Task | Status | Depends On | Notes |
-|---|---|---|---|---|
-| CS14-80 | Submission discovery & onboarding | ⬜ Pending | — | Add visible "Community" or "Create" entry point on home screen for all users (logged-out users see CTA to log in). Add brief explainer of how submissions work (submit → review → goes live). |
-| CS14-81 | My Submissions dashboard | ⬜ Pending | CS14-80 | New screen showing user's own submissions with status (pending/approved/rejected), reviewer notes, and timestamps. Uses existing `GET /api/submissions` endpoint. |
-| CS14-82 | Enhanced puzzle authoring form | ⬜ Pending | CS14-80 | Puzzle type selector (emoji/text/image). Custom options editor (4 options, must include answer). Live preview of how the puzzle will look to players. Validation feedback before submit. |
-| CS14-83 | Public community gallery | ⬜ Pending | CS14-81 | Browse approved community puzzles with attribution (submitted by username). Filter by category/difficulty. New API endpoint `GET /api/puzzles/community`. |
-| CS14-84 | Admin moderation improvements | ⬜ Pending | CS14-82 | Live puzzle preview in moderation screen. Bulk approve/reject. Edit puzzle before approval (fix typos, adjust options). Submission stats (total pending, approved, rejected). |
-| CS14-85 | Submission editing & deletion | ⬜ Pending | CS14-81 | Users can edit pending submissions and delete their own submissions. API endpoints `PUT /api/submissions/:id` and `DELETE /api/submissions/:id` with ownership checks. |
-| CS14-86 | Submission notifications | ⬜ Pending | CS14-84 | Notify submitters when their puzzle is approved/rejected (in-app notification or badge on submissions screen). Track unread review results. |
-| CS14-87 | Image puzzle submissions | ⬜ Pending | CS14-82 | Image upload support for image-type puzzles. Server-side validation (size, format). Storage (local in dev, Azure Blob in prod). Preview in authoring form and moderation. |
-
-**Parallelism:** Tasks CS14-81 and CS14-82 can run in parallel after CS14-80. Tasks CS14-83, CS14-84, CS14-85 can run in parallel after their dependencies. Task CS14-87 is independent of CS14-83–86 but requires CS14-82.
+Improve puzzle submission discovery, authoring, moderation, and notifications. Feature-flagged via `submitPuzzle` (PR #91). Not started. See [full details](project/clickstops/planned_cs14_community-puzzle-ux.md).
 
 ---
 
 ## Clickstop CS15 — Dev Tooling & Log Assertions
 
-Consolidate dev server scripts, integrate log capture into e2e tests, and add CI log assertion tests.
-
-| # | Task | Status | Depends On | Notes |
-|---|---|---|---|---|
-| CS15-90 | Unified dev server script | ✅ Done | — | `scripts/dev-server.js`: HTTPS + log capture by default. Replaces standalone `log-wrapper.js`. npm scripts: `dev:full`, `dev:log`. |
-| CS15-91 | E2e log capture integration | ⬜ Pending | CS15-90 | Playwright webServer uses dev-server.js to capture logs during test runs. Log file path configurable via env. |
-| CS15-92 | Log assertion tests | ⬜ Pending | CS15-91 | Post-test assertion: no ERROR-level entries during clean e2e run. Catches silent failures and unexpected error paths. |
-| CS15-93 | CI log artifact upload | ⬜ Pending | CS15-92 | On e2e failure in CI, upload captured log file as GitHub Actions artifact for debugging. |
-| CS15-94 | Production log format validation | ⬜ Pending | CS15-91 | Assert JSON structure in NODE_ENV=production mode: required fields (level, time, msg, req.id), no pretty-print leaking. |
-
-**Parallelism:** CS15-91 first, then CS15-92+CS15-93+CS15-94 can run in parallel.
+Unified dev server script done (CS15-90). Remaining: e2e log capture, log assertion tests, CI artifact upload, production log format validation. See [full details](project/clickstops/active_cs15_dev-tooling-log-assertions.md).
 
 ---
 

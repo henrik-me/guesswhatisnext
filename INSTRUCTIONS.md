@@ -585,12 +585,27 @@ The live coordination file. Rules:
 - Contains: orchestrator table, active work, queued tasks, recently completed
 - Kept small (<100 lines) — only active + recent items
 
-#### Completed Clickstop Archival
+#### Clickstop File Lifecycle
 
-When a clickstop is fully complete:
-1. Create `project/clickstops/done_{CS-ID}_{kebab-name}.md` (e.g., `done_cs11_database-migration.md`) with full task table, design decisions, and notes. Include a filled-in completion checklist if applicable (legacy archives from before CS0 may omit it). The `done_` prefix + CS ID enables proper sorting/ordering in the filesystem.
-2. Replace the clickstop's section in CONTEXT.md with a 2-4 line summary linking to the archive file
-3. Update the clickstop summary table status
+Each clickstop gets a detail file in `project/clickstops/` with a status prefix:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `planned_` | Defined but no tasks started | `planned_cs14_community-puzzle-ux.md` |
+| `active_` | Has work in progress | `active_cs11_database-migration.md` |
+| `done_` | Fully complete | `done_cs10_cicd-pipeline.md` |
+
+**File format:** Each file contains the clickstop title, status, goal, full task table (with CS-prefixed IDs), design decisions, and notes (parallelism, architecture details).
+
+**Lifecycle transitions:**
+
+1. **New clickstop defined** → create `planned_{cs-id}_{kebab-name}.md` with task table and design notes. Add a summary row to the CONTEXT.md clickstop summary table linking to the file.
+2. **First task starts** → rename file from `planned_` to `active_` (use `git mv`). Update the CONTEXT.md summary row status and link.
+3. **All tasks complete** → rename file from `active_` to `done_` (use `git mv`). Update the CONTEXT.md summary row. Fill in the completion checklist inside the file. Replace the CONTEXT.md section with a 2-4 line summary linking to the archive.
+
+CONTEXT.md always contains only a short summary (2-4 lines) per clickstop with a link to the detail file. Full task tables, design decisions, and architecture details live in the clickstop files.
+
+Legacy archives from before CS0 may omit the completion checklist.
 
 **Copilot PR Review Policy:**
 - Every PR must be reviewed by Copilot before merging
