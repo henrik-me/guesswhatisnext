@@ -735,7 +735,9 @@ public/
 - Project gains multiple active contributors
 - We enter an open-ended feature development phase without clear dependency chains
 
-## Adopted Tools & Versions
+## Adopted Tools & Minimum Versions
+
+> Versions below are minimum versions matching the semver ranges in `package.json`.
 
 | Tool | Purpose | Notes |
 |---|---|---|

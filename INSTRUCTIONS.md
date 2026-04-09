@@ -28,11 +28,16 @@ guesswhatisnext/
 ├── server/
 │   ├── index.js                    # Express app + HTTP + WebSocket bootstrap
 │   ├── puzzleData.js               # Server-side puzzle pool (multiplayer)
-│   ├── routes/
+│   ├── routes/                      # Route modules
+│   │   ├── achievements.js         # Achievement definitions + unlocks
 │   │   ├── auth.js                 # Register, login, JWT tokens
-│   │   ├── scores.js               # Score submission + leaderboards
+│   │   ├── features.js             # Feature flag status endpoint
 │   │   ├── matches.js              # Room create/join + match history
-│   │   └── puzzles.js              # Puzzle API
+│   │   ├── puzzles.js              # Puzzle API
+│   │   ├── scores.js               # Score submission + leaderboards
+│   │   ├── submissions.js          # User-submitted puzzles
+│   │   ├── telemetry.js            # Client telemetry ingestion
+│   │   └── users.js                # User profiles + management
 │   ├── ws/matchHandler.js          # WebSocket match engine (2–10 players)
 │   ├── db/
 │   │   ├── schema.sql              # SQLite table definitions
@@ -141,7 +146,7 @@ guesswhatisnext/
 
 The project uses a central feature-flag module for staged rollouts. The client mirrors flag state via `/api/features`, but guarded server routes still enforce the same flag server-side.
 
-- **Evaluation order:** default state → feature-specific request override (if opted in and environment allows) → explicit user targeting → deterministic percentage rollout
+- **Evaluation order:** feature-specific request override (if opted in and environment allows) → default state (`defaultEnabled`) → explicit user targeting → deterministic percentage rollout
 - **Rollout stability:** percentage rollouts are deterministic per authenticated user
 - **Override policy:** each feature must explicitly opt in and define its own override names; overrides are never global
 
