@@ -46,6 +46,7 @@ set_or_generate_secret() {
     echo "$env_val" | gh secret set "$name" --repo "$REPO"
     echo "  ✓ $name set from environment variable"
   else
+    local existing
     existing=$(gh secret list --repo "$REPO" --limit 1000 --json name --jq '.[].name' 2>/dev/null | grep -x "$name" || true)
     if [ -n "$existing" ]; then
       echo "  ✓ $name already exists, skipping"
