@@ -299,7 +299,7 @@ Navigate to **Settings → Secrets and variables → Actions → Variables** and
 | `STAGING_URL` | Staging application URL (e.g. `https://gwn-staging.<region>.azurecontainerapps.io`) |
 | `GHCR_USERNAME` | GitHub username for container registry access |
 | `STAGING_AUTO_DEPLOY` | Set to `true` to enable auto-deploy to staging on merge to main |
-| `CANONICAL_HOST` | _(Optional)_ Custom domain hostname. Auto-derived from `STAGING_URL` if not set. Only override for custom domain mappings. |
+| `CANONICAL_HOST` | Hostname used by the app (host portion of the deployed URL, without `https://`). For staging, the deploy workflow derives it from `STAGING_URL` if not set. For production, this must be set explicitly. Override for custom domain mappings. |
 
 ### Environments
 
