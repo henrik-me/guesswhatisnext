@@ -41,7 +41,7 @@ guesswhatisnext/
 ├── data/                           # SQLite database (auto-created, git-ignored)
 ├── Dockerfile                      # Production container image
 ├── docker-compose.yml              # Local container dev environment
-├── .github/workflows/              # ci-cd.yml + health-monitor.yml
+├── .github/workflows/              # CI, deploy, load-test, and health-monitor workflows
 ├── scripts/                        # Local health-check scripts (sh + ps1)
 ├── infra/                          # Azure deployment (deploy.sh + README)
 ├── eslint.config.mjs              # ESLint flat config
@@ -254,7 +254,7 @@ agents can each run `npm test` independently without port or DB conflicts.
   "test:watch": "vitest",
   "test:coverage": "vitest run --coverage",
   "test:e2e": "playwright test",
-  "test:all": "vitest run --coverage && playwright test",
+  "test:all": "vitest run && playwright test",
   "lint": "eslint . --max-warnings 50"
 }
 ```
@@ -271,7 +271,7 @@ Run the full validation sequence before pushing a branch:
 npm run lint && npm test && npm run test:e2e
 ```
 
-All three must pass. CI runs the same checks on every PR.
+All three must pass. CI runs the same checks for PRs that trigger the workflow; docs-only changes may be skipped.
 
 ### Test Data Management
 - Tests use an **isolated temp-directory SQLite database** via `GWN_DB_PATH` — never the real `data/game.db`
@@ -551,7 +551,7 @@ gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THRE
 
 ### CI/CD Pipeline Overview
 
-**PR checks (ci.yml):** Lint and test run in parallel on every pull request. No Docker build — fast feedback.
+**PR checks (ci.yml):** Lint, test, and E2E checks run on every pull request. No Docker build — fast feedback.
 
 **Push to `main`:** Does **not** trigger any deployment. All deployments flow through the staging pipeline first.
 
@@ -564,7 +564,7 @@ gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THRE
 
 ---
 
-## 5. Performance & Accessibility
+## 6. Performance & Accessibility
 
 ### Performance
 - No heavy libraries — total JS payload should stay under 50KB
