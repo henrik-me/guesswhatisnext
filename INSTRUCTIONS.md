@@ -2,6 +2,8 @@
 
 This document defines architecture decisions, coding standards, testing strategy, and git workflow for the **Guess What's Next** project.
 
+For project phases, task plans, detailed test specifications, tool evaluations, and current status, see **CONTEXT.md**.
+
 ---
 
 ## 1. Architecture Principles
@@ -207,7 +209,7 @@ guesswhatisnext/
 | **Unit tests** | ≥ 90% line coverage on game logic, scoring, auth, DB helpers | Vitest with `--coverage` |
 | **API / integration tests** | 100% of endpoints with success + error cases | supertest |
 | **WebSocket tests** | All message types (join, answer, roundResult, gameOver, reconnect) | ws client in tests |
-| **E2E tests** | All critical user flows (see list below) | Playwright |
+| **E2E tests** | All critical user flows | Playwright |
 | **Overall** | ≥ 80% line coverage across the project | `npm run test:coverage` |
 
 Tests **must pass** before any merge to `main`. CI/CD pipeline runs the full suite on every push.
@@ -245,6 +247,16 @@ agents can each run `npm test` independently without port or DB conflicts.
 ### Test Runner
 
 Tests use Vitest with supertest for API and ws for WebSocket testing. Run with `npm test`. Each suite gets an isolated temp database and random port. Tests are safe to run in parallel across worktrees.
+
+### Validation Before Pushing
+
+Run the full validation sequence before pushing a branch:
+
+```bash
+npm run lint && npm test && npm run test:e2e
+```
+
+All three must pass. CI runs the same checks on every PR.
 
 ### Test Data Management
 - Tests use an **isolated temp-directory SQLite database** via `GWN_DB_PATH` — never the real `data/game.db`
@@ -303,7 +315,7 @@ Commit locally after every meaningful, working change — each commit should be 
 **Do not** batch unrelated changes into one commit. Two distinct actions = two commits.
 
 ### Branch Strategy & Merge Model
-- All changes via **pull requests** to `main` — no direct commits to main
+- **No direct commits to `main`** — all code changes go through pull requests, no exceptions
 - Feature branches: `feat/<step-id>` (e.g., `feat/puzzle-expansion`, `feat/mp-game-logic`)
 - CI runs lint + tests (unit and e2e) on every PR
 - At least 1 approval required before merge
@@ -313,6 +325,16 @@ Commit locally after every meaningful, working change — each commit should be 
   - Require status checks to pass (lint, test (unit and e2e), build)
   - No force pushes
   - No direct commits
+
+### Agent Work Model
+
+The **main agent** works in the main checkout (`C:\src\guesswhatisnext<suffix>`) but **does not make code changes there**. Its role is:
+- Communicating with the human user (clarifying requirements, reporting progress)
+- Planning and decomposing work into tasks
+- Delegating implementation to sub-agents working in worktree slots
+- Orchestrating: tracking sub-agent progress, pulling merged changes, resolving cross-task issues
+
+**All code changes** — features, fixes, tests, docs, refactoring — are done by **sub-agents in worktree slots**. Each sub-agent gets a worktree with a meaningful branch name (e.g., `feat/lean-instructions`, `fix/ws-reconnect`). This keeps `main` clean and ensures every change flows through a PR.
 
 ### Parallel Agent Workflow
 
@@ -330,18 +352,18 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 
 | Slot | Path | Port | Purpose |
 |---|---|---|---|
-| main | `C:\src\guesswhatisnext<suffix>` | 3000 | Primary repo, sequential work |
-| wt-1 | `C:\src\gwn<suffix>-worktrees\wt-1` | 3001 | Parallel agent slot 1 |
-| wt-2 | `C:\src\gwn<suffix>-worktrees\wt-2` | 3002 | Parallel agent slot 2 |
-| wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Parallel agent slot 3 |
-| wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Parallel agent slot 4 |
+| main | `C:\src\guesswhatisnext<suffix>` | 3000 | Orchestration only — no code changes |
+| wt-1 | `C:\src\gwn<suffix>-worktrees\wt-1` | 3001 | Sub-agent slot 1 |
+| wt-2 | `C:\src\gwn<suffix>-worktrees\wt-2` | 3002 | Sub-agent slot 2 |
+| wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Sub-agent slot 3 |
+| wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Sub-agent slot 4 |
 
 **Agent setup:** Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
 
 **Branch lifecycle:**
 1. Work on `feat/<task-name>` branch in slot
 2. **Commit after each meaningful step** with a descriptive message — don't wait until the end
-3. Run `npm test` → all pass (before pushing)
+3. Run full validation before pushing: `npm run lint && npm test && npm run test:e2e`
 4. Push branch to origin
 5. Create PR: `gh pr create --base main --head feat/<task-name>`
 6. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
