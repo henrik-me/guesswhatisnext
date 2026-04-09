@@ -125,6 +125,10 @@ function getHeaderValue(headers, headerName) {
   const normalizedHeaderName = normalizeIdentifier(headerName);
   if (!headers || !normalizedHeaderName) return undefined;
 
+  if (Object.prototype.hasOwnProperty.call(headers, normalizedHeaderName)) {
+    return headers[normalizedHeaderName];
+  }
+
   return Object.entries(headers).find(([key]) => normalizeIdentifier(key) === normalizedHeaderName)?.[1];
 }
 

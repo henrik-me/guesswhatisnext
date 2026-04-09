@@ -22,7 +22,7 @@ describe('GET /api/features', () => {
     expect(res.body).toHaveProperty('features.submitPuzzle');
     expect(res.body).toMatchObject({
       features: {
-        submitPuzzle: expect.any(Boolean),
+        submitPuzzle: false,
       },
     });
   });
