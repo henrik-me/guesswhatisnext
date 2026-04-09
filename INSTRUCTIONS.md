@@ -496,7 +496,7 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 4. Implement the task (commit after each meaningful step)
 5. Run full validation: `npm run lint && npm test && npm run test:e2e`
 6. Push branch and create PR: `gh pr create --base main`
-7. Request Copilot review: `gh pr edit {PR#} --add-reviewer "@copilot"`
+7. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
 8. Wait for review (poll per "Waiting for Copilot Review (CRITICAL)" section — do NOT skip this)
 9. Address all review comments (reply + fix + resolve threads)
 10. Re-request review and repeat until clean
@@ -504,7 +504,7 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 
 **Model Usage Guidance:**
 
-Recommendations based on benchmark results comparing claude-opus-4.6, claude-sonnet-4.6, gpt-5.4, and gpt-5.3-codex on identical coding tasks:
+Recommendations based on benchmark results comparing claude-opus-4.6, claude-sonnet-4.6, gpt-5.4, and gpt-5.3-codex on identical coding tasks (claude-haiku-4.5 included for exploration based on separate cost/speed evaluation):
 
 | Task Type | Recommended Model | Rationale |
 |---|---|---|
@@ -672,13 +672,13 @@ After requesting review with `gh pr edit <PR#> --add-reviewer "@copilot"`, Copil
 Polling procedure:
 1. Record the current review count before requesting (re-)review:
    ```powershell
-   $reviewCountBefore = gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == \"copilot-pull-request-reviewer\")] | length'
+   $reviewCountBefore = gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
    ```
 2. Request review: `gh pr edit <PR#> --add-reviewer "@copilot"`
 3. Wait 60 seconds: `Start-Sleep -Seconds 60`
 4. Check if a new review has been posted:
    ```powershell
-   $reviewCountAfter = gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == \"copilot-pull-request-reviewer\")] | length'
+   $reviewCountAfter = gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
    ```
 5. If `$reviewCountAfter` > `$reviewCountBefore`, a new review exists — proceed to read comments
 6. If the count has not incremented, repeat from step 3 (up to **10 times** — 10 minutes total)
@@ -686,7 +686,7 @@ Polling procedure:
 
 Check the latest review state:
 ```powershell
-gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == \"copilot-pull-request-reviewer\")] | last | .state'
+gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | last | .state'
 ```
 - `APPROVED` — Copilot is satisfied, PR is ready to merge
 - `CHANGES_REQUESTED` — read the review comments and address them
