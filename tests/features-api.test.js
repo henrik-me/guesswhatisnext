@@ -5,9 +5,27 @@
 const { getAgent, setup, teardown, registerUser } = require('./helper');
 
 let userToken;
+const originalSubmitPuzzlePercentage = process.env.FEATURE_SUBMIT_PUZZLE_PERCENTAGE;
+const originalSubmitPuzzleUsers = process.env.FEATURE_SUBMIT_PUZZLE_USERS;
+
+process.env.FEATURE_SUBMIT_PUZZLE_PERCENTAGE = '0';
+process.env.FEATURE_SUBMIT_PUZZLE_USERS = '';
 
 beforeAll(setup);
 afterAll(teardown);
+afterAll(() => {
+  if (originalSubmitPuzzlePercentage === undefined) {
+    delete process.env.FEATURE_SUBMIT_PUZZLE_PERCENTAGE;
+  } else {
+    process.env.FEATURE_SUBMIT_PUZZLE_PERCENTAGE = originalSubmitPuzzlePercentage;
+  }
+
+  if (originalSubmitPuzzleUsers === undefined) {
+    delete process.env.FEATURE_SUBMIT_PUZZLE_USERS;
+  } else {
+    process.env.FEATURE_SUBMIT_PUZZLE_USERS = originalSubmitPuzzleUsers;
+  }
+});
 
 beforeAll(async () => {
   const { token } = await registerUser('features-api-user');
