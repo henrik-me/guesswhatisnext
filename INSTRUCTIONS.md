@@ -492,7 +492,7 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 **Sub-Agent Checklist** (include verbatim in every sub-agent prompt):
 1. Read INSTRUCTIONS.md in the repository root before starting any work
 2. Run `npm install` in worktree
-3. Set `$env:PORT = "300X"` for the assigned slot
+3. Set `$env:PORT = "300N"` for the assigned slot
 4. Implement the task (commit after each meaningful step)
 5. Run full validation: `npm run lint && npm test && npm run test:e2e`
 6. Push branch and create PR: `gh pr create --base main`
@@ -672,13 +672,13 @@ After requesting review with `gh pr edit <PR#> --add-reviewer "@copilot"`, Copil
 Polling procedure:
 1. Record the current review count before requesting (re-)review:
    ```powershell
-   $reviewCountBefore = gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
+   $reviewCountBefore = gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
    ```
 2. Request review: `gh pr edit <PR#> --add-reviewer "@copilot"`
 3. Wait 60 seconds: `Start-Sleep -Seconds 60`
 4. Check if a new review has been posted:
    ```powershell
-   $reviewCountAfter = gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
+   $reviewCountAfter = gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
    ```
 5. If `$reviewCountAfter` > `$reviewCountBefore`, a new review exists — proceed to read comments
 6. If the count has not incremented, repeat from step 3 (up to **10 times** — 10 minutes total)
@@ -686,7 +686,7 @@ Polling procedure:
 
 Check the latest review state:
 ```powershell
-gh api repos/henrik-me/guesswhatisnext/pulls/{PR#}/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | last | .state'
+gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | last | .state'
 ```
 - `APPROVED` — Copilot is satisfied, PR is ready to merge
 - `CHANGES_REQUESTED` — read the review comments and address them
