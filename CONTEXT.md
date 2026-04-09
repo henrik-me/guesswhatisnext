@@ -28,7 +28,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS11 | Database Migration | 🔄 Active | see below | — |
 | CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/completed_clickstop_test-infrastructure.md) |
 | CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/completed_clickstop_observability-logging.md) |
-| CS14 | Community Puzzle UX | ⬜ Planned | see below | — |
+| CS14 | Community Puzzle Submission UX | ⬜ Planned | see below | — |
 | CS15 | Dev Tooling & Log Assertions | 🔄 Active | see below | — |
 
 *CS10: task CS10-56 (unified infra script) still pending.

@@ -537,6 +537,8 @@ Every orchestrating agent has a unique ID: `{machine-short}-{repo-suffix}`
 
 #### Naming Conventions
 
+Task IDs use uppercase in documentation and tables (`CS11-64`) but are normalized to **lowercase** in branches and commit scopes (`cs11-64`).
+
 **Branches:** `{agent-id}/{task-id}-{description}`
 ```
 yoga-gwn/cs11-64-provision-azure-sql

@@ -20,7 +20,7 @@ Live coordination file for multi-agent work. Only orchestrating agents update th
 
 | Task ID | Clickstop | Description | Depends On |
 |---------|-----------|-------------|------------|
-| CS11-64 | DB Migration | Provision Azure SQL | — |
+| CS11-64 | Database Migration | Provision Azure SQL | — |
 | CS10-56 | CI/CD Pipeline | Unified infra setup script | — |
 
 ## Recently Completed
