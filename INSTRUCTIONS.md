@@ -26,10 +26,11 @@ guesswhatisnext/
 │       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
 │       └── colors/                 # Color circles (red → purple)
 ├── server/
-│   ├── index.js                    # Express app + HTTP + WebSocket bootstrap
+│   ├── index.js                    # Entry point: telemetry init, config, server bootstrap
+│   ├── app.js                      # Express app factory, middleware, route wiring
 │   ├── puzzleData.js               # Server-side puzzle pool (multiplayer)
 │   ├── routes/                      # Route modules
-│   │   ├── achievements.js         # Achievement definitions + unlocks
+│   │   ├── achievements.js         # Achievement API routes
 │   │   ├── auth.js                 # Register, login, JWT tokens
 │   │   ├── features.js             # Feature flag status endpoint
 │   │   ├── matches.js              # Room create/join + match history

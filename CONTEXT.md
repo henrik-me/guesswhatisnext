@@ -584,7 +584,7 @@ public/
 ### Deployment Architecture
 
 ```
-  Developer pushes to main
+  Developer opens PR targeting main
          │
          ▼
   ┌──────────────────────────────────────────────────────────────┐
