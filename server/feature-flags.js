@@ -1,6 +1,7 @@
 'use strict';
 
 const { config } = require('./config');
+const logger = require('./logger');
 
 const ENABLED_OVERRIDE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enable', 'enabled']);
 const DISABLED_OVERRIDE_VALUES = new Set(['0', 'false', 'no', 'off', 'disable', 'disabled']);
@@ -104,19 +105,38 @@ function isUserTargeted(feature, user) {
 }
 
 function evaluateFeatureFlag(feature, req = {}) {
-  const override = getFeatureOverride(feature, req);
-  if (override !== null) return override;
-  if (feature.defaultEnabled) return true;
-  if (isUserTargeted(feature, req.user)) return true;
+  let enabled;
+  let reason;
 
-  if (feature.rolloutPercentage > 0) {
+  const override = getFeatureOverride(feature, req);
+  if (override !== null) {
+    enabled = override;
+    reason = 'override';
+  } else if (feature.defaultEnabled) {
+    enabled = true;
+    reason = 'default-on';
+  } else if (isUserTargeted(feature, req.user)) {
+    enabled = true;
+    reason = 'user-targeted';
+  } else if (feature.rolloutPercentage > 0) {
     const stableKey = getStableRolloutKey(req.user);
-    if (stableKey) {
-      return getRolloutBucket(stableKey) < feature.rolloutPercentage;
+    if (!stableKey) {
+      enabled = false;
+      reason = 'rollout-no-key';
+    } else if (getRolloutBucket(stableKey) < feature.rolloutPercentage) {
+      enabled = true;
+      reason = 'rollout';
+    } else {
+      enabled = false;
+      reason = 'rollout-miss';
     }
+  } else {
+    enabled = false;
+    reason = 'default-off';
   }
 
-  return false;
+  logger.debug({ flag: feature.key, enabled, reason }, 'feature flag evaluated');
+  return enabled;
 }
 
 function isFeatureEnabled(featureName, req = {}) {
