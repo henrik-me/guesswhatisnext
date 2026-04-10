@@ -1,8 +1,6 @@
 services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    ports:
-      - "1433:1433"
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-GwnTest1!}
@@ -12,3 +10,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  app:
+    build: .
+    environment:
+      NODE_ENV: production
+      JWT_SECRET: gwn-docker-mssql-validation
+      SYSTEM_API_KEY: gwn-docker-mssql-validation
+      CANONICAL_HOST: "localhost"
+      DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=${MSSQL_SA_PASSWORD:-GwnTest1!};Encrypt=false;TrustServerCertificate=true"
+      PORT: "3000"
+    volumes:
+      - ./scripts/docker-mssql-entrypoint.sh:/app/docker-mssql-entrypoint.sh:ro
+    entrypoint: ["sh", "/app/docker-mssql-entrypoint.sh"]
+    depends_on:
+      mssql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "443:443"
+      - "3001:80"
+    volumes:
+      - ./infra/Caddyfile.local:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - app
+    restart: unless-stopped

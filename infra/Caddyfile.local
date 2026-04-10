@@ -1,0 +1,7 @@
+# Local HTTPS reverse proxy for Docker MSSQL validation.
+# Caddy auto-generates a self-signed cert for localhost.
+# Accept the browser warning once, then HTTPS works seamlessly.
+
+localhost {
+	reverse_proxy app:3000
+}
