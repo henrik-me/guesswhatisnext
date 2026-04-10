@@ -632,6 +632,13 @@ Every clickstop must satisfy ALL of these before marking complete:
 
 Filled-in checklists are recorded in the clickstop's archive file upon completion.
 
+**Deferred work policy:** When completing a clickstop with deferred tasks, the orchestrator must:
+1. Create a new `planned_` clickstop file for the deferred work, including: what was deferred, why it was deferred, and a link back to the originating clickstop
+2. Add the new clickstop to the CONTEXT.md summary table
+3. Inform the user that deferred work has been placed in a new clickstop, with a link and summary
+
+A clickstop may be marked complete with deferred tasks only if the deferred work has been captured in a new clickstop. Never silently drop deferred tasks.
+
 #### WORKBOARD.md — Live Coordination
 
 WORKBOARD.md is the real-time coordination file for multi-agent work. It tracks who is working on what, right now.
