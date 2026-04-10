@@ -1221,18 +1221,11 @@ function updateCommunityAuthDisplay() {
   const mySubBtn = document.querySelector('[data-bind="my-submissions-btn"]');
   const modBtn = document.querySelector('[data-bind="moderation-btn"]');
 
-  if (isLoggedIn() && isFeatureEnabled('submitPuzzle')) {
-    if (createBtn) createBtn.style.display = '';
-    if (mySubBtn) mySubBtn.style.display = '';
-  } else if (isLoggedIn()) {
-    // Logged in but flag is off — hide create, show my-submissions
-    if (createBtn) createBtn.style.display = 'none';
-    if (mySubBtn) mySubBtn.style.display = '';
-  } else {
-    // Not logged in — show create (it will redirect to auth), hide my-submissions
-    if (createBtn) createBtn.style.display = '';
-    if (mySubBtn) mySubBtn.style.display = 'none';
-  }
+  // Create Puzzle is gated behind submitPuzzle flag (visible only when flag is on)
+  if (createBtn) createBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
+  // My Submissions requires login
+  if (mySubBtn) mySubBtn.style.display = isLoggedIn() ? '' : 'none';
+  // Moderation requires admin/system role
   if (modBtn) {
     modBtn.style.display = (isLoggedIn() && (authRole === 'admin' || authRole === 'system')) ? '' : 'none';
   }

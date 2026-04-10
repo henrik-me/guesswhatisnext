@@ -12,17 +12,17 @@ test.describe('Community Discovery & Onboarding', () => {
     await expect(page.locator('[data-action="show-community"]')).toBeVisible();
   });
 
-  test('community screen shows browse and create buttons', async ({ page }) => {
+  test('community screen shows browse button, create puzzle hidden by default', async ({ page }) => {
     await page.goto('/');
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await expect(page.locator('[data-action="browse-community"]')).toBeVisible();
-    // Create button is visible (redirects to auth when logged out)
-    await expect(page.locator('[data-bind="community-create-btn"]')).toBeVisible();
+    // Create button is hidden when feature flag is off (default)
+    await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
   });
 
   test('clicking create puzzle while logged out redirects to auth', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="create-puzzle"]');
