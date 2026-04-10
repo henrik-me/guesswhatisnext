@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-10T00:55Z
+> **Last updated:** 2026-04-10T01:39Z
 
 ## Orchestrators
 
@@ -19,7 +19,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS11-64 | Database Migration | Provision Azure SQL — 64a/b/c/e done, 64d PR pending | yoga-gwn | wt-1 | yoga-gwn/cs11-64d-mssql-schema-bootstrap | — | 2026-04-09 |
 | CS15 | Dev Tooling | Close out CS15 (all tasks already merged) | yoga-gwn-c2 | wt-1 | yoga-gwn-c2/cs15-close-out | — | 2026-04-09 |
-| CS14 | Community Puzzle UX | Plan merged, ready for implementation | yoga-gwn-c3 | — | — | — | 2026-04-09 |
+| CS14 | Community Puzzle UX | Wave 1: CS14-80 discovery & onboarding | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-80-discovery-onboarding | — | 2026-04-10 |
 
 ## Queued (ready, no dependencies blocking)
 
