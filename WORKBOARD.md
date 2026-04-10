@@ -18,7 +18,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS14-81 | Community Puzzle UX | Wave 2: My Submissions dashboard | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-81-my-submissions | — | 2026-04-10 |
-| CS14-82 | Community Puzzle UX | Wave 2: Enhanced authoring form | yoga-gwn-c3 | wt-2 | yoga-gwn-c3/cs14-82-authoring-form | — | 2026-04-10 |
+| CS14-82 | Community Puzzle UX | Wave 2: Enhanced authoring form | yoga-gwn-c3 | wt-2 | yoga-gwn-c3/cs14-82-authoring-form | #119 ✅ | 2026-04-10 |
 
 ## Queued (ready, no dependencies blocking)
 
