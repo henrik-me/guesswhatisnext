@@ -264,6 +264,68 @@ function validateSubmission(body) {
   return null;
 }
 
+/** Validate a partial submission update. Returns an error string or null. */
+function validatePartialSubmission(body) {
+  const { sequence, answer, explanation, difficulty, category, type, options } = body;
+
+  if (sequence !== undefined) {
+    if (!Array.isArray(sequence) || sequence.length < 3) {
+      return 'sequence must be an array of at least 3 elements';
+    }
+  }
+  if (answer !== undefined) {
+    const trimmedAnswer = typeof answer === 'string' ? answer.trim() : String(answer);
+    if (trimmedAnswer.length === 0) {
+      return 'answer is required';
+    }
+  }
+  if (explanation !== undefined) {
+    if (typeof explanation !== 'string' || explanation.trim().length === 0) {
+      return 'explanation is required';
+    }
+  }
+  if (difficulty !== undefined) {
+    const diff = Number(difficulty);
+    if (!Number.isInteger(diff) || diff < 1 || diff > 3) {
+      return 'difficulty must be 1, 2, or 3';
+    }
+  }
+  if (category !== undefined) {
+    if (typeof category !== 'string' || !VALID_CATEGORIES.includes(category)) {
+      return `category must be one of: ${VALID_CATEGORIES.join(', ')}`;
+    }
+  }
+  if (type !== undefined && type !== null) {
+    if (typeof type !== 'string' || !VALID_TYPES.includes(type)) {
+      return `type must be one of: ${VALID_TYPES.join(', ')}`;
+    }
+  }
+  if (options !== undefined && options !== null) {
+    if (!Array.isArray(options) || options.length !== 4) {
+      return 'options must be an array of exactly 4 items';
+    }
+    for (let i = 0; i < options.length; i++) {
+      if (typeof options[i] !== 'string' || options[i].trim().length === 0) {
+        return 'each option must be a non-empty string';
+      }
+    }
+    const trimmedOptions = options.map(o => o.trim());
+    const uniqueOptions = new Set(trimmedOptions);
+    if (uniqueOptions.size !== 4) {
+      return 'options must not contain duplicates';
+    }
+    // Cross-validate answer if provided or if submission has existing answer
+    const trimmedAnswer = answer !== undefined
+      ? (typeof answer === 'string' ? answer.trim() : String(answer))
+      : null;
+    if (trimmedAnswer !== null && !trimmedOptions.includes(trimmedAnswer)) {
+      return 'options must include the answer';
+    }
+  }
+
+  return null;
+}
+
 /** POST /api/submissions — submit a puzzle proposal (requires auth). */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
@@ -381,6 +443,137 @@ router.get('/pending', requireSystem, async (req, res, next) => {
     }));
 
     res.json({ submissions });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/submissions/stats — submission statistics (system/admin only). */
+router.get('/stats', requireSystem, async (req, res, next) => {
+  try {
+    const db = await getDbAdapter();
+    const statusRows = await db.all(
+      'SELECT status, COUNT(*) AS count FROM puzzle_submissions GROUP BY status'
+    );
+
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    for (const row of statusRows) {
+      if (counts[row.status] !== undefined) {
+        counts[row.status] = row.count;
+      }
+    }
+    const total = counts.pending + counts.approved + counts.rejected;
+
+    const todaySubmitted = await db.get(
+      "SELECT COUNT(*) AS count FROM puzzle_submissions WHERE DATE(created_at) = DATE('now')"
+    );
+    const todayReviewed = await db.get(
+      "SELECT COUNT(*) AS count FROM puzzle_submissions WHERE DATE(reviewed_at) = DATE('now')"
+    );
+
+    res.json({
+      pending: counts.pending,
+      approved: counts.approved,
+      rejected: counts.rejected,
+      total,
+      today: {
+        submitted: todaySubmitted ? todaySubmitted.count : 0,
+        reviewed: todayReviewed ? todayReviewed.count : 0,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PUT /api/submissions/:id — edit a pending submission (admin or owner). */
+router.put('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid submission ID' });
+    }
+
+    const db = await getDbAdapter();
+    const submission = await db.get('SELECT * FROM puzzle_submissions WHERE id = ?', [id]);
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+    if (submission.status !== 'pending') {
+      return res.status(409).json({ error: 'Cannot edit a reviewed submission' });
+    }
+
+    const isAdminOrSystem = req.user.role === 'admin' || req.user.role === 'system';
+    const isOwner = submission.user_id === req.user.id;
+
+    if (!isAdminOrSystem && !isOwner) {
+      return res.status(403).json({ error: 'Not authorized to edit this submission' });
+    }
+
+    // Regular users need the submitPuzzle feature flag
+    if (!isAdminOrSystem && !isFeatureEnabled('submitPuzzle', req)) {
+      return res.status(403).json({ error: 'Submit puzzle feature is not enabled' });
+    }
+
+    const error = validatePartialSubmission(req.body);
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
+    const { sequence, answer, explanation, difficulty, category, type, options } = req.body;
+    const updates = [];
+    const params = [];
+
+    if (sequence !== undefined) {
+      updates.push('sequence = ?');
+      params.push(JSON.stringify(sequence));
+    }
+    if (answer !== undefined) {
+      updates.push('answer = ?');
+      params.push(typeof answer === 'string' ? answer.trim() : String(answer));
+    }
+    if (explanation !== undefined) {
+      updates.push('explanation = ?');
+      params.push(explanation.trim());
+    }
+    if (difficulty !== undefined) {
+      updates.push('difficulty = ?');
+      params.push(Number(difficulty));
+    }
+    if (category !== undefined) {
+      updates.push('category = ?');
+      params.push(category);
+    }
+    if (type !== undefined) {
+      updates.push('type = ?');
+      params.push(type);
+    }
+    if (options !== undefined) {
+      updates.push('options = ?');
+      params.push(options === null ? null : JSON.stringify(options.map(o => o.trim())));
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    params.push(id);
+    const result = await db.run(
+      `UPDATE puzzle_submissions SET ${updates.join(', ')} WHERE id = ? AND status = 'pending'`,
+      params
+    );
+
+    if (result.changes === 0) {
+      return res.status(409).json({ error: 'Cannot edit a reviewed submission' });
+    }
+
+    const updated = await db.get('SELECT * FROM puzzle_submissions WHERE id = ?', [id]);
+    res.json({
+      ...updated,
+      sequence: JSON.parse(updated.sequence),
+      options: updated.options ? JSON.parse(updated.options) : null,
+    });
   } catch (err) {
     next(err);
   }
@@ -509,6 +702,44 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
     }
 
     res.json({ id, status, message: `Submission ${status}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** GET /api/submissions/stats — get submission statistics (system/admin only). */
+router.get('/stats', requireSystem, async (req, res, next) => {
+  try {
+    const db = await getDbAdapter();
+    const statusRows = await db.all(
+      'SELECT status, COUNT(*) AS count FROM puzzle_submissions GROUP BY status'
+    );
+
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    for (const row of statusRows) {
+      if (counts[row.status] !== undefined) {
+        counts[row.status] = row.count;
+      }
+    }
+    const total = counts.pending + counts.approved + counts.rejected;
+
+    const todaySubmitted = await db.get(
+      "SELECT COUNT(*) AS count FROM puzzle_submissions WHERE DATE(created_at) = DATE('now')"
+    );
+    const todayReviewed = await db.get(
+      "SELECT COUNT(*) AS count FROM puzzle_submissions WHERE DATE(reviewed_at) = DATE('now')"
+    );
+
+    res.json({
+      pending: counts.pending,
+      approved: counts.approved,
+      rejected: counts.rejected,
+      total,
+      today: {
+        submitted: todaySubmitted ? todaySubmitted.count : 0,
+        reviewed: todayReviewed ? todayReviewed.count : 0,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -646,6 +877,111 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     }
 
     res.json({ message: 'Submission deleted' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/submissions/bulk-review — batch approve/reject (system/admin only). */
+router.post('/bulk-review', requireSystem, async (req, res, next) => {
+  try {
+    const { ids, status, reviewerNotes } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids must be a non-empty array' });
+    }
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'status must be approved or rejected' });
+    }
+    if (reviewerNotes !== undefined && reviewerNotes !== null && typeof reviewerNotes !== 'string') {
+      return res.status(400).json({ error: 'reviewerNotes must be a string' });
+    }
+
+    const notes = typeof reviewerNotes === 'string' && reviewerNotes.trim().length > 0
+      ? reviewerNotes.trim()
+      : null;
+
+    const db = await getDbAdapter();
+    const results = [];
+
+    for (const rawId of ids) {
+      const id = Number(rawId);
+      if (!Number.isInteger(id) || id <= 0) {
+        results.push({ id: rawId, error: 'Invalid submission ID' });
+        continue;
+      }
+
+      const submission = await db.get('SELECT * FROM puzzle_submissions WHERE id = ?', [id]);
+      if (!submission) {
+        results.push({ id, error: 'Submission not found' });
+        continue;
+      }
+      if (submission.status !== 'pending') {
+        results.push({ id, error: 'Already reviewed' });
+        continue;
+      }
+
+      if (status === 'approved') {
+        const submitter = await db.get('SELECT username FROM users WHERE id = ?', [submission.user_id]);
+        const puzzleId = `community-${id}`;
+        const puzzleType = VALID_TYPES.includes(submission.type) ? submission.type : 'emoji';
+        const puzzleOptions = submission.options
+          ? submission.options
+          : JSON.stringify(generateOptions(submission.sequence, submission.answer));
+
+        try {
+          await db.transaction(async (tx) => {
+            const result = await tx.run(
+              `UPDATE puzzle_submissions
+               SET status = ?, reviewer_notes = ?, reviewed_at = CURRENT_TIMESTAMP
+               WHERE id = ? AND status = 'pending'`,
+              [status, notes, id]
+            );
+            if (result.changes === 0) {
+              throw new Error('ALREADY_REVIEWED');
+            }
+            await tx.run(
+              `INSERT INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active, submitted_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+              [
+                puzzleId,
+                submission.category,
+                submission.difficulty,
+                puzzleType,
+                submission.sequence,
+                submission.answer,
+                puzzleOptions,
+                submission.explanation,
+                submitter ? submitter.username : null,
+              ]
+            );
+          });
+          results.push({ id, status: 'approved' });
+        } catch (err) {
+          if (err && err.message === 'ALREADY_REVIEWED') {
+            results.push({ id, error: 'Already reviewed' });
+          } else {
+            logger.error({ err, submissionId: id }, 'Error during bulk approve');
+            results.push({ id, error: 'Internal error' });
+          }
+        }
+      } else {
+        // Rejected
+        const result = await db.run(
+          `UPDATE puzzle_submissions
+           SET status = ?, reviewer_notes = ?, reviewed_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND status = 'pending'`,
+          [status, notes, id]
+        );
+        if (result.changes === 0) {
+          results.push({ id, error: 'Already reviewed' });
+        } else {
+          results.push({ id, status: 'rejected' });
+        }
+      }
+    }
+
+    res.json({ results });
   } catch (err) {
     next(err);
   }
