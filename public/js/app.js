@@ -3987,6 +3987,8 @@ async function loadModerationSubmissions() {
     syncSelectAllCheckbox();
   } catch {
     container.innerHTML = '<p class="moderation-error">Network error — please try again.</p>';
+    const bh = document.querySelector('[data-bind="mod-bulk-header"]');
+    if (bh) bh.style.display = 'none';
   }
 }
 
@@ -4122,11 +4124,20 @@ async function saveModEdit(id) {
   const explanation = card.querySelector('.mod-edit-explanation')?.value || '';
   const difficulty = Number(card.querySelector('.mod-edit-difficulty')?.value || 1);
   const optionEls = card.querySelectorAll('.mod-edit-option');
-  const options = [...optionEls].map(el => el.value.trim()).filter(Boolean);
+  const options = [...optionEls].map(el => el.value.trim());
+  const filledOptionCount = options.filter(Boolean).length;
   const sequence = seqRaw.split(',').map(s => s.trim()).filter(Boolean);
 
+  if (filledOptionCount > 0 && filledOptionCount < options.length) {
+    if (statusEl) {
+      statusEl.textContent = 'Please fill in all answer options before saving.';
+      statusEl.className = 'moderation-status error';
+    }
+    return;
+  }
+
   const body = { sequence, answer, explanation, difficulty };
-  if (options.length === 4) body.options = options;
+  if (options.length === 4 && filledOptionCount === 4) body.options = options;
 
   try {
     const res = await apiFetch(`/api/submissions/${id}`, {
