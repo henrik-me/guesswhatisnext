@@ -519,8 +519,26 @@ function init() {
     }
   });
 
+  // Keyboard activation for notification items (Enter/Space → click)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const notifItem = e.target.closest('.notification-item');
+    if (notifItem && !e.target.closest('[data-action]')) {
+      e.preventDefault();
+      notifItem.click();
+    }
+  });
+
   // Wire up button actions
   document.addEventListener('click', (e) => {
+    // Handle notification item click → highlight submission
+    const notifItem = e.target.closest('.notification-item');
+    if (notifItem && !e.target.closest('[data-action]')) {
+      const subId = notifItem.dataset.submissionId;
+      if (subId) highlightSubmissionFromNotification(Number(subId));
+      return;
+    }
+
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (!action) return;
 
@@ -649,6 +667,34 @@ function init() {
         if (cancelDeleteCard) {
           const overlay = cancelDeleteCard.querySelector('.submission-delete-confirm');
           if (overlay) overlay.remove();
+        }
+        break;
+      }
+      case 'mark-notification-read': {
+        const nid = e.target.closest('[data-action="mark-notification-read"]')?.dataset.notificationId;
+        if (nid) markNotificationRead(Number(nid));
+        break;
+      }
+      case 'mark-all-notifications-read':
+        markAllNotificationsRead();
+        break;
+      case 'toggle-notifications': {
+        const toggleBtn = e.target.closest('[data-action="toggle-notifications"]');
+        const nList = document.querySelector('[data-bind="notifications-list"]');
+        if (toggleBtn && nList) {
+          const expanded = nList.style.display !== 'none';
+          nList.style.display = expanded ? 'none' : '';
+          toggleBtn.setAttribute('aria-expanded', String(!expanded));
+          const unreadCountEl =
+            toggleBtn.querySelector('[data-bind="notifications-unread-count"]')
+            || document.querySelector('[data-bind="notifications-unread-count"]');
+          if (unreadCountEl) {
+            toggleBtn.replaceChildren(
+              document.createTextNode('🔔 Notifications ('),
+              unreadCountEl,
+              document.createTextNode(expanded ? ' unread) ▸' : ' unread) ▾')
+            );
+          }
         }
         break;
       }
@@ -1158,11 +1204,14 @@ function updateHomeAuthDisplay() {
     if (submitBtn) submitBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
     if (modBtn) modBtn.style.display = (authRole === 'admin' || authRole === 'system') ? '' : 'none';
     if (mySubBtn) mySubBtn.style.display = '';
+    startNotificationPolling();
   } else {
     row.style.display = 'none';
     if (submitBtn) submitBtn.style.display = 'none';
     if (modBtn) modBtn.style.display = 'none';
     if (mySubBtn) mySubBtn.style.display = 'none';
+    stopNotificationPolling();
+    updateNotificationBadge(0);
   }
 }
 
@@ -2669,6 +2718,161 @@ function renderSubmissionCard(submission) {
 /** Cache of current user's submissions for edit pre-population. */
 let mySubmissionsCache = [];
 
+// ── Notification state ──────────────────────────────────────────────
+let notificationPollTimer = null;
+const NOTIFICATION_POLL_INTERVAL = 60000;
+
+/** Update the notification badge on the My Submissions button. */
+function updateNotificationBadge(count) {
+  const badge = document.querySelector('[data-bind="notification-badge"]');
+  if (!badge) return;
+  const btn = badge.closest('button');
+  if (count > 0) {
+    const visibleCount = count > 99 ? '99+' : String(count);
+    badge.textContent = visibleCount;
+    badge.setAttribute('aria-label', `${count} unread notifications`);
+    badge.style.display = '';
+    if (btn) btn.setAttribute('aria-label', `View My Submissions (${count} unread notifications)`);
+  } else {
+    badge.style.display = 'none';
+    badge.setAttribute('aria-label', '');
+    if (btn) btn.setAttribute('aria-label', 'View My Submissions');
+  }
+}
+
+/** Poll for unread notification count and update badge. */
+async function pollNotificationCount() {
+  if (!isLoggedIn()) return;
+  try {
+    const res = await apiFetch('/api/notifications/count');
+    if (res.ok) {
+      const data = await res.json();
+      updateNotificationBadge(data.unread_count || 0);
+    }
+  } catch { /* ignore polling errors */ }
+}
+
+/** Start the notification polling interval. */
+function startNotificationPolling() {
+  stopNotificationPolling();
+  pollNotificationCount();
+  notificationPollTimer = setInterval(pollNotificationCount, NOTIFICATION_POLL_INTERVAL);
+}
+
+/** Stop the notification polling interval. */
+function stopNotificationPolling() {
+  if (notificationPollTimer) {
+    clearInterval(notificationPollTimer);
+    notificationPollTimer = null;
+  }
+}
+
+/** Render a single notification item. */
+function renderNotificationItem(notification) {
+  const icon = notification.type === 'submission_approved' ? '✅' : '❌';
+  const readClass = notification.read ? 'notification-read' : 'notification-unread';
+  const timeAgo = formatRelativeTime(notification.created_at);
+  const subId = notification.data && notification.data.submissionId ? notification.data.submissionId : '';
+
+  let markReadBtn = '';
+  if (!notification.read) {
+    markReadBtn = `<button class="btn-link notification-mark-read" data-action="mark-notification-read" data-notification-id="${notification.id}">Mark read</button>`;
+  }
+
+  return `<div class="notification-item ${readClass}" data-notification-id="${notification.id}" data-submission-id="${subId}" role="listitem" tabindex="0" aria-label="${escapeHTML(notification.message)}">
+    <span class="notification-icon" aria-hidden="true">${icon}</span>
+    <div class="notification-content">
+      <p class="notification-message">${escapeHTML(notification.message)}</p>
+      <span class="notification-time">${escapeHTML(timeAgo)}</span>
+    </div>
+    ${markReadBtn}
+  </div>`;
+}
+
+/** Fetch and display notifications in the my-submissions screen. */
+async function loadNotifications() {
+  const section = document.querySelector('[data-bind="notifications-section"]');
+  const list = document.querySelector('[data-bind="notifications-list"]');
+  const countLabel = document.querySelector('[data-bind="notifications-unread-count"]');
+  if (!section || !list) return;
+
+  try {
+    const res = await apiFetch('/api/notifications');
+    if (!res.ok) {
+      section.style.display = 'none';
+      return;
+    }
+    const data = await res.json();
+    const notifications = data.notifications || [];
+    const unreadCount = data.unread_count || 0;
+
+    if (notifications.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = '';
+    if (countLabel) countLabel.textContent = String(unreadCount);
+    list.innerHTML = notifications.map(renderNotificationItem).join('');
+    updateNotificationBadge(unreadCount);
+  } catch {
+    section.style.display = 'none';
+  }
+}
+
+/** Mark a single notification as read via API. */
+async function markNotificationRead(notificationId) {
+  try {
+    const res = await apiFetch(`/api/notifications/${notificationId}/read`, { method: 'PUT' });
+    if (res.ok) {
+      const item = document.querySelector(`.notification-item[data-notification-id="${notificationId}"]`);
+      if (item) {
+        item.classList.remove('notification-unread');
+        item.classList.add('notification-read');
+        const btn = item.querySelector('[data-action="mark-notification-read"]');
+        if (btn) btn.remove();
+      }
+      // Update unread count
+      const countLabel = document.querySelector('[data-bind="notifications-unread-count"]');
+      if (countLabel) {
+        const current = parseInt(countLabel.textContent, 10) || 0;
+        const next = Math.max(0, current - 1);
+        countLabel.textContent = String(next);
+        updateNotificationBadge(next);
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+/** Mark all notifications as read via API. */
+async function markAllNotificationsRead() {
+  try {
+    const res = await apiFetch('/api/notifications/read-all', { method: 'PUT' });
+    if (res.ok) {
+      document.querySelectorAll('.notification-item.notification-unread').forEach(item => {
+        item.classList.remove('notification-unread');
+        item.classList.add('notification-read');
+        const btn = item.querySelector('[data-action="mark-notification-read"]');
+        if (btn) btn.remove();
+      });
+      const countLabel = document.querySelector('[data-bind="notifications-unread-count"]');
+      if (countLabel) countLabel.textContent = '0';
+      updateNotificationBadge(0);
+    }
+  } catch { /* ignore */ }
+}
+
+/** Highlight a submission card when a notification is clicked. */
+function highlightSubmissionFromNotification(submissionId) {
+  if (!submissionId) return;
+  const card = document.querySelector(`.submission-card[data-submission-id="${submissionId}"]`);
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.add('submission-highlight');
+    setTimeout(() => card.classList.remove('submission-highlight'), 2000);
+  }
+}
+
 /** Fetch and display the current user's submissions. */
 async function showMySubmissions() {
   showScreen('my-submissions');
@@ -2676,6 +2880,9 @@ async function showMySubmissions() {
   const container = document.querySelector('[data-bind="my-submissions-list"]');
   if (!container) return;
   container.innerHTML = '<p class="my-submissions-loading" role="listitem">Loading submissions…</p>';
+
+  // Load notifications in parallel
+  loadNotifications();
 
   try {
     const res = await apiFetch('/api/submissions');

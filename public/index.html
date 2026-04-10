@@ -38,7 +38,7 @@
         <div class="community-buttons">
           <button class="btn btn-secondary" data-action="browse-community" aria-label="Browse Community Puzzles">🔍 Browse Community</button>
           <button class="btn btn-secondary" data-action="create-puzzle" aria-label="Create a Puzzle">✏️ Create Puzzle</button>
-          <button class="btn btn-secondary" data-action="show-my-submissions" data-bind="my-submissions-btn" aria-label="View My Submissions" style="display:none">📋 My Submissions</button>
+          <button class="btn btn-secondary" data-action="show-my-submissions" data-bind="my-submissions-btn" aria-label="View My Submissions" style="display:none">📋 My Submissions <span class="notification-badge" data-bind="notification-badge" role="status" aria-live="polite" aria-atomic="true" style="display:none"></span></button>
         </div>
       </section>
       <footer class="home-stats">
@@ -589,6 +589,13 @@
         <h2>📋 My Submissions</h2>
         <p class="screen-description">Track your puzzle submissions and their review status</p>
       </header>
+      <div class="notifications-section" data-bind="notifications-section" style="display:none">
+        <div class="notifications-header">
+          <button class="notifications-toggle" data-action="toggle-notifications" aria-expanded="true">🔔 Notifications (<span data-bind="notifications-unread-count">0</span> unread) ▾</button>
+          <button class="btn-link notifications-mark-all" data-action="mark-all-notifications-read">Mark all as read</button>
+        </div>
+        <div class="notifications-list" data-bind="notifications-list" role="list"></div>
+      </div>
       <div class="my-submissions-list" data-bind="my-submissions-list" aria-label="Your submissions" role="list">
         <p class="my-submissions-loading">Loading submissions…</p>
       </div>

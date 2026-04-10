@@ -15,6 +15,57 @@ const logger = require('../logger');
 const router = express.Router();
 
 const VALID_TYPES = ['emoji', 'text'];
+
+/**
+ * Build a short preview of a sequence for notification messages.
+ * Shows first 3 items joined by commas with trailing ellipsis.
+ * Image submissions use a placeholder since items are data URIs.
+ */
+function sequencePreview(sequenceStr, type) {
+  if (type === 'image') return '🖼️ image puzzle';
+  try {
+    const seq = typeof sequenceStr === 'string' ? JSON.parse(sequenceStr) : sequenceStr;
+    if (!Array.isArray(seq)) return '…';
+    const items = seq.slice(0, 3).map(item => {
+      const s = String(item);
+      return s.length > 30 ? s.slice(0, 30) + '…' : s;
+    });
+    return items.join(', ') + (seq.length > 3 ? ', …' : '');
+  } catch {
+    return '…';
+  }
+}
+
+/**
+ * Create a notification for a submission review result (best-effort).
+ * Errors are logged but never propagated to the caller.
+ */
+async function createReviewNotification(db, submission, status, reviewerNotes) {
+  try {
+    const preview = sequencePreview(submission.sequence, submission.type);
+    let message;
+    let type;
+
+    if (status === 'approved') {
+      type = 'submission_approved';
+      message = `Your puzzle '${preview}' was approved! It's now live in the Community Gallery.`;
+    } else {
+      type = 'submission_rejected';
+      message = `Your puzzle '${preview}' was not approved.`;
+      if (reviewerNotes) {
+        message += ` Reviewer notes: ${reviewerNotes}`;
+      }
+    }
+
+    const data = JSON.stringify({ submissionId: submission.id });
+    await db.run(
+      'INSERT INTO notifications (user_id, type, message, data) VALUES (?, ?, ?, ?)',
+      [submission.user_id, type, message, data]
+    );
+  } catch (err) {
+    logger.warn({ err, submissionId: submission.id }, 'Failed to create review notification');
+  }
+}
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp'];
 const MAX_IMAGE_SIZE_BYTES = 500 * 1024; // 500KB decoded bytes
 const MAX_IMAGE_SEQUENCE_LENGTH = 6;
@@ -665,6 +716,8 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
         return res.status(500).json({ error: 'Internal server error' });
       }
 
+      await createReviewNotification(db, submission, status, notes);
+
       return res.json({ id, status, message: `Submission ${status}`, puzzleId });
     }
 
@@ -679,6 +732,8 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
     if (result.changes === 0) {
       return res.status(409).json({ error: 'Submission has already been reviewed' });
     }
+
+    await createReviewNotification(db, submission, status, notes);
 
     res.json({ id, status, message: `Submission ${status}` });
   } catch (err) {
@@ -941,6 +996,7 @@ router.post('/bulk-review', requireSystem, async (req, res, next) => {
             );
           });
           results.push({ id, status: 'approved' });
+          await createReviewNotification(db, submission, status, notes);
         } catch (err) {
           if (err && err.message === 'ALREADY_REVIEWED') {
             results.push({ id, error: 'Already reviewed' });
@@ -962,6 +1018,7 @@ router.post('/bulk-review', requireSystem, async (req, res, next) => {
             results.push({ id, error: 'Already reviewed' });
           } else {
             results.push({ id, status: 'rejected' });
+            await createReviewNotification(db, submission, status, notes);
           }
         } catch (e) {
           req.log?.error?.({ submissionId: id, err: e }, 'bulk-review reject failed');
