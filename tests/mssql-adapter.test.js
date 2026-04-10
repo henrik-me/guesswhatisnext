@@ -454,6 +454,28 @@ describe('rewriteSql', () => {
       );
       expect(params).toEqual([1, 40, 20]);
     });
+
+    it('rewrites numeric LIMIT (no placeholder)', () => {
+      const { sql, params } = rewriteSql(
+        'SELECT * FROM scores WHERE user_id = ? ORDER BY played_at DESC LIMIT 50',
+        [1]
+      );
+      expect(sql).toBe(
+        'SELECT * FROM scores WHERE user_id = ? ORDER BY played_at DESC OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY'
+      );
+      expect(params).toEqual([1]);
+    });
+
+    it('rewrites numeric LIMIT with numeric OFFSET', () => {
+      const { sql, params } = rewriteSql(
+        'SELECT * FROM t ORDER BY id LIMIT 10 OFFSET 20',
+        []
+      );
+      expect(sql).toBe(
+        'SELECT * FROM t ORDER BY id OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY'
+      );
+      expect(params).toEqual([]);
+    });
   });
 
   describe('RANDOM() → NEWID()', () => {

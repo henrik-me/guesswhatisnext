@@ -27,37 +27,43 @@ function rewriteSql(sqlStr, params = []) {
   let p = [...params];
 
   // 1. LIMIT / OFFSET → OFFSET / FETCH NEXT
-  //    Must handle LIMIT ? OFFSET ? first (more specific), then plain LIMIT ?
-  const limitOffsetRe = /\bORDER\s+BY\s+([\s\S]+?)\bLIMIT\s+\?\s+OFFSET\s+\?/i;
-  const limitOnlyRe = /\bORDER\s+BY\s+([\s\S]+?)\bLIMIT\s+\?/i;
+  //    Must handle LIMIT ... OFFSET ... first (more specific), then plain LIMIT ...
+  //    Support both placeholders and numeric literals so existing SQLite-style
+  //    queries like `... LIMIT 50` also work against SQL Server unchanged.
+  const limitOffsetRe = /\bORDER\s+BY\s+([\s\S]+?)\bLIMIT\s+(\?|\d+)\s+OFFSET\s+(\?|\d+)/i;
+  const limitOnlyRe = /\bORDER\s+BY\s+([\s\S]+?)\bLIMIT\s+(\?|\d+)/i;
 
   const loMatch = sql.match(limitOffsetRe);
   if (loMatch) {
-    // Find the positions of the two `?` that belong to LIMIT and OFFSET.
-    // They are the last two `?` in the statement (LIMIT ? ... OFFSET ?).
-    const qPositions = findPlaceholderPositions(sql);
-    const limitIdx = qPositions.length - 2; // LIMIT ?
-    const offsetIdx = qPositions.length - 1; // OFFSET ?
+    const limitToken = loMatch[2];
+    const offsetToken = loMatch[3];
 
-    // Rewrite SQL: keep ORDER BY part, replace LIMIT ? OFFSET ? with OFFSET/FETCH
+    // Rewrite SQL: keep ORDER BY part, replace LIMIT/OFFSET with OFFSET/FETCH.
     sql = sql.replace(
       limitOffsetRe,
-      `ORDER BY $1OFFSET ? ROWS FETCH NEXT ? ROWS ONLY`
+      (_match, orderByExpr, rewrittenLimitToken, rewrittenOffsetToken) =>
+        `ORDER BY ${orderByExpr}OFFSET ${rewrittenOffsetToken} ROWS FETCH NEXT ${rewrittenLimitToken} ROWS ONLY`
     );
 
-    // Swap params: SQLite has (LIMIT, OFFSET) but T-SQL needs (OFFSET, FETCH)
-    const newParams = [...p];
-    newParams[limitIdx] = p[offsetIdx]; // OFFSET value goes first
-    newParams[offsetIdx] = p[limitIdx]; // FETCH NEXT value goes second
-    // But after rewrite, the two `?` are now at positions limitIdx and offsetIdx
-    // in the SQL, so we just swap those entries in the array.
-    p = newParams;
+    // Swap params only when both LIMIT and OFFSET are placeholders.
+    // SQLite has (LIMIT, OFFSET) but T-SQL needs (OFFSET, FETCH NEXT).
+    if (limitToken === '?' && offsetToken === '?') {
+      const qPositions = findPlaceholderPositions(sqlStr);
+      const limitIdx = qPositions.length - 2; // LIMIT ?
+      const offsetIdx = qPositions.length - 1; // OFFSET ?
+
+      const newParams = [...p];
+      newParams[limitIdx] = p[offsetIdx]; // OFFSET value goes first
+      newParams[offsetIdx] = p[limitIdx]; // FETCH NEXT value goes second
+      p = newParams;
+    }
   } else {
     const lMatch = sql.match(limitOnlyRe);
     if (lMatch) {
       sql = sql.replace(
         limitOnlyRe,
-        'ORDER BY $1OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY'
+        (_match, orderByExpr, limitToken) =>
+          `ORDER BY ${orderByExpr}OFFSET 0 ROWS FETCH NEXT ${limitToken} ROWS ONLY`
       );
     }
   }

@@ -13,7 +13,7 @@
 
 const { execSync } = require('child_process');
 
-const SA_PASSWORD = 'GwnTest1!';
+const SA_PASSWORD = process.env.MSSQL_SA_PASSWORD || 'GwnTest1!';
 const CONNECTION = `Server=localhost,1433;Database=master;User Id=sa;Password=${SA_PASSWORD};Encrypt=false;TrustServerCertificate=true`;
 const TEST_DB = 'gwn_test';
 const TEST_CONNECTION = `Server=localhost,1433;Database=${TEST_DB};User Id=sa;Password=${SA_PASSWORD};Encrypt=false;TrustServerCertificate=true`;
