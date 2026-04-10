@@ -1,6 +1,6 @@
 # Clickstop CS11: Database Abstraction + Azure SQL Migration
 
-**Status:** 🔄 Active
+**Status:** ✅ Complete
 **Goal:** Replace the tightly-coupled SQLite layer with a clean database abstraction that supports both SQLite (local dev, staging, tests) and Azure SQL (production), eliminating SMB issues and enabling persistent production data with proper schema migrations.
 
 ## Tasks
@@ -21,10 +21,10 @@
 | CS11-64c | Configure firewall access | ✅ Done | CS11-64a | AllowAzureServices + operator IP firewall rules configured. |
 | CS11-64d | Enable MSSQL schema bootstrap | ✅ Done | CS11-64b | Removed MSSQL fail-fast gate; dialect-aware migrations, seeding, and retry logic. |
 | CS11-64e | Add GitHub `DATABASE_URL` secret | ✅ Done | CS11-64b | DATABASE_URL + AZURE_SQL_ADMIN_PASSWORD stored as GitHub secrets. |
-| CS11-65 | Production deploy | ⬜ Pending | CS11-64 | Rollup for 65a–65c: wire workflow/env, deploy, then verify production. |
+| CS11-65 | Production deploy | ✅ Done | CS11-64 | Rollup for 65a–65c: wire workflow/env, deploy, then verify production. |
 | CS11-65a | Update `prod-deploy.yml` for MSSQL | ✅ Done | CS11-64 | Wire `DATABASE_URL` into deploy + rollback paths. PR #124. |
-| CS11-65b | First production deploy | ⬜ Pending | CS11-65a | Run the first deploy with Azure SQL settings and the chosen MSSQL bootstrap process. |
-| CS11-65c | Verify production | ⬜ Pending | CS11-65b | Smoke test startup, read paths, auth, submit flow, and DB-backed writes against Azure SQL. |
+| CS11-65b | First production deploy | ✅ Done | CS11-65a | Fixed GHCR auth (token exchange), cold start timeouts, Container App stopped state. PRs #125→#128. |
+| CS11-65c | Verify production + fix CANONICAL_HOST | ✅ Done | CS11-65b | App live on Azure SQL: 6 migrations, 504 puzzles, auth working. Added CANONICAL_HOST + start guard to workflow. PR #129. |
 
 ## Design Decisions
 
