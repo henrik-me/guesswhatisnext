@@ -2725,7 +2725,7 @@ function initSubmitPuzzleForm() {
       const data = await res.json();
       if (res.ok) {
         if (status) {
-          status.innerHTML = 'Puzzle submitted for review! <button class="btn-link" data-action="show-my-submissions">View My Submissions →</button>';
+          status.innerHTML = 'Puzzle submitted for review! <button type="button" class="btn-link" data-action="show-my-submissions">View My Submissions →</button>';
           status.className = 'submit-puzzle-status success';
         }
         form.reset();

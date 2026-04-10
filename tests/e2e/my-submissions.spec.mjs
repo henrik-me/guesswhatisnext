@@ -6,11 +6,16 @@ function uniqueUser() {
   return `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Generate a unique IP to avoid rate-limit collisions across tests. */
+/** Generate a unique IP to avoid rate-limit collisions across tests and spec files. */
+const ipSeed = ((Date.now() & 0xffff) ^ Math.floor(Math.random() * 0xffff)) >>> 0;
+const ipBaseSecondOctet = (ipSeed % 254) + 1;
+const ipBaseThirdOctet = Math.floor(ipSeed / 256) % 256;
 let ipCounter = 0;
 function uniqueIP() {
-  ipCounter++;
-  return `10.0.${Math.floor(ipCounter / 256)}.${ipCounter % 256}`;
+  const offset = ipCounter++;
+  const thirdOctet = (ipBaseThirdOctet + Math.floor(offset / 254)) % 256;
+  const fourthOctet = (offset % 254) + 1;
+  return `10.${ipBaseSecondOctet}.${thirdOctet}.${fourthOctet}`;
 }
 
 /** Register a new user and return to home screen. Uses unique IP per call to avoid rate limits. */
