@@ -2589,20 +2589,20 @@ async function showMySubmissions() {
 
   const container = document.querySelector('[data-bind="my-submissions-list"]');
   if (!container) return;
-  container.innerHTML = '<p class="my-submissions-loading">Loading submissions…</p>';
+  container.innerHTML = '<p class="my-submissions-loading" role="listitem">Loading submissions…</p>';
 
   try {
     const res = await apiFetch('/api/submissions');
     const data = await res.json();
     if (!res.ok) {
-      container.innerHTML = `<p class="my-submissions-error">${escapeHTML(data.error || 'Failed to load submissions')}</p>`;
+      container.innerHTML = `<p class="my-submissions-error" role="listitem">${escapeHTML(data.error || 'Failed to load submissions')}</p>`;
       return;
     }
 
     const submissions = data.submissions || [];
     if (submissions.length === 0) {
       container.innerHTML = `
-        <div class="my-submissions-empty">
+        <div class="my-submissions-empty" role="listitem">
           <div class="my-submissions-empty-icon" aria-hidden="true">📭</div>
           <p class="my-submissions-empty-text">No submissions yet</p>
           <button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>
@@ -2612,7 +2612,7 @@ async function showMySubmissions() {
 
     container.innerHTML = submissions.map(renderSubmissionCard).join('');
   } catch {
-    container.innerHTML = '<p class="my-submissions-error">Network error — please try again.</p>';
+    container.innerHTML = '<p class="my-submissions-error" role="listitem">Network error — please try again.</p>';
   }
 }
 
