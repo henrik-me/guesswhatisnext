@@ -51,15 +51,17 @@ function validateImageDataUri(uri, label) {
   if (!ALLOWED_IMAGE_MIMES.includes(parsed.mime)) {
     return `${label}: unsupported format (${parsed.mime}). Allowed: ${ALLOWED_IMAGE_MIMES.join(', ')}`;
   }
-  // Validate base64 content
+  // Validate base64 content — strict: reject if roundtrip doesn't match
+  let buf;
   try {
-    const buf = Buffer.from(parsed.data, 'base64');
+    buf = Buffer.from(parsed.data, 'base64');
     if (buf.length === 0) return `${label}: empty image data`;
+    if (buf.toString('base64') !== parsed.data) return `${label}: malformed base64 data`;
   } catch {
     return `${label}: malformed base64 data`;
   }
-  const base64Size = parsed.data.length;
-  if (base64Size > MAX_IMAGE_SIZE_BYTES) {
+  // Compare decoded byte length (not base64 char count) to the size limit
+  if (buf.length > MAX_IMAGE_SIZE_BYTES) {
     return `${label}: image exceeds 500KB limit`;
   }
   return null;

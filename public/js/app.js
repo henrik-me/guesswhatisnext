@@ -3329,7 +3329,7 @@ function renderPuzzlePreview({ type: pType, sequence, answer, options, explanati
   const isImage = pType === 'image';
   let html = '<div class="preview-sequence">';
   for (const item of sequence) {
-    if (isImage && (typeof item === 'string') && item.startsWith('data:')) {
+    if (isImage && (typeof item === 'string') && (item.startsWith('data:') || item.startsWith('blob:'))) {
       html += `<span class="preview-sequence-item"><img src="${item}" alt="sequence item" loading="lazy"></span>`;
     } else {
       html += `<span class="preview-sequence-item">${escapeHTML(String(item))}</span>`;
@@ -3342,7 +3342,7 @@ function renderPuzzlePreview({ type: pType, sequence, answer, options, explanati
     html += '<div class="preview-options">';
     for (const opt of options) {
       const isCorrect = answer && opt === answer;
-      if (isImage && (typeof opt === 'string') && opt.startsWith('data:')) {
+      if (isImage && (typeof opt === 'string') && (opt.startsWith('data:') || opt.startsWith('blob:'))) {
         html += `<div class="preview-option-btn${isCorrect ? ' correct' : ''}"><img src="${opt}" alt="option" loading="lazy"></div>`;
       } else {
         const correctClass = answer && opt.trim() === (typeof answer === 'string' ? answer.trim() : answer);
