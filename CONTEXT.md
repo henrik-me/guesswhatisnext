@@ -33,12 +33,13 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS16 | Docs Optimization & Cleanup | ✅ Complete | 4/4 | [details](project/clickstops/done_cs16_docs-optimization.md) |
 | CS17 | Process Documentation Improvement | ✅ Complete | 4/8 | [details](project/clickstops/done_cs17_process-docs-improvement.md) |
 | CS18 | Address MSSQL Issues in Production | ✅ Complete | 10/10 | [details](project/clickstops/done_cs18_mssql-production-fixes.md) |
-| CS19 | Community Puzzle Navigation & Testing | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs19_community-puzzle-navigation.md) |
+| CS19 | Community Puzzle Navigation & Testing | ✅ Complete | 4/5 | [details](project/clickstops/done_cs19_community-puzzle-navigation.md) |
 | CS20 | Authentication UX Overhaul | ⬜ Planned | 0/6 | [details](project/clickstops/planned_cs20_auth-ux-overhaul.md) |
 | CS21 | High Score Synchronization | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs21_highscore-sync.md) |
 | CS22 | Answer Randomization Fix | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs22_answer-randomization.md) |
 | CS23 | Documentation Review | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
+| CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
 
 ---
 
@@ -101,7 +102,7 @@ Every Copilot review comment thread must be replied to with a meaningful message
 
 ## Clickstop CS19 — Community Puzzle Navigation & Testing
 
-Move community puzzle submission from the home screen into a dedicated sub-page, properly gate behind `submitPuzzle` feature flag, and add Docker MSSQL E2E tests. See [full details](project/clickstops/planned_cs19_community-puzzle-navigation.md).
+✅ Complete. Community puzzle submission moved to dedicated sub-page, feature-flag gating applied, E2E tests updated for new navigation, home screen cleaned up. CS19-4 (Docker MSSQL E2E) deferred to CS25. Merged in PR [#139](https://github.com/henrik-me/guesswhatisnext/pull/139). See [archive](project/clickstops/done_cs19_community-puzzle-navigation.md).
 
 ---
 
@@ -120,6 +121,12 @@ Fix high-score display to sync from backend on login (not just localStorage). Re
 ## Clickstop CS22 — Answer Randomization Fix
 
 Fix bias where 75% of puzzles have correct answer as first option. Add Fisher-Yates shuffle before display, fix submission form bias. See [full details](project/clickstops/planned_cs22_answer-randomization.md).
+
+---
+
+## Clickstop CS25 — MSSQL E2E Testing
+
+E2E browser tests against Docker MSSQL stack. Deferred from CS19-4. See [full details](project/clickstops/planned_cs25_mssql-e2e-testing.md).
 
 ---
 
