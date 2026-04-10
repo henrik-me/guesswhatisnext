@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | CS15-90 | Unified dev server script | ✅ Done | — | PR #88. `scripts/dev-server.js`: HTTPS + log capture by default. Replaces standalone `log-wrapper.js`. npm scripts: `dev:full`, `dev:log`. |
 | CS15-91 | E2E log capture integration | ✅ Done | CS15-90 | PR #94. Playwright webServer uses `node scripts/dev-server.js --output` to capture logs during test runs. |
-| CS15-92 | Log assertion tests | ✅ Done | CS15-91 | PR #94. `tests/e2e/global-teardown.mjs` — post-test assertion: no ERROR/FATAL entries during clean e2e run. |
+| CS15-92 | Log assertion tests | ✅ Done | CS15-91 | PR #94. `tests/e2e/global-teardown.mjs` — post-test assertion: no ERROR/FATAL entries during clean E2E run. |
 | CS15-93 | CI log artifact upload | ✅ Done | CS15-92 | PR #94. `ci.yml` uploads `test-results/` on failure; teardown copies `server.log` there. |
 | CS15-94 | Production log format validation | ✅ Done | CS15-91 | PR #93. `tests/log-format.test.js` — 4 tests for JSON structure: required fields, no pretty-print leaking. |
 
@@ -31,4 +31,4 @@ No clickstop-specific design decision table yet.
 
 ## Notes
 
-All implementation merged across three PRs: #88 (unified dev server), #93 (log format validation), #94 (e2e log capture, assertions, CI artifact upload).
+All implementation merged across three PRs: #88 (unified dev server), #93 (log format validation), #94 (E2E log capture, assertions, CI artifact upload).
