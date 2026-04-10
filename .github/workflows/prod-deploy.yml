@@ -51,8 +51,22 @@ jobs:
         run: |
           IMAGE_PATH="${IMAGE_NAME#${REGISTRY}/}"
           echo "Checking for image $IMAGE_NAME:${{ inputs.image-tag }}"
-          RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' \
+
+          # GHCR requires Docker Registry V2 token exchange:
+          # 1. Authenticate with token service to get bearer token
+          # 2. Use bearer token to query manifests
+          TOKEN=$(curl -s --connect-timeout 10 --max-time 30 \
             -u "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
+            "https://${REGISTRY}/token?service=${REGISTRY}&scope=repository:${IMAGE_PATH}:pull" \
+            | jq -r '.token // empty')
+
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Failed to obtain GHCR auth token. Verify the workflow has packages:read permission."
+            exit 1
+          fi
+
+          RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
             "https://${REGISTRY}/v2/${IMAGE_PATH}/manifests/${{ inputs.image-tag }}")
           if [ "$RESPONSE" = "200" ]; then
