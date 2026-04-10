@@ -32,6 +32,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS18 | Address MSSQL Issues in Production | 🔄 Active | 0/6 | [details](project/clickstops/active_cs18_mssql-production-fixes.md) |
 | CS15 | Dev Tooling & Log Assertions | ✅ Complete | 5/5 | [details](project/clickstops/done_cs15_dev-tooling-log-assertions.md) |
 | CS16 | Docs Optimization & Cleanup | ✅ Complete | 4/4 | [details](project/clickstops/done_cs16_docs-optimization.md) |
+| CS17 | Process Documentation Improvement | ✅ Complete | 4/8 | [details](project/clickstops/done_cs17_process-docs-improvement.md) |
 
 ---
 
