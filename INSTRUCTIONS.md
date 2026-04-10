@@ -639,7 +639,7 @@ WORKBOARD.md is the real-time coordination file for multi-agent work. It tracks 
 **Direct commit on main (no PR required):**
 Unlike other project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. **The push is critical** — a local-only commit provides zero coordination value to other agents. Always commit and push together (see the multi-line commit format with `Agent:` trailer in § Commit Convention for workboard updates below). This enables fast task assignment without PR review overhead. The workboard must be updated immediately when:
 - An orchestrator claims a task (add to Active Work)
-- A task completes or is blocked (move between sections)
+- A task completes (remove from Active Work)
 - An orchestrator starts or stops a session (update Orchestrators table)
 
 **Session naming:** After updating the workboard to claim a task, prompt the user to rename the session so it's identifiable at a glance. Format: `[{agent-id}]-{task-id}: {clickstop name}`. Example:
