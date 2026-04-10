@@ -468,12 +468,13 @@ This is a performance optimization, not required for initial implementation.
    - Note: admin edit (CS14-84) uses the same endpoint path but different auth (`requireSystem`). Implementation approach: single route handler that checks if user is admin/system OR owner. Edits remain **pending-only** for both paths; the admin/system "broader access" here means they may edit **any user's pending submission**, whereas a normal user may edit **only their own pending submission**. Admins/system must **not** be allowed to edit approved or rejected submissions via this endpoint.
 
 2. **New `DELETE /api/submissions/:id`:**
-   - Auth: `requireAuth` + ownership check
+   - Auth: `requireAuth` + in-handler authorization (admin/system role OR owner) — same shared pattern as PUT
    - Behavior: **hard delete** (not soft delete) — community submissions are proposals, not permanent records. Approved submissions that already created puzzles: the puzzle remains (it's a separate entity), only the submission record is deleted.
    - Constraints:
      - User can delete own submissions in **any** status (pending, approved, rejected)
+     - Admin/system users can delete any user's submission in any status
+     - Non-owner, non-admin users get 403
      - Feature flag: NOT required for deletion (users should always be able to clean up their submissions)
-     - Admins can delete any submission via `requireSystem` OR ownership check
    - Response: `{ message: "Submission deleted" }` with 200 status
    - If submission doesn't exist: 404
 
