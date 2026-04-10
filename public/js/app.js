@@ -1080,6 +1080,7 @@ function logout() {
   authToken = null;
   authUsername = null;
   authRole = null;
+  authReturnScreen = null;
   resetFeatureFlags();
   localStorage.removeItem('gwn_auth_token');
   localStorage.removeItem('gwn_auth_username');
