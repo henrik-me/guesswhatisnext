@@ -173,7 +173,8 @@ jobs:
               echo "::error::CANONICAL_HOST could not be derived from PROD_URL"
               exit 1
             fi
-            echo "Using CANONICAL_HOST=$CANONICAL_HOST"
+            echo "::add-mask::$CANONICAL_HOST"
+            echo "CANONICAL_HOST derived successfully"
 
             trap 'rm -f /tmp/deploy-template.yaml' EXIT
             cat > /tmp/deploy-template.yaml <<YAMLEOF
