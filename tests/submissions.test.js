@@ -872,4 +872,15 @@ describe('POST /api/submissions/bulk-review', () => {
 
     expect(res.status).toBe(403);
   });
+
+  test('rejects batch exceeding size limit', async () => {
+    const largeIds = Array.from({ length: 51 }, (_, i) => i + 1);
+    const res = await getAgent()
+      .post('/api/submissions/bulk-review')
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ ids: largeIds, status: 'approved' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/maximum/i);
+  });
 });

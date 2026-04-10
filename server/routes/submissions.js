@@ -274,6 +274,9 @@ function validatePartialSubmission(body) {
     }
   }
   if (answer !== undefined) {
+    if (answer === null) {
+      return 'answer is required';
+    }
     const trimmedAnswer = typeof answer === 'string' ? answer.trim() : String(answer);
     if (trimmedAnswer.length === 0) {
       return 'answer is required';
@@ -464,11 +467,18 @@ router.get('/stats', requireSystem, async (req, res, next) => {
     }
     const total = counts.pending + counts.approved + counts.rejected;
 
+    // Use parameterized day boundaries for dialect-agnostic queries
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const startOfNextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+
     const todaySubmitted = await db.get(
-      "SELECT COUNT(*) AS count FROM puzzle_submissions WHERE DATE(created_at) = DATE('now')"
+      'SELECT COUNT(*) AS count FROM puzzle_submissions WHERE created_at >= ? AND created_at < ?',
+      [startOfDay, startOfNextDay]
     );
     const todayReviewed = await db.get(
-      "SELECT COUNT(*) AS count FROM puzzle_submissions WHERE DATE(reviewed_at) = DATE('now')"
+      'SELECT COUNT(*) AS count FROM puzzle_submissions WHERE reviewed_at >= ? AND reviewed_at < ?',
+      [startOfDay, startOfNextDay]
     );
 
     res.json({
@@ -550,8 +560,31 @@ router.put('/:id', requireAuth, async (req, res, next) => {
       params.push(type);
     }
     if (options !== undefined) {
+      const normalizedOptions = options === null ? null : options.map(o => o.trim());
+      const effectiveAnswer = answer !== undefined
+        ? (typeof answer === 'string' ? answer.trim() : String(answer))
+        : submission.answer;
+
+      if (
+        normalizedOptions !== null &&
+        typeof effectiveAnswer === 'string' &&
+        effectiveAnswer.length > 0 &&
+        !normalizedOptions.includes(effectiveAnswer)
+      ) {
+        return res.status(400).json({ error: 'Options must include the correct answer' });
+      }
+
       updates.push('options = ?');
-      params.push(options === null ? null : JSON.stringify(options.map(o => o.trim())));
+      params.push(normalizedOptions === null ? null : JSON.stringify(normalizedOptions));
+    }
+
+    // Cross-validate: if only answer changes, check it still fits existing options
+    if (answer !== undefined && options === undefined && submission.options) {
+      const existingOptions = JSON.parse(submission.options);
+      const newAnswer = typeof answer === 'string' ? answer.trim() : String(answer);
+      if (!existingOptions.includes(newAnswer)) {
+        return res.status(400).json({ error: 'New answer must be included in existing options, or update options too' });
+      }
     }
 
     if (updates.length === 0) {
@@ -887,8 +920,13 @@ router.post('/bulk-review', requireSystem, async (req, res, next) => {
   try {
     const { ids, status, reviewerNotes } = req.body;
 
+    const MAX_BULK_SIZE = 50;
+
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'ids must be a non-empty array' });
+    }
+    if (ids.length > MAX_BULK_SIZE) {
+      return res.status(400).json({ error: `Maximum ${MAX_BULK_SIZE} submissions per bulk operation` });
     }
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ error: 'status must be approved or rejected' });

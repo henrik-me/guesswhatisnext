@@ -3934,13 +3934,15 @@ async function loadModerationSubmissions() {
     const data = await res.json();
     if (!res.ok) {
       container.innerHTML = `<p class="moderation-error">${escapeHTML(data.error || 'Failed to load')}</p>`;
-      document.querySelector('[data-bind="mod-bulk-header"]').style.display = 'none';
+      const bh = document.querySelector('[data-bind="mod-bulk-header"]');
+      if (bh) bh.style.display = 'none';
       return;
     }
     const submissions = data.submissions || [];
     if (submissions.length === 0) {
       container.innerHTML = '<p class="moderation-empty">No pending submissions.</p>';
-      document.querySelector('[data-bind="mod-bulk-header"]').style.display = 'none';
+      const bh = document.querySelector('[data-bind="mod-bulk-header"]');
+      if (bh) bh.style.display = 'none';
       return;
     }
 
