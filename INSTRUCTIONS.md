@@ -620,7 +620,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 #### Clickstop Completion Checklist
 
 Every clickstop must satisfy ALL of these before marking complete:
-- [ ] All tasks done and merged
+- [ ] All tasks done and merged (or deferred — see Deferred work policy below)
 - [ ] README updated (if user-facing changes)
 - [ ] INSTRUCTIONS.md updated (if architectural/workflow changes)
 - [ ] CONTEXT.md updated with final state
