@@ -17,7 +17,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS11-65 | Database Migration | Production deploy (65a–65c) | yoga-gwn | wt-1 | yoga-gwn/cs11-65a-prod-deploy-mssql | — | 2026-04-10 |
+| CS11-65 | Database Migration | Production deploy — 65a✅ merged (#124), fixing GHCR auth for deploy | yoga-gwn | wt-1 | yoga-gwn/cs11-65b-fix-ghcr-auth | — | 2026-04-10 |
 | CS14-84 | Community Puzzle UX | Wave 3: Admin moderation (Copilot review) | yoga-gwn-c3 | wt-2 | yoga-gwn-c3/cs14-84-moderation | — | 2026-04-10 |
 
 ## Queued (ready, no dependencies blocking)
