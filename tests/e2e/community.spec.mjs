@@ -7,21 +7,32 @@ function uniqueUser() {
 }
 
 test.describe('Community Discovery & Onboarding', () => {
-  test('community section is visible on home screen when logged out', async ({ page }) => {
+  test('community puzzles button is visible on home screen', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('#community-section')).toBeVisible();
+    await expect(page.locator('[data-action="show-community"]')).toBeVisible();
+  });
+
+  test('community screen shows browse and create buttons', async ({ page }) => {
+    await page.goto('/');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await expect(page.locator('[data-action="browse-community"]')).toBeVisible();
-    await expect(page.locator('[data-action="create-puzzle"]')).toBeVisible();
+    // Create button is visible (redirects to auth when logged out)
+    await expect(page.locator('[data-bind="community-create-btn"]')).toBeVisible();
   });
 
   test('clicking create puzzle while logged out redirects to auth', async ({ page }) => {
     await page.goto('/');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="create-puzzle"]');
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
   });
 
   test('browse community button opens gallery screen', async ({ page }) => {
     await page.goto('/');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
     await expect(page.locator('[data-screen="community-gallery"] h2')).toContainText('Community Puzzles');
@@ -31,8 +42,10 @@ test.describe('Community Discovery & Onboarding', () => {
     const username = uniqueUser();
     const password = 'testpass123';
 
-    // Navigate with feature flag, click create puzzle → redirected to auth
+    // Navigate with feature flag, go to community, click create puzzle → redirected to auth
     await page.goto('/?ff_submit_puzzle=true');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="create-puzzle"]');
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
 
@@ -60,12 +73,12 @@ test.describe('Community Discovery & Onboarding', () => {
     await page.click('[data-action="dismiss-onboarding"]');
     await expect(page.locator('#submit-onboarding')).toBeHidden();
 
-    // Navigate away and come back — should stay hidden (persisted)
-    await page.click('[data-screen="submit-puzzle"] [data-action="go-home"]');
-    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
-    await expect(page.locator('#community-section')).toBeVisible();
+    // Navigate back to community, then home
+    await page.click('[data-screen="submit-puzzle"] [data-action="go-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
 
-    await page.click('[data-action="show-submit-puzzle"]');
+    // Navigate to create puzzle again from community
+    await page.click('[data-action="create-puzzle"]');
     await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
     await expect(page.locator('#submit-onboarding')).toBeHidden();
   });
@@ -93,6 +106,8 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
     }, { t: token, u: username });
 
     await page.goto('/?ff_submit_puzzle=true');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="create-puzzle"]');
     await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
   });
@@ -188,6 +203,8 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
 test.describe('Community Gallery', () => {
   test('gallery screen shows empty state when no community puzzles', async ({ page }) => {
     await page.goto('/');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
 
@@ -197,6 +214,7 @@ test.describe('Community Gallery', () => {
 
   test('gallery has filter controls', async ({ page }) => {
     await page.goto('/');
+    await page.click('[data-action="show-community"]');
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
 
@@ -210,13 +228,14 @@ test.describe('Community Gallery', () => {
     await expect(page.locator('[data-gallery-difficulty="3"]')).toBeVisible();
   });
 
-  test('gallery back button returns to home', async ({ page }) => {
+  test('gallery back button returns to community screen', async ({ page }) => {
     await page.goto('/');
+    await page.click('[data-action="show-community"]');
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
 
-    await page.click('#screen-community-gallery [data-action="go-home"]');
-    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
+    await page.click('#screen-community-gallery [data-action="go-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
   });
 
   test('gallery renders cards when community puzzles exist', async ({ page, request }) => {
@@ -254,8 +273,9 @@ test.describe('Community Gallery', () => {
     });
     expect(reviewRes.ok()).toBeTruthy();
 
-    // Now visit the gallery
+    // Now visit the gallery via community screen
     await page.goto('/');
+    await page.click('[data-action="show-community"]');
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
 
