@@ -112,4 +112,152 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
     await expect(page.locator('.my-submissions-empty')).toBeVisible();
   });
+
+  test('edit a pending submission inline', async ({ page, request }) => {
+    const username = uniqueUser();
+    const password = 'testpass123';
+    const ip = uniqueIP();
+
+    // Register via API
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const { token } = await regRes.json();
+
+    // Create a submission via API
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['🌑', '🌒', '🌓'],
+        answer: '🌔',
+        explanation: 'Moon phases in order',
+        difficulty: 2,
+        category: 'Nature',
+      },
+      headers: { Authorization: `Bearer ${token}`, 'X-Forwarded-For': ip },
+    });
+    expect(subRes.ok()).toBeTruthy();
+
+    // Inject auth and navigate to my-submissions
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    await page.goto('/?ff_submit_puzzle=true');
+    await page.click('[data-bind="my-submissions-btn"]');
+    await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+    await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
+
+    // Click edit button
+    await page.click('[data-action="edit-submission"]');
+    await expect(page.locator('.submission-edit-form')).toBeVisible({ timeout: 3000 });
+
+    // Change category from Nature to Music (visible on card after save)
+    await page.selectOption('.edit-category', 'Music');
+    await page.click('[data-action="save-edit-submission"]');
+
+    // After save, submissions list reloads with updated category
+    await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
+    await expect(page.locator('.submission-edit-form')).toHaveCount(0);
+    await expect(page.locator('.submission-category-badge')).toContainText('Music');
+  });
+
+  test('delete a submission with confirmation', async ({ page, request }) => {
+    const username = uniqueUser();
+    const password = 'testpass123';
+    const ip = uniqueIP();
+
+    // Register via API
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const { token } = await regRes.json();
+
+    // Create a submission via API
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['🌱', '🌿', '🌳'],
+        answer: '🌲',
+        explanation: 'Plants growing',
+        difficulty: 1,
+        category: 'Nature',
+      },
+      headers: { Authorization: `Bearer ${token}`, 'X-Forwarded-For': ip },
+    });
+    expect(subRes.ok()).toBeTruthy();
+
+    // Inject auth and navigate to my-submissions
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    await page.goto('/');
+    await page.click('[data-bind="my-submissions-btn"]');
+    await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+    await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
+
+    // Click delete button — confirmation should appear
+    await page.click('[data-action="delete-submission"]');
+    await expect(page.locator('.submission-delete-confirm')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.delete-confirm-text')).toContainText('cannot be undone');
+
+    // Confirm deletion
+    await page.click('[data-action="confirm-delete-submission"]');
+
+    // Card should be removed
+    await expect(page.locator('.submission-card')).toHaveCount(0, { timeout: 5000 });
+    await expect(page.locator('.my-submissions-empty')).toBeVisible();
+  });
+
+  test('cancel delete does not remove the submission', async ({ page, request }) => {
+    const username = uniqueUser();
+    const password = 'testpass123';
+    const ip = uniqueIP();
+
+    // Register via API
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const { token } = await regRes.json();
+
+    // Create a submission via API
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['🐕', '🐈', '🐟'],
+        answer: '🐦',
+        explanation: 'Common pets',
+        difficulty: 1,
+        category: 'Nature',
+      },
+      headers: { Authorization: `Bearer ${token}`, 'X-Forwarded-For': ip },
+    });
+    expect(subRes.ok()).toBeTruthy();
+
+    // Inject auth and navigate to my-submissions
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    await page.goto('/');
+    await page.click('[data-bind="my-submissions-btn"]');
+    await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+    await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
+
+    // Click delete, then cancel
+    await page.click('[data-action="delete-submission"]');
+    await expect(page.locator('.submission-delete-confirm')).toBeVisible({ timeout: 3000 });
+    await page.click('[data-action="cancel-delete-submission"]');
+
+    // Confirmation should be gone, card still there
+    await expect(page.locator('.submission-delete-confirm')).toHaveCount(0);
+    await expect(page.locator('.submission-card')).toHaveCount(1);
+  });
 });

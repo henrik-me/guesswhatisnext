@@ -619,6 +619,39 @@ function init() {
         }
         break;
       }
+      case 'edit-submission': {
+        const editId = e.target.closest('[data-action="edit-submission"]')?.dataset.submissionId;
+        if (editId) openEditSubmission(Number(editId));
+        break;
+      }
+      case 'cancel-edit-submission': {
+        const cancelCard = e.target.closest('.submission-card');
+        if (cancelCard) cancelEditSubmission(cancelCard);
+        break;
+      }
+      case 'save-edit-submission': {
+        const saveCard = e.target.closest('.submission-card');
+        if (saveCard) saveEditSubmission(saveCard);
+        break;
+      }
+      case 'delete-submission': {
+        const deleteId = e.target.closest('[data-action="delete-submission"]')?.dataset.submissionId;
+        if (deleteId) showDeleteConfirmation(Number(deleteId));
+        break;
+      }
+      case 'confirm-delete-submission': {
+        const confirmId = e.target.closest('[data-action="confirm-delete-submission"]')?.dataset.submissionId;
+        if (confirmId) confirmDeleteSubmission(Number(confirmId));
+        break;
+      }
+      case 'cancel-delete-submission': {
+        const cancelDeleteCard = e.target.closest('.submission-card');
+        if (cancelDeleteCard) {
+          const overlay = cancelDeleteCard.querySelector('.submission-delete-confirm');
+          if (overlay) overlay.remove();
+        }
+        break;
+      }
       case 'toggle-onboarding':
         toggleOnboarding();
         break;
@@ -2609,6 +2642,14 @@ function renderSubmissionCard(submission) {
       </div>`;
   }
 
+  // Action buttons: pending + feature enabled → Edit + Delete; otherwise → Delete only
+  let actionsHtml = '<div class="submission-card-actions">';
+  if (safeStatus === 'pending' && isFeatureEnabled('submitPuzzle')) {
+    actionsHtml += `<button class="btn btn-sm btn-secondary" data-action="edit-submission" data-submission-id="${safeId}">✏️ Edit</button>`;
+  }
+  actionsHtml += `<button class="btn btn-sm btn-danger" data-action="delete-submission" data-submission-id="${safeId}">🗑️ Delete</button>`;
+  actionsHtml += '</div>';
+
   return `<div class="submission-card" data-submission-id="${safeId}" role="listitem">
     <div class="submission-card-header">
       <span class="submission-sequence-preview">${preview}</span>
@@ -2620,8 +2661,12 @@ function renderSubmissionCard(submission) {
     </div>
     <div class="submission-card-dates">${datesHtml}</div>
     ${notesHtml}
+    ${actionsHtml}
   </div>`;
 }
+
+/** Cache of current user's submissions for edit pre-population. */
+let mySubmissionsCache = [];
 
 /** Fetch and display the current user's submissions. */
 async function showMySubmissions() {
@@ -2640,6 +2685,7 @@ async function showMySubmissions() {
     }
 
     const submissions = data.submissions || [];
+    mySubmissionsCache = submissions;
     if (submissions.length === 0) {
       container.innerHTML = `
         <div class="my-submissions-empty" role="listitem">
@@ -2653,6 +2699,233 @@ async function showMySubmissions() {
     container.innerHTML = submissions.map(renderSubmissionCard).join('');
   } catch {
     container.innerHTML = '<p class="my-submissions-error" role="listitem">Network error — please try again.</p>';
+  }
+}
+
+/** Derive category list from the existing submit-puzzle select element. */
+function getEditCategories() {
+  const select = document.querySelector('#sp-category');
+  if (!select) return [];
+  return Array.from(select.options)
+    .map(o => o.value)
+    .filter(v => v && v !== '');
+}
+
+/** Open an inline edit form inside the submission card. */
+function openEditSubmission(submissionId) {
+  const submission = mySubmissionsCache.find(s => s.id === submissionId);
+  if (!submission) return;
+
+  const card = document.querySelector(`.submission-card[data-submission-id="${submissionId}"]`);
+  if (!card) return;
+
+  // Already editing — don't open again
+  if (card.querySelector('.submission-edit-form')) return;
+
+  const seq = Array.isArray(submission.sequence) ? submission.sequence.join(', ') : '';
+  const opts = Array.isArray(submission.options) ? submission.options : ['', '', '', ''];
+  const categoryOptions = getEditCategories().map(cat =>
+    `<option value="${escapeHTML(cat)}"${cat === submission.category ? ' selected' : ''}>${escapeHTML(cat)}</option>`
+  ).join('');
+  const typeEmoji = submission.type === 'text' ? '' : ' selected';
+  const typeText = submission.type === 'text' ? ' selected' : '';
+
+  const formHtml = `
+    <div class="submission-edit-form">
+      <div class="form-group">
+        <label for="edit-type-${submissionId}">Type</label>
+        <select id="edit-type-${submissionId}" class="edit-type">
+          <option value="emoji"${typeEmoji}>Emoji</option>
+          <option value="text"${typeText}>Text</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit-category-${submissionId}">Category</label>
+        <select id="edit-category-${submissionId}" class="edit-category">${categoryOptions}</select>
+      </div>
+      <div class="form-group">
+        <label for="edit-difficulty-${submissionId}">Difficulty</label>
+        <select id="edit-difficulty-${submissionId}" class="edit-difficulty">
+          <option value="1"${submission.difficulty === 1 ? ' selected' : ''}>Easy</option>
+          <option value="2"${submission.difficulty === 2 ? ' selected' : ''}>Medium</option>
+          <option value="3"${submission.difficulty === 3 ? ' selected' : ''}>Hard</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit-sequence-${submissionId}">Sequence (comma-separated)</label>
+        <input type="text" id="edit-sequence-${submissionId}" class="edit-sequence" value="${escapeHTML(seq)}">
+      </div>
+      <div class="form-group">
+        <label for="edit-answer-${submissionId}">Answer</label>
+        <input type="text" id="edit-answer-${submissionId}" class="edit-answer" value="${escapeHTML(String(submission.answer || ''))}">
+      </div>
+      <div class="form-group">
+        <label>Options (4 choices)</label>
+        <div class="edit-options">
+          <input type="text" class="edit-option" data-idx="0" value="${escapeHTML(opts[0] || '')}" placeholder="Option 1" aria-label="Option 1">
+          <input type="text" class="edit-option" data-idx="1" value="${escapeHTML(opts[1] || '')}" placeholder="Option 2" aria-label="Option 2">
+          <input type="text" class="edit-option" data-idx="2" value="${escapeHTML(opts[2] || '')}" placeholder="Option 3" aria-label="Option 3">
+          <input type="text" class="edit-option" data-idx="3" value="${escapeHTML(opts[3] || '')}" placeholder="Option 4" aria-label="Option 4">
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="edit-explanation-${submissionId}">Explanation</label>
+        <textarea id="edit-explanation-${submissionId}" class="edit-explanation" rows="2">${escapeHTML(submission.explanation || '')}</textarea>
+      </div>
+      <div class="submission-edit-actions">
+        <button class="btn btn-primary btn-sm" data-action="save-edit-submission">Save Changes</button>
+        <button class="btn btn-secondary btn-sm" data-action="cancel-edit-submission">Cancel</button>
+      </div>
+      <p class="submission-edit-status" role="status" aria-live="polite"></p>
+    </div>`;
+
+  // Hide the card body and show the edit form
+  const cardContent = card.querySelectorAll(':scope > :not(.submission-edit-form)');
+  cardContent.forEach(el => el.style.display = 'none');
+  card.insertAdjacentHTML('beforeend', formHtml);
+}
+
+/** Cancel inline edit and restore the card. */
+function cancelEditSubmission(card) {
+  const form = card.querySelector('.submission-edit-form');
+  if (form) form.remove();
+  const cardContent = card.querySelectorAll(':scope > *');
+  cardContent.forEach(el => { el.style.display = ''; });
+}
+
+/** Save inline edit and refresh the card. */
+async function saveEditSubmission(card) {
+  const submissionId = card.dataset.submissionId;
+  const form = card.querySelector('.submission-edit-form');
+  if (!form || !submissionId) return;
+
+  const status = form.querySelector('.submission-edit-status');
+  const sequenceRaw = form.querySelector('.edit-sequence').value.trim();
+  const answer = form.querySelector('.edit-answer').value.trim();
+  const explanation = form.querySelector('.edit-explanation').value.trim();
+  const difficulty = parseInt(form.querySelector('.edit-difficulty').value, 10);
+  const category = form.querySelector('.edit-category').value;
+  const type = form.querySelector('.edit-type').value;
+
+  const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const optionInputs = form.querySelectorAll('.edit-option');
+  const optionVals = [];
+  optionInputs.forEach(el => optionVals.push(el.value.trim()));
+  const nonEmpty = optionVals.filter(Boolean);
+  // Require all 4 or none — reject partial fills
+  if (nonEmpty.length > 0 && nonEmpty.length < 4) {
+    if (status) { status.textContent = 'Please fill in all 4 options or leave them all empty.'; status.className = 'submission-edit-status error'; }
+    return;
+  }
+  // If all 4 filled: use them. If all empty and submission had options: send null to clear. Otherwise: omit.
+  const cachedSub = mySubmissionsCache.find(s => String(s.id) === submissionId);
+  const hadOptions = cachedSub && Array.isArray(cachedSub.options) && cachedSub.options.length > 0;
+  const options = nonEmpty.length === 4 ? optionVals : (nonEmpty.length === 0 && hadOptions ? null : undefined);
+
+  if (sequence.length < 3) {
+    if (status) { status.textContent = 'Sequence must have at least 3 items.'; status.className = 'submission-edit-status error'; }
+    return;
+  }
+  if (!answer) {
+    if (status) { status.textContent = 'Answer is required.'; status.className = 'submission-edit-status error'; }
+    return;
+  }
+  if (!explanation) {
+    if (status) { status.textContent = 'Explanation is required.'; status.className = 'submission-edit-status error'; }
+    return;
+  }
+  // If all 4 options are provided, validate answer is included
+  if (options && !options.includes(answer)) {
+    if (status) { status.textContent = 'Options must include the answer.'; status.className = 'submission-edit-status error'; }
+    return;
+  }
+
+  const payload = { sequence, answer, explanation, difficulty, category, type };
+  if (options !== undefined) payload.options = options;
+
+  try {
+    const res = await apiFetch(getFeatureAwarePath(`/api/submissions/${submissionId}`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      // Refresh submissions list to show updated card
+      showMySubmissions();
+    } else {
+      if (status) { status.textContent = data.error || 'Save failed.'; status.className = 'submission-edit-status error'; }
+    }
+  } catch {
+    if (status) { status.textContent = 'Network error — please try again.'; status.className = 'submission-edit-status error'; }
+  }
+}
+
+/** Show a delete confirmation overlay inside the card. */
+function showDeleteConfirmation(submissionId) {
+  const card = document.querySelector(`.submission-card[data-submission-id="${submissionId}"]`);
+  if (!card) return;
+
+  // Don't show if already visible
+  if (card.querySelector('.submission-delete-confirm')) return;
+
+  const submission = mySubmissionsCache.find(s => s.id === submissionId);
+  const approvedNote = submission && submission.status === 'approved'
+    ? '<p class="delete-approved-note">The puzzle will remain live even if you delete this submission.</p>'
+    : '';
+
+  const confirmHtml = `
+    <div class="submission-delete-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-label-${submissionId}">
+      <p id="delete-label-${submissionId}" class="delete-confirm-text">Delete this submission? This cannot be undone.</p>
+      ${approvedNote}
+      <div class="delete-confirm-actions">
+        <button class="btn btn-danger btn-sm" data-action="confirm-delete-submission" data-submission-id="${submissionId}">Delete</button>
+        <button class="btn btn-secondary btn-sm" data-action="cancel-delete-submission">Cancel</button>
+      </div>
+    </div>`;
+
+  card.insertAdjacentHTML('beforeend', confirmHtml);
+  // Focus the cancel button for keyboard accessibility
+  const cancelBtn = card.querySelector('[data-action="cancel-delete-submission"]');
+  if (cancelBtn) cancelBtn.focus();
+}
+
+/** Execute the deletion and remove the card with animation. */
+async function confirmDeleteSubmission(submissionId) {
+  const card = document.querySelector(`.submission-card[data-submission-id="${submissionId}"]`);
+  if (!card) return;
+
+  try {
+    const res = await apiFetch(`/api/submissions/${submissionId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      const removeCard = () => {
+        card.remove();
+        mySubmissionsCache = mySubmissionsCache.filter(s => s.id !== submissionId);
+        // If no cards remain, show empty state
+        const container = document.querySelector('[data-bind="my-submissions-list"]');
+        if (container && !container.querySelector('.submission-card')) {
+          container.innerHTML = `
+            <div class="my-submissions-empty" role="listitem">
+              <div class="my-submissions-empty-icon" aria-hidden="true">📭</div>
+              <p class="my-submissions-empty-text">No submissions yet</p>
+              <button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>
+            </div>`;
+        }
+      };
+      card.classList.add('card-removing');
+      card.addEventListener('animationend', removeCard, { once: true });
+      // Fallback: remove after 500ms if animation doesn't fire (e.g., reduced motion)
+      setTimeout(() => { if (card.parentNode) removeCard(); }, 500);
+    } else {
+      showToast(data.error || 'Delete failed');
+      const overlay = card.querySelector('.submission-delete-confirm');
+      if (overlay) overlay.remove();
+    }
+  } catch {
+    showToast('Network error — please try again');
+    const overlay = card.querySelector('.submission-delete-confirm');
+    if (overlay) overlay.remove();
   }
 }
 
