@@ -38,6 +38,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS21 | High Score Synchronization | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs21_highscore-sync.md) |
 | CS22 | Answer Randomization Fix | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs22_answer-randomization.md) |
 | CS23 | Documentation Review | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs23_docs-review.md) |
+| CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
 
 ---
 
@@ -119,6 +120,12 @@ Fix high-score display to sync from backend on login (not just localStorage). Re
 ## Clickstop CS22 — Answer Randomization Fix
 
 Fix bias where 75% of puzzles have correct answer as first option. Add Fisher-Yates shuffle before display, fix submission form bias. See [full details](project/clickstops/planned_cs22_answer-randomization.md).
+
+---
+
+## Clickstop CS24 — Custom Domain (gwn.metzger.dk)
+
+Configure `gwn.metzger.dk` as the production custom domain. DNS, Azure custom domain binding, managed TLS certificate, and deploy variable updates. See [full details](project/clickstops/planned_cs24_custom-domain.md).
 
 ---
 
