@@ -3183,7 +3183,6 @@ function toggleImageMode(isImage) {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.display = isImage ? 'none' : '';
-    // Disable inputs so native required validation doesn't block image mode
     el.querySelectorAll('input, select, textarea').forEach(ctrl => { ctrl.disabled = isImage; });
   });
   imageGroups.forEach(id => {
@@ -3192,6 +3191,11 @@ function toggleImageMode(isImage) {
     el.style.display = isImage ? '' : 'none';
     el.querySelectorAll('input, select, textarea').forEach(ctrl => { ctrl.disabled = !isImage; });
   });
+  // Clean up image state when switching away from image mode
+  if (!isImage) {
+    clearImageFormState();
+    rebuildSequenceImageGrid();
+  }
 }
 
 /** Validate a file for image upload. Returns error string or null. */
@@ -3493,7 +3497,7 @@ function updateSubmitButtonState() {
 }
 
 /** Initialize a single image drop zone with upload, drag-drop, and remove handlers. */
-function initImageDropZone(selector, label, onUpload, onRemove) {
+function initImageDropZone(selector, onUpload, onRemove) {
   const zone = document.querySelector(selector);
   if (!zone) return;
   zone.addEventListener('click', (e) => {
@@ -3649,7 +3653,7 @@ function initSubmitPuzzleForm() {
   }
 
   // Image upload — answer drop zone
-  initImageDropZone('#sp-image-answer .image-drop-zone', 'Click or drag to upload', (entry) => {
+  initImageDropZone('#sp-image-answer .image-drop-zone', (entry) => {
     revokeObjectUrl(imageFormState.answer);
     imageFormState.answer = entry;
     const zone = document.querySelector('#sp-image-answer .image-drop-zone');
@@ -3667,7 +3671,7 @@ function initSubmitPuzzleForm() {
 
   // Image upload — distractor drop zones
   document.querySelectorAll('#sp-image-distractors .image-drop-zone').forEach((zone, i) => {
-    initImageDropZone(`#sp-image-distractors .image-drop-zone[data-image-slot="distractor-${i}"]`, `Distractor ${i + 1}`, (entry) => {
+    initImageDropZone(`#sp-image-distractors .image-drop-zone[data-image-slot="distractor-${i}"]`, (entry) => {
       revokeObjectUrl(imageFormState.distractors[i]);
       imageFormState.distractors[i] = entry;
       renderDropZone(zone, entry, `Distractor ${i + 1}`);
