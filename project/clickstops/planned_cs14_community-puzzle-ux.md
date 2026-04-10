@@ -14,7 +14,7 @@
 | CS14-84 | Admin moderation improvements | ⬜ Pending | CS14-82 | Live puzzle preview in moderation screen. Bulk approve/reject. Edit puzzle before approval (fix typos, adjust options). Submission stats (total pending, approved, rejected). |
 | CS14-85 | Submission editing & deletion | ⬜ Pending | CS14-81 | Users can edit pending submissions and delete their own submissions. API endpoints `PUT /api/submissions/:id` and `DELETE /api/submissions/:id` with ownership checks. |
 | CS14-86 | Submission notifications | ⬜ Pending | CS14-84 | Notify submitters when their puzzle is approved/rejected (in-app notification or badge on submissions screen). Track unread review results. |
-| CS14-87 | Image puzzle submissions | ⬜ Pending | CS14-82 | Image upload support for image-type puzzles. Server-side validation (size, format). Storage (local in dev, Azure Blob in prod). Preview in authoring form and moderation. |
+| CS14-87 | Image puzzle submissions | ⬜ Pending | CS14-82 | Image upload support for image-type puzzles. Server-side validation (size, format). Inline base64 storage in MVP (Azure Blob in future phase 2). Preview in authoring form and moderation. |
 
 ## Design Decisions
 
@@ -665,6 +665,7 @@ This is a performance optimization, not required for initial implementation.
      - Max sequence length for images: 6 elements (to limit total payload)
      - Answer: also a resolvable image source string (base64 data URI for image-based answers)
      - Options: array of 4 items — answer + 3 distractors; for image puzzles, all option values use the same resolvable image source format
+   - **Body parser limit:** The server currently uses `express.json()` with the default 100KB limit (`server/app.js`). Image submissions can reach ~5MB. Add a route-scoped `express.json({ limit: '6mb' })` middleware on `POST /api/submissions` (scoped, not global) to support image payloads without affecting other endpoints.
 
 **Database changes:**
 
