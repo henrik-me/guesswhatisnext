@@ -410,22 +410,25 @@
       <form id="submit-puzzle-form" class="submit-puzzle-form" autocomplete="off">
         <div class="form-group">
           <label>Puzzle Type</label>
-          <div class="type-selector" role="radiogroup" aria-label="Puzzle type">
-            <button type="button" class="type-card active" data-type="emoji" role="radio" aria-checked="true">
+          <div class="type-selector" aria-label="Puzzle type">
+            <label class="type-card active" data-type="emoji">
+              <input type="radio" name="puzzle-type" value="emoji" checked>
               <span class="type-card-icon" aria-hidden="true">😀</span>
               <span class="type-card-label">Emoji</span>
               <span class="type-card-desc">Use emoji characters in your sequence</span>
-            </button>
-            <button type="button" class="type-card" data-type="text" role="radio" aria-checked="false">
+            </label>
+            <label class="type-card" data-type="text">
+              <input type="radio" name="puzzle-type" value="text">
               <span class="type-card-icon" aria-hidden="true">📝</span>
               <span class="type-card-label">Text</span>
               <span class="type-card-desc">Use words, numbers, or text patterns</span>
-            </button>
-            <button type="button" class="type-card" data-type="image" role="radio" aria-checked="false" disabled aria-disabled="true">
+            </label>
+            <label class="type-card disabled" data-type="image" aria-disabled="true">
+              <input type="radio" name="puzzle-type" value="image" disabled>
               <span class="type-card-icon" aria-hidden="true">🖼️</span>
               <span class="type-card-label">Image</span>
               <span class="type-card-desc">Coming soon</span>
-            </button>
+            </label>
           </div>
           <p class="field-error" data-error="type" aria-live="polite"></p>
         </div>

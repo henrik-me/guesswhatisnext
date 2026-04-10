@@ -14,7 +14,7 @@ const logger = require('../logger');
 
 const router = express.Router();
 
-const VALID_TYPES = ['emoji', 'text', 'image'];
+const VALID_TYPES = ['emoji', 'text'];
 
 /** Validate a submission payload. Returns an error string or null. */
 function validateSubmission(body) {

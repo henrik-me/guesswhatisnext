@@ -452,7 +452,15 @@ body::before {
   font-family: var(--font-main);
 }
 
-.type-card:hover:not(:disabled) {
+.type-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.type-card:hover:not(.disabled) {
   border-color: var(--color-primary);
   background-color: var(--color-surface-hover);
 }
@@ -463,7 +471,7 @@ body::before {
   box-shadow: 0 0 12px var(--color-secondary-glow);
 }
 
-.type-card:disabled {
+.type-card.disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

@@ -82,6 +82,7 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
       data: { username, password },
       headers: { 'X-Forwarded-For': ip },
     });
+    expect(res.ok()).toBeTruthy();
     const { token } = await res.json();
 
     // Inject auth into localStorage before page scripts run
@@ -108,7 +109,8 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
 
   test('image type is disabled', async ({ page }) => {
     const imageCard = page.locator('.type-card[data-type="image"]');
-    await expect(imageCard).toBeDisabled();
+    await expect(imageCard).toHaveClass(/disabled/);
+    await expect(imageCard.locator('input[type="radio"]')).toBeDisabled();
     await expect(imageCard).toContainText('Coming soon');
   });
 
@@ -117,10 +119,7 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
     await page.fill('#sp-sequence', '1, 2, 3');
     await page.fill('#sp-answer', '4');
 
-    // Wait for debounced preview update
-    await page.waitForTimeout(400);
-
-    // Preview should show sequence items
+    // Preview should show sequence items (assertions auto-wait for debounced update)
     const preview = page.locator('#puzzle-preview');
     await expect(preview.locator('.preview-sequence-item').first()).toBeVisible();
     await expect(preview.locator('.preview-question')).toContainText('What comes next?');
@@ -134,10 +133,7 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
     await page.fill('.option-input[data-option="2"]', '6');
     await page.fill('.option-input[data-option="3"]', '7');
 
-    // Wait for preview to update
-    await page.waitForTimeout(400);
-
-    // Preview options should appear
+    // Preview options should appear (assertions auto-wait)
     await expect(preview.locator('.preview-option-btn')).toHaveCount(4);
     // The correct answer should be highlighted
     await expect(preview.locator('.preview-option-btn.correct')).toBeVisible();

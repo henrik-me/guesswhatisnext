@@ -2590,7 +2590,7 @@ function renderPuzzlePreview({ type: _type, sequence, answer, options, explanati
   }
   let html = '<div class="preview-sequence">';
   for (const item of sequence) {
-    html += `<span class="preview-sequence-item">${escapeHtml(String(item))}</span>`;
+    html += `<span class="preview-sequence-item">${escapeHTML(String(item))}</span>`;
   }
   html += '<span class="preview-sequence-item" style="opacity:0.4">?</span>';
   html += '</div>';
@@ -2599,21 +2599,14 @@ function renderPuzzlePreview({ type: _type, sequence, answer, options, explanati
     html += '<div class="preview-options">';
     for (const opt of options) {
       const isCorrect = answer && opt.trim() === answer.trim();
-      html += `<div class="preview-option-btn${isCorrect ? ' correct' : ''}">${escapeHtml(String(opt))}</div>`;
+      html += `<div class="preview-option-btn${isCorrect ? ' correct' : ''}">${escapeHTML(String(opt))}</div>`;
     }
     html += '</div>';
   }
   if (explanation && explanation.trim()) {
-    html += `<p class="preview-explanation">💡 ${escapeHtml(explanation)}</p>`;
+    html += `<p class="preview-explanation">💡 ${escapeHTML(explanation)}</p>`;
   }
   return html;
-}
-
-/** Escape HTML special characters for safe rendering. */
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 /** Debounce timer for preview updates. */
@@ -2719,17 +2712,12 @@ function initSubmitPuzzleForm() {
   const form = document.getElementById('submit-puzzle-form');
   if (!form) return;
 
-  // Type selector
-  document.querySelectorAll('.type-card').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.disabled) {
-        showComingSoonTooltip(btn);
-        return;
-      }
-      selectedPuzzleType = btn.dataset.type;
-      document.querySelectorAll('.type-card').forEach(b => {
-        b.classList.toggle('active', b === btn);
-        b.setAttribute('aria-checked', String(b === btn));
+  // Type selector — use native radio change events
+  document.querySelectorAll('input[name="puzzle-type"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      selectedPuzzleType = radio.value;
+      document.querySelectorAll('.type-card').forEach(card => {
+        card.classList.toggle('active', card.dataset.type === radio.value);
       });
       schedulePreviewUpdate();
     });
@@ -2799,9 +2787,18 @@ function initSubmitPuzzleForm() {
     input.addEventListener('blur', () => validateField('options'));
   });
 
-  // Radio buttons for correct answer
+  // Radio buttons for correct answer — sync answer field to match selected option
   document.querySelectorAll('input[name="correct-option"]').forEach(radio => {
     radio.addEventListener('change', () => {
+      const selectedIdx = radio.value;
+      const selectedOption = document.querySelector(`.option-input[data-option="${selectedIdx}"]`);
+      if (selectedOption && selectedOption.value.trim()) {
+        const answerField = document.getElementById('sp-answer');
+        if (answerField) answerField.value = selectedOption.value;
+      }
+      validateField('answer');
+      validateField('options');
+      updateSubmitButtonState();
       schedulePreviewUpdate();
     });
   });

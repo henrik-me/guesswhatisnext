@@ -417,6 +417,23 @@ describe('POST /api/submissions — type and options validation', () => {
     expect(res.body.error).toMatch(/type must be one of/);
   });
 
+  test('rejects image type (not yet supported)', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [1, 2, 3],
+        answer: '4',
+        explanation: 'Counting.',
+        difficulty: 1,
+        category: 'Math & Numbers',
+        type: 'image',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/type must be one of/);
+  });
+
   test('accepts submission with valid 4-element options', async () => {
     const res = await getAgent()
       .post(ENABLED_SUBMISSIONS_PATH)
