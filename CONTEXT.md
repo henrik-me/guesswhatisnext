@@ -28,11 +28,15 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS11 | Database Migration | ✅ Complete | 18/18 | [details](project/clickstops/done_cs11_database-migration.md) |
 | CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/done_cs12_test-infrastructure.md) |
 | CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done_cs13_observability-logging.md) |
-| CS14 | Community Puzzle Submission UX | ⬜ Planned | 0/8 | [details](project/clickstops/planned_cs14_community-puzzle-ux.md) |
-| CS18 | Address MSSQL Issues in Production | ✅ Complete | 10/10 | [details](project/clickstops/done_cs18_mssql-production-fixes.md) |
+| CS14 | Community Puzzle Submission UX | ✅ Complete | 8/8 | [details](project/clickstops/done_cs14_community-puzzle-ux.md) |
 | CS15 | Dev Tooling & Log Assertions | ✅ Complete | 5/5 | [details](project/clickstops/done_cs15_dev-tooling-log-assertions.md) |
 | CS16 | Docs Optimization & Cleanup | ✅ Complete | 4/4 | [details](project/clickstops/done_cs16_docs-optimization.md) |
 | CS17 | Process Documentation Improvement | ✅ Complete | 4/8 | [details](project/clickstops/done_cs17_process-docs-improvement.md) |
+| CS18 | Address MSSQL Issues in Production | ✅ Complete | 10/10 | [details](project/clickstops/done_cs18_mssql-production-fixes.md) |
+| CS19 | Community Puzzle Navigation & Testing | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs19_community-puzzle-navigation.md) |
+| CS20 | Authentication UX Overhaul | ⬜ Planned | 0/6 | [details](project/clickstops/planned_cs20_auth-ux-overhaul.md) |
+| CS21 | High Score Synchronization | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs21_highscore-sync.md) |
+| CS22 | Answer Randomization Fix | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs22_answer-randomization.md) |
 | CS23 | Documentation Review | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs23_docs-review.md) |
 
 ---
@@ -78,7 +82,7 @@ Every Copilot review comment thread must be replied to with a meaningful message
 
 ## Clickstop CS14 — Community Puzzle Submission UX
 
-Improve puzzle submission discovery, authoring, moderation, and notifications. Feature-flagged via `submitPuzzle` (PR #91). Not started. See [full details](project/clickstops/planned_cs14_community-puzzle-ux.md).
+✅ Complete. Puzzle submission discovery, authoring, moderation, and notifications. Feature-flagged via `submitPuzzle` (PR #91). All task PRs merged. Note: CS14-87 (image submissions) added client-side UI and server-side handling/sanitization code, but the `VALID_TYPES` gate in `server/routes/submissions.js` still excludes `image` — opening the gate is deferred to CS19. See [archive](project/clickstops/done_cs14_community-puzzle-ux.md).
 
 ---
 
@@ -91,6 +95,30 @@ Improve puzzle submission discovery, authoring, moderation, and notifications. F
 ## Clickstop CS18 — Address MSSQL Issues in Production
 
 ✅ Complete. Adapter-level SQL rewriting (LIMIT→OFFSET/FETCH, dates, RANDOM→NEWID, INSERT OR IGNORE, SCOPE_IDENTITY for lastId). Multiplayer leaderboard query rewritten for MSSQL compat (LEFT JOIN instead of aggregate subquery). Docker MSSQL validation stack with Caddy HTTPS. Deployed to production, verified. See [archive](project/clickstops/done_cs18_mssql-production-fixes.md).
+
+---
+
+## Clickstop CS19 — Community Puzzle Navigation & Testing
+
+Move community puzzle submission from the home screen into a dedicated sub-page, properly gate behind `submitPuzzle` feature flag, and add Docker MSSQL E2E tests. See [full details](project/clickstops/planned_cs19_community-puzzle-navigation.md).
+
+---
+
+## Clickstop CS20 — Authentication UX Overhaul
+
+Restructure auth UI: move controls to top header, simplify login/logout states, hide multiplayer until logged in, make leaderboard accessible without login, add "to keep score, sign in" prompts. See [full details](project/clickstops/planned_cs20_auth-ux-overhaul.md).
+
+---
+
+## Clickstop CS21 — High Score Synchronization
+
+Fix high-score display to sync from backend on login (not just localStorage). Reposition to top header alongside auth info. See [full details](project/clickstops/planned_cs21_highscore-sync.md).
+
+---
+
+## Clickstop CS22 — Answer Randomization Fix
+
+Fix bias where 75% of puzzles have correct answer as first option. Add Fisher-Yates shuffle before display, fix submission form bias. See [full details](project/clickstops/planned_cs22_answer-randomization.md).
 
 ---
 

@@ -697,7 +697,7 @@ Each clickstop gets a detail file in `project/clickstops/` with a status prefix:
 
 | Prefix | Meaning | Example |
 |--------|---------|---------|
-| `planned_` | Defined but no tasks started | `planned_cs14_community-puzzle-ux.md` |
+| `planned_` | Defined but no tasks started | `planned_cs19_community-puzzle-navigation.md` |
 | `active_` | Has work in progress | `active_cs11_database-migration.md` |
 | `done_` | Fully complete | `done_cs10_cicd-pipeline.md` |
 
