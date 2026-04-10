@@ -358,3 +358,303 @@ describe('PUT /api/submissions/:id/review', () => {
     expect(rejected.reviewer_notes).toBe('Too simple');
   });
 });
+
+describe('POST /api/submissions — type and options validation', () => {
+  test('accepts submission with valid type', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['🔴', '🟠', '🟡'],
+        answer: '🟢',
+        explanation: 'Rainbow colors.',
+        difficulty: 1,
+        category: 'Colors & Patterns',
+        type: 'text',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('pending');
+  });
+
+  test('defaults type to emoji when not provided', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['🌑', '🌒', '🌓'],
+        answer: '🌔',
+        explanation: 'Moon phases.',
+        difficulty: 1,
+        category: 'Nature',
+      });
+
+    expect(res.status).toBe(201);
+
+    const listRes = await getAgent()
+      .get('/api/submissions')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    const sub = listRes.body.submissions.find(s => s.id === res.body.id);
+    expect(sub).toBeDefined();
+    expect(sub.type).toBe('emoji');
+  });
+
+  test('rejects invalid type', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [1, 2, 3],
+        answer: '4',
+        explanation: 'Counting.',
+        difficulty: 1,
+        category: 'Math & Numbers',
+        type: 'video',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/type must be one of/);
+  });
+
+  test('rejects image type (not yet supported)', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [1, 2, 3],
+        answer: '4',
+        explanation: 'Counting.',
+        difficulty: 1,
+        category: 'Math & Numbers',
+        type: 'image',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/type must be one of/);
+  });
+
+  test('accepts submission with valid 4-element options', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Alphabet.',
+        difficulty: 1,
+        category: 'General Knowledge',
+        options: ['D', 'E', 'F', 'G'],
+      });
+
+    expect(res.status).toBe(201);
+  });
+
+  test('rejects options with wrong count', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Alphabet.',
+        difficulty: 1,
+        category: 'General Knowledge',
+        options: ['D', 'E', 'F'],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/exactly 4/);
+  });
+
+  test('rejects options missing answer', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Alphabet.',
+        difficulty: 1,
+        category: 'General Knowledge',
+        options: ['E', 'F', 'G', 'H'],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/include the answer/);
+  });
+
+  test('rejects options with duplicates', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Alphabet.',
+        difficulty: 1,
+        category: 'General Knowledge',
+        options: ['D', 'D', 'E', 'F'],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/duplicates/);
+  });
+
+  test('rejects options with empty strings', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Alphabet.',
+        difficulty: 1,
+        category: 'General Knowledge',
+        options: ['D', 'E', '', 'F'],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty string/);
+  });
+
+  test('rejects options with whitespace-only strings', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Alphabet.',
+        difficulty: 1,
+        category: 'General Knowledge',
+        options: ['D', 'E', '   ', 'F'],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/non-empty string/);
+  });
+});
+
+describe('PUT /api/submissions/:id/review — type and options', () => {
+  test('approve uses submission type instead of hardcoded emoji', async () => {
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['one', 'two', 'three'],
+        answer: 'four',
+        explanation: 'Counting words.',
+        difficulty: 1,
+        category: 'General Knowledge',
+        type: 'text',
+      });
+
+    const approveRes = await getAgent()
+      .put(`/api/submissions/${createRes.body.id}/review`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ status: 'approved' });
+
+    expect(approveRes.status).toBe(200);
+    expect(approveRes.body.puzzleId).toBe(`community-${createRes.body.id}`);
+
+    // Verify the puzzle was created with type 'text'
+    const puzzlesRes = await getAgent()
+      .get('/api/puzzles')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    const puzzles = puzzlesRes.body;
+    const puzzle = puzzles.find(p => p.id === approveRes.body.puzzleId);
+    expect(puzzle).toBeDefined();
+    expect(puzzle.type).toBe('text');
+  });
+
+  test('approve uses custom options when provided', async () => {
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['🍎', '🍊', '🍋'],
+        answer: '🍇',
+        explanation: 'Fruits.',
+        difficulty: 1,
+        category: 'Food',
+        options: ['🍇', '🍉', '🍓', '🫐'],
+      });
+
+    const approveRes = await getAgent()
+      .put(`/api/submissions/${createRes.body.id}/review`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ status: 'approved' });
+
+    expect(approveRes.status).toBe(200);
+
+    const puzzlesRes = await getAgent()
+      .get('/api/puzzles')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    const puzzles = puzzlesRes.body;
+    const puzzle = puzzles.find(p => p.id === approveRes.body.puzzleId);
+    expect(puzzle).toBeDefined();
+    expect(puzzle.options).toEqual(['🍇', '🍉', '🍓', '🫐']);
+  });
+
+  test('approve auto-generates options when not provided', async () => {
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['🌱', '🌿', '🌳'],
+        answer: '🌲',
+        explanation: 'Plants growing.',
+        difficulty: 1,
+        category: 'Nature',
+      });
+
+    const approveRes = await getAgent()
+      .put(`/api/submissions/${createRes.body.id}/review`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ status: 'approved' });
+
+    expect(approveRes.status).toBe(200);
+
+    const puzzlesRes = await getAgent()
+      .get('/api/puzzles')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    const puzzles = puzzlesRes.body;
+    const puzzle = puzzles.find(p => p.id === approveRes.body.puzzleId);
+    expect(puzzle).toBeDefined();
+    expect(puzzle.options).toHaveLength(4);
+    expect(puzzle.options).toContain('🌲');
+  });
+
+  test('backward compat: old submissions without type default to emoji on approve', async () => {
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['X', 'Y', 'Z'],
+        answer: 'A',
+        explanation: 'Wraps around.',
+        difficulty: 1,
+        category: 'General Knowledge',
+      });
+
+    const approveRes = await getAgent()
+      .put(`/api/submissions/${createRes.body.id}/review`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ status: 'approved' });
+
+    expect(approveRes.status).toBe(200);
+
+    const puzzlesRes = await getAgent()
+      .get('/api/puzzles')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    const puzzles = puzzlesRes.body;
+    const puzzle = puzzles.find(p => p.id === approveRes.body.puzzleId);
+    expect(puzzle).toBeDefined();
+    expect(puzzle.type).toBe('emoji');
+  });
+});

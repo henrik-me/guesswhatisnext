@@ -2677,18 +2677,260 @@ function showComingSoonTooltip(target) {
   }, 2000);
 }
 
+/** Currently selected puzzle type for the authoring form. */
+let selectedPuzzleType = 'emoji';
+
 /** Reset the submit-puzzle form and status message. */
 function resetSubmitPuzzleForm() {
   const form = document.getElementById('submit-puzzle-form');
   if (form) form.reset();
   const status = document.querySelector('[data-bind="submit-puzzle-status"]');
   if (status) { status.textContent = ''; status.className = 'submit-puzzle-status'; }
+  // Reset type selector to emoji
+  selectedPuzzleType = 'emoji';
+  document.querySelectorAll('.type-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.type === 'emoji');
+  });
+  // Clear field errors
+  document.querySelectorAll('.field-error').forEach(el => { el.textContent = ''; });
+  // Clear option inputs
+  document.querySelectorAll('.option-input').forEach(el => { el.value = ''; el.classList.remove('has-error'); });
+  // Reset submit button
+  const submitBtn = document.getElementById('sp-submit-btn');
+  if (submitBtn) submitBtn.disabled = true;
+  // Reset preview
+  updatePuzzlePreview();
+}
+
+/**
+ * Render a puzzle preview into a container.
+ * Reusable function — used by authoring form and will be reused by gallery/moderation.
+ * @param {{type?: string, sequence?: string[], answer?: string, options?: string[], explanation?: string}} data
+ * @returns {string} HTML string for the preview
+ */
+function renderPuzzlePreview({ type: _type, sequence, answer, options, explanation }) {
+  if (!sequence || sequence.length === 0) {
+    return '<p class="preview-empty">Fill in the form to see a live preview</p>';
+  }
+  let html = '<div class="preview-sequence">';
+  for (const item of sequence) {
+    html += `<span class="preview-sequence-item">${escapeHTML(String(item))}</span>`;
+  }
+  html += '<span class="preview-sequence-item" style="opacity:0.4">?</span>';
+  html += '</div>';
+  html += '<p class="preview-question">What comes next?</p>';
+  if (options && options.length > 0) {
+    html += '<div class="preview-options">';
+    for (const opt of options) {
+      const isCorrect = answer && opt.trim() === answer.trim();
+      html += `<div class="preview-option-btn${isCorrect ? ' correct' : ''}">${escapeHTML(String(opt))}</div>`;
+    }
+    html += '</div>';
+  }
+  if (explanation && explanation.trim()) {
+    html += `<p class="preview-explanation">💡 ${escapeHTML(explanation)}</p>`;
+  }
+  return html;
+}
+
+/** Debounce timer for preview updates. */
+let previewDebounceTimer = null;
+
+/** Schedule a debounced preview update (300ms). */
+function schedulePreviewUpdate() {
+  if (previewDebounceTimer) clearTimeout(previewDebounceTimer);
+  previewDebounceTimer = setTimeout(updatePuzzlePreview, 300);
+}
+
+/** Read current form state and update the live preview panel. */
+function updatePuzzlePreview() {
+  const container = document.querySelector('[data-bind="preview-content"]');
+  if (!container) return;
+  const sequenceRaw = (document.getElementById('sp-sequence')?.value || '').trim();
+  const answer = (document.getElementById('sp-answer')?.value || '').trim();
+  const explanation = (document.getElementById('sp-explanation')?.value || '').trim();
+  const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const options = [];
+  document.querySelectorAll('.option-input').forEach(el => {
+    const v = el.value.trim();
+    if (v) options.push(v);
+  });
+  container.innerHTML = renderPuzzlePreview({
+    type: selectedPuzzleType,
+    sequence,
+    answer,
+    options: options.length > 0 ? options : undefined,
+    explanation,
+  });
+}
+
+/** Validate a single form field and show inline error. Returns true if valid. */
+function validateField(name) {
+  const errorEl = document.querySelector(`[data-error="${name}"]`);
+  let valid = true;
+  let msg = '';
+
+  if (name === 'sequence') {
+    const raw = (document.getElementById('sp-sequence')?.value || '').trim();
+    const items = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (!raw) { msg = ''; } // Don't show an error when the sequence is empty.
+    else if (items.length < 3) { msg = 'Sequence needs at least 3 items'; valid = false; }
+  } else if (name === 'answer') {
+    const val = (document.getElementById('sp-answer')?.value || '').trim();
+    if (val.length === 0 && document.getElementById('sp-answer') === document.activeElement) { msg = ''; }
+    else if (val.length === 0) { msg = 'Answer is required'; valid = false; }
+  } else if (name === 'explanation') {
+    const val = (document.getElementById('sp-explanation')?.value || '').trim();
+    if (val.length === 0 && document.getElementById('sp-explanation') === document.activeElement) { msg = ''; }
+    else if (val.length === 0) { msg = 'Explanation is required'; valid = false; }
+  } else if (name === 'category') {
+    const val = document.getElementById('sp-category')?.value || '';
+    if (!val) { msg = 'Please select a category'; valid = false; }
+  } else if (name === 'options') {
+    const inputs = document.querySelectorAll('.option-input');
+    const vals = [];
+    inputs.forEach(el => { vals.push(el.value.trim()); el.classList.remove('has-error'); });
+    const answer = (document.getElementById('sp-answer')?.value || '').trim();
+    const nonEmpty = vals.filter(Boolean);
+    // Treat a single auto-synced answer option as "no custom options"
+    const hasOnlyAutoSyncedOption = answer && nonEmpty.length === 1 && nonEmpty[0] === answer;
+
+    if (nonEmpty.length > 0 && nonEmpty.length < 4 && !hasOnlyAutoSyncedOption) {
+      msg = 'All 4 options are required';
+      valid = false;
+      inputs.forEach(el => { if (!el.value.trim()) el.classList.add('has-error'); });
+    } else if (nonEmpty.length === 4) {
+      const unique = new Set(vals);
+      if (unique.size !== 4) { msg = 'Options must not contain duplicates'; valid = false; }
+      else if (answer && !vals.includes(answer)) { msg = 'Options must include the answer'; valid = false; }
+    }
+  }
+
+  if (errorEl) errorEl.textContent = msg;
+  return valid;
+}
+
+/** Check if the entire form is valid and enable/disable submit button. */
+function updateSubmitButtonState() {
+  const btn = document.getElementById('sp-submit-btn');
+  if (!btn) return;
+  const sequenceRaw = (document.getElementById('sp-sequence')?.value || '').trim();
+  const answer = (document.getElementById('sp-answer')?.value || '').trim();
+  const explanation = (document.getElementById('sp-explanation')?.value || '').trim();
+  const category = document.getElementById('sp-category')?.value || '';
+  const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+  const optionVals = [];
+  document.querySelectorAll('.option-input').forEach(el => optionVals.push(el.value.trim()));
+  const nonEmptyOptions = optionVals.filter(Boolean);
+  // Treat a single auto-synced answer option as "no custom options"
+  const hasOnlyAutoSyncedAnswerOption = answer && nonEmptyOptions.length === 1 && nonEmptyOptions[0] === answer;
+  const hasValidCustomOptions = nonEmptyOptions.length === 4 &&
+    new Set(optionVals).size === 4 &&
+    optionVals.includes(answer);
+  const optionsValid = nonEmptyOptions.length === 0 || hasOnlyAutoSyncedAnswerOption || hasValidCustomOptions;
+
+  const isValid = sequence.length >= 3 && answer && explanation && category && optionsValid;
+  btn.disabled = !isValid;
 }
 
 /** Wire submit-puzzle form handler inside init (called once). */
 function initSubmitPuzzleForm() {
   const form = document.getElementById('submit-puzzle-form');
   if (!form) return;
+
+  // Type selector — use native radio change events
+  document.querySelectorAll('input[name="puzzle-type"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      selectedPuzzleType = radio.value;
+      document.querySelectorAll('.type-card').forEach(card => {
+        card.classList.toggle('active', card.dataset.type === radio.value);
+      });
+      schedulePreviewUpdate();
+    });
+  });
+
+  // Answer field → auto-sync to the currently selected correct option
+  const answerInput = document.getElementById('sp-answer');
+  if (answerInput) {
+    answerInput.addEventListener('input', () => {
+      const correctRadio = document.querySelector('input[name="correct-option"]:checked');
+      if (correctRadio) {
+        const targetOption = document.querySelector(`.option-input[data-option="${correctRadio.value}"]`);
+        if (targetOption) targetOption.value = answerInput.value;
+      }
+      validateField('answer');
+      validateField('options');
+      updateSubmitButtonState();
+      schedulePreviewUpdate();
+    });
+    answerInput.addEventListener('blur', () => validateField('answer'));
+  }
+
+  // Sequence field
+  const seqInput = document.getElementById('sp-sequence');
+  if (seqInput) {
+    seqInput.addEventListener('input', () => {
+      validateField('sequence');
+      updateSubmitButtonState();
+      schedulePreviewUpdate();
+    });
+    seqInput.addEventListener('blur', () => validateField('sequence'));
+  }
+
+  // Explanation field
+  const expInput = document.getElementById('sp-explanation');
+  if (expInput) {
+    expInput.addEventListener('input', () => {
+      validateField('explanation');
+      updateSubmitButtonState();
+      schedulePreviewUpdate();
+    });
+    expInput.addEventListener('blur', () => validateField('explanation'));
+  }
+
+  // Category field
+  const catSelect = document.getElementById('sp-category');
+  if (catSelect) {
+    catSelect.addEventListener('change', () => {
+      validateField('category');
+      updateSubmitButtonState();
+    });
+  }
+
+  // Difficulty field
+  const diffSelect = document.getElementById('sp-difficulty');
+  if (diffSelect) {
+    diffSelect.addEventListener('change', updateSubmitButtonState);
+  }
+
+  // Options editor inputs
+  document.querySelectorAll('.option-input').forEach(input => {
+    input.addEventListener('input', () => {
+      validateField('options');
+      updateSubmitButtonState();
+      schedulePreviewUpdate();
+    });
+    input.addEventListener('blur', () => validateField('options'));
+  });
+
+  // Radio buttons for correct answer — sync answer field to match selected option
+  document.querySelectorAll('input[name="correct-option"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const selectedIdx = radio.value;
+      const selectedOption = document.querySelector(`.option-input[data-option="${selectedIdx}"]`);
+      if (selectedOption && selectedOption.value.trim()) {
+        const answerField = document.getElementById('sp-answer');
+        if (answerField) answerField.value = selectedOption.value;
+      }
+      validateField('answer');
+      validateField('options');
+      updateSubmitButtonState();
+      schedulePreviewUpdate();
+    });
+  });
+
+  // Form submit
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const status = document.querySelector('[data-bind="submit-puzzle-status"]');
@@ -2699,6 +2941,14 @@ function initSubmitPuzzleForm() {
     const category = document.getElementById('sp-category').value;
 
     const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+    // Collect options (only send if all 4 are filled)
+    const optionVals = [];
+    document.querySelectorAll('.option-input').forEach(el => optionVals.push(el.value.trim()));
+    const nonEmptyOptions = optionVals.filter(Boolean);
+    const options = nonEmptyOptions.length === 4 ? optionVals : undefined;
+
+    // Client validation
     if (sequence.length < 3) {
       if (status) { status.textContent = 'Sequence must have at least 3 items.'; status.className = 'submit-puzzle-status error'; }
       return;
@@ -2716,19 +2966,22 @@ function initSubmitPuzzleForm() {
       return;
     }
 
+    const payload = { sequence, answer, explanation, difficulty, category, type: selectedPuzzleType };
+    if (options) payload.options = options;
+
     try {
       const res = await apiFetch(getFeatureAwarePath('/api/submissions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sequence, answer, explanation, difficulty, category }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok) {
+        resetSubmitPuzzleForm();
         if (status) {
           status.innerHTML = 'Puzzle submitted for review! <button type="button" class="btn-link" data-action="show-my-submissions">View My Submissions →</button>';
           status.className = 'submit-puzzle-status success';
         }
-        form.reset();
       } else {
         if (status) { status.textContent = data.error || 'Submission failed.'; status.className = 'submit-puzzle-status error'; }
       }
