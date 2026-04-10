@@ -15,10 +15,10 @@
 | CS11-62 | Convert routes to async | ✅ Done | CS11-61a | All DB-touching handlers use `await db.get/all/run()`. PR #57 merged. |
 | CS11-63 | Update tests for async | ✅ Done | CS11-61b, CS11-62 | Async test helpers. Test suite passes with SQLite adapter. PR #57 merged (combined with CS11-62). |
 | CS11-63v | Validate staging (post-async) | ✅ Done | CS11-63 | Staging deploy + smoke tests + E2E all passed. 4 migrations applied, 504 puzzles seeded, async routes working. Run #23833160313. |
-| CS11-64 | Provision Azure SQL | ✅ Done | CS11-63v | All sub-tasks complete. Azure SQL server gwn-sqldb.database.windows.net (centralus), DB gwn-production, free-tier serverless. PR #113 (code). |
-| CS11-64a | Create Azure SQL server | ✅ Done | CS11-63v | Server gwn-sqldb created in centralus (eastus blocked). Admin: gwnadmin. |
-| CS11-64b | Create serverless prod DB | ✅ Done | CS11-64a | DB gwn-production, GP_S_Gen5_2 serverless, free tier, auto-pause 60min. |
-| CS11-64c | Configure firewall access | ✅ Done | CS11-64a | AllowAzureServices (0.0.0.0) + OperatorAccess (50.47.197.212) firewall rules. |
+| CS11-64 | Provision Azure SQL | ✅ Done | CS11-63v | All sub-tasks complete. Azure SQL provisioned in centralus (free-tier serverless). PR #113 (code). |
+| CS11-64a | Create Azure SQL server | ✅ Done | CS11-63v | Logical server created in centralus (eastus was blocked at provisioning time). |
+| CS11-64b | Create serverless prod DB | ✅ Done | CS11-64a | GP_S_Gen5_2 serverless, free tier, auto-pause 60min. |
+| CS11-64c | Configure firewall access | ✅ Done | CS11-64a | AllowAzureServices + operator IP firewall rules configured. |
 | CS11-64d | Enable MSSQL schema bootstrap | ✅ Done | CS11-64b | Removed MSSQL fail-fast gate; dialect-aware migrations, seeding, and retry logic. |
 | CS11-64e | Add GitHub `DATABASE_URL` secret | ✅ Done | CS11-64b | DATABASE_URL + AZURE_SQL_ADMIN_PASSWORD stored as GitHub secrets. |
 | CS11-65 | Production deploy | ⬜ Pending | CS11-64 | Rollup for 65a–65c: wire workflow/env, deploy, then verify production. |
