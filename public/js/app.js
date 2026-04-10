@@ -2602,9 +2602,9 @@ function renderSubmissionCard(submission) {
       </div>`;
   }
 
-  // Action buttons: pending → Edit + Delete; approved/rejected → Delete only
+  // Action buttons: pending + feature enabled → Edit + Delete; otherwise → Delete only
   let actionsHtml = '<div class="submission-card-actions">';
-  if (safeStatus === 'pending') {
+  if (safeStatus === 'pending' && isFeatureEnabled('submitPuzzle')) {
     actionsHtml += `<button class="btn btn-sm btn-secondary" data-action="edit-submission" data-submission-id="${safeId}">✏️ Edit</button>`;
   }
   actionsHtml += `<button class="btn btn-sm btn-danger" data-action="delete-submission" data-submission-id="${safeId}">🗑️ Delete</button>`;
@@ -2835,8 +2835,8 @@ function showDeleteConfirmation(submissionId) {
     : '';
 
   const confirmHtml = `
-    <div class="submission-delete-confirm" role="alertdialog" aria-label="Confirm deletion">
-      <p class="delete-confirm-text">Delete this submission? This cannot be undone.</p>
+    <div class="submission-delete-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-label-${submissionId}">
+      <p id="delete-label-${submissionId}" class="delete-confirm-text">Delete this submission? This cannot be undone.</p>
       ${approvedNote}
       <div class="delete-confirm-actions">
         <button class="btn btn-danger btn-sm" data-action="confirm-delete-submission" data-submission-id="${submissionId}">Delete</button>
@@ -2845,6 +2845,9 @@ function showDeleteConfirmation(submissionId) {
     </div>`;
 
   card.insertAdjacentHTML('beforeend', confirmHtml);
+  // Focus the cancel button for keyboard accessibility
+  const cancelBtn = card.querySelector('[data-action="cancel-delete-submission"]');
+  if (cancelBtn) cancelBtn.focus();
 }
 
 /** Execute the deletion and remove the card with animation. */
