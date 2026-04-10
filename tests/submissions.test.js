@@ -673,6 +673,8 @@ describe('PUT /api/submissions/:id', () => {
         difficulty: 1,
         category: 'Nature',
       });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
     submissionId = res.body.id;
   });
 

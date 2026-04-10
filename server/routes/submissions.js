@@ -432,9 +432,9 @@ router.put('/:id', requireAuth, async (req, res, next) => {
       updates.push('category = ?');
       params.push(category);
     }
-    if (type !== undefined) {
+    if (type !== undefined && type !== null) {
       updates.push('type = ?');
-      params.push(type && VALID_TYPES.includes(type) ? type : 'emoji');
+      params.push(VALID_TYPES.includes(type) ? type : 'emoji');
     }
     if (options !== undefined) {
       updates.push('options = ?');
@@ -495,7 +495,11 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     }
 
     // Hard delete — puzzle in puzzles table (if approved) remains
-    await db.run('DELETE FROM puzzle_submissions WHERE id = ?', [id]);
+    const deleteResult = await db.run('DELETE FROM puzzle_submissions WHERE id = ?', [id]);
+
+    if (!deleteResult || deleteResult.changes === 0) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
 
     res.json({ message: 'Submission deleted' });
   } catch (err) {
