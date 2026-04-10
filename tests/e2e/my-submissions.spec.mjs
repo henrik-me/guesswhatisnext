@@ -260,4 +260,115 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('.submission-delete-confirm')).toHaveCount(0);
     await expect(page.locator('.submission-card')).toHaveCount(1);
   });
+
+  test('submit puzzle, approve it via API, see notification with badge', async ({ page, request }) => {
+    const username = uniqueUser();
+    const password = 'testpass123';
+    const ip = uniqueIP();
+
+    // Register via API
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const { token } = await regRes.json();
+
+    // Create a submission via API
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['🔴', '🟠', '🟡'],
+        answer: '🟢',
+        explanation: 'Rainbow colors',
+        difficulty: 1,
+        category: 'Nature',
+      },
+      headers: { Authorization: `Bearer ${token}`, 'X-Forwarded-For': ip },
+    });
+    expect(subRes.ok()).toBeTruthy();
+    const { id: subId } = await subRes.json();
+
+    // Approve via API
+    const reviewRes = await request.put(`/api/submissions/${subId}/review`, {
+      data: { status: 'approved' },
+      headers: { 'X-API-Key': 'test-system-api-key' },
+    });
+    expect(reviewRes.ok()).toBeTruthy();
+
+    // Inject auth and navigate to my-submissions
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    await page.goto('/');
+
+    // Badge should be visible
+    await expect(page.locator('[data-bind="notification-badge"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-bind="notification-badge"]')).toHaveText(/[1-9]/);
+
+    // Navigate to my-submissions
+    await page.click('[data-bind="my-submissions-btn"]');
+    await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+
+    // Notifications section should be visible with the approval notification
+    await expect(page.locator('[data-bind="notifications-section"]')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.notification-item')).toHaveCount(1, { timeout: 5000 });
+    await expect(page.locator('.notification-message')).toContainText('approved');
+  });
+
+  test('mark notification as read updates badge count', async ({ page, request }) => {
+    const username = uniqueUser();
+    const password = 'testpass123';
+    const ip = uniqueIP();
+
+    // Register via API
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const { token } = await regRes.json();
+
+    // Create and approve a submission
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['⬛', '⬜', '⬛'],
+        answer: '⬜',
+        explanation: 'Alternating colors',
+        difficulty: 1,
+        category: 'Nature',
+      },
+      headers: { Authorization: `Bearer ${token}`, 'X-Forwarded-For': ip },
+    });
+    expect(subRes.ok()).toBeTruthy();
+    const { id: subId } = await subRes.json();
+
+    await request.put(`/api/submissions/${subId}/review`, {
+      data: { status: 'rejected', reviewerNotes: 'Too simple' },
+      headers: { 'X-API-Key': 'test-system-api-key' },
+    });
+
+    // Inject auth and go to my-submissions
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    await page.goto('/');
+    await expect(page.locator('[data-bind="notification-badge"]')).toBeVisible({ timeout: 10000 });
+
+    await page.click('[data-bind="my-submissions-btn"]');
+    await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+    await expect(page.locator('.notification-item')).toHaveCount(1, { timeout: 5000 });
+
+    // Mark as read
+    await page.click('[data-action="mark-all-notifications-read"]');
+
+    // Badge should disappear
+    await expect(page.locator('[data-bind="notification-badge"]')).toBeHidden({ timeout: 5000 });
+
+    // Notification should be marked read (class change)
+    await expect(page.locator('.notification-item.notification-read')).toHaveCount(1);
+  });
 });

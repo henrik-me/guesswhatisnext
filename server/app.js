@@ -20,6 +20,7 @@ const puzzleRoutes = require('./routes/puzzles');
 const achievementRoutes = require('./routes/achievements');
 const featureRoutes = require('./routes/features');
 const submissionRoutes = require('./routes/submissions');
+const notificationRoutes = require('./routes/notifications');
 const userRoutes = require('./routes/users');
 const telemetryRoutes = require('./routes/telemetry');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
@@ -187,6 +188,7 @@ function createServer() {
   app.use('/api/achievements', achievementRoutes);
   app.use('/api/features', featureRoutes);
   app.use('/api/submissions', submissionRoutes);
+  app.use('/api/notifications', notificationRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/telemetry', telemetryRoutes);
 

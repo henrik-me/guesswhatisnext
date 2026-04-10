@@ -9,6 +9,7 @@ const migrations = [
   require('./004-add-submitted-by'),
   require('./005-add-submission-type'),
   require('./006-add-image-type'),
+  require('./007-add-notifications'),
 ].sort((a, b) => a.version - b.version);
 
 module.exports = migrations;
