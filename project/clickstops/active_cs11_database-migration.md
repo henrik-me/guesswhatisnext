@@ -22,7 +22,7 @@
 | CS11-64d | Enable MSSQL schema bootstrap | ✅ Done | CS11-64b | Removed MSSQL fail-fast gate; dialect-aware migrations, seeding, and retry logic. |
 | CS11-64e | Add GitHub `DATABASE_URL` secret | ✅ Done | CS11-64b | DATABASE_URL + AZURE_SQL_ADMIN_PASSWORD stored as GitHub secrets. |
 | CS11-65 | Production deploy | ⬜ Pending | CS11-64 | Rollup for 65a–65c: wire workflow/env, deploy, then verify production. |
-| CS11-65a | Update `prod-deploy.yml` for MSSQL | ✅ Done | CS11-64 | Wire `DATABASE_URL` into deploy + rollback paths. PR #TBD. |
+| CS11-65a | Update `prod-deploy.yml` for MSSQL | ✅ Done | CS11-64 | Wire `DATABASE_URL` into deploy + rollback paths. PR #124. |
 | CS11-65b | First production deploy | ⬜ Pending | CS11-65a | Run the first deploy with Azure SQL settings and the chosen MSSQL bootstrap process. |
 | CS11-65c | Verify production | ⬜ Pending | CS11-65b | Smoke test startup, read paths, auth, submit flow, and DB-backed writes against Azure SQL. |
 
