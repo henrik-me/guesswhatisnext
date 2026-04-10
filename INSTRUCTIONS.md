@@ -41,13 +41,17 @@ guesswhatisnext/
 │   │   └── users.js                # User profiles + management
 │   ├── ws/matchHandler.js          # WebSocket match engine (2–10 players)
 │   ├── db/
-│   │   ├── schema.sql              # SQLite table definitions
-│   │   ├── index.js                # DB factory / primary database entry point
-│   │   └── connection.js           # Legacy DB module
+│   │   ├── index.js                # DB factory (auto-selects SQLite or MSSQL via DATABASE_URL)
+│   │   ├── base-adapter.js         # Abstract async adapter interface
+│   │   ├── sqlite-adapter.js       # SQLite adapter (local dev, tests)
+│   │   ├── mssql-adapter.js        # MSSQL/Azure SQL adapter with SQL rewriting
+│   │   ├── migrations/             # Versioned schema migrations (dialect-aware)
+│   │   └── connection.js           # DB init + seeding
 │   └── middleware/auth.js          # JWT + API key verification middleware
-├── data/                           # SQLite database (auto-created, git-ignored)
+├── data/                           # SQLite database (local dev, git-ignored)
 ├── Dockerfile                      # Production container image
-├── docker-compose.yml              # Local container dev environment
+├── docker-compose.yml              # Local container dev (SQLite)
+├── docker-compose.mssql.yml        # MSSQL validation stack (SQL Server + HTTPS)
 ├── .github/workflows/              # CI, deploy, load-test, and health-monitor workflows
 ├── scripts/                        # Local health-check scripts (sh + ps1)
 ├── infra/                          # Azure deployment (deploy.sh + README)
@@ -71,8 +75,8 @@ guesswhatisnext/
  │  │ puzzles.js│  │◀─────────────▶│  └───────┬────────┘  │
  │  │ storage.js│  │               │          │           │
  │  └───────────┘  │               │  ┌───────▼────────┐  │
- │  LocalStorage   │               │  │ SQLite (WAL)   │  │
- └─────────────────┘               │  │ data/game.db   │  │
+ │  LocalStorage   │               │  │ DB Adapter      │  │
+ └─────────────────┘               │  │ SQLite / MSSQL  │  │
                                    │  └────────────────┘  │
                                    │  ┌────────────────┐  │
                                    │  │ WebSocket (ws)  │  │
@@ -757,10 +761,11 @@ gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THRE
 ### Deployment Environments
 | Environment | Trigger | Approval | Infrastructure | Rollback |
 |---|---|---|---|---|
-| **Local** | `docker compose up` or `npm start` | None | Developer machine | N/A |
+| **Local (SQLite)** | `npm start` or `docker compose up` | None | Developer machine | N/A |
+| **Local (MSSQL)** | `npm run docker:mssql` | None | Docker (SQL Server 2022 + Caddy HTTPS) | N/A |
 | **Ephemeral staging** | Push to main + workflow_dispatch (gated by `STAGING_AUTO_DEPLOY`) | Automatic | GitHub Actions (container in workflow) | N/A (ephemeral) |
 | **Azure staging** | After ephemeral validation passes | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-staging | Redeploy previous SHA-tagged image |
-| **Production** | After Azure staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-prod | Auto-rollback to previous SHA-tagged image |
+| **Production** | After Azure staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps + Azure SQL | Auto-rollback to previous SHA-tagged image |
 
 ### CI/CD Pipeline Overview
 

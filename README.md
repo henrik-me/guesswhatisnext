@@ -142,16 +142,34 @@ This section documents the small central **server-side feature-flag system** int
 
 ### Running with Docker
 
+**SQLite (default, local dev):**
 ```bash
-# Build and run in a container (same image used in production)
 docker compose up --build
 # → http://localhost:3000
-
-# Stop
-docker compose down
 ```
 
-The container mounts `./data` for SQLite persistence and sets dev environment variables automatically.
+**MSSQL (production-like validation):**
+
+Runs the full stack against SQL Server 2022 with HTTPS via Caddy reverse proxy — mirrors the production Azure SQL environment:
+```bash
+# Start MSSQL + app + HTTPS proxy
+npm run docker:mssql
+# → https://localhost (accept self-signed cert warning once)
+
+# View pretty-printed live logs
+npm run docker:mssql:logs
+
+# Errors only
+docker compose -f docker-compose.mssql.yml logs app --no-log-prefix | npx pino-pretty -L error
+
+# Export raw JSON logs for analysis
+docker compose -f docker-compose.mssql.yml logs app --no-log-prefix > app-logs.json
+
+# Stop everything
+npm run docker:mssql:down
+```
+
+The Docker MSSQL stack produces **production-identical structured JSON logs** (Pino) — every HTTP request, WebSocket event, migration, auth event, and error is captured with the same schema as production.
 
 ### Testing
 
@@ -224,12 +242,17 @@ guesswhatisnext/
 │   │   └── puzzles.js              # Puzzle API
 │   ├── ws/matchHandler.js          # WebSocket head-to-head match engine
 │   ├── db/
-│   │   ├── schema.sql              # SQLite table definitions
-│   │   └── connection.js           # DB init + query helpers
+│   │   ├── index.js                   # DB factory (auto-selects SQLite or MSSQL)
+│   │   ├── base-adapter.js            # Abstract async adapter interface
+│   │   ├── sqlite-adapter.js          # SQLite adapter (local dev, tests)
+│   │   ├── mssql-adapter.js           # MSSQL adapter with SQL rewriting
+│   │   ├── migrations/                # Versioned schema migrations
+│   │   └── connection.js              # DB init + seeding
 │   └── middleware/auth.js          # JWT + API key verification middleware
-├── data/                           # SQLite database (auto-created, git-ignored)
+├── data/                           # SQLite database (local dev, git-ignored)
 ├── Dockerfile                      # Production container image
-├── docker-compose.yml              # Local container dev environment
+├── docker-compose.yml              # Local container dev (SQLite)
+├── docker-compose.mssql.yml        # MSSQL validation stack (SQL Server + HTTPS)
 ├── .github/workflows/              # CI/CD + health monitor
 ├── package.json
 ├── INSTRUCTIONS.md                 # Architecture & coding guidelines
@@ -251,14 +274,29 @@ guesswhatisnext/
  │  └───────────┘  │               │  └───────┬────────┘  │
  │  LocalStorage   │               │          │           │
  └─────────────────┘               │  ┌───────▼────────┐  │
-                                   │  │ SQLite (WAL)   │  │
-                                   │  │ data/game.db   │  │
+                                   │  │ DB Adapter      │  │
+                                   │  │ (auto-selects)  │  │
+                                   │  │ ┌────────────┐  │  │
+                                   │  │ │ SQLite     │  │  │
+                                   │  │ │ (local dev)│  │  │
+                                   │  │ ├────────────┤  │  │
+                                   │  │ │ Azure SQL  │  │  │
+                                   │  │ │ (prod)     │  │  │
+                                   │  │ └────────────┘  │  │
                                    │  └────────────────┘  │
                                    │  ┌────────────────┐  │
                                    │  │ WebSocket (ws)  │  │
                                    │  │ matchHandler.js │  │
                                    │  └────────────────┘  │
                                    └──────────────────────┘
+
+  DB backend auto-selects:
+    DATABASE_URL set → Azure SQL / MSSQL (production)
+    DATABASE_URL absent → SQLite (local dev, tests)
+
+  Routes use `?` placeholders. The adapter layer handles:
+    SQLite: pass-through
+    MSSQL:  ? → @p1, LIMIT → OFFSET/FETCH, dates, RANDOM, etc.
 ```
 
 **Deployment Pipeline:**
@@ -295,10 +333,11 @@ guesswhatisnext/
 
 | Environment | Cost | Trigger | Approval | Rollback |
 |---|---|---|---|---|
-| Local | Free | `docker compose up` / `npm start` | None | N/A |
+| Local (SQLite) | Free | `npm start` / `docker compose up` | None | N/A |
+| Local (MSSQL) | Free | `npm run docker:mssql` | None | N/A |
 | Ephemeral staging | $0 (GitHub Actions) | Hourly cron (if new commits) | Automatic | N/A (ephemeral) |
 | Azure staging | $0 (scale-to-zero) | After ephemeral validation | Manual | Redeploy previous SHA tag |
-| Production | $0+ (pay-per-use) | Manual trigger (staging must be green) | Manual | Auto-rollback to previous SHA tag |
+| Production | $0+ (pay-per-use, Azure SQL) | Manual trigger (staging must be green) | Manual | Auto-rollback to previous SHA tag |
 
 ### API Endpoints
 
@@ -357,8 +396,13 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 | `npm run dev` | Start with auto-reload (--watch) |
 | `npm run dev:full` | HTTPS + log capture (recommended for testing) |
 | `npm run dev:log` | HTTP + log capture (plain HTTP with logging) |
-| `npm test` | Run tests |
+| `npm test` | Run unit + integration tests (vitest) |
+| `npm run test:e2e` | Run E2E browser tests (Playwright) |
+| `npm run test:mssql` | Run tests against local MSSQL container |
 | `npm run lint` | Run ESLint (0 warnings target) |
+| `npm run docker:mssql` | Start full MSSQL stack (SQL Server + app + HTTPS) |
+| `npm run docker:mssql:logs` | Pretty-printed live log tail from MSSQL stack |
+| `npm run docker:mssql:down` | Stop MSSQL Docker stack |
 
 ### Development Server Modes
 
