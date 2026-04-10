@@ -19,4 +19,4 @@ Orchestrators update this file directly on main — no PR required.
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS17 | Process Docs Improvement | Orchestrator/sub-agent doc improvements | yoga-gwn-c2 | — | — | — | 2026-04-10 |
 
-> **Note:** For queued tasks, check clickstop files with `planned_` or `active_` prefix in `project/clickstops/`. For completed work, check files with `done_` prefix.
+> **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
