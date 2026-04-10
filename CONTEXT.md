@@ -29,7 +29,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/done_cs12_test-infrastructure.md) |
 | CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done_cs13_observability-logging.md) |
 | CS14 | Community Puzzle Submission UX | ⬜ Planned | 0/8 | [details](project/clickstops/planned_cs14_community-puzzle-ux.md) |
-| CS18 | Address MSSQL Issues in Production | 🔄 Active | 0/6 | [details](project/clickstops/active_cs18_mssql-production-fixes.md) |
+| CS18 | Address MSSQL Issues in Production | ✅ Complete | 10/10 | [details](project/clickstops/done_cs18_mssql-production-fixes.md) |
 | CS15 | Dev Tooling & Log Assertions | ✅ Complete | 5/5 | [details](project/clickstops/done_cs15_dev-tooling-log-assertions.md) |
 | CS16 | Docs Optimization & Cleanup | ✅ Complete | 4/4 | [details](project/clickstops/done_cs16_docs-optimization.md) |
 | CS17 | Process Documentation Improvement | ✅ Complete | 4/8 | [details](project/clickstops/done_cs17_process-docs-improvement.md) |
@@ -90,7 +90,7 @@ Improve puzzle submission discovery, authoring, moderation, and notifications. F
 
 ## Clickstop CS18 — Address MSSQL Issues in Production
 
-Route-level SQL uses SQLite-specific syntax (LIMIT, date(), RANDOM(), INSERT OR IGNORE) that fails on MSSQL. Fix via adapter-level SQL rewriting + targeted call-site fixes. See [full details](project/clickstops/active_cs18_mssql-production-fixes.md).
+✅ Complete. Adapter-level SQL rewriting (LIMIT→OFFSET/FETCH, dates, RANDOM→NEWID, INSERT OR IGNORE, SCOPE_IDENTITY for lastId). Multiplayer leaderboard query rewritten for MSSQL compat (LEFT JOIN instead of aggregate subquery). Docker MSSQL validation stack with Caddy HTTPS. Deployed to production, verified. See [archive](project/clickstops/done_cs18_mssql-production-fixes.md).
 
 ---
 
