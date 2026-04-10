@@ -13,7 +13,13 @@
 
 const { execSync } = require('child_process');
 
-const SA_PASSWORD = process.env.MSSQL_SA_PASSWORD || 'GwnTest1!';
+const SA_PASSWORD = process.env.MSSQL_SA_PASSWORD;
+
+if (!SA_PASSWORD) {
+  console.error('Error: MSSQL_SA_PASSWORD environment variable must be set.');
+  console.error('Example: $env:MSSQL_SA_PASSWORD = "YourPassword"; npm run test:mssql');
+  process.exit(1);
+}
 const CONNECTION = `Server=localhost,1433;Database=master;User Id=sa;Password=${SA_PASSWORD};Encrypt=false;TrustServerCertificate=true`;
 const TEST_DB = 'gwn_test';
 const TEST_CONNECTION = `Server=localhost,1433;Database=${TEST_DB};User Id=sa;Password=${SA_PASSWORD};Encrypt=false;TrustServerCertificate=true`;

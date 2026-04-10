@@ -94,7 +94,7 @@ function rewriteSql(sqlStr, params = []) {
 }
 
 /**
- * Return the zero-based positions of `?` placeholders in SQL,
+ * Return the zero-based ordinal indices of unquoted `?` placeholders,
  * skipping those inside single-quoted strings.
  */
 function findPlaceholderPositions(sqlStr) {
@@ -204,8 +204,9 @@ async function runWithInsertHandling(sqlStr, params, execFn) {
         lastId: (result.recordset && result.recordset[0] && result.recordset[0].lastId) || 0,
       };
     } catch (err) {
+      const errorNumber = err.number || (err.originalError && err.originalError.number);
       // 2627 = unique constraint violation, 2601 = unique index violation
-      if (err.number === 2627 || err.number === 2601) {
+      if (errorNumber === 2627 || errorNumber === 2601) {
         return { changes: 0, lastId: 0 };
       }
       throw err;
