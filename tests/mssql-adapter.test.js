@@ -10,6 +10,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 const MssqlAdapter = require('../server/db/mssql-adapter');
 const rewriteParams = MssqlAdapter._rewriteParams;
+const rewriteSql = MssqlAdapter._rewriteSql;
 
 /* ── mock factories ──────────────────────────────────────────────────── */
 
@@ -415,5 +416,298 @@ describe('MssqlTxAdapter (transaction-scoped)', () => {
       await tx._exec('CREATE TABLE foo (id INT)');
       expect(txReq.batch).toHaveBeenCalledWith('CREATE TABLE foo (id INT)');
     });
+  });
+});
+
+/* ── rewriteSql tests ────────────────────────────────────────────────── */
+
+describe('rewriteSql', () => {
+  describe('LIMIT → OFFSET/FETCH', () => {
+    it('rewrites ORDER BY … LIMIT ?', () => {
+      const { sql, params } = rewriteSql(
+        'SELECT * FROM t ORDER BY x LIMIT ?',
+        [10]
+      );
+      expect(sql).toBe('SELECT * FROM t ORDER BY x OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY');
+      expect(params).toEqual([10]);
+    });
+
+    it('rewrites LIMIT ? OFFSET ? and swaps params', () => {
+      const { sql, params } = rewriteSql(
+        'SELECT * FROM puzzles WHERE active = 1 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
+        [20, 40]
+      );
+      expect(sql).toBe(
+        'SELECT * FROM puzzles WHERE active = 1 ORDER BY created_at DESC, id DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY'
+      );
+      // params swapped: offset (40) comes first, limit (20) second
+      expect(params).toEqual([40, 20]);
+    });
+
+    it('swaps only the LIMIT/OFFSET params when query has earlier params', () => {
+      const { sql, params } = rewriteSql(
+        'SELECT * FROM puzzles WHERE active = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
+        [1, 20, 40]
+      );
+      expect(sql).toBe(
+        'SELECT * FROM puzzles WHERE active = ? ORDER BY created_at DESC OFFSET ? ROWS FETCH NEXT ? ROWS ONLY'
+      );
+      expect(params).toEqual([1, 40, 20]);
+    });
+  });
+
+  describe('RANDOM() → NEWID()', () => {
+    it('replaces RANDOM() case-insensitively', () => {
+      const { sql } = rewriteSql('SELECT * FROM t ORDER BY RANDOM() LIMIT ?', [5]);
+      expect(sql).toContain('ORDER BY NEWID()');
+      expect(sql).not.toContain('RANDOM');
+    });
+
+    it('replaces lowercase random()', () => {
+      const { sql } = rewriteSql('ORDER BY random()', []);
+      expect(sql).toBe('ORDER BY NEWID()');
+    });
+  });
+
+  describe('date functions', () => {
+    it("rewrites date('now')", () => {
+      const { sql } = rewriteSql("WHERE date(s.played_at) = date('now')", []);
+      expect(sql).toBe('WHERE CAST(s.played_at AS DATE) = CAST(GETUTCDATE() AS DATE)');
+    });
+
+    it("rewrites DATE('now') (uppercase)", () => {
+      const { sql } = rewriteSql("WHERE DATE('now') = x", []);
+      expect(sql).toBe('WHERE CAST(GETUTCDATE() AS DATE) = x');
+    });
+
+    it("rewrites datetime('now', '-7 days')", () => {
+      const { sql } = rewriteSql("WHERE t >= datetime('now', '-7 days')", []);
+      expect(sql).toBe('WHERE t >= DATEADD(day, -7, GETUTCDATE())');
+    });
+
+    it("rewrites datetime('now', '-24 hours')", () => {
+      const { sql } = rewriteSql("WHERE t >= datetime('now', '-24 hours')", []);
+      expect(sql).toBe('WHERE t >= DATEADD(hour, -24, GETUTCDATE())');
+    });
+
+    it('rewrites date(column_expr) to CAST(… AS DATE)', () => {
+      const { sql } = rewriteSql('WHERE date(m.finished_at) = date(s.played_at)', []);
+      expect(sql).toBe('WHERE CAST(m.finished_at AS DATE) = CAST(s.played_at AS DATE)');
+    });
+  });
+
+  describe('combined rewrites', () => {
+    it('handles leaderboard query with date filter + LIMIT', () => {
+      const input = `
+      SELECT s.id, s.score, u.username
+      FROM scores s JOIN users u ON s.user_id = u.id
+      WHERE s.mode = ? AND date(s.played_at) = date('now')
+      ORDER BY s.score DESC
+      LIMIT ?`;
+      const { sql, params } = rewriteSql(input, ['freeplay', 20]);
+      expect(sql).toContain('CAST(s.played_at AS DATE) = CAST(GETUTCDATE() AS DATE)');
+      expect(sql).toContain('OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY');
+      expect(sql).not.toContain('LIMIT');
+      expect(params).toEqual(['freeplay', 20]);
+    });
+
+    it('handles RANDOM() + LIMIT together', () => {
+      const { sql } = rewriteSql(
+        'SELECT * FROM puzzles WHERE active = 1 ORDER BY RANDOM() LIMIT ?',
+        [5]
+      );
+      expect(sql).toBe(
+        'SELECT * FROM puzzles WHERE active = 1 ORDER BY NEWID() OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY'
+      );
+    });
+  });
+
+  describe('pass-through', () => {
+    it('does not modify SQL without SQLite idioms', () => {
+      const input = 'SELECT * FROM t WHERE id = ?';
+      const { sql, params } = rewriteSql(input, [42]);
+      expect(sql).toBe(input);
+      expect(params).toEqual([42]);
+    });
+
+    it('does not modify INSERT statements', () => {
+      const input = 'INSERT INTO t (a, b) VALUES (?, ?)';
+      const { sql, params } = rewriteSql(input, [1, 2]);
+      expect(sql).toBe(input);
+      expect(params).toEqual([1, 2]);
+    });
+  });
+});
+
+/* ── INSERT OR IGNORE handling ───────────────────────────────────────── */
+
+describe('INSERT OR IGNORE handling', () => {
+  let adapter;
+  let mockSql;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSql = makeMockSql();
+    adapter = new MssqlAdapter(
+      'Server=test;',
+      { mssql: mockSql }
+    );
+  });
+
+  it('strips OR IGNORE and executes normally on success', async () => {
+    const mockReq = makeMockRequest({ recordset: [], rowsAffected: [1] });
+    adapter._pool = makeMockPool(mockReq);
+
+    const result = await adapter._run(
+      'INSERT OR IGNORE INTO user_achievements (user_id, achievement_id) VALUES (?, ?)',
+      [1, 'first-win']
+    );
+    expect(result.changes).toBe(1);
+    // SQL should have OR IGNORE stripped
+    const calledSql = mockReq.query.mock.calls[0][0];
+    expect(calledSql).not.toContain('OR IGNORE');
+    expect(calledSql).toContain('INSERT INTO');
+  });
+
+  it('returns { changes: 0, lastId: 0 } on duplicate key error 2627', async () => {
+    const mockReq = makeMockRequest();
+    const dupError = new Error('Violation of UNIQUE KEY constraint');
+    dupError.number = 2627;
+    mockReq.query.mockRejectedValue(dupError);
+    adapter._pool = makeMockPool(mockReq);
+
+    const result = await adapter._run(
+      'INSERT OR IGNORE INTO user_achievements (user_id, achievement_id) VALUES (?, ?)',
+      [1, 'first-win']
+    );
+    expect(result).toEqual({ changes: 0, lastId: 0 });
+  });
+
+  it('returns { changes: 0, lastId: 0 } on unique index error 2601', async () => {
+    const mockReq = makeMockRequest();
+    const dupError = new Error('Cannot insert duplicate key');
+    dupError.number = 2601;
+    mockReq.query.mockRejectedValue(dupError);
+    adapter._pool = makeMockPool(mockReq);
+
+    const result = await adapter._run(
+      'INSERT OR IGNORE INTO match_rounds (match_id, round_num, puzzle_id) VALUES (?, ?, ?)',
+      ['m1', 1, 5]
+    );
+    expect(result).toEqual({ changes: 0, lastId: 0 });
+  });
+
+  it('re-throws non-duplicate errors', async () => {
+    const mockReq = makeMockRequest();
+    const otherError = new Error('Connection lost');
+    otherError.number = 4060;
+    mockReq.query.mockRejectedValue(otherError);
+    adapter._pool = makeMockPool(mockReq);
+
+    await expect(adapter._run(
+      'INSERT OR IGNORE INTO t (a) VALUES (?)',
+      [1]
+    )).rejects.toThrow('Connection lost');
+  });
+});
+
+/* ── lastId via SCOPE_IDENTITY() ─────────────────────────────────────── */
+
+describe('lastId via SCOPE_IDENTITY()', () => {
+  let adapter;
+  let mockSql;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSql = makeMockSql();
+    adapter = new MssqlAdapter('Server=test;', { mssql: mockSql });
+  });
+
+  it('appends SCOPE_IDENTITY() for plain INSERT', async () => {
+    const mockReq = makeMockRequest({
+      recordset: [{ lastId: 99 }],
+      rowsAffected: [1],
+    });
+    adapter._pool = makeMockPool(mockReq);
+
+    const result = await adapter._run(
+      'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+      ['alice', 'hash123']
+    );
+    expect(result.lastId).toBe(99);
+    expect(result.changes).toBe(1);
+    const calledSql = mockReq.query.mock.calls[0][0];
+    expect(calledSql).toContain('SELECT SCOPE_IDENTITY() AS lastId');
+  });
+
+  it('does NOT append SCOPE_IDENTITY() for INSERT … SELECT', async () => {
+    const mockReq = makeMockRequest({ recordset: [], rowsAffected: [3] });
+    adapter._pool = makeMockPool(mockReq);
+
+    await adapter._run(
+      'INSERT INTO t (a) SELECT b FROM other WHERE c = ?',
+      [1]
+    );
+    const calledSql = mockReq.query.mock.calls[0][0];
+    expect(calledSql).not.toContain('SCOPE_IDENTITY');
+  });
+
+  it('does NOT append SCOPE_IDENTITY() for UPDATE', async () => {
+    const mockReq = makeMockRequest({ recordset: [], rowsAffected: [2] });
+    adapter._pool = makeMockPool(mockReq);
+
+    await adapter._run('UPDATE t SET a = ? WHERE b = ?', [1, 2]);
+    const calledSql = mockReq.query.mock.calls[0][0];
+    expect(calledSql).not.toContain('SCOPE_IDENTITY');
+  });
+
+  it('does NOT append SCOPE_IDENTITY() for DELETE', async () => {
+    const mockReq = makeMockRequest({ recordset: [], rowsAffected: [1] });
+    adapter._pool = makeMockPool(mockReq);
+
+    await adapter._run('DELETE FROM t WHERE id = ?', [5]);
+    const calledSql = mockReq.query.mock.calls[0][0];
+    expect(calledSql).not.toContain('SCOPE_IDENTITY');
+  });
+});
+
+/* ── SQL rewriting integration through adapter methods ───────────────── */
+
+describe('SQL rewriting through _get/_all', () => {
+  let adapter;
+  let mockSql;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSql = makeMockSql();
+    adapter = new MssqlAdapter('Server=test;', { mssql: mockSql });
+  });
+
+  it('_all rewrites LIMIT in the sent query', async () => {
+    const mockReq = makeMockRequest({ recordset: [{ id: 1 }], rowsAffected: [1] });
+    adapter._pool = makeMockPool(mockReq);
+
+    await adapter._all(
+      'SELECT * FROM puzzles WHERE active = 1 ORDER BY RANDOM() LIMIT ?',
+      [5]
+    );
+    const calledSql = mockReq.query.mock.calls[0][0];
+    expect(calledSql).toContain('NEWID()');
+    expect(calledSql).toContain('OFFSET 0 ROWS FETCH NEXT');
+    expect(calledSql).not.toContain('LIMIT');
+    expect(calledSql).not.toContain('RANDOM');
+  });
+
+  it('_get rewrites date functions in the sent query', async () => {
+    const mockReq = makeMockRequest({ recordset: [{ cnt: 5 }], rowsAffected: [1] });
+    adapter._pool = makeMockPool(mockReq);
+
+    await adapter._get(
+      "SELECT COUNT(*) as cnt FROM scores WHERE played_at >= datetime('now', '-7 days')",
+      []
+    );
+    const calledSql = mockReq.query.mock.calls[0][0];
+    expect(calledSql).toContain('DATEADD(day, -7, GETUTCDATE())');
+    expect(calledSql).not.toContain('datetime');
   });
 });
