@@ -13,7 +13,7 @@
 | CS22-2 | Apply shuffle in multiplayer mode | ⬜ Pending | Ensure the same shuffle algorithm is applied client-side for multiplayer rendering (`server/ws/matchHandler.js` sends options, client in `public/js/app.js` shuffles independently). Each player sees a different random ordering since each client shuffles independently. |
 | CS22-3 | Fix puzzle submission form bias | ⬜ Pending | The puzzle creator UI defaults correct answer to option 1 and image submissions build `options = [answer, ...distractors]`. Update to randomize the position of the correct answer in submitted puzzles. |
 | CS22-4 | Add unit tests for shuffle fairness | ⬜ Pending | Test that the shuffle function produces all permutations using a seeded RNG or by enumerating permutations for small n. Verify Fisher-Yates properties deterministically. Test that correct answer tracking works after shuffle. |
-| CS22-5 | Update existing tests | ⬜ Pending | Some tests use `puzzle.options[0]` as the answer (e.g., `nplayer.test.js`, `reconnection.test.js`). Update to use `puzzle.answer` instead of assuming position. |
+| CS22-5 | Update existing tests | ⬜ Pending | Some tests use `puzzle.options[0]` as the answer (e.g., `tests/nplayer.test.js`, `tests/reconnection.test.js`). Update to use `puzzle.answer` instead of assuming position. |
 
 ---
 
