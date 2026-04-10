@@ -144,6 +144,8 @@ jobs:
                         value: "${SYSTEM_API_KEY}"
                       - name: GWN_DB_PATH
                         value: /tmp/game.db
+                      - name: DATABASE_URL
+                        value: "${DATABASE_URL}"
                     resources:
                       cpu: 0.5
                       memory: 1Gi
@@ -157,6 +159,7 @@ jobs:
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deactivate old revisions
         uses: azure/cli@v2
@@ -217,6 +220,8 @@ jobs:
                         value: "${SYSTEM_API_KEY}"
                       - name: GWN_DB_PATH
                         value: /tmp/game.db
+                      - name: DATABASE_URL
+                        value: "${DATABASE_URL}"
                     resources:
                       cpu: 0.5
                       memory: 1Gi
@@ -247,6 +252,7 @@ jobs:
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Fail if unhealthy
         if: steps.healthcheck.outputs.healthy != 'true'
