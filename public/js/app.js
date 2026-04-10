@@ -662,6 +662,7 @@ function init() {
         if (isLoggedIn() && (authRole === 'admin' || authRole === 'system')) {
           showScreen('moderation');
           loadModerationSubmissions();
+          loadModerationStats();
         }
         break;
       case 'gallery-load-more':
@@ -3855,6 +3856,53 @@ function initSubmitPuzzleForm() {
    Admin Moderation UI
    ==================== */
 
+/** Set of selected submission IDs for bulk operations. */
+const modSelectedIds = new Set();
+
+/** Refresh the bulk action bar visibility and counts. */
+function updateBulkActionBar() {
+  const bar = document.querySelector('[data-bind="mod-bulk-actions"]');
+  const countEl = document.querySelector('[data-bind="mod-bulk-count"]');
+  if (!bar) return;
+  const n = modSelectedIds.size;
+  bar.style.display = n > 0 ? 'flex' : 'none';
+  if (countEl) countEl.textContent = `${n} selected`;
+  // Update approve/reject button labels
+  const approveBtn = bar.querySelector('[data-action="bulk-approve"]');
+  const rejectBtn = bar.querySelector('[data-action="bulk-reject"]');
+  if (approveBtn) approveBtn.textContent = `✅ Approve Selected (${n})`;
+  if (rejectBtn) rejectBtn.textContent = `❌ Reject Selected (${n})`;
+}
+
+/** Update the select-all checkbox state based on individual checkboxes. */
+function syncSelectAllCheckbox() {
+  const selectAll = document.querySelector('[data-bind="mod-select-all"]');
+  if (!selectAll) return;
+  const checkboxes = document.querySelectorAll('.mod-card-checkbox');
+  if (checkboxes.length === 0) { selectAll.checked = false; selectAll.indeterminate = false; return; }
+  const allChecked = [...checkboxes].every(cb => cb.checked);
+  const someChecked = [...checkboxes].some(cb => cb.checked);
+  selectAll.checked = allChecked;
+  selectAll.indeterminate = someChecked && !allChecked;
+}
+
+/** Fetch and display submission statistics. */
+async function loadModerationStats() {
+  try {
+    const res = await apiFetch('/api/submissions/stats');
+    if (!res.ok) return;
+    const data = await res.json();
+    const pending = document.querySelector('[data-bind="stat-pending"]');
+    const approved = document.querySelector('[data-bind="stat-approved"]');
+    const rejected = document.querySelector('[data-bind="stat-rejected"]');
+    const today = document.querySelector('[data-bind="stat-today"]');
+    if (pending) pending.textContent = data.pending;
+    if (approved) approved.textContent = data.approved;
+    if (rejected) rejected.textContent = data.rejected;
+    if (today) today.textContent = `${data.today.submitted} submitted, ${data.today.reviewed} reviewed`;
+  } catch { /* best effort */ }
+}
+
 /** Initialize moderation tab switching. */
 function initModerationTabs() {
   document.querySelectorAll('[data-mod-tab]').forEach(btn => {
@@ -3878,39 +3926,69 @@ async function loadModerationSubmissions() {
   const container = document.querySelector('[data-bind="moderation-list"]');
   if (!container) return;
   container.innerHTML = '<p class="moderation-loading">Loading submissions…</p>';
+  modSelectedIds.clear();
+  updateBulkActionBar();
 
   try {
     const res = await apiFetch('/api/submissions/pending');
     const data = await res.json();
     if (!res.ok) {
       container.innerHTML = `<p class="moderation-error">${escapeHTML(data.error || 'Failed to load')}</p>`;
+      const bh = document.querySelector('[data-bind="mod-bulk-header"]');
+      if (bh) bh.style.display = 'none';
       return;
     }
     const submissions = data.submissions || [];
     if (submissions.length === 0) {
       container.innerHTML = '<p class="moderation-empty">No pending submissions.</p>';
+      const bh = document.querySelector('[data-bind="mod-bulk-header"]');
+      if (bh) bh.style.display = 'none';
       return;
     }
-    container.innerHTML = submissions.map(s => `
+
+    // Show bulk header
+    const bulkHeader = document.querySelector('[data-bind="mod-bulk-header"]');
+    if (bulkHeader) bulkHeader.style.display = '';
+
+    container.innerHTML = submissions.map(s => {
+      const seqDisplay = Array.isArray(s.sequence) ? s.sequence.map(item => escapeHTML(String(item))).join(', ') : escapeHTML(String(s.sequence));
+      const optionsDisplay = Array.isArray(s.options) ? s.options.map(o => escapeHTML(String(o))).join(', ') : '';
+      return `
       <div class="moderation-card" data-submission-id="${s.id}">
         <div class="mod-card-header">
+          <label class="mod-checkbox-label">
+            <input type="checkbox" class="mod-card-checkbox" data-mod-select="${s.id}" aria-label="Select submission ${s.id}">
+          </label>
           <span class="mod-badge mod-badge-${s.difficulty === 1 ? 'easy' : s.difficulty === 2 ? 'medium' : 'hard'}">${s.difficulty === 1 ? 'Easy' : s.difficulty === 2 ? 'Medium' : 'Hard'}</span>
           <span class="mod-category">${escapeHTML(s.category)}</span>
+          <span class="mod-type-badge">${escapeHTML(s.type || 'emoji')}</span>
           <span class="mod-author">by ${escapeHTML(s.submitted_by)}</span>
         </div>
-        <div class="mod-card-body">
-          <p><strong>Sequence:</strong> ${Array.isArray(s.sequence) ? s.sequence.map(item => escapeHTML(String(item))).join(', ') : escapeHTML(String(s.sequence))}</p>
+        <div class="mod-card-body" data-mod-body="${s.id}">
+          <p><strong>Sequence:</strong> ${seqDisplay}</p>
           <p><strong>Answer:</strong> ${escapeHTML(String(s.answer))}</p>
+          ${optionsDisplay ? `<p><strong>Options:</strong> ${optionsDisplay}</p>` : ''}
           <p><strong>Explanation:</strong> ${escapeHTML(s.explanation)}</p>
         </div>
-        <div class="mod-card-actions">
+        <div class="mod-card-preview" data-mod-preview="${s.id}" style="display:none">
+          ${renderPuzzlePreview({ type: s.type, sequence: s.sequence, answer: String(s.answer), options: s.options, explanation: s.explanation })}
+        </div>
+        <div class="mod-card-actions" data-mod-actions="${s.id}">
+          <button class="btn btn-secondary btn-sm" data-mod-toggle-preview="${s.id}" aria-expanded="false">👁️ Preview</button>
+          <button class="btn btn-secondary btn-sm" data-mod-edit="${s.id}">✏️ Edit</button>
           <button class="btn btn-approve" data-mod-action="approved" data-mod-id="${s.id}">✅ Approve</button>
           <button class="btn btn-reject" data-mod-action="rejected" data-mod-id="${s.id}">❌ Reject</button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
+
+    // Store submission data for edit functionality
+    container._submissionsData = submissions;
+    syncSelectAllCheckbox();
   } catch {
     container.innerHTML = '<p class="moderation-error">Network error — please try again.</p>';
+    const bh = document.querySelector('[data-bind="mod-bulk-header"]');
+    if (bh) bh.style.display = 'none';
   }
 }
 
@@ -3935,8 +4013,147 @@ async function handleModerationAction(id, status) {
     if (res.ok) {
       if (statusEl) { statusEl.textContent = data.message || `Submission ${status}`; statusEl.className = 'moderation-status success'; }
       loadModerationSubmissions();
+      loadModerationStats();
     } else {
       if (statusEl) { statusEl.textContent = data.error || `Failed to ${status}`; statusEl.className = 'moderation-status error'; }
+    }
+  } catch {
+    if (statusEl) { statusEl.textContent = 'Network error — please try again.'; statusEl.className = 'moderation-status error'; }
+  }
+}
+
+/** Handle bulk approve/reject for selected submissions. */
+async function handleBulkReview(status) {
+  const statusEl = document.querySelector('[data-bind="moderation-status"]');
+  const ids = [...modSelectedIds];
+  if (ids.length === 0) return;
+
+  const action = status === 'approved' ? 'Approve' : 'Reject';
+  if (!confirm(`${action} ${ids.length} submission${ids.length > 1 ? 's' : ''}?`)) return;
+
+  let reviewerNotes = null;
+  if (status === 'rejected') {
+    reviewerNotes = prompt('Reviewer notes (optional):');
+    if (reviewerNotes === null) return;
+  }
+
+  if (statusEl) { statusEl.textContent = `Processing ${ids.length} submissions…`; statusEl.className = 'moderation-status'; }
+
+  try {
+    const body = { ids, status };
+    if (reviewerNotes) body.reviewerNotes = reviewerNotes;
+    const res = await apiFetch('/api/submissions/bulk-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const succeeded = data.results.filter(r => !r.error).length;
+      const failed = data.results.filter(r => r.error).length;
+      let msg = `${succeeded} ${status}`;
+      if (failed > 0) msg += `, ${failed} failed`;
+      if (statusEl) { statusEl.textContent = msg; statusEl.className = succeeded > 0 ? 'moderation-status success' : 'moderation-status error'; }
+      loadModerationSubmissions();
+      loadModerationStats();
+    } else {
+      if (statusEl) { statusEl.textContent = data.error || 'Bulk operation failed'; statusEl.className = 'moderation-status error'; }
+    }
+  } catch {
+    if (statusEl) { statusEl.textContent = 'Network error — please try again.'; statusEl.className = 'moderation-status error'; }
+  }
+}
+
+/** Toggle inline preview for a submission card. */
+function toggleModPreview(id) {
+  const preview = document.querySelector(`[data-mod-preview="${id}"]`);
+  if (!preview) return;
+  const visible = preview.style.display !== 'none';
+  preview.style.display = visible ? 'none' : '';
+  const btn = document.querySelector(`[data-mod-toggle-preview="${id}"]`);
+  if (btn) {
+    btn.textContent = visible ? '👁️ Preview' : '👁️ Hide Preview';
+    btn.setAttribute('aria-expanded', String(!visible));
+  }
+}
+
+/** Enter edit mode for a submission card. */
+function startModEdit(id) {
+  const container = document.querySelector('[data-bind="moderation-list"]');
+  const submissions = container?._submissionsData;
+  if (!submissions) return;
+  const s = submissions.find(sub => sub.id === Number(id) || sub.id === id);
+  if (!s) return;
+
+  const body = document.querySelector(`[data-mod-body="${id}"]`);
+  const actions = document.querySelector(`[data-mod-actions="${id}"]`);
+  if (!body || !actions) return;
+
+  const seqVal = Array.isArray(s.sequence) ? s.sequence.join(', ') : String(s.sequence);
+  const optVals = Array.isArray(s.options) ? s.options : ['', '', '', ''];
+
+  body.innerHTML = `
+    <div class="mod-edit-form">
+      <label>Sequence (comma-separated): <textarea class="mod-edit-sequence" rows="2">${escapeHTML(seqVal)}</textarea></label>
+      <label>Answer: <input type="text" class="mod-edit-answer" value="${escapeHTML(String(s.answer))}"></label>
+      <label>Explanation: <textarea class="mod-edit-explanation" rows="2">${escapeHTML(s.explanation)}</textarea></label>
+      <label>Difficulty:
+        <select class="mod-edit-difficulty">
+          <option value="1" ${s.difficulty === 1 ? 'selected' : ''}>Easy</option>
+          <option value="2" ${s.difficulty === 2 ? 'selected' : ''}>Medium</option>
+          <option value="3" ${s.difficulty === 3 ? 'selected' : ''}>Hard</option>
+        </select>
+      </label>
+      <label>Options (4):
+        <div class="mod-edit-options">
+          ${[0,1,2,3].map(i => `<input type="text" class="mod-edit-option" data-idx="${i}" value="${escapeHTML(optVals[i] || '')}" placeholder="Option ${i+1}">`).join('')}
+        </div>
+      </label>
+    </div>`;
+
+  actions.innerHTML = `
+    <button class="btn btn-approve btn-sm" data-mod-save="${id}">💾 Save</button>
+    <button class="btn btn-secondary btn-sm" data-mod-cancel="${id}">Cancel</button>`;
+}
+
+/** Save edits for a submission card. */
+async function saveModEdit(id) {
+  const statusEl = document.querySelector('[data-bind="moderation-status"]');
+  const card = document.querySelector(`[data-submission-id="${id}"]`);
+  if (!card) return;
+
+  const seqRaw = card.querySelector('.mod-edit-sequence')?.value || '';
+  const answer = card.querySelector('.mod-edit-answer')?.value || '';
+  const explanation = card.querySelector('.mod-edit-explanation')?.value || '';
+  const difficulty = Number(card.querySelector('.mod-edit-difficulty')?.value || 1);
+  const optionEls = card.querySelectorAll('.mod-edit-option');
+  const options = [...optionEls].map(el => el.value.trim());
+  const filledOptionCount = options.filter(Boolean).length;
+  const sequence = seqRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+  if (filledOptionCount > 0 && filledOptionCount < options.length) {
+    if (statusEl) {
+      statusEl.textContent = 'Please fill in all answer options before saving.';
+      statusEl.className = 'moderation-status error';
+    }
+    return;
+  }
+
+  const body = { sequence, answer, explanation, difficulty };
+  if (options.length === 4 && filledOptionCount === 4) body.options = options;
+
+  try {
+    const res = await apiFetch(`/api/submissions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (statusEl) { statusEl.textContent = 'Submission updated'; statusEl.className = 'moderation-status success'; }
+      loadModerationSubmissions();
+    } else {
+      if (statusEl) { statusEl.textContent = data.error || 'Failed to save'; statusEl.className = 'moderation-status error'; }
     }
   } catch {
     if (statusEl) { statusEl.textContent = 'Network error — please try again.'; statusEl.className = 'moderation-status error'; }
@@ -4003,14 +4220,78 @@ async function handleRoleChange(userId, newRole) {
 /** Wire moderation screen event delegation. */
 function initModerationScreen() {
   initModerationTabs();
+
+  // Select-all checkbox
+  const selectAll = document.querySelector('[data-bind="mod-select-all"]');
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      const checked = selectAll.checked;
+      selectAll.indeterminate = false;
+      document.querySelectorAll('.mod-card-checkbox').forEach(cb => {
+        cb.checked = checked;
+        const id = cb.dataset.modSelect;
+        if (checked) modSelectedIds.add(id); else modSelectedIds.delete(id);
+      });
+      updateBulkActionBar();
+    });
+  }
+
   document.addEventListener('click', (e) => {
+    // Individual approve/reject
     const modAction = e.target.dataset.modAction;
     if (modAction && e.target.dataset.modId) {
       handleModerationAction(e.target.dataset.modId, modAction);
+      return;
     }
+    // Role management
     const roleAction = e.target.dataset.roleAction;
     if (roleAction && e.target.dataset.userId) {
       handleRoleChange(e.target.dataset.userId, roleAction);
+      return;
+    }
+    // Preview toggle
+    const previewId = e.target.dataset.modTogglePreview;
+    if (previewId) {
+      toggleModPreview(previewId);
+      return;
+    }
+    // Edit button
+    const editId = e.target.dataset.modEdit;
+    if (editId) {
+      startModEdit(editId);
+      return;
+    }
+    // Save edit
+    const saveId = e.target.dataset.modSave;
+    if (saveId) {
+      saveModEdit(saveId);
+      return;
+    }
+    // Cancel edit
+    const cancelId = e.target.dataset.modCancel;
+    if (cancelId) {
+      loadModerationSubmissions();
+      return;
+    }
+    // Bulk approve
+    if (e.target.dataset.action === 'bulk-approve') {
+      handleBulkReview('approved');
+      return;
+    }
+    // Bulk reject
+    if (e.target.dataset.action === 'bulk-reject') {
+      handleBulkReview('rejected');
+      return;
+    }
+  });
+
+  // Checkbox changes (individual)
+  document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('mod-card-checkbox')) {
+      const id = e.target.dataset.modSelect;
+      if (e.target.checked) modSelectedIds.add(id); else modSelectedIds.delete(id);
+      updateBulkActionBar();
+      syncSelectAllCheckbox();
     }
   });
 }
