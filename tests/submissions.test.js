@@ -544,9 +544,10 @@ describe('PUT /api/submissions/:id/review — type and options', () => {
     // Verify the puzzle was created with type 'text'
     const puzzlesRes = await getAgent()
       .get('/api/puzzles')
-      .set('X-API-Key', SYSTEM_KEY);
+      .set('Authorization', `Bearer ${userToken}`);
 
-    const puzzle = puzzlesRes.body.puzzles.find(p => p.id === approveRes.body.puzzleId);
+    const puzzles = puzzlesRes.body;
+    const puzzle = puzzles.find(p => p.id === approveRes.body.puzzleId);
     expect(puzzle).toBeDefined();
     expect(puzzle.type).toBe('text');
   });
@@ -573,12 +574,12 @@ describe('PUT /api/submissions/:id/review — type and options', () => {
 
     const puzzlesRes = await getAgent()
       .get('/api/puzzles')
-      .set('X-API-Key', SYSTEM_KEY);
+      .set('Authorization', `Bearer ${userToken}`);
 
-    const puzzle = puzzlesRes.body.puzzles.find(p => p.id === approveRes.body.puzzleId);
+    const puzzles = puzzlesRes.body;
+    const puzzle = puzzles.find(p => p.id === approveRes.body.puzzleId);
     expect(puzzle).toBeDefined();
-    const opts = JSON.parse(puzzle.options);
-    expect(opts).toEqual(['🍇', '🍉', '🍓', '🫐']);
+    expect(puzzle.options).toEqual(['🍇', '🍉', '🍓', '🫐']);
   });
 
   test('approve auto-generates options when not provided', async () => {
@@ -602,13 +603,13 @@ describe('PUT /api/submissions/:id/review — type and options', () => {
 
     const puzzlesRes = await getAgent()
       .get('/api/puzzles')
-      .set('X-API-Key', SYSTEM_KEY);
+      .set('Authorization', `Bearer ${userToken}`);
 
-    const puzzle = puzzlesRes.body.puzzles.find(p => p.id === approveRes.body.puzzleId);
+    const puzzles = puzzlesRes.body;
+    const puzzle = puzzles.find(p => p.id === approveRes.body.puzzleId);
     expect(puzzle).toBeDefined();
-    const opts = JSON.parse(puzzle.options);
-    expect(opts).toHaveLength(4);
-    expect(opts).toContain('🌲');
+    expect(puzzle.options).toHaveLength(4);
+    expect(puzzle.options).toContain('🌲');
   });
 
   test('backward compat: old submissions without type default to emoji on approve', async () => {
@@ -632,9 +633,10 @@ describe('PUT /api/submissions/:id/review — type and options', () => {
 
     const puzzlesRes = await getAgent()
       .get('/api/puzzles')
-      .set('X-API-Key', SYSTEM_KEY);
+      .set('Authorization', `Bearer ${userToken}`);
 
-    const puzzle = puzzlesRes.body.puzzles.find(p => p.id === approveRes.body.puzzleId);
+    const puzzles = puzzlesRes.body;
+    const puzzle = puzzles.find(p => p.id === approveRes.body.puzzleId);
     expect(puzzle).toBeDefined();
     expect(puzzle.type).toBe('emoji');
   });

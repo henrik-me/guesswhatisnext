@@ -2584,7 +2584,7 @@ function resetSubmitPuzzleForm() {
  * @param {{type?: string, sequence?: string[], answer?: string, options?: string[], explanation?: string}} data
  * @returns {string} HTML string for the preview
  */
-function renderPuzzlePreview({ type, sequence, answer, options, explanation }) {
+function renderPuzzlePreview({ type: _type, sequence, answer, options, explanation }) {
   if (!sequence || sequence.length === 0) {
     return '<p class="preview-empty">Fill in the form to see a live preview</p>';
   }
@@ -2853,8 +2853,8 @@ function initSubmitPuzzleForm() {
       });
       const data = await res.json();
       if (res.ok) {
-        if (status) { status.textContent = 'Puzzle submitted for review!'; status.className = 'submit-puzzle-status success'; }
         resetSubmitPuzzleForm();
+        if (status) { status.textContent = 'Puzzle submitted for review!'; status.className = 'submit-puzzle-status success'; }
       } else {
         if (status) { status.textContent = data.error || 'Submission failed.'; status.className = 'submit-puzzle-status error'; }
       }

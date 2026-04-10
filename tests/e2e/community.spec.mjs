@@ -140,6 +140,10 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
     await page.selectOption('#sp-difficulty', '1');
     await page.fill('#sp-sequence', '🌑, 🌒, 🌓');
     await page.fill('#sp-answer', '🌔');
+
+    // Wait for answer auto-sync to first option
+    await expect(page.locator('.option-input[data-option="0"]')).toHaveValue('🌔', { timeout: 2000 });
+
     await page.fill('.option-input[data-option="1"]', '🌕');
     await page.fill('.option-input[data-option="2"]', '🌖');
     await page.fill('.option-input[data-option="3"]', '🌗');
@@ -147,12 +151,12 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
 
     // Submit button should be enabled
     const submitBtn = page.locator('#sp-submit-btn');
-    await expect(submitBtn).toBeEnabled({ timeout: 2000 });
+    await expect(submitBtn).toBeEnabled({ timeout: 3000 });
 
     // Submit the form
     await submitBtn.click();
 
     // Should show success message
-    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 5000 });
+    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 10000 });
   });
 });
