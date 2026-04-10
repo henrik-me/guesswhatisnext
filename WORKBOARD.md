@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-10T17:58Z
+> **Last updated:** 2026-04-10T18:25Z
 
 ## Orchestrators
 
@@ -17,6 +17,13 @@ Orchestrators update this file directly on main — no PR required.
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS19-22-plan | CS19–CS22 | Plan clickstops: Puzzle Nav, Auth UX, High Score Sync, Answer Randomization | yoga-gwn-c3 | — | — | — | 2026-04-10 |
+| — | — | No active work | — | — | — | — | — |
+
+## Recently Completed
+
+| Task ID | Description | Agent ID | PR | Merged |
+|---------|-------------|----------|----|--------|
+| CS19-22-plan | Plan clickstops: Puzzle Nav, Auth UX, High Score Sync, Answer Randomization | yoga-gwn-c3 | #136 | 2026-04-10 |
+| CS24-plan | Plan custom domain clickstop (gwn.metzger.dk) | yoga-gwn-c3 | #138 | 2026-04-10 |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
