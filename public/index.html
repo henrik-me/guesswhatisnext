@@ -33,6 +33,13 @@
         <button class="btn btn-secondary" data-action="show-moderation" data-bind="moderation-btn" aria-label="Review Submissions" style="display:none">🛡️ Moderation</button>
         <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
+      <section id="community-section" class="community-section" aria-label="Community Puzzles">
+        <h2 class="community-heading">🌍 Community Puzzles</h2>
+        <div class="community-buttons">
+          <button class="btn btn-secondary" data-action="browse-community" aria-label="Browse Community Puzzles">🔍 Browse Community</button>
+          <button class="btn btn-secondary" data-action="create-puzzle" aria-label="Create a Puzzle">✏️ Create Puzzle</button>
+        </div>
+      </section>
       <footer class="home-stats">
         <div class="home-user-row" data-bind="home-user-display" style="display:none">
           <p class="home-user" data-bind="home-user-label"></p>
@@ -377,6 +384,29 @@
         <h2>📝 Submit a Puzzle</h2>
         <p class="screen-description">Propose a new pattern for the community!</p>
       </header>
+      <div id="submit-onboarding" class="onboarding-explainer" role="region" aria-label="How submissions work">
+        <button class="onboarding-toggle" data-action="toggle-onboarding" aria-expanded="true" aria-controls="onboarding-content">How it works <span class="onboarding-chevron" aria-hidden="true">▾</span></button>
+        <div id="onboarding-content" class="onboarding-content">
+          <div class="onboarding-steps">
+            <div class="onboarding-step">
+              <span class="onboarding-icon" aria-hidden="true">✏️</span>
+              <span class="onboarding-label">Create</span>
+            </div>
+            <span class="onboarding-arrow" aria-hidden="true">→</span>
+            <div class="onboarding-step">
+              <span class="onboarding-icon" aria-hidden="true">👀</span>
+              <span class="onboarding-label">Review</span>
+            </div>
+            <span class="onboarding-arrow" aria-hidden="true">→</span>
+            <div class="onboarding-step">
+              <span class="onboarding-icon" aria-hidden="true">🎮</span>
+              <span class="onboarding-label">Live</span>
+            </div>
+          </div>
+          <p class="onboarding-text">Submit a puzzle sequence → admins review it → approved puzzles go live for everyone to play</p>
+          <button class="btn btn-dismiss" data-action="dismiss-onboarding" aria-label="Dismiss onboarding guide">Got it!</button>
+        </div>
+      </div>
       <form id="submit-puzzle-form" class="submit-puzzle-form" autocomplete="off">
         <div class="form-group">
           <label for="sp-category">Category</label>

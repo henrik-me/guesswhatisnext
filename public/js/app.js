@@ -554,9 +554,31 @@ function init() {
         } else if (isFeatureEnabled('submitPuzzle')) {
           showScreen('submit-puzzle');
           resetSubmitPuzzleForm();
+          showOnboarding();
         } else {
           showToast('Puzzle submissions are not enabled for your account yet');
         }
+        break;
+      case 'browse-community':
+        showToast('Community gallery coming soon!');
+        break;
+      case 'create-puzzle':
+        if (!isLoggedIn()) {
+          authReturnScreen = 'submit-puzzle';
+          showScreen('auth');
+        } else if (isFeatureEnabled('submitPuzzle')) {
+          showScreen('submit-puzzle');
+          resetSubmitPuzzleForm();
+          showOnboarding();
+        } else {
+          showComingSoonTooltip(e.target.closest('[data-action]'));
+        }
+        break;
+      case 'toggle-onboarding':
+        toggleOnboarding();
+        break;
+      case 'dismiss-onboarding':
+        dismissOnboarding();
         break;
       case 'show-moderation':
         if (isLoggedIn() && (authRole === 'admin' || authRole === 'system')) {
@@ -968,6 +990,7 @@ const DEFAULT_FEATURE_FLAGS = Object.freeze({
   submitPuzzle: false,
 });
 let featureFlags = { ...DEFAULT_FEATURE_FLAGS };
+let authReturnScreen = null;
 let matchState = {
   roomCode: null,
   players: [],
@@ -1203,7 +1226,23 @@ async function authAction(action) {
 
     await refreshFeatureFlags();
     submitPendingScores();
-    showScreen('multiplayer');
+
+    if (authReturnScreen) {
+      const returnTo = authReturnScreen;
+      authReturnScreen = null;
+      if (returnTo === 'submit-puzzle' && isFeatureEnabled('submitPuzzle')) {
+        showScreen('submit-puzzle');
+        resetSubmitPuzzleForm();
+        showOnboarding();
+      } else if (returnTo === 'submit-puzzle') {
+        showScreen('home');
+        showToast('Puzzle submissions are not enabled for your account yet');
+      } else {
+        showScreen(returnTo);
+      }
+    } else {
+      showScreen('multiplayer');
+    }
   } catch {
     bindText('auth-error', 'Network error — is the server running?');
   }
@@ -2458,6 +2497,56 @@ function renderMatchHistory(history) {
 /* ===========================
    Community Puzzle Submissions
    =========================== */
+
+const ONBOARDING_DISMISSED_KEY = 'gwn_submit_onboarding_dismissed';
+
+/** Show the onboarding explainer if not previously dismissed. */
+function showOnboarding() {
+  const el = document.getElementById('submit-onboarding');
+  if (!el) return;
+  try {
+    if (localStorage.getItem(ONBOARDING_DISMISSED_KEY) === 'true') {
+      el.style.display = 'none';
+      return;
+    }
+  } catch {
+    // localStorage unavailable — show onboarding
+  }
+  el.style.display = '';
+  el.classList.remove('collapsed');
+  const toggle = el.querySelector('.onboarding-toggle');
+  if (toggle) toggle.setAttribute('aria-expanded', 'true');
+}
+
+/** Toggle the onboarding explainer open/closed. */
+function toggleOnboarding() {
+  const el = document.getElementById('submit-onboarding');
+  if (!el) return;
+  const isCollapsed = el.classList.toggle('collapsed');
+  const toggle = el.querySelector('.onboarding-toggle');
+  if (toggle) toggle.setAttribute('aria-expanded', String(!isCollapsed));
+}
+
+/** Dismiss the onboarding explainer and persist via localStorage. */
+function dismissOnboarding() {
+  const el = document.getElementById('submit-onboarding');
+  if (el) el.style.display = 'none';
+  try {
+    localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true');
+  } catch {
+    // localStorage unavailable — dismissal is best-effort
+  }
+}
+
+/** Show a temporary "coming soon" tooltip on a button. */
+function showComingSoonTooltip(target) {
+  if (!target) return;
+  target.classList.add('coming-soon-tooltip', 'show-tooltip');
+  setTimeout(() => {
+    target.classList.remove('show-tooltip');
+    setTimeout(() => target.classList.remove('coming-soon-tooltip'), 200);
+  }, 2000);
+}
 
 /** Reset the submit-puzzle form and status message. */
 function resetSubmitPuzzleForm() {
