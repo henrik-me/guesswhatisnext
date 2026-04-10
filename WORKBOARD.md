@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-10T01:57Z
+> **Last updated:** 2026-04-10T02:02Z
 
 ## Orchestrators
 
@@ -17,7 +17,6 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS15 | Dev Tooling | Close out CS15 (all tasks already merged) | yoga-gwn-c2 | wt-1 | yoga-gwn-c2/cs15-close-out | — | 2026-04-09 |
 | CS14 | Community Puzzle UX | Wave 1: CS14-80 discovery & onboarding | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-80-discovery-onboarding | — | 2026-04-10 |
 
 ## Queued (ready, no dependencies blocking)
@@ -30,6 +29,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Description | Agent ID | PR | Merged |
 |---------|-------------|----------|----|--------|
+| CS15 | Close out CS15 clickstop (docs-only) | yoga-gwn-c2 | #114 | 2026-04-10 |
 | CS11-64 | Provision Azure SQL (64a–64e complete) | yoga-gwn | #113 (64d code) | 2026-04-10 |
 | CS14-plan | CS14 detailed implementation plan | yoga-gwn-c3 | #115 | 2026-04-10 |
 | CS16 | Docs optimization and workboard conventions | yoga-gwn | #111 | 2026-04-09 |
