@@ -430,7 +430,7 @@ Commit locally after every meaningful, working change — each commit should be 
 
 ### Agent Progress Reporting
 
-All task work happens in background agents on worktrees — never in the main session. Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
+All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
 
 Background agents **must** report progress to the orchestrating agent:
 - **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
@@ -472,6 +472,23 @@ NOT allowed on main checkout:
 - No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates are committed and pushed directly from main
 - No `git push` from main (except WORKBOARD.md updates)
 - No merge conflict resolution on main, **except for conflicts confined to `WORKBOARD.md` and handled per the WORKBOARD.md conflict-handling guidance** — if `git pull` conflicts on anything else, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
+
+**Orchestrator Startup Checklist** (first actions in every new session):
+1. Read INSTRUCTIONS.md in the repository root
+2. Read WORKBOARD.md for current active work and task assignments
+3. Read CONTEXT.md for project state and available clickstops
+4. Determine agent ID from hostname + repo suffix (see § Agent Identification)
+5. Update WORKBOARD.md to register the session (update Orchestrators table), then commit and push immediately
+6. Once a task is claimed, prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
+
+**Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, git operations on main (`git pull`, `git worktree add/remove`), updating WORKBOARD.md, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
+
+**Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation.
+
+**Copilot CLI commands (reference):** The user has access to CLI commands that the orchestrator should be aware of:
+- `/rename <name>` — rename the current session (orchestrator should prompt for this after claiming a task)
+- `/remote` — start a remote cloud session
+- `/tasks` — view running background tasks
 
 **Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
 
@@ -532,6 +549,12 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 | wt-2 | `C:\src\gwn<suffix>-worktrees\wt-2` | 3002 | Sub-agent slot 2 |
 | wt-3 | `C:\src\gwn<suffix>-worktrees\wt-3` | 3003 | Sub-agent slot 3 |
 | wt-4 | `C:\src\gwn<suffix>-worktrees\wt-4` | 3004 | Sub-agent slot 4 |
+
+**Task parallelism:**
+- **Worktree tasks** (code changes, tests, PRs): bounded by worktree slots wt-1 through wt-4. Each needs a git worktree, a unique port, and `npm install`.
+- **Non-worktree tasks** (research, investigation, session queries, planning, analysis): not bounded by worktree slots. These run as non-worktree background agents without consuming a worktree slot. No port or npm install needed.
+
+The orchestrator should maximize parallelism by running non-worktree tasks concurrently with worktree tasks. There is no fixed limit on non-worktree background tasks.
 
 **Agent setup:** Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
 
@@ -614,7 +637,7 @@ Filled-in checklists are recorded in the clickstop's archive file upon completio
 WORKBOARD.md is the real-time coordination file for multi-agent work. It tracks who is working on what, right now.
 
 **Direct commit on main (no PR required):**
-Unlike other project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. This enables fast task assignment without PR review overhead. The workboard must be updated immediately when:
+Unlike other project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. **The push is critical** — a local-only commit provides zero coordination value to other agents. Always commit and push together (see the multi-line commit format with `Agent:` trailer in § Commit Convention for workboard updates below). This enables fast task assignment without PR review overhead. The workboard must be updated immediately when:
 - An orchestrator claims a task (add to Active Work)
 - A task completes or is blocked (move between sections)
 - An orchestrator starts or stops a session (update Orchestrators table)
