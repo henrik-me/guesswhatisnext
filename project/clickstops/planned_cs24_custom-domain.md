@@ -21,8 +21,8 @@
 
 - **Azure managed certificate:** Use Azure's free managed certificate rather than bringing a custom cert. Azure handles renewal automatically. This is the simplest approach for a single custom domain.
 - **CNAME vs A record:** CNAME is preferred for Container Apps since the underlying IP can change. Azure Container Apps provides a domain verification TXT record and expects a CNAME to the app's FQDN.
-- **No code changes needed:** The app already uses `CANONICAL_HOST` for all host-dependent behavior (HTTPS redirect, CSP, WebSocket URL). Changing the env var is sufficient — no code modifications required in security middleware, app.js, or any route.
-- **Backward compatibility:** The old `.azurecontainerapps.io` URL will continue to work but will redirect to the canonical host via the existing security middleware.
+- **No code changes needed:** The app already uses `CANONICAL_HOST` for all host-dependent behavior (HTTPS redirect, CSP, WebSocket URL). Changing the env var is sufficient — no code modifications required in security middleware, `server/app.js`, or any route.
+- **Backward compatibility:** The old `.azurecontainerapps.io` URL may continue to work, but the existing security middleware does not perform canonical-host redirects for already-HTTPS requests.
 
 ## Current State (from investigation)
 
@@ -32,7 +32,7 @@
 - `PROD_URL` GitHub secret feeds `CANONICAL_HOST` during deploy (`.github/workflows/prod-deploy.yml:170-200`).
 - Deploy scripts (`infra/deploy.sh`, `infra/deploy.ps1`) create the container app and set `PROD_URL`/`CANONICAL_HOST` but have no custom domain config.
 - No existing DNS documentation in the repo.
-- `trust proxy` is set in `app.js` — works correctly behind Azure's reverse proxy with custom domains.
+- `trust proxy` is set in `server/app.js` — works correctly behind Azure's reverse proxy with custom domains.
 
 ## Prerequisites
 
