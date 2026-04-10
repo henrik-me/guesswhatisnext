@@ -2721,14 +2721,14 @@ function initSubmitPuzzleForm() {
     });
   });
 
-  // Answer field → auto-sync to first option
+  // Answer field → auto-sync to the currently selected correct option
   const answerInput = document.getElementById('sp-answer');
   if (answerInput) {
     answerInput.addEventListener('input', () => {
-      const firstOption = document.querySelector('.option-input[data-option="0"]');
       const correctRadio = document.querySelector('input[name="correct-option"]:checked');
-      if (firstOption && correctRadio && correctRadio.value === '0') {
-        firstOption.value = answerInput.value;
+      if (correctRadio) {
+        const targetOption = document.querySelector(`.option-input[data-option="${correctRadio.value}"]`);
+        if (targetOption) targetOption.value = answerInput.value;
       }
       validateField('answer');
       validateField('options');
