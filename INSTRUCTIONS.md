@@ -617,7 +617,7 @@ Unlike other project files, WORKBOARD.md is updated by orchestrating agents dire
 
 **Session naming:** After updating the workboard to claim a task, prompt the user to rename the session so it's identifiable at a glance. Format: `[{agent-id}]-{task-id}: {clickstop name}`. Example:
 ```
-/rename [yoga-gwn-c2]-CS17: Process Docs Improvement
+/rename [yoga-gwn-c2]-CS17-1: Process Docs Improvement
 ```
 
 **Update frequency:** Orchestrators should update WORKBOARD.md often — at minimum on task start, task complete, and session start/end. Between those events, update whenever meaningful progress occurs (e.g., PR created, review round complete).
