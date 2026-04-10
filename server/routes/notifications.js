@@ -45,7 +45,14 @@ router.get('/', requireAuth, async (req, res, next) => {
         if (n.data) {
           try { data = JSON.parse(n.data); } catch { /* malformed JSON — treat as null */ }
         }
-        return { ...n, is_read: undefined, read: !!n.is_read, data };
+        return {
+          id: n.id,
+          type: n.type,
+          message: n.message,
+          data,
+          read: !!n.is_read,
+          created_at: n.created_at,
+        };
       }),
       unread_count: countRow ? countRow.count : 0,
     });

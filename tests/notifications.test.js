@@ -32,6 +32,8 @@ async function createSubmission(token) {
       difficulty: 1,
       category: 'Nature',
     });
+  expect(res.status).toBe(201);
+  expect(res.body.id).toBeDefined();
   return res.body.id;
 }
 

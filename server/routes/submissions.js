@@ -63,7 +63,7 @@ async function createReviewNotification(db, submission, status, reviewerNotes) {
       [submission.user_id, type, message, data]
     );
   } catch (err) {
-    logger.error({ err, submissionId: submission.id }, 'Failed to create review notification');
+    logger.warn({ err, submissionId: submission.id }, 'Failed to create review notification');
   }
 }
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp'];
