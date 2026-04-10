@@ -20,10 +20,11 @@ test.describe('Community Discovery & Onboarding', () => {
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
   });
 
-  test('browse community button shows placeholder toast', async ({ page }) => {
+  test('browse community button opens gallery screen', async ({ page }) => {
     await page.goto('/');
     await page.click('[data-action="browse-community"]');
-    await expect(page.locator('.share-toast')).toContainText('coming soon');
+    await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-screen="community-gallery"] h2')).toContainText('Community Puzzles');
   });
 
   test('create puzzle redirects to submit after login, onboarding shows and can be dismissed', async ({ page }) => {
@@ -163,5 +164,90 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
 
     // Should show success message
     await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 10000 });
+  });
+});
+
+test.describe('Community Gallery', () => {
+  test('gallery screen shows empty state when no community puzzles', async ({ page }) => {
+    await page.goto('/');
+    await page.click('[data-action="browse-community"]');
+    await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
+
+    // Should show empty state or loading (empty state because no community puzzles in fresh DB)
+    await expect(page.locator('.gallery-empty, .gallery-grid .gallery-card')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('gallery has filter controls', async ({ page }) => {
+    await page.goto('/');
+    await page.click('[data-action="browse-community"]');
+    await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
+
+    // Category filter dropdown
+    await expect(page.locator('#gallery-category-filter')).toBeVisible();
+
+    // Difficulty filter buttons
+    await expect(page.locator('[data-gallery-difficulty="all"]')).toBeVisible();
+    await expect(page.locator('[data-gallery-difficulty="1"]')).toBeVisible();
+    await expect(page.locator('[data-gallery-difficulty="2"]')).toBeVisible();
+    await expect(page.locator('[data-gallery-difficulty="3"]')).toBeVisible();
+  });
+
+  test('gallery back button returns to home', async ({ page }) => {
+    await page.goto('/');
+    await page.click('[data-action="browse-community"]');
+    await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
+
+    await page.click('#screen-community-gallery [data-action="go-home"]');
+    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
+  });
+
+  test('gallery renders cards when community puzzles exist', async ({ page, request }) => {
+    const username = uniqueUser();
+    const password = 'testpass123';
+    const ip = `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+
+    // Register user
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+
+    // Submit a puzzle via API with feature flag override
+    const { token } = await regRes.json();
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['🐱', '🐶', '🐭'],
+        answer: '🐹',
+        explanation: 'Small pets',
+        difficulty: 1,
+        category: 'Animals',
+      },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(subRes.ok()).toBeTruthy();
+    const { id: submissionId } = await subRes.json();
+
+    // Approve the submission via system API
+    const systemKey = 'test-system-api-key';
+    const reviewRes = await request.put(`/api/submissions/${submissionId}/review`, {
+      data: { status: 'approved' },
+      headers: { 'X-API-Key': systemKey },
+    });
+    expect(reviewRes.ok()).toBeTruthy();
+
+    // Now visit the gallery
+    await page.goto('/');
+    await page.click('[data-action="browse-community"]');
+    await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
+
+    // Gallery cards should appear
+    await expect(page.locator('.gallery-card').first()).toBeVisible({ timeout: 5000 });
+
+    // Card should show author attribution
+    await expect(page.locator('.gallery-card-author').first()).toContainText('By:');
+
+    // Card should have a play button
+    await expect(page.locator('.gallery-card-play').first()).toBeVisible();
   });
 });

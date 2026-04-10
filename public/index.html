@@ -522,6 +522,32 @@
       <button class="btn btn-back" data-action="go-home">← Back</button>
     </section>
 
+    <!-- Community Gallery Screen -->
+    <section id="screen-community-gallery" class="screen" data-screen="community-gallery" aria-label="Community Gallery">
+      <header class="screen-header">
+        <h2>🌍 Community Puzzles</h2>
+        <p class="screen-description">Browse and play puzzles created by the community</p>
+      </header>
+      <div class="gallery-filters" aria-label="Filter puzzles">
+        <select id="gallery-category-filter" class="gallery-filter-select" aria-label="Filter by category">
+          <option value="">All Categories</option>
+        </select>
+        <div class="gallery-difficulty-filter" role="group" aria-label="Filter by difficulty">
+          <button class="difficulty-btn active" data-gallery-difficulty="all">All</button>
+          <button class="difficulty-btn" data-gallery-difficulty="1">⭐</button>
+          <button class="difficulty-btn" data-gallery-difficulty="2">⭐⭐</button>
+          <button class="difficulty-btn" data-gallery-difficulty="3">⭐⭐⭐</button>
+        </div>
+      </div>
+      <div class="gallery-grid" data-bind="gallery-grid" role="list" aria-label="Community puzzles">
+        <p class="gallery-loading">Loading community puzzles…</p>
+      </div>
+      <div class="gallery-pagination" data-bind="gallery-pagination" style="display:none">
+        <button class="btn btn-secondary" data-action="gallery-load-more">Load More</button>
+      </div>
+      <button class="btn btn-back" data-action="go-home">← Back</button>
+    </section>
+
     <!-- My Submissions Screen -->
     <section id="screen-my-submissions" class="screen" data-screen="my-submissions" aria-label="My Submissions">
       <header class="screen-header">
