@@ -25,7 +25,7 @@
 
 ## Current State (from investigation)
 
-- Community puzzle UI is currently embedded directly on the home screen (`index.html:26-41`) with buttons for Create Puzzle, My Submissions, and a community section.
+- Community puzzle UI is currently embedded directly on the home screen (`index.html`, community section) with buttons for Create Puzzle, My Submissions, and a community section.
 - Feature flag `submitPuzzle` exists and gates the submission flow (server + client).
 - E2E tests exist in `community.spec.mjs`, `my-submissions.spec.mjs`, `moderation.spec.mjs`.
 - The `image` puzzle type is partially wired (client UI exists, server only accepts `emoji`/`text`).

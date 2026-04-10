@@ -28,8 +28,8 @@
 
 ## Current State (from investigation)
 
-- Auth controls are in `#screen-home > footer.home-stats` (lines 44-49 of index.html) — bottom of home screen.
-- `updateHomeAuthDisplay()` in app.js shows/hides user display and buttons based on auth state.
+- Auth controls are in `#screen-home > footer.home-stats` in `index.html` — bottom of home screen.
+- `updateHomeAuthDisplay()` in `public/js/app.js` shows/hides user display and buttons based on auth state.
 - Multiplayer is already gated client-side (redirects to auth) and server-side (requireAuth middleware).
 - Leaderboard endpoints (`/api/scores/leaderboard`, `/api/scores/leaderboard/multiplayer`) both require auth. Client shows "Log in to view the leaderboard 🔒" on 401.
 - Profile screen exists but has no logout button.

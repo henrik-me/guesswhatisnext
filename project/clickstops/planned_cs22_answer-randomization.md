@@ -9,7 +9,7 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS22-1 | Implement Fisher-Yates shuffle for options | ⬜ Pending | Add a shuffle utility function and apply it to `puzzle.options` before rendering in `renderRound()` (`public/js/app.js`) and multiplayer answer display. Must track which shuffled index maps to the correct answer. |
+| CS22-1 | Implement Fisher-Yates shuffle for options | ⬜ Pending | Add a shuffle utility function and apply it to `puzzle.options` before rendering in `renderRound()` (`public/js/app.js`) and multiplayer answer display. Since answer validation already compares by value (not index), no index tracking is needed — just shuffle the display order. |
 | CS22-2 | Apply shuffle in multiplayer mode | ⬜ Pending | Ensure the same shuffle algorithm is applied client-side for multiplayer rendering (`server/ws/matchHandler.js` sends options, client in `public/js/app.js` shuffles independently). Each player sees a different random ordering since each client shuffles independently. |
 | CS22-3 | Fix puzzle submission form bias | ⬜ Pending | The puzzle creator UI defaults correct answer to option 1 and image submissions build `options = [answer, ...distractors]`. Update to randomize the position of the correct answer in submitted puzzles. |
 | CS22-4 | Add unit tests for shuffle fairness | ⬜ Pending | Test that the shuffle function produces all permutations using a seeded RNG or by enumerating permutations for small n. Verify Fisher-Yates properties deterministically. Test that correct answer tracking works after shuffle. |
@@ -26,7 +26,7 @@
 
 ## Current State (from investigation)
 
-- **379 of 504 puzzles** (75%) have the correct answer at index 0 in the data.
+- **379 of 504 puzzles** (75%) have the correct answer at index 0 in the data (as of April 2026).
 - `renderRound()` in `public/js/app.js` iterates `puzzle.options.forEach(...)` in array order — no shuffling.
 - `Game.startFreePlay()` shuffles the puzzle queue (which puzzles to show) but NOT the options within each puzzle.
 - The puzzle submission form defaults correct answer to the first option position.
