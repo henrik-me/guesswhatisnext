@@ -26,6 +26,8 @@ async function createSubmission(request, token) {
     },
   });
   const body = await res.json();
+  if (!res.ok()) throw new Error(`createSubmission failed: ${res.status()} ${JSON.stringify(body)}`);
+  if (!body.id) throw new Error('createSubmission: missing id in response');
   return body.id;
 }
 
@@ -40,6 +42,8 @@ test.describe('Admin Moderation Improvements', () => {
       headers: { 'X-Forwarded-For': ip },
     });
     const body = await res.json();
+    if (!res.ok()) throw new Error(`Registration failed: ${res.status()} ${JSON.stringify(body)}`);
+    if (!body.token) throw new Error('Registration: missing token in response');
     userToken = body.token;
   });
 
