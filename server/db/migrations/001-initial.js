@@ -43,7 +43,7 @@ CREATE TABLE matches (
   created_at DATETIME DEFAULT GETDATE(),
   finished_at DATETIME,
   FOREIGN KEY (created_by) REFERENCES users(id),
-  FOREIGN KEY (host_user_id) REFERENCES users(id)
+  CONSTRAINT FK_matches_host_user_id FOREIGN KEY (host_user_id) REFERENCES users(id)
 );
 
 IF OBJECT_ID('match_players', 'U') IS NULL

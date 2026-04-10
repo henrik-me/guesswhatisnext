@@ -27,7 +27,12 @@ module.exports = {
           ALTER TABLE matches ADD host_user_id INT;
       `);
       await db.exec(`
-        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_matches_host_user_id')
+        IF NOT EXISTS (
+          SELECT 1 FROM sys.foreign_keys fk
+          JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+          JOIN sys.columns c ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id
+          WHERE fk.parent_object_id = OBJECT_ID('matches') AND c.name = 'host_user_id'
+        )
           ALTER TABLE matches ADD CONSTRAINT FK_matches_host_user_id FOREIGN KEY (host_user_id) REFERENCES users(id);
       `);
     } else {
