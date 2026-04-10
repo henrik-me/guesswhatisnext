@@ -81,7 +81,7 @@ Every Copilot review comment thread must be replied to with a meaningful message
 
 ## Clickstop CS14 — Community Puzzle Submission UX
 
-✅ Complete. Puzzle submission discovery, authoring, moderation, and notifications. Feature-flagged via `submitPuzzle` (PR #91). All tasks merged. See [archive](project/clickstops/done_cs14_community-puzzle-ux.md).
+✅ Complete. Puzzle submission discovery, authoring, moderation, and notifications. Feature-flagged via `submitPuzzle` (PR #91). All task PRs merged. Note: CS14-87 (image submissions) added client-side UI and server-side handling/sanitization code, but the `VALID_TYPES` gate in `server/routes/submissions.js` still excludes `image` — opening the gate is deferred to CS19. See [archive](project/clickstops/done_cs14_community-puzzle-ux.md).
 
 ---
 

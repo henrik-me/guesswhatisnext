@@ -14,7 +14,7 @@
 | CS14-84 | Admin moderation improvements | ✅ Done | CS14-82 | Live puzzle preview in moderation screen. Bulk approve/reject. Edit puzzle before approval (fix typos, adjust options). Submission stats (total pending, approved, rejected). |
 | CS14-85 | Submission editing & deletion | ✅ Done | CS14-81 | Users can edit pending submissions and delete their own submissions. API endpoints `PUT /api/submissions/:id` and `DELETE /api/submissions/:id` with ownership checks. |
 | CS14-86 | Submission notifications | ✅ Done | CS14-84 | Notify submitters when their puzzle is approved/rejected (in-app notification or badge on submissions screen). Track unread review results. |
-| CS14-87 | Image puzzle submissions | ✅ Done | CS14-82 | Image upload support for image-type puzzles. Server-side validation (size, format). Inline base64 storage in MVP (Azure Blob in future phase 2). Preview in authoring form and moderation. |
+| CS14-87 | Image puzzle submissions | ✅ Done | CS14-82 | Image upload support for image-type puzzles. Server-side validation (size, format) and SVG XSS sanitization added. Inline base64 storage in MVP (Azure Blob in future phase 2). Note: `VALID_TYPES` gate in `server/routes/submissions.js` still excludes `image` — opening the gate is deferred to CS19. |
 
 ## Design Decisions
 
