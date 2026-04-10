@@ -485,6 +485,26 @@ function init() {
   // Fetch puzzles from server (non-blocking, falls back to local data)
   fetchPuzzlesFromServer();
 
+  // Gallery filter listeners
+  const galleryCatFilter = document.getElementById('gallery-category-filter');
+  if (galleryCatFilter) {
+    galleryCatFilter.addEventListener('change', () => {
+      galleryCategory = galleryCatFilter.value;
+      galleryPage = 1;
+      loadGallery();
+    });
+  }
+  document.querySelectorAll('[data-gallery-difficulty]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      galleryDifficulty = btn.dataset.galleryDifficulty;
+      document.querySelectorAll('[data-gallery-difficulty]').forEach(b => {
+        b.classList.toggle('active', b === btn);
+      });
+      galleryPage = 1;
+      loadGallery();
+    });
+  });
+
   // Keyboard support: 1-4 selects options during game or match
   document.addEventListener('keydown', (e) => {
     if (currentScreen !== 'game' && currentScreen !== 'match') return;
@@ -516,16 +536,27 @@ function init() {
         disconnectWebSocket();
         resetMatchState();
         if (currentScreen === 'auth') authReturnScreen = null;
-        showScreen('home');
-        bindText('high-score', Storage.getHighScore());
-        updateHomeAuthDisplay();
+        if (galleryReturnScreen && (currentScreen === 'gameover' || currentScreen === 'game' || currentScreen === 'result')) {
+          galleryReturnScreen = null;
+          showCommunityGallery();
+        } else {
+          galleryReturnScreen = null;
+          showScreen('home');
+          bindText('high-score', Storage.getHighScore());
+          updateHomeAuthDisplay();
+        }
         break;
       case 'next-round':
         Game.nextRound(ui);
         break;
       case 'play-again':
-        showScreen('category');
-        renderCategories();
+        if (galleryReturnScreen) {
+          galleryReturnScreen = null;
+          showCommunityGallery();
+        } else {
+          showScreen('category');
+          renderCategories();
+        }
         break;
       case 'share-result':
         Game.shareResult();
@@ -559,7 +590,7 @@ function init() {
         }
         break;
       case 'browse-community':
-        showToast('Community gallery coming soon!');
+        showCommunityGallery();
         break;
       case 'create-puzzle':
         if (!isLoggedIn()) {
@@ -600,6 +631,15 @@ function init() {
           loadModerationSubmissions();
         }
         break;
+      case 'gallery-load-more':
+        galleryPage += 1;
+        loadGallery(true);
+        break;
+      case 'gallery-play': {
+        const puzzleId = e.target.closest('[data-puzzle-id]')?.dataset.puzzleId;
+        if (puzzleId) playGalleryPuzzle(puzzleId);
+        break;
+      }
       case 'leaderboard-mode': {
         const mode = e.target.dataset.mode;
         if (mode) {
@@ -2617,8 +2657,152 @@ async function showMySubmissions() {
 }
 
 /* ===========================
-   Community Puzzle Submissions
+   Community Gallery
    =========================== */
+
+let galleryPuzzles = [];
+let galleryPage = 1;
+let galleryTotalPages = 0;
+let galleryCategory = '';
+let galleryDifficulty = 'all';
+let galleryReturnScreen = null;
+
+/** Populate the category dropdown from the server's categories. */
+function populateGalleryCategoryFilter() {
+  const select = document.getElementById('gallery-category-filter');
+  if (!select || select.options.length > 1) return;
+
+  const categories = [
+    'Nature', 'Math & Numbers', 'Colors & Patterns', 'General Knowledge',
+    'Emoji Sequences', 'Music', 'Flags', 'Science', 'Sports', 'Food',
+    'Animals', 'Pop Culture', 'Letter & Word Patterns', 'Logic Sequences',
+    'Visual & Spatial', 'Creative & Mixed', 'Geography', 'History',
+    'Technology', 'Art & Design', 'Language & Grammar',
+  ];
+  categories.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    select.appendChild(opt);
+  });
+}
+
+/** Render a single gallery puzzle card. */
+function renderGalleryCard(puzzle) {
+  const seq = Array.isArray(puzzle.sequence) ? puzzle.sequence : [];
+  const preview = seq.slice(0, 4).map(item => escapeHTML(String(item))).join(' ');
+  const safeId = escapeHTML(String(puzzle.id || ''));
+  const author = puzzle.submitted_by ? escapeHTML(puzzle.submitted_by) : 'Unknown';
+
+  return `<div class="gallery-card" role="listitem" data-puzzle-id="${safeId}">
+    <div class="gallery-card-sequence">${preview}</div>
+    <div class="gallery-card-meta">
+      <span class="gallery-card-category">${escapeHTML(puzzle.category || '')}</span>
+      <span class="gallery-card-difficulty">${renderDifficultyStars(puzzle.difficulty)}</span>
+    </div>
+    <div class="gallery-card-author">By: ${author}</div>
+    <button class="gallery-card-play" data-action="gallery-play" data-puzzle-id="${safeId}">▶ Play</button>
+  </div>`;
+}
+
+/** Fetch community puzzles and render the gallery. */
+async function loadGallery(append = false) {
+  const grid = document.querySelector('[data-bind="gallery-grid"]');
+  const paginationEl = document.querySelector('[data-bind="gallery-pagination"]');
+  if (!grid) return;
+
+  if (!append) {
+    grid.innerHTML = '<p class="gallery-loading" role="listitem">Loading community puzzles…</p>';
+    galleryPuzzles = [];
+    galleryPage = 1;
+  }
+
+  try {
+    const params = new URLSearchParams({ page: galleryPage, limit: 20 });
+    if (galleryCategory) params.set('category', galleryCategory);
+    if (galleryDifficulty && galleryDifficulty !== 'all') params.set('difficulty', galleryDifficulty);
+
+    const res = await fetch(`/api/puzzles/community?${params}`);
+    const data = await res.json();
+    if (!res.ok) {
+      grid.innerHTML = `<p class="gallery-empty" role="listitem">${escapeHTML(data.error || 'Failed to load puzzles')}</p>`;
+      if (paginationEl) paginationEl.style.display = 'none';
+      return;
+    }
+
+    const puzzles = data.puzzles || [];
+    galleryTotalPages = data.pagination?.pages || 0;
+
+    if (append) {
+      galleryPuzzles = galleryPuzzles.concat(puzzles);
+    } else {
+      galleryPuzzles = puzzles;
+    }
+
+    if (galleryPuzzles.length === 0) {
+      grid.innerHTML = `
+        <div class="gallery-empty" role="listitem">
+          <div class="gallery-empty-icon" aria-hidden="true">🌍</div>
+          <p class="gallery-empty-text">No community puzzles yet — be the first to create one!</p>
+        </div>`;
+      if (paginationEl) paginationEl.style.display = 'none';
+      return;
+    }
+
+    if (!append) {
+      grid.innerHTML = '';
+    } else {
+      const loadingEl = grid.querySelector('.gallery-loading');
+      if (loadingEl) loadingEl.remove();
+    }
+
+    const fragment = document.createDocumentFragment();
+    const newPuzzles = append ? puzzles : galleryPuzzles;
+    newPuzzles.forEach(p => {
+      const temp = document.createElement('div');
+      temp.innerHTML = renderGalleryCard(p);
+      fragment.appendChild(temp.firstElementChild);
+    });
+    grid.appendChild(fragment);
+
+    if (paginationEl) {
+      paginationEl.style.display = galleryPage < galleryTotalPages ? '' : 'none';
+    }
+  } catch {
+    if (!append) {
+      grid.innerHTML = '<p class="gallery-empty" role="listitem">Network error — please try again.</p>';
+    }
+    if (paginationEl) paginationEl.style.display = 'none';
+  }
+}
+
+/** Open the community gallery screen. */
+function showCommunityGallery() {
+  showScreen('community-gallery');
+  populateGalleryCategoryFilter();
+
+  const select = document.getElementById('gallery-category-filter');
+  if (select) select.value = galleryCategory;
+  document.querySelectorAll('[data-gallery-difficulty]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.galleryDifficulty === galleryDifficulty);
+  });
+
+  galleryPage = 1;
+  loadGallery();
+}
+
+/** Play a community puzzle from the gallery. */
+function playGalleryPuzzle(puzzleId) {
+  const puzzle = galleryPuzzles.find(p => String(p.id) === String(puzzleId));
+  if (!puzzle) return;
+
+  galleryReturnScreen = 'community-gallery';
+  Game.startFreePlay([puzzle], null, ui, 'all');
+}
+
+/* ===========================
+   Community Puzzle Submissions
+   ===========================*/
 
 const ONBOARDING_DISMISSED_KEY = 'gwn_submit_onboarding_dismissed';
 
