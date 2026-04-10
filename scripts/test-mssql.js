@@ -18,9 +18,29 @@ const CONNECTION = `Server=localhost,1433;Database=master;User Id=sa;Password=${
 const TEST_DB = 'gwn_test';
 const TEST_CONNECTION = `Server=localhost,1433;Database=${TEST_DB};User Id=sa;Password=${SA_PASSWORD};Encrypt=false;TrustServerCertificate=true`;
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function ensureDatabase() {
   const sql = require('mssql');
-  const pool = await sql.connect(CONNECTION);
+  const maxAttempts = 10;
+  let pool;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      pool = await sql.connect(CONNECTION);
+      break;
+    } catch (err) {
+      lastError = err;
+      if (attempt === maxAttempts) throw lastError;
+      const delayMs = attempt * 1000;
+      console.log(`Waiting for SQL Server (attempt ${attempt}/${maxAttempts})...`);
+      await sleep(delayMs);
+    }
+  }
+
   try {
     await pool.request().query(
       `IF DB_ID('${TEST_DB}') IS NULL CREATE DATABASE [${TEST_DB}]`
