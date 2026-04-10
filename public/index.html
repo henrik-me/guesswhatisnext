@@ -602,14 +602,48 @@
         <p class="screen-description">Review community puzzle submissions</p>
       </header>
 
+      <!-- Stats bar -->
+      <div class="mod-stats-bar" data-bind="mod-stats-bar" aria-label="Submission statistics">
+        <div class="mod-stat-card">
+          <span class="mod-stat-label">Pending</span>
+          <span class="mod-stat-value" data-bind="stat-pending">—</span>
+        </div>
+        <div class="mod-stat-card">
+          <span class="mod-stat-label">Approved</span>
+          <span class="mod-stat-value" data-bind="stat-approved">—</span>
+        </div>
+        <div class="mod-stat-card">
+          <span class="mod-stat-label">Rejected</span>
+          <span class="mod-stat-value" data-bind="stat-rejected">—</span>
+        </div>
+        <div class="mod-stat-card">
+          <span class="mod-stat-label">Today</span>
+          <span class="mod-stat-value" data-bind="stat-today">—</span>
+        </div>
+      </div>
+
       <div class="moderation-tabs" role="tablist">
         <button class="btn btn-secondary active" id="tab-submissions" data-mod-tab="submissions" role="tab" aria-selected="true" aria-controls="mod-submissions-panel">📝 Pending Submissions</button>
         <button class="btn btn-secondary" id="tab-users" data-mod-tab="users" role="tab" aria-selected="false" aria-controls="mod-users-panel">👥 User Management</button>
       </div>
 
       <div id="mod-submissions-panel" data-mod-panel="submissions" role="tabpanel" aria-labelledby="tab-submissions">
+        <!-- Bulk select header -->
+        <div class="mod-bulk-header" data-bind="mod-bulk-header" style="display:none">
+          <label class="mod-select-all-label">
+            <input type="checkbox" data-bind="mod-select-all" aria-label="Select all submissions"> Select All
+          </label>
+        </div>
+
         <div class="moderation-list" data-bind="moderation-list" aria-label="Pending submissions">
           <p class="moderation-loading">Loading submissions…</p>
+        </div>
+
+        <!-- Floating bulk action bar -->
+        <div class="mod-bulk-actions" data-bind="mod-bulk-actions" style="display:none" role="toolbar" aria-label="Bulk actions">
+          <span class="mod-bulk-count" data-bind="mod-bulk-count">0 selected</span>
+          <button class="btn btn-approve" data-action="bulk-approve">✅ Approve Selected</button>
+          <button class="btn btn-reject" data-action="bulk-reject">❌ Reject Selected</button>
         </div>
       </div>
 
