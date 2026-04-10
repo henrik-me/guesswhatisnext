@@ -615,6 +615,11 @@ Unlike other project files, WORKBOARD.md is updated by orchestrating agents dire
 - A task completes or is blocked (move between sections)
 - An orchestrator starts or stops a session (update Orchestrators table)
 
+**Session naming:** After updating the workboard to claim a task, prompt the user to rename the session so it's identifiable at a glance. Format: `[{agent-id}]-{task-id}: {clickstop name}`. Example:
+```
+/rename [yoga-gwn-c2]-CS17: Process Docs Improvement
+```
+
 **Update frequency:** Orchestrators should update WORKBOARD.md often — at minimum on task start, task complete, and session start/end. Between those events, update whenever meaningful progress occurs (e.g., PR created, review round complete).
 
 **Task locking:** When a task appears in Active Work assigned to an agent ID, no other orchestrator may pick up that task. The assignment is a lock. If an orchestrator crashes or stops working:
