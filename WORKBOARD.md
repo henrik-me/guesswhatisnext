@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-10T08:15Z
+> **Last updated:** 2026-04-10T08:30Z
 
 ## Orchestrators
 
@@ -17,7 +17,6 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS11-65 | Database Migration | 65a✅ 65b✅ prod running, 65c workflow fix (#129) pending review | yoga-gwn | wt-1 | yoga-gwn/cs11-65c-canonical-host | #129 | 2026-04-10 |
 | CS14-86 | Community Puzzle UX | Wave 4: Submission notifications | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-86-notifications | — | 2026-04-10 |
 
 ## Queued (ready, no dependencies blocking)
@@ -30,6 +29,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Description | Agent ID | PR | Merged |
 |---------|-------------|----------|----|--------|
+| CS11-65 | Production deploy (65a wire DB_URL, 65b GHCR auth, 65c CANONICAL_HOST) | yoga-gwn | #124,#128,#129 | 2026-04-10 |
 | CS14-84 | Admin moderation improvements | yoga-gwn-c3 | #120 | 2026-04-10 |
 | CS14-87 | Image puzzle submissions | yoga-gwn-c3 | #121 | 2026-04-10 |
 | CS14-85 | Edit & delete submissions | yoga-gwn-c3 | #123 | 2026-04-10 |
