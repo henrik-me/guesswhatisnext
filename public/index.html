@@ -38,6 +38,7 @@
         <div class="community-buttons">
           <button class="btn btn-secondary" data-action="browse-community" aria-label="Browse Community Puzzles">🔍 Browse Community</button>
           <button class="btn btn-secondary" data-action="create-puzzle" aria-label="Create a Puzzle">✏️ Create Puzzle</button>
+          <button class="btn btn-secondary" data-action="show-my-submissions" data-bind="my-submissions-btn" aria-label="View My Submissions" style="display:none">📋 My Submissions</button>
         </div>
       </section>
       <footer class="home-stats">
@@ -514,6 +515,21 @@
         <div class="preview-content" data-bind="preview-content">
           <p class="preview-empty">Fill in the form to see a live preview</p>
         </div>
+      </div>
+      <div class="submit-puzzle-links">
+        <button class="btn-link" data-action="show-my-submissions" aria-label="View My Submissions">📋 View My Submissions</button>
+      </div>
+      <button class="btn btn-back" data-action="go-home">← Back</button>
+    </section>
+
+    <!-- My Submissions Screen -->
+    <section id="screen-my-submissions" class="screen" data-screen="my-submissions" aria-label="My Submissions">
+      <header class="screen-header">
+        <h2>📋 My Submissions</h2>
+        <p class="screen-description">Track your puzzle submissions and their review status</p>
+      </header>
+      <div class="my-submissions-list" data-bind="my-submissions-list" aria-label="Your submissions" role="list">
+        <p class="my-submissions-loading">Loading submissions…</p>
       </div>
       <button class="btn btn-back" data-action="go-home">← Back</button>
     </section>

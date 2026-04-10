@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-10T02:02Z
+> **Last updated:** 2026-04-10T02:25Z
 
 ## Orchestrators
 
@@ -17,7 +17,8 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS14 | Community Puzzle UX | Wave 1: CS14-80 discovery & onboarding | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-80-discovery-onboarding | — | 2026-04-10 |
+| CS14-81 | Community Puzzle UX | Wave 2: My Submissions dashboard | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-81-my-submissions | — | 2026-04-10 |
+| CS14-82 | Community Puzzle UX | Wave 2: Enhanced authoring form | yoga-gwn-c3 | wt-2 | yoga-gwn-c3/cs14-82-authoring-form | — | 2026-04-10 |
 
 ## Queued (ready, no dependencies blocking)
 
@@ -29,6 +30,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Description | Agent ID | PR | Merged |
 |---------|-------------|----------|----|--------|
+| CS14-80 | Submission discovery & onboarding | yoga-gwn-c3 | #117 | 2026-04-10 |
 | CS15 | Close out CS15 clickstop (docs-only) | yoga-gwn-c2 | #114 | 2026-04-10 |
 | CS11-64 | Provision Azure SQL (64a–64e complete) | yoga-gwn | #113 (64d code) | 2026-04-10 |
 | CS14-plan | CS14 detailed implementation plan | yoga-gwn-c3 | #115 | 2026-04-10 |

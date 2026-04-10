@@ -571,6 +571,23 @@ function init() {
           showComingSoonTooltip(e.target.closest('[data-action]'));
         }
         break;
+      case 'show-my-submissions':
+        if (isLoggedIn()) {
+          showMySubmissions();
+        } else {
+          showScreen('auth');
+        }
+        break;
+      case 'toggle-reviewer-notes': {
+        const toggleButton = e.target.closest('[data-action="toggle-reviewer-notes"]');
+        const notesContent = toggleButton?.closest('.submission-reviewer-notes')?.querySelector('.submission-notes-content');
+        if (toggleButton && notesContent) {
+          const isExpanded = notesContent.classList.toggle('expanded');
+          toggleButton.setAttribute('aria-expanded', String(isExpanded));
+          toggleButton.textContent = isExpanded ? '📝 Reviewer notes ▾' : '📝 Reviewer notes ▸';
+        }
+        break;
+      }
       case 'toggle-onboarding':
         toggleOnboarding();
         break;
@@ -1059,16 +1076,19 @@ function updateHomeAuthDisplay() {
   const label = document.querySelector('[data-bind="home-user-label"]');
   const submitBtn = document.querySelector('[data-bind="submit-puzzle-btn"]');
   const modBtn = document.querySelector('[data-bind="moderation-btn"]');
+  const mySubBtn = document.querySelector('[data-bind="my-submissions-btn"]');
   if (!row) return;
   if (isLoggedIn() && authUsername) {
     if (label) label.textContent = `👤 Logged in as ${authUsername}`;
     row.style.display = '';
     if (submitBtn) submitBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
     if (modBtn) modBtn.style.display = (authRole === 'admin' || authRole === 'system') ? '' : 'none';
+    if (mySubBtn) mySubBtn.style.display = '';
   } else {
     row.style.display = 'none';
     if (submitBtn) submitBtn.style.display = 'none';
     if (modBtn) modBtn.style.display = 'none';
+    if (mySubBtn) mySubBtn.style.display = 'none';
   }
 }
 
@@ -2491,6 +2511,112 @@ function renderMatchHistory(history) {
 }
 
 /* ===========================
+   My Submissions Dashboard
+   =========================== */
+
+/** Format a date as relative time (e.g., "2 days ago"). */
+function formatRelativeTime(dateStr) {
+  const date = new Date(dateStr);
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const seconds = Math.floor(diffMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return days === 1 ? '1 day ago' : `${days} days ago`;
+  if (hours > 0) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  if (minutes > 0) return minutes === 1 ? '1 minute ago' : `${minutes} minutes ago`;
+  return 'just now';
+}
+
+/** Render difficulty as star characters (e.g., ★★☆ for difficulty 2). */
+function renderDifficultyStars(difficulty) {
+  const filled = Math.min(Math.max(Number(difficulty) || 0, 0), 3);
+  return '★'.repeat(filled) + '☆'.repeat(3 - filled);
+}
+
+/** Render a single submission card. */
+function renderSubmissionCard(submission) {
+  const seq = Array.isArray(submission.sequence) ? submission.sequence : [];
+  const preview = seq.length > 3
+    ? seq.slice(0, 3).map(item => escapeHTML(String(item))).join(', ') + ', …'
+    : seq.map(item => escapeHTML(String(item))).join(', ');
+
+  const VALID_STATUSES = ['pending', 'approved', 'rejected'];
+  const safeStatus = VALID_STATUSES.includes(submission.status) ? submission.status : 'pending';
+  const statusClass = `status-${safeStatus}`;
+  const statusLabels = { pending: '🟡 Pending', approved: '🟢 Approved', rejected: '🔴 Rejected' };
+  const statusLabel = statusLabels[safeStatus];
+
+  const safeId = Number(submission.id) || 0;
+  const createdAgo = formatRelativeTime(submission.created_at);
+
+  let datesHtml = `<span>Submitted ${escapeHTML(createdAgo)}</span>`;
+  if (submission.reviewed_at) {
+    const reviewedDate = new Date(submission.reviewed_at).toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+    datesHtml += `<span>Reviewed ${escapeHTML(reviewedDate)}</span>`;
+  }
+
+  let notesHtml = '';
+  if (submission.reviewer_notes) {
+    notesHtml = `
+      <div class="submission-reviewer-notes">
+        <button class="submission-notes-toggle" data-action="toggle-reviewer-notes" aria-expanded="false">📝 Reviewer notes ▸</button>
+        <div class="submission-notes-content">${escapeHTML(submission.reviewer_notes)}</div>
+      </div>`;
+  }
+
+  return `<div class="submission-card" data-submission-id="${safeId}" role="listitem">
+    <div class="submission-card-header">
+      <span class="submission-sequence-preview">${preview}</span>
+      <span class="submission-status-badge ${statusClass}">${statusLabel}</span>
+    </div>
+    <div class="submission-card-meta">
+      <span class="submission-category-badge">${escapeHTML(submission.category)}</span>
+      <span class="submission-difficulty">${renderDifficultyStars(submission.difficulty)}</span>
+    </div>
+    <div class="submission-card-dates">${datesHtml}</div>
+    ${notesHtml}
+  </div>`;
+}
+
+/** Fetch and display the current user's submissions. */
+async function showMySubmissions() {
+  showScreen('my-submissions');
+
+  const container = document.querySelector('[data-bind="my-submissions-list"]');
+  if (!container) return;
+  container.innerHTML = '<p class="my-submissions-loading" role="listitem">Loading submissions…</p>';
+
+  try {
+    const res = await apiFetch('/api/submissions');
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<p class="my-submissions-error" role="listitem">${escapeHTML(data.error || 'Failed to load submissions')}</p>`;
+      return;
+    }
+
+    const submissions = data.submissions || [];
+    if (submissions.length === 0) {
+      container.innerHTML = `
+        <div class="my-submissions-empty" role="listitem">
+          <div class="my-submissions-empty-icon" aria-hidden="true">📭</div>
+          <p class="my-submissions-empty-text">No submissions yet</p>
+          <button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = submissions.map(renderSubmissionCard).join('');
+  } catch {
+    container.innerHTML = '<p class="my-submissions-error" role="listitem">Network error — please try again.</p>';
+  }
+}
+
+/* ===========================
    Community Puzzle Submissions
    =========================== */
 
@@ -2852,7 +2978,10 @@ function initSubmitPuzzleForm() {
       const data = await res.json();
       if (res.ok) {
         resetSubmitPuzzleForm();
-        if (status) { status.textContent = 'Puzzle submitted for review!'; status.className = 'submit-puzzle-status success'; }
+        if (status) {
+          status.innerHTML = 'Puzzle submitted for review! <button type="button" class="btn-link" data-action="show-my-submissions">View My Submissions →</button>';
+          status.className = 'submit-puzzle-status success';
+        }
       } else {
         if (status) { status.textContent = data.error || 'Submission failed.'; status.className = 'submit-puzzle-status error'; }
       }
