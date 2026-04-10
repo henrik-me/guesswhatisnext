@@ -262,6 +262,169 @@ body::before {
 }
 
 /* ===========================
+   Community Section
+   =========================== */
+.community-section {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-surface-border);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.community-heading {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--color-text);
+}
+
+.community-buttons {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.community-buttons .btn {
+  flex: 1;
+  max-width: 200px;
+  font-size: 0.9rem;
+}
+
+/* ===========================
+   Onboarding Explainer
+   =========================== */
+.onboarding-explainer {
+  width: 100%;
+  margin-bottom: 1.5rem;
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.onboarding-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.25rem;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-family: var(--font-main);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--transition-speed);
+}
+
+.onboarding-toggle:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.onboarding-chevron {
+  transition: transform var(--transition-speed);
+}
+
+.onboarding-explainer.collapsed .onboarding-chevron {
+  transform: rotate(-90deg);
+}
+
+.onboarding-content {
+  padding: 0 1.25rem 1.25rem;
+}
+
+.onboarding-explainer.collapsed .onboarding-content {
+  display: none;
+}
+
+.onboarding-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.onboarding-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.onboarding-icon {
+  font-size: 1.75rem;
+}
+
+.onboarding-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.onboarding-arrow {
+  font-size: 1.25rem;
+  color: var(--color-text-muted);
+}
+
+.onboarding-text {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.btn-dismiss {
+  background: none;
+  color: var(--color-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--color-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-speed), color var(--transition-speed);
+}
+
+.btn-dismiss:hover {
+  background-color: var(--color-secondary);
+  color: var(--color-bg);
+}
+
+.coming-soon-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.coming-soon-tooltip::after {
+  content: 'Coming soon!';
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-surface-border);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-speed);
+  box-shadow: var(--shadow-sm);
+}
+
+.coming-soon-tooltip.show-tooltip::after {
+  opacity: 1;
+}
+
+/* ===========================
    Category Select
    =========================== */
 .category-grid {
