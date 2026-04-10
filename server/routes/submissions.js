@@ -468,7 +468,8 @@ router.get('/stats', requireSystem, async (req, res, next) => {
     }
     const total = counts.pending + counts.approved + counts.rejected;
 
-    // Format day boundaries to match SQLite CURRENT_TIMESTAMP format (YYYY-MM-DD HH:MM:SS)
+    // Day boundaries in UTC to match SQLite CURRENT_TIMESTAMP (UTC) and MSSQL GETUTCDATE().
+    // Assumes all stored timestamps are UTC; MSSQL GETDATE() (local time) may skew "today" counts.
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const y = now.getUTCFullYear();
@@ -1014,16 +1015,20 @@ router.post('/bulk-review', requireSystem, async (req, res, next) => {
         }
       } else {
         // Rejected
-        const result = await db.run(
-          `UPDATE puzzle_submissions
-           SET status = ?, reviewer_notes = ?, reviewed_at = CURRENT_TIMESTAMP
-           WHERE id = ? AND status = 'pending'`,
-          [status, notes, id]
-        );
-        if (result.changes === 0) {
-          results.push({ id, error: 'Already reviewed' });
-        } else {
-          results.push({ id, status: 'rejected' });
+        try {
+          const result = await db.run(
+            `UPDATE puzzle_submissions
+             SET status = ?, reviewer_notes = ?, reviewed_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND status = 'pending'`,
+            [status, notes, id]
+          );
+          if (result.changes === 0) {
+            results.push({ id, error: 'Already reviewed' });
+          } else {
+            results.push({ id, status: 'rejected' });
+          }
+        } catch (e) {
+          results.push({ id, error: e.message || 'Failed to reject' });
         }
       }
     }

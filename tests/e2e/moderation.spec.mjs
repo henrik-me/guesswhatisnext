@@ -48,8 +48,8 @@ test.describe('Admin Moderation Improvements', () => {
   });
 
   test('preview renders in moderation queue', async ({ page, request }) => {
-    // Create a submission
-    await createSubmission(request, userToken);
+    // Create a submission and capture its ID
+    const submissionId = await createSubmission(request, userToken);
 
     // Inject system auth (admin role) to access moderation
     await page.addInitScript(() => {
@@ -75,24 +75,24 @@ test.describe('Admin Moderation Improvements', () => {
     await page.click('[data-action="show-moderation"]');
     await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });
 
-    // Wait for submissions to load
-    await expect(page.locator('.moderation-card').first()).toBeVisible({ timeout: 10000 });
+    // Wait for the specific submission card to load
+    const card = page.locator(`[data-submission-id="${submissionId}"]`);
+    await expect(card).toBeVisible({ timeout: 10000 });
 
-    // Click preview toggle
-    const firstPreviewBtn = page.locator('[data-mod-toggle-preview]').first();
-    await firstPreviewBtn.click();
+    // Click preview toggle on the specific card
+    await card.locator('[data-mod-toggle-preview]').click();
 
     // Preview should be visible with sequence items
-    const preview = page.locator('.mod-card-preview').first();
+    const preview = card.locator('.mod-card-preview');
     await expect(preview).toBeVisible();
     await expect(preview.locator('.preview-sequence-item').first()).toBeVisible();
     await expect(preview.locator('.preview-question')).toContainText('What comes next?');
   });
 
   test('bulk approve flow works', async ({ page, request }) => {
-    // Create multiple submissions so the queue has items to select
-    await createSubmission(request, userToken);
-    await createSubmission(request, userToken);
+    // Create multiple submissions and capture their IDs
+    const id1 = await createSubmission(request, userToken);
+    const id2 = await createSubmission(request, userToken);
 
     // Inject system auth
     await page.addInitScript(() => {
@@ -116,16 +116,15 @@ test.describe('Admin Moderation Improvements', () => {
     await page.click('[data-action="show-moderation"]');
     await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });
 
-    // Wait for cards to load
-    await expect(page.locator('.moderation-card').first()).toBeVisible({ timeout: 10000 });
+    // Wait for the specific submission cards to load
+    const card1 = page.locator(`[data-submission-id="${id1}"]`);
+    const card2 = page.locator(`[data-submission-id="${id2}"]`);
+    await expect(card1).toBeVisible({ timeout: 10000 });
+    await expect(card2).toBeVisible({ timeout: 10000 });
 
-    // Select first two submissions using checkboxes
-    const checkboxes = page.locator('.mod-card-checkbox');
-    const count = await checkboxes.count();
-    expect(count).toBeGreaterThanOrEqual(2);
-
-    await checkboxes.nth(0).check();
-    await checkboxes.nth(1).check();
+    // Select both submissions using their specific checkboxes
+    await card1.locator('.mod-card-checkbox').check();
+    await card2.locator('.mod-card-checkbox').check();
 
     // Bulk action bar should be visible
     const bulkBar = page.locator('[data-bind="mod-bulk-actions"]');
