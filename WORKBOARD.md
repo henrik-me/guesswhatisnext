@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-09T23:51Z
+> **Last updated:** 2026-04-10T00:55Z
 
 ## Orchestrators
 
@@ -19,7 +19,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS11-64 | Database Migration | Provision Azure SQL — 64a/b/c/e done, 64d PR pending | yoga-gwn | wt-1 | yoga-gwn/cs11-64d-mssql-schema-bootstrap | — | 2026-04-09 |
 | CS15 | Dev Tooling | Close out CS15 (all tasks already merged) | yoga-gwn-c2 | wt-1 | yoga-gwn-c2/cs15-close-out | — | 2026-04-09 |
-| CS14 | Community Puzzle UX | Planning — detailed task design | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-plan | — | 2026-04-09 |
+| CS14 | Community Puzzle UX | Plan merged, ready for implementation | yoga-gwn-c3 | — | — | — | 2026-04-09 |
 
 ## Queued (ready, no dependencies blocking)
 
@@ -31,6 +31,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Description | Agent ID | PR | Merged |
 |---------|-------------|----------|----|--------|
+| CS14-plan | CS14 detailed implementation plan | yoga-gwn-c3 | #115 | 2026-04-10 |
 | CS16 | Docs optimization and workboard conventions | yoga-gwn | #111 | 2026-04-09 |
 | CS0-102 | Restructure docs to clickstop system | yoga-gwn | #102 | 2026-04-09 |
 | CS0-101 | Clarify agent boundaries | yoga-gwn | #101 | 2026-04-09 |
