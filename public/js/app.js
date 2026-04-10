@@ -2726,11 +2726,17 @@ const NOTIFICATION_POLL_INTERVAL = 60000;
 function updateNotificationBadge(count) {
   const badge = document.querySelector('[data-bind="notification-badge"]');
   if (!badge) return;
+  const btn = badge.closest('button');
   if (count > 0) {
-    badge.textContent = count > 99 ? '99+' : String(count);
+    const visibleCount = count > 99 ? '99+' : String(count);
+    badge.textContent = visibleCount;
+    badge.setAttribute('aria-label', `${count} unread notifications`);
     badge.style.display = '';
+    if (btn) btn.setAttribute('aria-label', `View My Submissions (${count} unread notifications)`);
   } else {
     badge.style.display = 'none';
+    badge.setAttribute('aria-label', '');
+    if (btn) btn.setAttribute('aria-label', 'View My Submissions');
   }
 }
 
