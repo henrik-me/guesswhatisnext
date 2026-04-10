@@ -317,7 +317,8 @@ function validatePartialSubmission(body) {
     if (uniqueOptions.size !== 4) {
       return 'options must not contain duplicates';
     }
-    // Cross-validate answer if provided or if submission has existing answer
+    // Cross-validate: if answer is also provided in the update, ensure options include it.
+    // When answer is omitted, the PUT handler performs the cross-check against the stored answer.
     const trimmedAnswer = answer !== undefined
       ? (typeof answer === 'string' ? answer.trim() : String(answer))
       : null;
@@ -467,10 +468,17 @@ router.get('/stats', requireSystem, async (req, res, next) => {
     }
     const total = counts.pending + counts.approved + counts.rejected;
 
-    // Use parameterized day boundaries for dialect-agnostic queries
+    // Format day boundaries to match SQLite CURRENT_TIMESTAMP format (YYYY-MM-DD HH:MM:SS)
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const startOfNextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+    const pad = (n) => String(n).padStart(2, '0');
+    const y = now.getUTCFullYear();
+    const m = pad(now.getUTCMonth() + 1);
+    const d = pad(now.getUTCDate());
+    const startOfDay = `${y}-${m}-${d} 00:00:00`;
+    const startOfNextDay = (() => {
+      const next = new Date(Date.UTC(y, now.getUTCMonth(), now.getUTCDate() + 1));
+      return `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())} 00:00:00`;
+    })();
 
     const todaySubmitted = await db.get(
       'SELECT COUNT(*) AS count FROM puzzle_submissions WHERE created_at >= ? AND created_at < ?',
@@ -555,7 +563,7 @@ router.put('/:id', requireAuth, async (req, res, next) => {
       updates.push('category = ?');
       params.push(category);
     }
-    if (type !== undefined) {
+    if (type !== undefined && type !== null) {
       updates.push('type = ?');
       params.push(type);
     }
@@ -945,7 +953,7 @@ router.post('/bulk-review', requireSystem, async (req, res, next) => {
     for (const rawId of ids) {
       const id = Number(rawId);
       if (!Number.isInteger(id) || id <= 0) {
-        results.push({ id: rawId, error: 'Invalid submission ID' });
+        results.push({ id: Number(rawId) || 0, error: 'Invalid submission ID' });
         continue;
       }
 
