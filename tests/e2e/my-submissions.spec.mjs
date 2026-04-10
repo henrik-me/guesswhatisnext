@@ -365,10 +365,14 @@ test.describe('My Submissions Dashboard', () => {
     // Mark as read
     await page.click('[data-action="mark-all-notifications-read"]');
 
-    // Badge should disappear
-    await expect(page.locator('[data-bind="notification-badge"]')).toBeHidden({ timeout: 5000 });
-
     // Notification should be marked read (class change)
     await expect(page.locator('.notification-item.notification-read')).toHaveCount(1);
+
+    // Navigate back to Home to assert badge on the visible home screen
+    await page.goto('/');
+    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/, { timeout: 5000 });
+
+    // Badge should disappear
+    await expect(page.locator('[data-bind="notification-badge"]')).toBeHidden({ timeout: 5000 });
   });
 });
