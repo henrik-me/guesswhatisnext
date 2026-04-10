@@ -54,7 +54,7 @@ const helmetMiddleware = helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'", ...wsConnectSrc],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],

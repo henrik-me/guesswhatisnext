@@ -108,11 +108,29 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
     await expect(page.locator('.type-card[data-type="emoji"]')).not.toHaveClass(/active/);
   });
 
-  test('image type is disabled', async ({ page }) => {
+  test('image type is enabled and toggles image uploaders', async ({ page }) => {
     const imageCard = page.locator('.type-card[data-type="image"]');
-    await expect(imageCard).toHaveClass(/disabled/);
-    await expect(imageCard.locator('input[type="radio"]')).toBeDisabled();
-    await expect(imageCard).toContainText('Coming soon');
+    await expect(imageCard).not.toHaveClass(/disabled/);
+    await expect(imageCard.locator('input[type="radio"]')).toBeEnabled();
+
+    // Click image type
+    await page.click('.type-card[data-type="image"]');
+    await expect(imageCard).toHaveClass(/active/);
+
+    // Text sequence/answer fields should be hidden
+    await expect(page.locator('#sp-sequence-group')).toBeHidden();
+    await expect(page.locator('#sp-answer-group')).toBeHidden();
+
+    // Image upload sections should be visible
+    await expect(page.locator('#sp-image-sequence-group')).toBeVisible();
+    await expect(page.locator('#sp-image-answer-group')).toBeVisible();
+    await expect(page.locator('#sp-image-distractors-group')).toBeVisible();
+
+    // Switch back to emoji — text fields reappear
+    await page.click('.type-card[data-type="emoji"]');
+    await expect(page.locator('#sp-sequence-group')).toBeVisible();
+    await expect(page.locator('#sp-answer-group')).toBeVisible();
+    await expect(page.locator('#sp-image-sequence-group')).toBeHidden();
   });
 
   test('options editor and preview update on input', async ({ page }) => {

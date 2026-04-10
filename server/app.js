@@ -147,8 +147,10 @@ function createServer() {
     },
   }));
   const defaultJsonParser = express.json();
+  const largeJsonParser = express.json({ limit: '8mb' });
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/telemetry/')) return next();
+    if (req.path.startsWith('/api/submissions')) return largeJsonParser(req, res, next);
     return defaultJsonParser(req, res, next);
   });
 

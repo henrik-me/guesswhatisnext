@@ -8,6 +8,7 @@ const migrations = [
   require('./003-add-max-players'),
   require('./004-add-submitted-by'),
   require('./005-add-submission-type'),
+  require('./006-add-image-type'),
 ].sort((a, b) => a.version - b.version);
 
 module.exports = migrations;

@@ -689,6 +689,96 @@ body::before {
   cursor: not-allowed;
 }
 
+/* Image upload components */
+.image-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.image-upload-single {
+  margin-bottom: 0.5rem;
+}
+
+.image-drop-zone {
+  position: relative;
+  border: 2px dashed var(--color-border, #555);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.image-drop-zone:hover,
+.image-drop-zone.drag-over {
+  border-color: var(--color-primary, #4fc3f7);
+  background: rgba(79, 195, 247, 0.05);
+}
+
+.image-drop-zone.has-image {
+  border-style: solid;
+  border-color: var(--color-success, #66bb6a);
+  padding: 0.25rem;
+}
+
+.image-drop-zone .drop-zone-text {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #888);
+}
+
+.image-drop-zone .image-file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.image-drop-zone .image-preview-thumb {
+  max-width: 100%;
+  max-height: 80px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.image-drop-zone .image-remove-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.preview-sequence-item img,
+.preview-option-btn img {
+  max-width: 60px;
+  max-height: 60px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
 @media (min-width: 768px) {
   #screen-submit-puzzle {
     display: flex;

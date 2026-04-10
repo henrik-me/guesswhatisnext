@@ -14,7 +14,102 @@ const logger = require('../logger');
 
 const router = express.Router();
 
-const VALID_TYPES = ['emoji', 'text'];
+const VALID_TYPES = ['emoji', 'text', 'image'];
+const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp'];
+const MAX_IMAGE_SIZE_BYTES = 500 * 1024; // 500KB decoded bytes
+const MAX_IMAGE_SEQUENCE_LENGTH = 6;
+const DATA_URI_REGEX = /^data:([a-z]+\/[a-z0-9.+_-]+);base64,(.+)$/i;
+
+/** Validate a base64 data URI. Returns { mime, data } or null. */
+function parseDataUri(str) {
+  if (typeof str !== 'string') return null;
+  const match = str.match(DATA_URI_REGEX);
+  if (!match) return null;
+  return { mime: match[1].toLowerCase(), data: match[2] };
+}
+
+/** Sanitize SVG content — strip dangerous elements, attributes, and URLs. */
+function sanitizeSvg(base64Data) {
+  let svgText;
+  try {
+    svgText = Buffer.from(base64Data, 'base64').toString('utf-8');
+  } catch {
+    return null;
+  }
+  // Strip <script> blocks
+  svgText = svgText.replace(/<script[\s\S]*?<\/script>/gi, '');
+  svgText = svgText.replace(/<script[^>]*\/>/gi, '');
+  // Strip dangerous elements: foreignObject, iframe, embed, object
+  svgText = svgText.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
+  svgText = svgText.replace(/<(iframe|embed|object)[\s\S]*?<\/\1>/gi, '');
+  svgText = svgText.replace(/<(iframe|embed|object)[^>]*\/>/gi, '');
+  // Strip event handlers (on*)
+  svgText = svgText.replace(/\s+on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi, '');
+  // Strip javascript: URLs in href/xlink:href/src attributes (handles quoted and unquoted)
+  svgText = svgText.replace(/\s+(href|xlink:href|src)\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*'|\s*javascript:[^\s>]*)/gi, '');
+  return Buffer.from(svgText, 'utf-8').toString('base64');
+}
+
+/** Validate a single image data URI. Returns an error string or null. */
+function validateImageDataUri(uri, label) {
+  const parsed = parseDataUri(uri);
+  if (!parsed) return `${label}: invalid data URI format`;
+  if (!ALLOWED_IMAGE_MIMES.includes(parsed.mime)) {
+    return `${label}: unsupported format (${parsed.mime}). Allowed: ${ALLOWED_IMAGE_MIMES.join(', ')}`;
+  }
+  // Validate base64 content — strict: reject if roundtrip doesn't match
+  let buf;
+  try {
+    buf = Buffer.from(parsed.data, 'base64');
+    if (buf.length === 0) return `${label}: empty image data`;
+    if (buf.toString('base64') !== parsed.data) return `${label}: malformed base64 data`;
+  } catch {
+    return `${label}: malformed base64 data`;
+  }
+  // Compare decoded byte length (not base64 char count) to the size limit
+  if (buf.length > MAX_IMAGE_SIZE_BYTES) {
+    return `${label}: image exceeds 500KB limit`;
+  }
+  return null;
+}
+
+/** Sanitize image data URIs — processes SVGs in-place for XSS prevention. */
+function sanitizeImageUri(uri) {
+  const parsed = parseDataUri(uri);
+  if (!parsed) return uri;
+  if (parsed.mime === 'image/svg+xml') {
+    const sanitized = sanitizeSvg(parsed.data);
+    if (sanitized === null) return uri;
+    return `data:${parsed.mime};base64,${sanitized}`;
+  }
+  return uri;
+}
+
+/** Validate image-type submission fields. Returns an error string or null. */
+function validateImageSubmission(body) {
+  const { sequence, answer, options } = body;
+
+  if (sequence.length > MAX_IMAGE_SEQUENCE_LENGTH) {
+    return `image puzzles allow at most ${MAX_IMAGE_SEQUENCE_LENGTH} sequence elements`;
+  }
+
+  for (let i = 0; i < sequence.length; i++) {
+    const err = validateImageDataUri(sequence[i], `sequence[${i}]`);
+    if (err) return err;
+  }
+
+  const answerErr = validateImageDataUri(answer, 'answer');
+  if (answerErr) return answerErr;
+
+  if (options) {
+    for (let i = 0; i < options.length; i++) {
+      const err = validateImageDataUri(options[i], `options[${i}]`);
+      if (err) return err;
+    }
+  }
+
+  return null;
+}
 
 /** Validate provided fields of a partial submission update.
  *  @param {object} body - request body with partial fields
@@ -123,6 +218,8 @@ function validateSubmission(body) {
     }
   }
 
+  const isImage = type === 'image';
+
   // Validate options (optional array of exactly 4 non-empty strings including answer)
   if (options !== undefined && options !== null) {
     if (!Array.isArray(options) || options.length !== 4) {
@@ -133,14 +230,35 @@ function validateSubmission(body) {
         return 'each option must be a non-empty string';
       }
     }
-    const trimmedOptions = options.map(o => o.trim());
-    const uniqueOptions = new Set(trimmedOptions);
-    if (uniqueOptions.size !== 4) {
-      return 'options must not contain duplicates';
+    if (!isImage) {
+      const trimmedOptions = options.map(o => o.trim());
+      const uniqueOptions = new Set(trimmedOptions);
+      if (uniqueOptions.size !== 4) {
+        return 'options must not contain duplicates';
+      }
+      if (!trimmedOptions.includes(trimmedAnswer)) {
+        return 'options must include the answer';
+      }
+    } else {
+      // For image options, check uniqueness by value and require answer in options
+      const uniqueOptions = new Set(options);
+      if (uniqueOptions.size !== 4) {
+        return 'options must not contain duplicates';
+      }
+      if (!options.includes(trimmedAnswer)) {
+        return 'options must include the answer';
+      }
     }
-    if (!trimmedOptions.includes(trimmedAnswer)) {
-      return 'options must include the answer';
+  }
+
+  // Image-specific validation
+  if (isImage) {
+    // Image type requires options (answer + 3 distractors)
+    if (!options || !Array.isArray(options) || options.length !== 4) {
+      return 'image puzzles require exactly 4 options';
     }
+    const imageErr = validateImageSubmission(body);
+    if (imageErr) return imageErr;
   }
 
   return null;
@@ -166,10 +284,32 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(401).json({ error: 'User not found — please log in again' });
     }
 
-    const trimmedAnswer = typeof answer === 'string' ? answer.trim() : String(answer);
+    const isImage = type === 'image';
+    const trimmedAnswer = isImage ? answer : (typeof answer === 'string' ? answer.trim() : String(answer));
     const submissionType = (type && VALID_TYPES.includes(type)) ? type : 'emoji';
-    const submissionOptions = Array.isArray(options)
-      ? JSON.stringify(options.map(o => o.trim()))
+
+    // Sanitize image data — SVG XSS prevention
+    let storedSequence = sequence;
+    let storedAnswer = trimmedAnswer;
+    let storedOptions = options;
+    if (isImage) {
+      storedSequence = sequence.map(sanitizeImageUri);
+      storedAnswer = sanitizeImageUri(trimmedAnswer);
+      storedOptions = Array.isArray(options) ? options.map(sanitizeImageUri) : null;
+      // Re-check uniqueness after sanitization (SVG sanitization can make distinct URIs collide)
+      if (storedOptions) {
+        const unique = new Set(storedOptions);
+        if (unique.size !== storedOptions.length) {
+          return res.status(400).json({ error: 'options must not contain duplicates (after sanitization)' });
+        }
+        if (!storedOptions.includes(storedAnswer)) {
+          return res.status(400).json({ error: 'options must include the answer (after sanitization)' });
+        }
+      }
+    }
+
+    const submissionOptions = Array.isArray(storedOptions)
+      ? JSON.stringify(isImage ? storedOptions : storedOptions.map(o => o.trim()))
       : null;
 
     const result = await db.run(
@@ -177,8 +317,8 @@ router.post('/', requireAuth, async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
-        JSON.stringify(sequence),
-        trimmedAnswer,
+        JSON.stringify(storedSequence),
+        storedAnswer,
         explanation.trim(),
         Number(difficulty),
         category,
@@ -310,7 +450,11 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
       const puzzleType = VALID_TYPES.includes(submission.type) ? submission.type : 'emoji';
       const options = submission.options
         ? submission.options
-        : JSON.stringify(generateOptions(submission.sequence, submission.answer));
+        : (puzzleType === 'image' ? null : JSON.stringify(generateOptions(submission.sequence, submission.answer)));
+
+      if (puzzleType === 'image' && !options) {
+        return res.status(400).json({ error: 'Cannot approve image puzzle without options' });
+      }
 
       try {
         await db.transaction(async (tx) => {
