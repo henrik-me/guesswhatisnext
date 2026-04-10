@@ -245,7 +245,7 @@ function validateSubmission(body) {
       if (uniqueOptions.size !== 4) {
         return 'options must not contain duplicates';
       }
-      if (!options.includes(answer)) {
+      if (!options.includes(trimmedAnswer)) {
         return 'options must include the answer';
       }
     }

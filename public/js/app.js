@@ -3509,14 +3509,14 @@ function initImageDropZone(selector, onUpload, onRemove) {
     if (!e.target.classList.contains('image-file-input')) return;
     const file = e.target.files?.[0];
     if (!file) return;
+    const parent = zone.closest('.form-group');
+    const errEl = parent?.querySelector('.field-error');
     const result = await processImageFile(file);
     if (result.error) {
-      // Show error temporarily
-      const parent = zone.closest('.form-group');
-      const errEl = parent?.querySelector('.field-error');
       if (errEl) errEl.textContent = result.error;
       return;
     }
+    if (errEl) errEl.textContent = '';
     onUpload(result);
   });
   zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
@@ -3526,13 +3526,14 @@ function initImageDropZone(selector, onUpload, onRemove) {
     zone.classList.remove('drag-over');
     const file = e.dataTransfer?.files?.[0];
     if (!file) return;
+    const parent = zone.closest('.form-group');
+    const errEl = parent?.querySelector('.field-error');
     const result = await processImageFile(file);
     if (result.error) {
-      const parent = zone.closest('.form-group');
-      const errEl = parent?.querySelector('.field-error');
       if (errEl) errEl.textContent = result.error;
       return;
     }
+    if (errEl) errEl.textContent = '';
     onUpload(result);
   });
 }
