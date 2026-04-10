@@ -147,9 +147,19 @@ jobs:
               echo "Starting Container App..."
               RESOURCE_ID=$(az containerapp show --name gwn-production --resource-group gwn-rg --query "id" -o tsv)
               az rest --method POST \
-                --url "https://management.azure.com${RESOURCE_ID}/start?api-version=2024-03-01" \
-                || true
-              sleep 15
+                --url "https://management.azure.com${RESOURCE_ID}/start?api-version=2024-03-01"
+              # Poll until Running (timeout after 90s)
+              for i in $(seq 1 6); do
+                sleep 15
+                STATUS=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+                  --query "properties.runningStatus" -o tsv 2>/dev/null || echo "Unknown")
+                echo "  Poll $i: $STATUS"
+                if [ "$STATUS" = "Running" ]; then break; fi
+              done
+              if [ "$STATUS" != "Running" ]; then
+                echo "::error::Container App failed to reach Running state (current: $STATUS)"
+                exit 1
+              fi
               echo "Container App started"
             fi
 
@@ -246,6 +256,10 @@ jobs:
             echo "::error::Rolling back to previous image: ${{ steps.rollback.outputs.current-image }}"
             # Derive CANONICAL_HOST from PROD_URL
             CANONICAL_HOST=$(echo "$PROD_URL" | sed 's|^https\?://||' | sed 's|[/?#].*||' | sed 's|/$||')
+            if [ -z "$CANONICAL_HOST" ]; then
+              echo "::error::CANONICAL_HOST could not be derived from PROD_URL during rollback"
+              exit 1
+            fi
 
             trap 'rm -f /tmp/deploy-template.yaml' EXIT
             cat > /tmp/deploy-template.yaml <<YAMLEOF
