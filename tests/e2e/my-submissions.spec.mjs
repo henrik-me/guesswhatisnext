@@ -113,24 +113,42 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('.my-submissions-empty')).toBeVisible();
   });
 
-  test('edit a pending submission inline', async ({ page }) => {
+  test('edit a pending submission inline', async ({ page, request }) => {
     const username = uniqueUser();
-    await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
+    const password = 'testpass123';
+    const ip = uniqueIP();
 
-    // Create a submission
-    await page.click('[data-action="show-submit-puzzle"]');
-    await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
-    await page.selectOption('#sp-category', 'Nature');
-    await page.fill('#sp-sequence', '🌑, 🌒, 🌓');
-    await page.fill('#sp-answer', '🌔');
-    await page.fill('#sp-explanation', 'Moon phases in order');
-    await page.click('#submit-puzzle-form button[type="submit"]');
-    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 5000 });
+    // Register via API
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const { token } = await regRes.json();
 
-    // Go to my submissions
-    await page.click('[data-bind="submit-puzzle-status"] [data-action="show-my-submissions"]');
+    // Create a submission via API
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['🌑', '🌒', '🌓'],
+        answer: '🌔',
+        explanation: 'Moon phases in order',
+        difficulty: 2,
+        category: 'Nature',
+      },
+      headers: { Authorization: `Bearer ${token}`, 'X-Forwarded-For': ip },
+    });
+    expect(subRes.ok()).toBeTruthy();
+
+    // Inject auth and navigate to my-submissions
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    await page.goto('/?ff_submit_puzzle=true');
+    await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
-    await expect(page.locator('.submission-card')).toHaveCount(1);
+    await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
 
     // Click edit button
     await page.click('[data-action="edit-submission"]');
@@ -140,30 +158,47 @@ test.describe('My Submissions Dashboard', () => {
     await page.fill('.edit-explanation', 'Updated moon explanation');
     await page.click('[data-action="save-edit-submission"]');
 
-    // After save, submissions list reloads — card should show updated data
+    // After save, submissions list reloads
     await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
-    // The edit form should be gone
     await expect(page.locator('.submission-edit-form')).toHaveCount(0);
   });
 
-  test('delete a submission with confirmation', async ({ page }) => {
+  test('delete a submission with confirmation', async ({ page, request }) => {
     const username = uniqueUser();
-    await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
+    const password = 'testpass123';
+    const ip = uniqueIP();
 
-    // Create a submission
-    await page.click('[data-action="show-submit-puzzle"]');
-    await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
-    await page.selectOption('#sp-category', 'Nature');
-    await page.fill('#sp-sequence', '🌱, 🌿, 🌳');
-    await page.fill('#sp-answer', '🌲');
-    await page.fill('#sp-explanation', 'Plants growing');
-    await page.click('#submit-puzzle-form button[type="submit"]');
-    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 5000 });
+    // Register via API
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const { token } = await regRes.json();
 
-    // Go to my submissions
-    await page.click('[data-bind="submit-puzzle-status"] [data-action="show-my-submissions"]');
+    // Create a submission via API
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['🌱', '🌿', '🌳'],
+        answer: '🌲',
+        explanation: 'Plants growing',
+        difficulty: 1,
+        category: 'Nature',
+      },
+      headers: { Authorization: `Bearer ${token}`, 'X-Forwarded-For': ip },
+    });
+    expect(subRes.ok()).toBeTruthy();
+
+    // Inject auth and navigate to my-submissions
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    await page.goto('/');
+    await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
-    await expect(page.locator('.submission-card')).toHaveCount(1);
+    await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
 
     // Click delete button — confirmation should appear
     await page.click('[data-action="delete-submission"]');
@@ -173,29 +208,47 @@ test.describe('My Submissions Dashboard', () => {
     // Confirm deletion
     await page.click('[data-action="confirm-delete-submission"]');
 
-    // Card should be removed (animation)
+    // Card should be removed
     await expect(page.locator('.submission-card')).toHaveCount(0, { timeout: 5000 });
-    // Empty state should appear
     await expect(page.locator('.my-submissions-empty')).toBeVisible();
   });
 
-  test('cancel delete does not remove the submission', async ({ page }) => {
+  test('cancel delete does not remove the submission', async ({ page, request }) => {
     const username = uniqueUser();
-    await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
+    const password = 'testpass123';
+    const ip = uniqueIP();
 
-    // Create a submission
-    await page.click('[data-action="show-submit-puzzle"]');
-    await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
-    await page.selectOption('#sp-category', 'Nature');
-    await page.fill('#sp-sequence', '🐕, 🐈, 🐟');
-    await page.fill('#sp-answer', '🐦');
-    await page.fill('#sp-explanation', 'Common pets');
-    await page.click('#submit-puzzle-form button[type="submit"]');
-    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 5000 });
+    // Register via API
+    const regRes = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(regRes.ok()).toBeTruthy();
+    const { token } = await regRes.json();
 
-    // Go to my submissions
-    await page.click('[data-bind="submit-puzzle-status"] [data-action="show-my-submissions"]');
+    // Create a submission via API
+    const subRes = await request.post('/api/submissions?ff_submit_puzzle=1', {
+      data: {
+        sequence: ['🐕', '🐈', '🐟'],
+        answer: '🐦',
+        explanation: 'Common pets',
+        difficulty: 1,
+        category: 'Nature',
+      },
+      headers: { Authorization: `Bearer ${token}`, 'X-Forwarded-For': ip },
+    });
+    expect(subRes.ok()).toBeTruthy();
+
+    // Inject auth and navigate to my-submissions
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    await page.goto('/');
+    await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+    await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
 
     // Click delete, then cancel
     await page.click('[data-action="delete-submission"]');
