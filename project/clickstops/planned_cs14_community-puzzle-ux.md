@@ -252,7 +252,7 @@ Current migrations: 001–004. New migrations for CS14:
 ### CS14-83: Public Community Gallery
 
 **What exists:**
-- `GET /api/puzzles` returns all active puzzles (seeded + community)
+- `GET /api/puzzles` returns all active puzzles (seeded + community) for authenticated users only (`requireAuth` in `server/routes/puzzles.js`)
 - Approved community puzzles have `submitted_by` field populated
 - Game screens show "Submitted by: ..." attribution when `puzzle.submitted_by` exists
 - No dedicated community browsing interface
