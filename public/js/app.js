@@ -3280,8 +3280,7 @@ function updateImageValidation() {
       seqErr.textContent = '';
     }
   }
-  const ansErr = document.querySelector('[data-error="image-answer"]');
-  if (ansErr) ansErr.textContent = '';
+  // Answer error is managed by the upload handler, not here — don't clear it
   const distErr = document.querySelector('[data-error="image-distractors"]');
   if (distErr) {
     const filled = imageFormState.distractors.filter(Boolean).length;

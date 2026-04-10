@@ -23,12 +23,12 @@ module.exports = {
       await db.exec(`
         CREATE TABLE IF NOT EXISTS puzzle_submissions_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id TEXT NOT NULL,
+          user_id INTEGER NOT NULL,
           sequence TEXT NOT NULL,
           answer TEXT NOT NULL,
           explanation TEXT NOT NULL,
-          difficulty INTEGER NOT NULL DEFAULT 1,
-          category TEXT NOT NULL DEFAULT 'General Knowledge',
+          difficulty INTEGER NOT NULL CHECK(difficulty BETWEEN 1 AND 3),
+          category TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
           reviewer_notes TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -46,6 +46,9 @@ module.exports = {
       `);
       await db.exec('DROP TABLE IF EXISTS puzzle_submissions;');
       await db.exec('ALTER TABLE puzzle_submissions_new RENAME TO puzzle_submissions;');
+      // Recreate indexes dropped during table rebuild
+      await db.exec('CREATE INDEX IF NOT EXISTS idx_puzzle_submissions_user ON puzzle_submissions(user_id);');
+      await db.exec('CREATE INDEX IF NOT EXISTS idx_puzzle_submissions_status ON puzzle_submissions(status);');
     }
   },
 };
