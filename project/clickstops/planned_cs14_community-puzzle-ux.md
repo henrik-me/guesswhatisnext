@@ -27,9 +27,9 @@
 **Flag scope by task:**
 | Scope | Tasks | Rationale |
 |---|---|---|
-| Always visible (no flag) | CS14-80 discovery UI, CS14-81 dashboard, CS14-83 gallery, CS14-85 delete own submission | Discovery, browsing, viewing own submissions, and allowing users to remove their own submissions are available without the authoring flag |
+| Always visible (no flag) | CS14-80 discovery UI, CS14-81 dashboard, CS14-83 gallery, CS14-85 delete own submission, CS14-86 user notification read/mark-read | Discovery, browsing, viewing own submissions, and reading own notifications are available without the authoring flag |
 | Behind `submitPuzzle` flag | CS14-80 actual submit action, CS14-82 authoring form, CS14-85 edit pending submission, CS14-87 image upload | Operations that create submissions or change submission content remain gated behind the authoring feature flag |
-| Behind `requireSystem` | CS14-84 moderation, CS14-86 admin-triggered notifications | Admin-only operations |
+| Behind `requireSystem` | CS14-84 moderation, CS14-86 notification creation (triggered by review) | Admin-only operations; notification creation happens as a side effect of the review endpoint |
 
 > **Note:** Puzzle authoring format reference is in the [CS9 archive](done_cs9_content-growth.md).
 
