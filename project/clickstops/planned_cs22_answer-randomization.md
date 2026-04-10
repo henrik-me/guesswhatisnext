@@ -12,8 +12,8 @@
 | CS22-1 | Implement Fisher-Yates shuffle for options | ⬜ Pending | Add a shuffle utility function and apply it to `puzzle.options` before rendering in `renderRound()` (freeplay) and multiplayer answer display. Must track which shuffled index maps to the correct answer. |
 | CS22-2 | Apply shuffle in multiplayer mode | ⬜ Pending | Ensure the same shuffle is applied in `matchHandler.js` or client-side multiplayer rendering. Each player should see a different random ordering. |
 | CS22-3 | Fix puzzle submission form bias | ⬜ Pending | The puzzle creator UI defaults correct answer to option 1 and image submissions build `options = [answer, ...distractors]`. Update to randomize the position of the correct answer in submitted puzzles. |
-| CS22-4 | Add unit tests for shuffle fairness | ⬜ Pending | Test that the shuffle function produces all permutations with roughly equal probability over many iterations. Test that correct answer tracking works after shuffle. |
-| CS22-5 | Update existing tests | ⬜ Pending | Some tests use `puzzle.options[0]` as the answer (e.g., `nplayer.test.js:100-104`, `reconnection.test.js:100-104`). Update to use `puzzle.answer` instead of assuming position. |
+| CS22-4 | Add unit tests for shuffle fairness | ⬜ Pending | Test that the shuffle function produces all permutations using a seeded RNG or by enumerating permutations for small n. Verify Fisher-Yates properties deterministically. Test that correct answer tracking works after shuffle. |
+| CS22-5 | Update existing tests | ⬜ Pending | Some tests use `puzzle.options[0]` as the answer (e.g., `nplayer.test.js`, `reconnection.test.js`). Update to use `puzzle.answer` instead of assuming position. |
 
 ---
 
