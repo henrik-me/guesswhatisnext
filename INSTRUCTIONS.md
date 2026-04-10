@@ -655,6 +655,8 @@ Unlike other project files, WORKBOARD.md is updated by orchestrating agents dire
 - When that orchestrator restarts, it reads WORKBOARD.md, finds its assigned tasks, and resumes work
 - There is no automated process for reassigning stalled tasks — a human must manually update WORKBOARD.md to release the lock if an orchestrator is permanently unavailable
 
+**Row ownership:** Each orchestrator may only modify its own rows in Active Work. When completing a task, remove only your own row — never edit or remove another agent's entries. When adding a task, append a new row without altering existing rows.
+
 **Clickstop assignment:** An entire clickstop can be assigned to one orchestrator. When a clickstop is assigned, all tasks within it belong to that orchestrator. Other orchestrators must not pick up individual tasks from an assigned clickstop unless explicitly released.
 
 **Commit convention for workboard updates:**
