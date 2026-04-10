@@ -116,7 +116,7 @@ Current migrations: 001–004. New migrations for CS14:
    - HTML: `<section id="screen-my-submissions" class="screen">` in `index.html`
    - Header: "My Submissions" with back button (→ home)
    - Submission list rendered as cards, each showing:
-     - Puzzle sequence preview (first 3 elements + "...")
+     - Puzzle sequence preview truncated to the first 3 elements, followed by "..." when additional elements exist
      - Category badge and difficulty stars (★★☆ for difficulty 2)
      - **Status badge** with colors: 🟡 `pending` (yellow/amber), 🟢 `approved` (green), 🔴 `rejected` (red)
      - `created_at` as relative time ("2 days ago") — use simple JS date formatting, no library
@@ -150,7 +150,7 @@ Current migrations: 001–004. New migrations for CS14:
 **Edge cases:**
 - User with 0 submissions: show empty state with CTA
 - Large number of submissions: initially no pagination (submissions per user expected to be low <100), add pagination if needed later
-- Submission with very long sequence: truncate preview to first 5 elements
+- Submission with very long sequence: truncate preview to first 3 elements (consistent with card spec above)
 
 ---
 
@@ -463,7 +463,7 @@ This is a performance optimization, not required for initial implementation.
      - Same validation rules as `POST /api/submissions` for provided fields
      - Feature flag: `submitPuzzle` must be enabled (same gate as creating)
    - Response: updated submission object
-   - Note: admin edit (CS14-84) uses the same endpoint path but different auth (`requireSystem`). Implementation approach: single route handler that checks if user is admin/system OR owner, with ownership restricted to pending-only and admin allowed broader access.
+   - Note: admin edit (CS14-84) uses the same endpoint path but different auth (`requireSystem`). Implementation approach: single route handler that checks if user is admin/system OR owner. Edits remain **pending-only** for both paths; the admin/system "broader access" here means they may edit **any user's pending submission**, whereas a normal user may edit **only their own pending submission**. Admins/system must **not** be allowed to edit approved or rejected submissions via this endpoint.
 
 2. **New `DELETE /api/submissions/:id`:**
    - Auth: `requireAuth` + ownership check
@@ -649,7 +649,7 @@ This is a performance optimization, not required for initial implementation.
 **What's new:**
 - Image upload in authoring form
 - Server-side storage and validation
-- Image serving endpoint
+- Inline resolvable image source support for MVP (base64 data URIs stored in submission payloads)
 - Image preview in authoring and moderation
 
 **API changes:**
@@ -668,18 +668,18 @@ This is a performance optimization, not required for initial implementation.
 
 **Database changes:**
 
-- **Migration 007:** No separate `image_data` column needed in the MVP.
+- **No migration required:** No separate `image_data` column needed in the MVP.
   - For image-type submissions, `puzzle_submissions.sequence` stores the canonical image source strings (base64 data URIs) directly, same as emoji/text submissions store their sequence data.
   - `answer` and image-valued `options` likewise store the same canonical representation directly.
   - On approval, `puzzles.sequence` stores the same canonical image source strings so approved community puzzles render without client-side transformation.
   - For non-image submissions, storage remains unchanged.
-  - Note: this means submission rows for image puzzles will be larger (~3MB max), but keeps the data model simple and consistent across all puzzle types.
+  - Note: this means submission rows for image puzzles will be larger. Sequence images alone are ~3MB max (6 × 500KB), and the worst case is closer to ~5MB if the answer and 3 distractor options are also uploaded as additional images.
 
 **Storage strategy:**
 
 - **Phase 1 (this task):** Store image puzzle assets inline as base64 data URIs in the existing JSON fields (`sequence`, `answer`, and image-valued `options`). Simple, no external dependencies, works in both dev and prod, and matches the current client expectation that image entries are directly usable as `<img src>` values.
   - Tradeoff: larger DB rows and API payloads, but community submission volume is expected to be low initially
-  - Max storage per submission: ~6 images × 500KB = ~3MB in DB per image submission, plus answer/options if image-based
+  - Max storage per submission: ~3MB for the sequence alone (6 images × 500KB), or up to ~5MB worst case if the answer and 3 distractor options are also image-based uploads
 - **Phase 2 (future, not in CS14):** Migrate to Azure Blob Storage for production if image volume grows while preserving the same API contract that image entries are resolvable `src` values. This would involve:
   - New `AZURE_BLOB_CONNECTION_STRING` config var
   - Upload to blob on submit and replace stored data URIs with blob URLs in `sequence` / `answer` / image-valued `options`
