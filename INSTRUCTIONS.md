@@ -620,7 +620,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 #### Clickstop Completion Checklist
 
 Every clickstop must satisfy ALL of these before marking complete:
-- [ ] All tasks done and merged
+- [ ] All tasks done and merged (or deferred — see Deferred work policy below)
 - [ ] README updated (if user-facing changes)
 - [ ] INSTRUCTIONS.md updated (if architectural/workflow changes)
 - [ ] CONTEXT.md updated with final state
@@ -631,6 +631,13 @@ Every clickstop must satisfy ALL of these before marking complete:
 - [ ] Production deployed and verified (or N/A with documented reason)
 
 Filled-in checklists are recorded in the clickstop's archive file upon completion.
+
+**Deferred work policy:** When completing a clickstop with deferred tasks, the orchestrator must:
+1. Create a new `planned_` clickstop file for the deferred work, including: what was deferred, why it was deferred, and a link back to the originating clickstop
+2. Add the new clickstop to the CONTEXT.md summary table
+3. Inform the user that deferred work has been placed in a new clickstop, with a link and summary
+
+A clickstop may be marked complete with deferred tasks only if the deferred work has been captured in a new clickstop. Never silently drop deferred tasks.
 
 #### WORKBOARD.md — Live Coordination
 
@@ -654,6 +661,8 @@ Unlike other project files, WORKBOARD.md is updated by orchestrating agents dire
 - The task remains assigned in WORKBOARD.md
 - When that orchestrator restarts, it reads WORKBOARD.md, finds its assigned tasks, and resumes work
 - There is no automated process for reassigning stalled tasks — a human must manually update WORKBOARD.md to release the lock if an orchestrator is permanently unavailable
+
+**Row ownership:** Each orchestrator may only modify its own rows in Active Work. When completing a task, remove only your own row — never edit or remove another agent's entries. When adding a task, append a new row without altering existing rows.
 
 **Clickstop assignment:** An entire clickstop can be assigned to one orchestrator. When a clickstop is assigned, all tasks within it belong to that orchestrator. Other orchestrators must not pick up individual tasks from an assigned clickstop unless explicitly released.
 
