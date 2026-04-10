@@ -69,3 +69,90 @@ test.describe('Community Discovery & Onboarding', () => {
     await expect(page.locator('#submit-onboarding')).toBeHidden();
   });
 });
+
+test.describe('Enhanced Puzzle Authoring Form', () => {
+  let username;
+  const password = 'testpass123';
+
+  test.beforeEach(async ({ page }) => {
+    username = uniqueUser();
+    // Register and navigate to submit screen with feature flag
+    await page.goto('/?ff_submit_puzzle=true');
+    await page.click('[data-action="create-puzzle"]');
+    await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
+    await page.fill('#auth-username', username);
+    await page.fill('#auth-password', password);
+    await page.click('[data-action="auth-register"]');
+    await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
+  });
+
+  test('type selector defaults to emoji, can switch to text', async ({ page }) => {
+    // Emoji is selected by default
+    await expect(page.locator('.type-card[data-type="emoji"]')).toHaveClass(/active/);
+    await expect(page.locator('.type-card[data-type="text"]')).not.toHaveClass(/active/);
+
+    // Click text type
+    await page.click('.type-card[data-type="text"]');
+    await expect(page.locator('.type-card[data-type="text"]')).toHaveClass(/active/);
+    await expect(page.locator('.type-card[data-type="emoji"]')).not.toHaveClass(/active/);
+  });
+
+  test('image type is disabled', async ({ page }) => {
+    const imageCard = page.locator('.type-card[data-type="image"]');
+    await expect(imageCard).toBeDisabled();
+    await expect(imageCard).toContainText('Coming soon');
+  });
+
+  test('options editor and preview update on input', async ({ page }) => {
+    // Fill in sequence
+    await page.fill('#sp-sequence', '1, 2, 3');
+    await page.fill('#sp-answer', '4');
+
+    // Wait for debounced preview update
+    await page.waitForTimeout(400);
+
+    // Preview should show sequence items
+    const preview = page.locator('#puzzle-preview');
+    await expect(preview.locator('.preview-sequence-item').first()).toBeVisible();
+    await expect(preview.locator('.preview-question')).toContainText('What comes next?');
+
+    // First option should be auto-populated with answer
+    const firstOption = page.locator('.option-input[data-option="0"]');
+    await expect(firstOption).toHaveValue('4');
+
+    // Fill remaining options
+    await page.fill('.option-input[data-option="1"]', '5');
+    await page.fill('.option-input[data-option="2"]', '6');
+    await page.fill('.option-input[data-option="3"]', '7');
+
+    // Wait for preview to update
+    await page.waitForTimeout(400);
+
+    // Preview options should appear
+    await expect(preview.locator('.preview-option-btn')).toHaveCount(4);
+    // The correct answer should be highlighted
+    await expect(preview.locator('.preview-option-btn.correct')).toBeVisible();
+  });
+
+  test('submit with custom options stores correctly', async ({ page }) => {
+    // Fill all fields
+    await page.selectOption('#sp-category', 'Nature');
+    await page.selectOption('#sp-difficulty', '1');
+    await page.fill('#sp-sequence', '🌑, 🌒, 🌓');
+    await page.fill('#sp-answer', '🌔');
+    await page.fill('.option-input[data-option="1"]', '🌕');
+    await page.fill('.option-input[data-option="2"]', '🌖');
+    await page.fill('.option-input[data-option="3"]', '🌗');
+    await page.fill('#sp-explanation', 'Moon phases progress.');
+
+    // Submit button should be enabled
+    const submitBtn = page.locator('#sp-submit-btn');
+    await expect(submitBtn).toBeEnabled({ timeout: 2000 });
+
+    // Submit the form
+    await submitBtn.click();
+
+    // Should show success message
+    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 5000 });
+  });
+});
