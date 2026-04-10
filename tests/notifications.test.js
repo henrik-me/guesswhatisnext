@@ -271,12 +271,18 @@ describe('Review → Notification creation', () => {
     expect(notifs.length).toBe(2);
   });
 
-  test('notification creation failure does not break review endpoint', async () => {
-    // This test verifies best-effort behavior.
-    // We test by verifying the review succeeds regardless of notification state.
+  test('review endpoint succeeds and creates notification', async () => {
     const subId = await createSubmission(userToken);
     const reviewRes = await reviewSubmission(subId, 'approved');
     expect(reviewRes.status).toBe(200);
     expect(reviewRes.body.status).toBe('approved');
+
+    // Verify notification was also created
+    const notifRes = await getAgent()
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${userToken}`);
+    const notif = notifRes.body.notifications.find(n => n.data?.submissionId === subId);
+    expect(notif).toBeDefined();
+    expect(notif.type).toBe('submission_approved');
   });
 });

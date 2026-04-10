@@ -19,12 +19,18 @@ const VALID_TYPES = ['emoji', 'text'];
 /**
  * Build a short preview of a sequence for notification messages.
  * Shows first 3 items joined by commas with trailing ellipsis.
+ * Image submissions use a placeholder since items are data URIs.
  */
-function sequencePreview(sequenceStr) {
+function sequencePreview(sequenceStr, type) {
+  if (type === 'image') return '🖼️ image puzzle';
   try {
     const seq = typeof sequenceStr === 'string' ? JSON.parse(sequenceStr) : sequenceStr;
     if (!Array.isArray(seq)) return '…';
-    return seq.slice(0, 3).join(', ') + (seq.length > 3 ? ', …' : '');
+    const items = seq.slice(0, 3).map(item => {
+      const s = String(item);
+      return s.length > 30 ? s.slice(0, 30) + '…' : s;
+    });
+    return items.join(', ') + (seq.length > 3 ? ', …' : '');
   } catch {
     return '…';
   }
@@ -36,7 +42,7 @@ function sequencePreview(sequenceStr) {
  */
 async function createReviewNotification(db, submission, status, reviewerNotes) {
   try {
-    const preview = sequencePreview(submission.sequence);
+    const preview = sequencePreview(submission.sequence, submission.type);
     let message;
     let type;
 

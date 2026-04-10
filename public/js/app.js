@@ -519,6 +519,16 @@ function init() {
     }
   });
 
+  // Keyboard activation for notification items (Enter/Space → click)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const notifItem = e.target.closest('.notification-item');
+    if (notifItem && !e.target.closest('[data-action]')) {
+      e.preventDefault();
+      notifItem.click();
+    }
+  });
+
   // Wire up button actions
   document.addEventListener('click', (e) => {
     // Handle notification item click → highlight submission
@@ -2763,7 +2773,7 @@ function renderNotificationItem(notification) {
     markReadBtn = `<button class="btn-link notification-mark-read" data-action="mark-notification-read" data-notification-id="${notification.id}">Mark read</button>`;
   }
 
-  return `<div class="notification-item ${readClass}" data-notification-id="${notification.id}" data-submission-id="${subId}" role="listitem">
+  return `<div class="notification-item ${readClass}" data-notification-id="${notification.id}" data-submission-id="${subId}" role="listitem" tabindex="0" aria-label="${escapeHTML(notification.message)}">
     <span class="notification-icon" aria-hidden="true">${icon}</span>
     <div class="notification-content">
       <p class="notification-message">${escapeHTML(notification.message)}</p>
