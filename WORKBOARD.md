@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-10T17:30Z
+> **Last updated:** 2026-04-10T17:40Z
 
 ## Orchestrators
 
@@ -18,6 +18,7 @@ Orchestrators update this file directly on main — no PR required.
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS18 | MSSQL Production Fixes | Adapter SQL rewriting + Docker MSSQL validation | yoga-gwn | — | main | #131 (merged) | 2026-04-10 |
+| CS23 | Deferred docs review + deferred work policy | yoga-gwn-c2 | wt-1 | yoga-gwn-c2/cs23-deferred-docs-review | — | 2026-04-10 |
 | CS19-22-plan | CS19–CS22 | Plan clickstops: Puzzle Nav, Auth UX, High Score Sync, Answer Randomization | yoga-gwn-c3 | — | — | — | 2026-04-10 |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
