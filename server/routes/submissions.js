@@ -463,7 +463,7 @@ router.get('/stats', requireSystem, async (req, res, next) => {
     const counts = { pending: 0, approved: 0, rejected: 0 };
     for (const row of statusRows) {
       if (counts[row.status] !== undefined) {
-        counts[row.status] = row.count;
+        counts[row.status] = Number(row.count);
       }
     }
     const total = counts.pending + counts.approved + counts.rejected;
@@ -495,8 +495,8 @@ router.get('/stats', requireSystem, async (req, res, next) => {
       rejected: counts.rejected,
       total,
       today: {
-        submitted: todaySubmitted ? todaySubmitted.count : 0,
-        reviewed: todayReviewed ? todayReviewed.count : 0,
+        submitted: Number(todaySubmitted?.count ?? 0),
+        reviewed: Number(todayReviewed?.count ?? 0),
       },
     });
   } catch (err) {
