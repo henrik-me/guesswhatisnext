@@ -953,7 +953,7 @@ router.post('/bulk-review', requireSystem, async (req, res, next) => {
     for (const rawId of ids) {
       const id = Number(rawId);
       if (!Number.isInteger(id) || id <= 0) {
-        results.push({ id: Number(rawId) || 0, error: 'Invalid submission ID' });
+        results.push({ id: Number(rawId) || 0, rawId, error: 'Invalid submission ID' });
         continue;
       }
 
