@@ -16,6 +16,66 @@ const router = express.Router();
 
 const VALID_TYPES = ['emoji', 'text'];
 
+/** Validate provided fields of a partial submission update. Returns an error string or null. */
+function validatePartialSubmission(body) {
+  const { sequence, answer, explanation, difficulty, category, type, options } = body;
+
+  if (sequence !== undefined) {
+    if (!Array.isArray(sequence) || sequence.length < 3) {
+      return 'sequence must be an array of at least 3 elements';
+    }
+  }
+  if (answer !== undefined) {
+    if (answer === null) return 'answer is required';
+    const trimmed = typeof answer === 'string' ? answer.trim() : String(answer);
+    if (trimmed.length === 0) return 'answer is required';
+  }
+  if (explanation !== undefined) {
+    if (typeof explanation !== 'string' || explanation.trim().length === 0) {
+      return 'explanation is required';
+    }
+  }
+  if (difficulty !== undefined) {
+    const diff = Number(difficulty);
+    if (!Number.isInteger(diff) || diff < 1 || diff > 3) {
+      return 'difficulty must be 1, 2, or 3';
+    }
+  }
+  if (category !== undefined) {
+    if (typeof category !== 'string' || !VALID_CATEGORIES.includes(category)) {
+      return `category must be one of: ${VALID_CATEGORIES.join(', ')}`;
+    }
+  }
+  if (type !== undefined && type !== null) {
+    if (typeof type !== 'string' || !VALID_TYPES.includes(type)) {
+      return `type must be one of: ${VALID_TYPES.join(', ')}`;
+    }
+  }
+  if (options !== undefined && options !== null) {
+    if (!Array.isArray(options) || options.length !== 4) {
+      return 'options must be an array of exactly 4 items';
+    }
+    for (let i = 0; i < options.length; i++) {
+      if (typeof options[i] !== 'string' || options[i].trim().length === 0) {
+        return 'each option must be a non-empty string';
+      }
+    }
+    const trimmedOptions = options.map(o => o.trim());
+    if (new Set(trimmedOptions).size !== 4) {
+      return 'options must not contain duplicates';
+    }
+    // Resolve answer for options validation: use provided answer or existing answer from body
+    const resolvedAnswer = answer !== undefined
+      ? (typeof answer === 'string' ? answer.trim() : String(answer))
+      : null;
+    if (resolvedAnswer !== null && !trimmedOptions.includes(resolvedAnswer)) {
+      return 'options must include the answer';
+    }
+  }
+
+  return null;
+}
+
 /** Validate a submission payload. Returns an error string or null. */
 function validateSubmission(body) {
   const { sequence, answer, explanation, difficulty, category, type, options } = body;
@@ -290,6 +350,135 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
     }
 
     res.json({ id, status, message: `Submission ${status}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** PUT /api/submissions/:id — edit a pending submission (owner or admin/system). */
+router.put('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid submission ID' });
+    }
+
+    const isAdmin = req.user.role === 'system' || req.user.role === 'admin';
+
+    // Feature flag required for regular users (admin/system bypass)
+    if (!isAdmin && !isFeatureEnabled('submitPuzzle', req)) {
+      return res.status(403).json({ error: 'Submit puzzle feature is not enabled' });
+    }
+
+    const db = await getDbAdapter();
+    const submission = await db.get('SELECT * FROM puzzle_submissions WHERE id = ?', [id]);
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    // Authorization: admin/system can edit any user's pending; regular users only their own
+    if (!isAdmin && submission.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only edit your own submissions' });
+    }
+
+    if (submission.status !== 'pending') {
+      return res.status(409).json({ error: 'Cannot edit a reviewed submission' });
+    }
+
+    const error = validatePartialSubmission(req.body);
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
+    // Build update fields from provided body keys
+    const { sequence, answer, explanation, difficulty, category, type, options } = req.body;
+    const updates = [];
+    const params = [];
+
+    if (sequence !== undefined) {
+      updates.push('sequence = ?');
+      params.push(JSON.stringify(sequence));
+    }
+    if (answer !== undefined) {
+      const trimmed = typeof answer === 'string' ? answer.trim() : String(answer);
+      updates.push('answer = ?');
+      params.push(trimmed);
+    }
+    if (explanation !== undefined) {
+      updates.push('explanation = ?');
+      params.push(explanation.trim());
+    }
+    if (difficulty !== undefined) {
+      updates.push('difficulty = ?');
+      params.push(Number(difficulty));
+    }
+    if (category !== undefined) {
+      updates.push('category = ?');
+      params.push(category);
+    }
+    if (type !== undefined) {
+      updates.push('type = ?');
+      params.push(type && VALID_TYPES.includes(type) ? type : 'emoji');
+    }
+    if (options !== undefined) {
+      updates.push('options = ?');
+      params.push(options !== null ? JSON.stringify(options.map(o => o.trim())) : null);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    params.push(id);
+    await db.run(
+      `UPDATE puzzle_submissions SET ${updates.join(', ')} WHERE id = ? AND status = 'pending'`,
+      params
+    );
+
+    // Fetch the updated submission to return
+    const updated = await db.get(
+      `SELECT id, sequence, answer, explanation, difficulty, category, type, options, status, reviewer_notes, created_at, reviewed_at
+       FROM puzzle_submissions WHERE id = ?`,
+      [id]
+    );
+
+    res.json({
+      ...updated,
+      sequence: JSON.parse(updated.sequence),
+      options: updated.options ? JSON.parse(updated.options) : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** DELETE /api/submissions/:id — delete a submission (owner or admin/system). */
+router.delete('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'Invalid submission ID' });
+    }
+
+    const db = await getDbAdapter();
+    const submission = await db.get('SELECT * FROM puzzle_submissions WHERE id = ?', [id]);
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    const isAdmin = req.user.role === 'system' || req.user.role === 'admin';
+
+    // Authorization: admin/system can delete any; regular users only their own
+    if (!isAdmin && submission.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only delete your own submissions' });
+    }
+
+    // Hard delete — puzzle in puzzles table (if approved) remains
+    await db.run('DELETE FROM puzzle_submissions WHERE id = ?', [id]);
+
+    res.json({ message: 'Submission deleted' });
   } catch (err) {
     next(err);
   }
