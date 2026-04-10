@@ -1,7 +1,7 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
 
-const SYSTEM_KEY = 'test-system-api-key';
+const SYSTEM_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
 
 /** Create a unique test username. */
 function uniqueUser() {

@@ -3974,7 +3974,7 @@ async function loadModerationSubmissions() {
           ${renderPuzzlePreview({ type: s.type, sequence: s.sequence, answer: String(s.answer), options: s.options, explanation: s.explanation })}
         </div>
         <div class="mod-card-actions" data-mod-actions="${s.id}">
-          <button class="btn btn-secondary btn-sm" data-mod-toggle-preview="${s.id}">👁️ Preview</button>
+          <button class="btn btn-secondary btn-sm" data-mod-toggle-preview="${s.id}" aria-expanded="false">👁️ Preview</button>
           <button class="btn btn-secondary btn-sm" data-mod-edit="${s.id}">✏️ Edit</button>
           <button class="btn btn-approve" data-mod-action="approved" data-mod-id="${s.id}">✅ Approve</button>
           <button class="btn btn-reject" data-mod-action="rejected" data-mod-id="${s.id}">❌ Reject</button>
@@ -4071,7 +4071,10 @@ function toggleModPreview(id) {
   const visible = preview.style.display !== 'none';
   preview.style.display = visible ? 'none' : '';
   const btn = document.querySelector(`[data-mod-toggle-preview="${id}"]`);
-  if (btn) btn.textContent = visible ? '👁️ Preview' : '👁️ Hide Preview';
+  if (btn) {
+    btn.textContent = visible ? '👁️ Preview' : '👁️ Hide Preview';
+    btn.setAttribute('aria-expanded', String(!visible));
+  }
 }
 
 /** Enter edit mode for a submission card. */

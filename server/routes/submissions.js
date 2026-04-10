@@ -518,15 +518,16 @@ router.put('/:id', requireAuth, async (req, res, next) => {
     if (!submission) {
       return res.status(404).json({ error: 'Submission not found' });
     }
-    if (submission.status !== 'pending') {
-      return res.status(409).json({ error: 'Cannot edit a reviewed submission' });
-    }
 
     const isAdminOrSystem = req.user.role === 'admin' || req.user.role === 'system';
     const isOwner = submission.user_id === req.user.id;
 
     if (!isAdminOrSystem && !isOwner) {
       return res.status(403).json({ error: 'Not authorized to edit this submission' });
+    }
+
+    if (submission.status !== 'pending') {
+      return res.status(409).json({ error: 'Cannot edit a reviewed submission' });
     }
 
     // Regular users need the submitPuzzle feature flag
