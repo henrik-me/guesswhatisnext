@@ -47,7 +47,7 @@ Rather than making every route file dialect-aware, extend the MSSQL adapter's qu
 | `date(col)` | `CAST(col AS DATE)` | |
 | `datetime('now', '-N days')` | `DATEADD(day, -N, GETUTCDATE())` | |
 | `DATE(expr) = DATE('now')` | `CAST(expr AS DATE) = CAST(GETUTCDATE() AS DATE)` | |
-| `INSERT OR IGNORE` | Route-level dialect check | Too context-dependent to auto-rewrite |
+| `INSERT OR IGNORE` | `INSERT INTO` + duplicate-key suppression | Adapter strips `OR IGNORE` and suppresses 2627/2601 |
 
 ### INSERT OR IGNORE → Adapter-Level TRY/CATCH
 
