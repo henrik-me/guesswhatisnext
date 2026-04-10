@@ -496,18 +496,18 @@ body::before {
 }
 
 .submission-status-badge.status-pending {
-  background-color: rgba(253, 203, 110, 0.2);
-  color: #fdcb6e;
+  background-color: color-mix(in srgb, var(--color-timer) 20%, transparent);
+  color: var(--color-timer);
 }
 
 .submission-status-badge.status-approved {
-  background-color: rgba(0, 184, 148, 0.2);
-  color: #00b894;
+  background-color: color-mix(in srgb, var(--color-correct) 20%, transparent);
+  color: var(--color-correct);
 }
 
 .submission-status-badge.status-rejected {
-  background-color: rgba(214, 48, 49, 0.2);
-  color: #d63031;
+  background-color: color-mix(in srgb, var(--color-wrong) 20%, transparent);
+  color: var(--color-wrong);
 }
 
 .submission-card-meta {

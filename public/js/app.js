@@ -2569,7 +2569,7 @@ function renderSubmissionCard(submission) {
       </div>`;
   }
 
-  return `<div class="submission-card" data-submission-id="${safeId}">
+  return `<div class="submission-card" data-submission-id="${safeId}" role="listitem">
     <div class="submission-card-header">
       <span class="submission-sequence-preview">${preview}</span>
       <span class="submission-status-badge ${statusClass}">${statusLabel}</span>
