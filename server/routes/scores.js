@@ -109,19 +109,29 @@ router.get('/leaderboard/multiplayer', requireAuth, async (req, res, next) => {
     }
 
     const db = await getDbAdapter();
+    // Wins computed in a subquery to avoid SUM(CASE WHEN ... (subquery))
+    // which MSSQL rejects (aggregate on expression containing subquery).
     const rows = await db.all(`
       SELECT u.id as user_id, u.username,
              COUNT(DISTINCT mp.match_id) as matches_played,
              SUM(mp.score) as total_score,
              ROUND(AVG(mp.score), 0) as avg_score,
-             SUM(CASE WHEN mp.score = (
-               SELECT MAX(mp2.score) FROM match_players mp2 WHERE mp2.match_id = mp.match_id
-             ) THEN 1 ELSE 0 END) as wins
+             COALESCE(w.wins, 0) as wins
       FROM match_players mp
       JOIN users u ON mp.user_id = u.id
       JOIN matches m ON mp.match_id = m.id
+      LEFT JOIN (
+        SELECT mp_w.user_id, COUNT(*) as wins
+        FROM match_players mp_w
+        JOIN matches m_w ON mp_w.match_id = m_w.id
+        WHERE m_w.status = 'finished' ${dateFilter}
+          AND mp_w.score = (
+            SELECT MAX(mp2.score) FROM match_players mp2 WHERE mp2.match_id = mp_w.match_id
+          )
+        GROUP BY mp_w.user_id
+      ) w ON w.user_id = u.id
       WHERE m.status = 'finished' ${dateFilter}
-      GROUP BY u.id
+      GROUP BY u.id, u.username, w.wins
       ORDER BY wins DESC, total_score DESC
       LIMIT ?
     `, [safeLimit]);
