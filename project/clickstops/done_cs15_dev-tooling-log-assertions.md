@@ -1,14 +1,14 @@
 # Clickstop CS15: Dev Tooling & Log Assertions
 
 **Status:** ✅ Complete
-**Goal:** Consolidate dev server scripts, integrate log capture into e2e tests, and add CI log assertion tests.
+**Goal:** Consolidate dev server scripts, integrate log capture into E2E tests, and add CI log assertion tests.
 
 ## Tasks
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
 | CS15-90 | Unified dev server script | ✅ Done | — | PR #88. `scripts/dev-server.js`: HTTPS + log capture by default. Replaces standalone `log-wrapper.js`. npm scripts: `dev:full`, `dev:log`. |
-| CS15-91 | E2e log capture integration | ✅ Done | CS15-90 | PR #94. Playwright webServer uses `node scripts/dev-server.js --output` to capture logs during test runs. |
+| CS15-91 | E2E log capture integration | ✅ Done | CS15-90 | PR #94. Playwright webServer uses `node scripts/dev-server.js --output` to capture logs during test runs. |
 | CS15-92 | Log assertion tests | ✅ Done | CS15-91 | PR #94. `tests/e2e/global-teardown.mjs` — post-test assertion: no ERROR/FATAL entries during clean e2e run. |
 | CS15-93 | CI log artifact upload | ✅ Done | CS15-92 | PR #94. `ci.yml` uploads `test-results/` on failure; teardown copies `server.log` there. |
 | CS15-94 | Production log format validation | ✅ Done | CS15-91 | PR #93. `tests/log-format.test.js` — 4 tests for JSON structure: required fields, no pretty-print leaking. |
