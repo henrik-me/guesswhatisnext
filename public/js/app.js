@@ -3879,7 +3879,7 @@ function syncSelectAllCheckbox() {
   const selectAll = document.querySelector('[data-bind="mod-select-all"]');
   if (!selectAll) return;
   const checkboxes = document.querySelectorAll('.mod-card-checkbox');
-  if (checkboxes.length === 0) { selectAll.checked = false; return; }
+  if (checkboxes.length === 0) { selectAll.checked = false; selectAll.indeterminate = false; return; }
   const allChecked = [...checkboxes].every(cb => cb.checked);
   const someChecked = [...checkboxes].some(cb => cb.checked);
   selectAll.checked = allChecked;
