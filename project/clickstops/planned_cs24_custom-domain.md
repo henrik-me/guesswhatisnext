@@ -13,7 +13,7 @@
 | CS24-2 | Add Azure custom domain binding | ⬜ Pending | Bind `gwn.metzger.dk` as a custom hostname on the `gwn-production` Container App using `az containerapp hostname add`. Add domain validation. Update `infra/deploy.sh` and `infra/deploy.ps1` with the custom domain binding commands. |
 | CS24-3 | Configure managed TLS certificate | ⬜ Pending | Provision an Azure-managed free TLS certificate for `gwn.metzger.dk` via `az containerapp hostname bind --hostname gwn.metzger.dk --certificate-type ManagedCertificate`. Add to deploy scripts. |
 | CS24-4 | Update CANONICAL_HOST and deploy vars | ⬜ Pending | Update GitHub secret `PROD_URL` to `https://gwn.metzger.dk`. Update `CANONICAL_HOST` env var on the container app to `gwn.metzger.dk`. This propagates to HTTPS redirect, CSP headers, and WebSocket policy automatically via `server/middleware/security.js`. |
-| CS24-5 | Update deploy workflows and documentation | ⬜ Pending | Update `.github/workflows/prod-deploy.yml` health check and smoke test URLs to use `gwn.metzger.dk`. Update `infra/README.md` with custom domain setup documentation. Update `README.md` with the production URL. |
+| CS24-5 | Verify deploy workflows and update documentation | ⬜ Pending | Verify that `.github/workflows/prod-deploy.yml` and related automation contain no hard-coded production URLs; only update workflows if any `azurecontainerapps.io` references remain. Update `infra/README.md` with custom domain setup documentation. Update `README.md` with the production URL. |
 
 ---
 
