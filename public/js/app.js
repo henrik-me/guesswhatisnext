@@ -2647,7 +2647,7 @@ function validateField(name) {
   if (name === 'sequence') {
     const raw = (document.getElementById('sp-sequence')?.value || '').trim();
     const items = raw.split(',').map(s => s.trim()).filter(Boolean);
-    if (!raw) { msg = ''; } // Don't show error on empty (only on blur after input)
+    if (!raw) { msg = ''; } // Don't show an error when the sequence is empty.
     else if (items.length < 3) { msg = 'Sequence needs at least 3 items'; valid = false; }
   } else if (name === 'answer') {
     const val = (document.getElementById('sp-answer')?.value || '').trim();
