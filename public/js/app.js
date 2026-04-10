@@ -2562,10 +2562,8 @@ function resetSubmitPuzzleForm() {
   if (status) { status.textContent = ''; status.className = 'submit-puzzle-status'; }
   // Reset type selector to emoji
   selectedPuzzleType = 'emoji';
-  document.querySelectorAll('.type-card').forEach(btn => {
-    const isEmoji = btn.dataset.type === 'emoji';
-    btn.classList.toggle('active', isEmoji);
-    btn.setAttribute('aria-checked', String(isEmoji));
+  document.querySelectorAll('.type-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.type === 'emoji');
   });
   // Clear field errors
   document.querySelectorAll('.field-error').forEach(el => { el.textContent = ''; });

@@ -232,7 +232,7 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
     if (status === 'approved') {
       const submitter = await db.get('SELECT username FROM users WHERE id = ?', [submission.user_id]);
       const puzzleId = `community-${id}`;
-      const puzzleType = submission.type || 'emoji';
+      const puzzleType = VALID_TYPES.includes(submission.type) ? submission.type : 'emoji';
       const options = submission.options
         ? submission.options
         : JSON.stringify(generateOptions(submission.sequence, submission.answer));
