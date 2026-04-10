@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-10T05:41Z
+> **Last updated:** 2026-04-10T07:32Z
 
 ## Orchestrators
 
@@ -18,10 +18,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS11-65 | Database Migration | Production deploy (65a–65c) | yoga-gwn | wt-1 | yoga-gwn/cs11-65a-prod-deploy-mssql | — | 2026-04-10 |
-| CS14-83 | Community Puzzle UX | Wave 3: Community gallery | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-83-community-gallery | — | 2026-04-10 |
-| CS14-84 | Community Puzzle UX | Wave 3: Admin moderation | yoga-gwn-c3 | wt-2 | yoga-gwn-c3/cs14-84-moderation | — | 2026-04-10 |
-| CS14-85 | Community Puzzle UX | Wave 3: Edit & delete | yoga-gwn-c3 | wt-3 | yoga-gwn-c3/cs14-85-edit-delete | — | 2026-04-10 |
-| CS14-87 | Community Puzzle UX | Wave 3: Image submissions | yoga-gwn-c3 | wt-4 | yoga-gwn-c3/cs14-87-image-submissions | — | 2026-04-10 |
+| CS14-84 | Community Puzzle UX | Wave 3: Admin moderation (Copilot review) | yoga-gwn-c3 | wt-2 | yoga-gwn-c3/cs14-84-moderation | — | 2026-04-10 |
 
 ## Queued (ready, no dependencies blocking)
 
@@ -33,6 +30,9 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Description | Agent ID | PR | Merged |
 |---------|-------------|----------|----|--------|
+| CS14-87 | Image puzzle submissions | yoga-gwn-c3 | #121 | 2026-04-10 |
+| CS14-85 | Edit & delete submissions | yoga-gwn-c3 | #123 | 2026-04-10 |
+| CS14-83 | Community gallery | yoga-gwn-c3 | #122 | 2026-04-10 |
 | CS14-82 | Enhanced puzzle authoring form | yoga-gwn-c3 | #119 | 2026-04-10 |
 | CS14-81 | My Submissions dashboard | yoga-gwn-c3 | #118 | 2026-04-10 |
 | CS14-80 | Submission discovery & onboarding | yoga-gwn-c3 | #117 | 2026-04-10 |
