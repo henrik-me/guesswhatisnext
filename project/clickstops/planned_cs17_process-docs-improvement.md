@@ -7,13 +7,14 @@
 
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
-| CS17-1 | Review orchestrator workflow docs | ⬜ Pending | — | Audit INSTRUCTIONS.md §5 (Agent Work Model, Parallel Agent Workflow, Workboard coordination). Identify gaps, redundancies, unclear guidance. |
+| CS17-1 | Review orchestrator workflow docs | ✅ Done | — | Session naming convention added (PR #132 merged). |
 | CS17-2 | Review sub-agent execution docs | ⬜ Pending | — | Audit Sub-Agent Briefing Requirements, Sub-Agent Checklist, model-specific guidance, progress reporting. Evaluate completeness and clarity. |
 | CS17-3 | Review doc structure & cross-references | ⬜ Pending | — | Evaluate CONTEXT.md, WORKBOARD.md, LEARNINGS.md for organization, bloat, stale content, and cross-doc consistency. |
-| CS17-4 | Implement orchestrator doc improvements | ⬜ Pending | CS17-1 | Apply agreed changes from CS17-1 review. |
+| CS17-4 | Implement orchestrator doc improvements | 🔄 In Progress | CS17-1 | Applying 6 changes from CS17-7 investigation (PR in progress). |
 | CS17-5 | Implement sub-agent doc improvements | ⬜ Pending | CS17-2 | Apply agreed changes from CS17-2 review. |
 | CS17-6 | Implement doc structure improvements | ⬜ Pending | CS17-3 | Apply agreed changes from CS17-3 review. |
-| CS17-7 | Investigate session history for orchestrator clarifications | ⬜ Pending | — | Query sessions since last major doc update (CS16, 2026-04-09). Find patterns where orchestrators needed clarification or correction from the user. Compare gaps with current INSTRUCTIONS.md and propose updates. |
+| CS17-7 | Investigate session history for orchestrator clarifications | ✅ Done | — | Query sessions since last major doc update (CS16, 2026-04-09). Find patterns where orchestrators needed clarification or correction from the user. Compare gaps with current INSTRUCTIONS.md and propose updates. |
+| CS17-8 | Slim down WORKBOARD.md | ⬜ Pending | CS17-4 | Remove Queued and Recently Completed sections. Workboard purpose: agent registration + active task locking only. Queued/completed state is derivable from clickstop file names (planned_/active_/done_) and file timestamps. Update INSTRUCTIONS.md workboard guidance to match. |
 
 ## Design Decisions
 
