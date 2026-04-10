@@ -14,7 +14,7 @@ module.exports = {
         IF COL_LENGTH('puzzle_submissions', 'type') IS NULL
           ALTER TABLE puzzle_submissions ADD type NVARCHAR(50) NOT NULL
             CONSTRAINT DF_puzzle_submissions_type DEFAULT 'emoji'
-            CONSTRAINT CK_puzzle_submissions_type CHECK(type IN ('emoji', 'text'));
+            CONSTRAINT CK_puzzle_submissions_type CHECK(type IN ('emoji', 'text', 'image'));
       `);
       await db.exec(`
         IF COL_LENGTH('puzzle_submissions', 'options') IS NULL
@@ -23,7 +23,7 @@ module.exports = {
     } else {
       try {
         await db.exec(
-          "ALTER TABLE puzzle_submissions ADD COLUMN type TEXT NOT NULL DEFAULT 'emoji' CHECK(type IN ('emoji', 'text'))"
+          "ALTER TABLE puzzle_submissions ADD COLUMN type TEXT NOT NULL DEFAULT 'emoji' CHECK(type IN ('emoji', 'text', 'image'))"
         );
       } catch (err) {
         const msg = err && err.message ? err.message : '';
