@@ -417,21 +417,22 @@ describe('POST /api/submissions — type and options validation', () => {
     expect(res.body.error).toMatch(/type must be one of/);
   });
 
-  test('rejects image type (not yet supported)', async () => {
+  test('rejects image type with non-data-URI sequence', async () => {
     const res = await getAgent()
       .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
-        sequence: [1, 2, 3],
-        answer: '4',
+        sequence: ['not-a-data-uri', 'also-not', 'nope'],
+        answer: 'data:image/png;base64,iVBORw0KGgo=',
         explanation: 'Counting.',
         difficulty: 1,
         category: 'Math & Numbers',
         type: 'image',
+        options: ['data:image/png;base64,iVBORw0KGgo=', 'data:image/png;base64,iVBORw0KGgA=', 'data:image/png;base64,iVBORw0KGgB=', 'data:image/png;base64,iVBORw0KGgC='],
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/type must be one of/);
+    expect(res.body.error).toMatch(/invalid data URI/i);
   });
 
   test('accepts submission with valid 4-element options', async () => {
