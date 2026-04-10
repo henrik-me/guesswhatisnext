@@ -14,7 +14,7 @@ const logger = require('../logger');
 
 const router = express.Router();
 
-const VALID_TYPES = ['emoji', 'text', 'image'];
+const VALID_TYPES = ['emoji', 'text'];
 
 /**
  * Build a short preview of a sequence for notification messages.

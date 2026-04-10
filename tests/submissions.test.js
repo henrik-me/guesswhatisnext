@@ -417,7 +417,7 @@ describe('POST /api/submissions — type and options validation', () => {
     expect(res.body.error).toMatch(/type must be one of/);
   });
 
-  test('rejects image submission without required options', async () => {
+  test('rejects image type (not yet supported)', async () => {
     const res = await getAgent()
       .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
@@ -431,7 +431,7 @@ describe('POST /api/submissions — type and options validation', () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/image puzzles require/);
+    expect(res.body.error).toMatch(/type must be one of/);
   });
 
   test('accepts submission with valid 4-element options', async () => {
