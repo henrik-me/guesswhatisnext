@@ -409,6 +409,27 @@
       </div>
       <form id="submit-puzzle-form" class="submit-puzzle-form" autocomplete="off">
         <div class="form-group">
+          <label>Puzzle Type</label>
+          <div class="type-selector" role="radiogroup" aria-label="Puzzle type">
+            <button type="button" class="type-card active" data-type="emoji" role="radio" aria-checked="true">
+              <span class="type-card-icon" aria-hidden="true">😀</span>
+              <span class="type-card-label">Emoji</span>
+              <span class="type-card-desc">Use emoji characters in your sequence</span>
+            </button>
+            <button type="button" class="type-card" data-type="text" role="radio" aria-checked="false">
+              <span class="type-card-icon" aria-hidden="true">📝</span>
+              <span class="type-card-label">Text</span>
+              <span class="type-card-desc">Use words, numbers, or text patterns</span>
+            </button>
+            <button type="button" class="type-card" data-type="image" role="radio" aria-checked="false" disabled aria-disabled="true">
+              <span class="type-card-icon" aria-hidden="true">🖼️</span>
+              <span class="type-card-label">Image</span>
+              <span class="type-card-desc">Coming soon</span>
+            </button>
+          </div>
+          <p class="field-error" data-error="type" aria-live="polite"></p>
+        </div>
+        <div class="form-group">
           <label for="sp-category">Category</label>
           <select id="sp-category" required>
             <option value="">Select a category…</option>
@@ -434,6 +455,7 @@
             <option value="Art & Design">Art &amp; Design</option>
             <option value="Language & Grammar">Language &amp; Grammar</option>
           </select>
+          <p class="field-error" data-error="category" aria-live="polite"></p>
         </div>
         <div class="form-group">
           <label for="sp-difficulty">Difficulty</label>
@@ -446,20 +468,51 @@
         <div class="form-group">
           <label for="sp-sequence">Sequence (comma-separated, at least 3 items)</label>
           <input type="text" id="sp-sequence" placeholder="e.g. 🌑, 🌒, 🌓, 🌔" required>
+          <p class="field-error" data-error="sequence" aria-live="polite"></p>
         </div>
         <div class="form-group">
           <label for="sp-answer">Answer (the next item)</label>
           <input type="text" id="sp-answer" placeholder="e.g. 🌕" required>
+          <p class="field-error" data-error="answer" aria-live="polite"></p>
+        </div>
+        <div class="form-group">
+          <label>Answer Choices (4 options — players pick from these)</label>
+          <div class="options-editor" aria-label="Answer choices">
+            <div class="option-row">
+              <input type="radio" name="correct-option" value="0" checked class="option-radio" aria-label="Correct answer indicator for option 1">
+              <input type="text" class="option-input" data-option="0" placeholder="Option 1 (correct answer)" aria-label="Option 1">
+            </div>
+            <div class="option-row">
+              <input type="radio" name="correct-option" value="1" class="option-radio" aria-label="Correct answer indicator for option 2">
+              <input type="text" class="option-input" data-option="1" placeholder="Option 2" aria-label="Option 2">
+            </div>
+            <div class="option-row">
+              <input type="radio" name="correct-option" value="2" class="option-radio" aria-label="Correct answer indicator for option 3">
+              <input type="text" class="option-input" data-option="2" placeholder="Option 3" aria-label="Option 3">
+            </div>
+            <div class="option-row">
+              <input type="radio" name="correct-option" value="3" class="option-radio" aria-label="Correct answer indicator for option 4">
+              <input type="text" class="option-input" data-option="3" placeholder="Option 4" aria-label="Option 4">
+            </div>
+          </div>
+          <p class="field-error" data-error="options" aria-live="polite"></p>
         </div>
         <div class="form-group">
           <label for="sp-explanation">Explanation</label>
           <textarea id="sp-explanation" rows="3" placeholder="Explain the pattern…" required></textarea>
+          <p class="field-error" data-error="explanation" aria-live="polite"></p>
         </div>
         <div class="form-group submit-puzzle-actions">
-          <button type="submit" class="btn btn-primary">Submit Puzzle</button>
+          <button type="submit" class="btn btn-primary" id="sp-submit-btn" disabled>Submit Puzzle</button>
         </div>
         <p class="submit-puzzle-status" data-bind="submit-puzzle-status" role="status" aria-live="polite"></p>
       </form>
+      <div id="puzzle-preview" class="puzzle-preview" aria-label="Puzzle preview">
+        <h3 class="preview-title">📱 Preview</h3>
+        <div class="preview-content" data-bind="preview-content">
+          <p class="preview-empty">Fill in the form to see a live preview</p>
+        </div>
+      </div>
       <button class="btn btn-back" data-action="go-home">← Back</button>
     </section>
 
