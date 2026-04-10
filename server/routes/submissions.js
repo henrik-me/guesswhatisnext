@@ -14,9 +14,11 @@ const logger = require('../logger');
 
 const router = express.Router();
 
+const VALID_TYPES = ['emoji', 'text', 'image'];
+
 /** Validate a submission payload. Returns an error string or null. */
 function validateSubmission(body) {
-  const { sequence, answer, explanation, difficulty, category } = body;
+  const { sequence, answer, explanation, difficulty, category, type, options } = body;
 
   if (!Array.isArray(sequence) || sequence.length < 3) {
     return 'sequence must be an array of at least 3 elements';
@@ -38,6 +40,34 @@ function validateSubmission(body) {
   if (typeof category !== 'string' || !VALID_CATEGORIES.includes(category)) {
     return `category must be one of: ${VALID_CATEGORIES.join(', ')}`;
   }
+
+  // Validate type (optional, defaults to 'emoji')
+  if (type !== undefined && type !== null) {
+    if (typeof type !== 'string' || !VALID_TYPES.includes(type)) {
+      return `type must be one of: ${VALID_TYPES.join(', ')}`;
+    }
+  }
+
+  // Validate options (optional array of exactly 4 non-empty strings including answer)
+  if (options !== undefined && options !== null) {
+    if (!Array.isArray(options) || options.length !== 4) {
+      return 'options must be an array of exactly 4 items';
+    }
+    for (let i = 0; i < options.length; i++) {
+      if (typeof options[i] !== 'string' || options[i].trim().length === 0) {
+        return 'each option must be a non-empty string';
+      }
+    }
+    const trimmedOptions = options.map(o => o.trim());
+    const uniqueOptions = new Set(trimmedOptions);
+    if (uniqueOptions.size !== 4) {
+      return 'options must not contain duplicates';
+    }
+    if (!trimmedOptions.includes(trimmedAnswer)) {
+      return 'options must include the answer';
+    }
+  }
+
   return null;
 }
 
@@ -53,7 +83,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error });
     }
 
-    const { sequence, answer, explanation, difficulty, category } = req.body;
+    const { sequence, answer, explanation, difficulty, category, type, options } = req.body;
     const db = await getDbAdapter();
 
     const userExists = await db.get('SELECT 1 FROM users WHERE id = ?', [req.user.id]);
@@ -62,10 +92,14 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
 
     const trimmedAnswer = typeof answer === 'string' ? answer.trim() : String(answer);
+    const submissionType = (type && VALID_TYPES.includes(type)) ? type : 'emoji';
+    const submissionOptions = Array.isArray(options)
+      ? JSON.stringify(options.map(o => o.trim()))
+      : null;
 
     const result = await db.run(
-      `INSERT INTO puzzle_submissions (user_id, sequence, answer, explanation, difficulty, category)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO puzzle_submissions (user_id, sequence, answer, explanation, difficulty, category, type, options)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         JSON.stringify(sequence),
@@ -73,6 +107,8 @@ router.post('/', requireAuth, async (req, res, next) => {
         explanation.trim(),
         Number(difficulty),
         category,
+        submissionType,
+        submissionOptions,
       ]
     );
 
@@ -91,7 +127,7 @@ router.get('/', requireAuth, async (req, res, next) => {
   try {
     const db = await getDbAdapter();
     const rows = await db.all(
-      `SELECT id, sequence, answer, explanation, difficulty, category, status, reviewer_notes, created_at, reviewed_at
+      `SELECT id, sequence, answer, explanation, difficulty, category, type, options, status, reviewer_notes, created_at, reviewed_at
        FROM puzzle_submissions
        WHERE user_id = ?
        ORDER BY created_at DESC`,
@@ -101,6 +137,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const submissions = rows.map((row) => ({
       ...row,
       sequence: JSON.parse(row.sequence),
+      options: row.options ? JSON.parse(row.options) : null,
     }));
 
     res.json({ submissions });
@@ -115,7 +152,7 @@ router.get('/pending', requireSystem, async (req, res, next) => {
     const db = await getDbAdapter();
     const rows = await db.all(
       `SELECT ps.id, ps.sequence, ps.answer, ps.explanation, ps.difficulty, ps.category,
-              ps.status, ps.created_at, u.username AS submitted_by
+              ps.type, ps.options, ps.status, ps.created_at, u.username AS submitted_by
        FROM puzzle_submissions ps
        JOIN users u ON ps.user_id = u.id
        WHERE ps.status = 'pending'
@@ -125,6 +162,7 @@ router.get('/pending', requireSystem, async (req, res, next) => {
     const submissions = rows.map((row) => ({
       ...row,
       sequence: JSON.parse(row.sequence),
+      options: row.options ? JSON.parse(row.options) : null,
     }));
 
     res.json({ submissions });
@@ -194,7 +232,10 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
     if (status === 'approved') {
       const submitter = await db.get('SELECT username FROM users WHERE id = ?', [submission.user_id]);
       const puzzleId = `community-${id}`;
-      const options = JSON.stringify(generateOptions(submission.sequence, submission.answer));
+      const puzzleType = submission.type || 'emoji';
+      const options = submission.options
+        ? submission.options
+        : JSON.stringify(generateOptions(submission.sequence, submission.answer));
 
       try {
         await db.transaction(async (tx) => {
@@ -211,11 +252,12 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
 
           await tx.run(
             `INSERT INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active, submitted_by)
-             VALUES (?, ?, ?, 'emoji', ?, ?, ?, ?, 1, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
             [
               puzzleId,
               submission.category,
               submission.difficulty,
+              puzzleType,
               submission.sequence,
               submission.answer,
               options,
