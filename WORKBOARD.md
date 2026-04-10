@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-10T15:39Z
+> **Last updated:** 2026-04-10T16:25Z
 
 ## Orchestrators
 
@@ -18,7 +18,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS17 | Process Docs Improvement | Review & improve orchestrator/sub-agent docs | yoga-gwn-c2 | — | — | — | 2026-04-10 |
-| CS18 | MSSQL Production Fixes | Adapter SQL rewriting + call-site fixes | yoga-gwn | wt-1 | yoga-gwn/cs17-mssql-compat | — | 2026-04-10 |
+| CS18 | MSSQL Production Fixes | Adapter SQL rewriting + Docker MSSQL validation | yoga-gwn | — | main | #131 (merged) | 2026-04-10 |
 
 ## Queued (ready, no dependencies blocking)
 
