@@ -376,11 +376,13 @@ This is a performance optimization, not required for initial implementation.
      ```
    - SQL: `SELECT status, COUNT(*) FROM puzzle_submissions GROUP BY status` + date-filtered counts
 
-2. **New `PUT /api/submissions/:id`:**
-   - Auth: `requireSystem` (admin edit before approve)
+2. **Shared `PUT /api/submissions/:id` (admin edit before approve):**
+   - Auth: `requireAuth` + authorization logic inside the handler: allow if user is admin/system role OR if user owns the submission
+   - This is the **same endpoint** that CS14-85 uses for user edits — implement once with shared auth logic
    - Body: any subset of `{sequence, answer, explanation, difficulty, category, type, options}`
    - Validation: same rules as submission creation for provided fields
-   - Only allowed on `pending` submissions (409 if already reviewed)
+   - Only allowed on `pending` submissions (409 if already reviewed) for both admin and owner paths
+   - Admin/system users can edit any user's pending submission; regular users can only edit their own
    - Response: updated submission object
 
 3. **New `POST /api/submissions/bulk-review`:**
@@ -665,7 +667,7 @@ This is a performance optimization, not required for initial implementation.
      - Max sequence length for images: 6 elements (to limit total payload)
      - Answer: also a resolvable image source string (base64 data URI for image-based answers)
      - Options: array of 4 items — answer + 3 distractors; for image puzzles, all option values use the same resolvable image source format
-   - **Body parser limit:** The server currently uses `express.json()` with the default 100KB limit (`server/app.js`). Image submissions can reach ~5MB. Add a route-scoped `express.json({ limit: '6mb' })` middleware on `POST /api/submissions` (scoped, not global) to support image payloads without affecting other endpoints.
+   - **Body parser limit:** The server applies `express.json()` globally (default 100KB limit) in `server/app.js` before routes are matched. Image submissions can reach ~5MB. To support this, modify the global JSON parser to conditionally use a higher limit for the submissions route: either (a) skip the global parser for `/api/submissions` and let the router apply its own `express.json({ limit: '6mb' })`, or (b) use a conditional middleware that checks `req.path` before parsing (e.g., `app.use('/api/submissions', express.json({ limit: '6mb' }))` mounted before the default parser). Option (a) is cleaner — add `/api/submissions` to the parser exclusion list alongside the existing telemetry exclusion.
 
 **Database changes:**
 
