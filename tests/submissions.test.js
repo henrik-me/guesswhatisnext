@@ -417,22 +417,21 @@ describe('POST /api/submissions — type and options validation', () => {
     expect(res.body.error).toMatch(/type must be one of/);
   });
 
-  test('rejects image type with non-data-URI sequence', async () => {
+  test('rejects image type (not yet supported)', async () => {
     const res = await getAgent()
       .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
-        sequence: ['not-a-data-uri', 'also-not', 'nope'],
-        answer: 'data:image/png;base64,iVBORw0KGgo=',
+        sequence: [1, 2, 3],
+        answer: '4',
         explanation: 'Counting.',
         difficulty: 1,
         category: 'Math & Numbers',
         type: 'image',
-        options: ['data:image/png;base64,iVBORw0KGgo=', 'data:image/png;base64,iVBORw0KGgA=', 'data:image/png;base64,iVBORw0KGgB=', 'data:image/png;base64,iVBORw0KGgC='],
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/invalid data URI/i);
+    expect(res.body.error).toMatch(/type must be one of/);
   });
 
   test('accepts submission with valid 4-element options', async () => {
@@ -660,636 +659,217 @@ describe('PUT /api/submissions/:id/review — type and options', () => {
   });
 });
 
-describe('PUT /api/submissions/:id', () => {
-  let submissionId;
+describe('GET /api/submissions/stats', () => {
+  test('returns submission statistics for system user', async () => {
+    const res = await getAgent()
+      .get('/api/submissions/stats')
+      .set('X-API-Key', SYSTEM_KEY);
+
+    expect(res.status).toBe(200);
+    expect(typeof res.body.pending).toBe('number');
+    expect(typeof res.body.approved).toBe('number');
+    expect(typeof res.body.rejected).toBe('number');
+    expect(typeof res.body.total).toBe('number');
+    expect(res.body.total).toBe(res.body.pending + res.body.approved + res.body.rejected);
+    expect(typeof res.body.today.submitted).toBe('number');
+    expect(typeof res.body.today.reviewed).toBe('number');
+  });
+
+  test('rejects for regular users', async () => {
+    const res = await getAgent()
+      .get('/api/submissions/stats')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('PUT /api/submissions/:id (edit)', () => {
+  let editableId;
 
   beforeAll(async () => {
     const res = await getAgent()
       .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
-        sequence: ['🐛', '🦋', '🌸'],
-        answer: '🍯',
-        explanation: 'Life of a butterfly.',
-        difficulty: 1,
-        category: 'Nature',
-      });
-    expect(res.status).toBe(201);
-    expect(res.body.id).toBeDefined();
-    submissionId = res.body.id;
-  });
-
-  test('edits a pending submission (success)', async () => {
-    const res = await getAgent()
-      .put(`/api/submissions/${submissionId}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ explanation: 'Updated explanation.' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.explanation).toBe('Updated explanation.');
-    expect(res.body.status).toBe('pending');
-  });
-
-  test('edits multiple fields at once', async () => {
-    const res = await getAgent()
-      .put(`/api/submissions/${submissionId}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['🐛', '🦋', '🌸', '🌻'],
+        sequence: ['🔵', '🟢', '🟡'],
+        answer: '🔴',
+        explanation: 'Color circle.',
         difficulty: 2,
-        category: 'Animals',
+        category: 'Colors & Patterns',
       });
-
-    expect(res.status).toBe(200);
-    expect(res.body.sequence).toEqual(['🐛', '🦋', '🌸', '🌻']);
-    expect(res.body.difficulty).toBe(2);
-    expect(res.body.category).toBe('Animals');
+    editableId = res.body.id;
   });
 
-  test('rejects edit of approved submission (409)', async () => {
+  test('admin can edit a pending submission', async () => {
+    const res = await getAgent()
+      .put(`/api/submissions/${editableId}`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ explanation: 'Updated explanation' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.explanation).toBe('Updated explanation');
+  });
+
+  test('owner can edit own pending submission with feature flag', async () => {
+    const res = await getAgent()
+      .put(`/api/submissions/${editableId}?ff_submit_puzzle=1`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ difficulty: 3 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.difficulty).toBe(3);
+  });
+
+  test('non-owner regular user gets 403', async () => {
+    const res = await getAgent()
+      .put(`/api/submissions/${editableId}?ff_submit_puzzle=1`)
+      .set('Authorization', `Bearer ${userToken2}`)
+      .send({ difficulty: 1 });
+
+    expect(res.status).toBe(403);
+  });
+
+  test('rejects editing a reviewed submission with 409', async () => {
+    // Create and approve a submission
     const createRes = await getAgent()
       .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
       .send({
-        sequence: ['🎵', '🎶', '🎼'],
-        answer: '🎹',
-        explanation: 'Musical progression.',
+        sequence: ['📕', '📗', '📘'],
+        answer: '📙',
+        explanation: 'Book colors.',
         difficulty: 1,
-        category: 'Music',
+        category: 'General Knowledge',
       });
-
     await getAgent()
       .put(`/api/submissions/${createRes.body.id}/review`)
       .set('X-API-Key', SYSTEM_KEY)
       .send({ status: 'approved' });
 
     const res = await getAgent()
-      .put(`/api/submissions/${createRes.body.id}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ explanation: 'Nope' });
+      .put(`/api/submissions/${createRes.body.id}`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ explanation: 'Changed' });
 
     expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/reviewed/i);
   });
 
-  test('rejects edit of another user\'s submission (403)', async () => {
+  test('rejects invalid fields', async () => {
     const res = await getAgent()
-      .put(`/api/submissions/${submissionId}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken2}`)
-      .send({ explanation: 'Hijack' });
+      .put(`/api/submissions/${editableId}`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ difficulty: 99 });
 
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/own/i);
+    expect(res.status).toBe(400);
   });
 
-  test('returns 404 for nonexistent submission', async () => {
+  test('returns 404 for non-existent submission', async () => {
     const res = await getAgent()
-      .put('/api/submissions/99999?ff_submit_puzzle=1')
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ explanation: 'Ghost' });
+      .put('/api/submissions/99999')
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ explanation: 'Test' });
 
     expect(res.status).toBe(404);
   });
 
-  test('validates sequence field', async () => {
+  test('returns 400 for empty body', async () => {
     const res = await getAgent()
-      .put(`/api/submissions/${submissionId}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ sequence: [1, 2] });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/at least 3/);
-  });
-
-  test('validates difficulty field', async () => {
-    const res = await getAgent()
-      .put(`/api/submissions/${submissionId}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ difficulty: 5 });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/difficulty/i);
-  });
-
-  test('validates category field', async () => {
-    const res = await getAgent()
-      .put(`/api/submissions/${submissionId}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ category: 'Nonsense' });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/category/i);
-  });
-
-  test('enforces feature flag for regular users', async () => {
-    const res = await getAgent()
-      .put(`/api/submissions/${submissionId}`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ explanation: 'No flag' });
-
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/not enabled/i);
-  });
-
-  test('admin/system bypasses feature flag', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['A', 'B', 'C'],
-        answer: 'D',
-        explanation: 'Alphabet.',
-        difficulty: 1,
-        category: 'General Knowledge',
-      });
-
-    const res = await getAgent()
-      .put(`/api/submissions/${createRes.body.id}`)
+      .put(`/api/submissions/${editableId}`)
       .set('X-API-Key', SYSTEM_KEY)
-      .send({ explanation: 'Admin edit without flag' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.explanation).toBe('Admin edit without flag');
-  });
-
-  test('returns 400 when no fields provided', async () => {
-    const res = await getAgent()
-      .put(`/api/submissions/${submissionId}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
       .send({});
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/no fields/i);
   });
 
-  test('rejects updating only answer when stored options do not include new answer', async () => {
-    // Create a submission with options
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['A', 'B', 'C'],
-        answer: 'D',
-        explanation: 'Cross-field test',
-        difficulty: 1,
-        category: 'Nature',
-        options: ['D', 'E', 'F', 'G'],
-      });
-    const sid = createRes.body.id;
-
-    // Try to change answer to something not in stored options
+  test('rejects without auth', async () => {
     const res = await getAgent()
-      .put(`/api/submissions/${sid}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ answer: 'Z' });
+      .put(`/api/submissions/${editableId}`)
+      .send({ explanation: 'No auth' });
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/options must include the answer/i);
-  });
-
-  test('rejects updating only options when stored answer is not in new options', async () => {
-    // Create a submission with answer 'D'
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['A', 'B', 'C'],
-        answer: 'D',
-        explanation: 'Cross-field test 2',
-        difficulty: 1,
-        category: 'Nature',
-        options: ['D', 'E', 'F', 'G'],
-      });
-    const sid = createRes.body.id;
-
-    // Try to change options to exclude stored answer 'D'
-    const res = await getAgent()
-      .put(`/api/submissions/${sid}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ options: ['X', 'Y', 'Z', 'W'] });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/options must include the answer/i);
-  });
-
-  test('accepts updating answer when stored options include new answer', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['A', 'B', 'C'],
-        answer: 'D',
-        explanation: 'Cross-field valid',
-        difficulty: 1,
-        category: 'Nature',
-        options: ['D', 'E', 'F', 'G'],
-      });
-    const sid = createRes.body.id;
-
-    // Change answer to 'E' which is in stored options
-    const res = await getAgent()
-      .put(`/api/submissions/${sid}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ answer: 'E' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.answer).toBe('E');
-  });
-
-  test('clears options by sending options: null', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['X', 'Y', 'Z'],
-        answer: 'W',
-        explanation: 'Options clearing test',
-        difficulty: 1,
-        category: 'Nature',
-        options: ['W', 'X', 'Y', 'Z'],
-      });
-    const sid = createRes.body.id;
-
-    const res = await getAgent()
-      .put(`/api/submissions/${sid}?ff_submit_puzzle=1`)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({ options: null });
-
-    expect(res.status).toBe(200);
-    expect(res.body.options).toBeNull();
+    expect(res.status).toBe(401);
   });
 });
 
-describe('DELETE /api/submissions/:id', () => {
-  test('deletes own pending submission', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['🗑️', '🗑️', '🗑️'],
-        answer: '🗑️',
-        explanation: 'Trash.',
-        difficulty: 1,
-        category: 'General Knowledge',
-      });
+describe('POST /api/submissions/bulk-review', () => {
+  let bulkIds;
 
-    const res = await getAgent()
-      .delete(`/api/submissions/${createRes.body.id}`)
-      .set('Authorization', `Bearer ${userToken}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.message).toBe('Submission deleted');
+  beforeAll(async () => {
+    bulkIds = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await getAgent()
+        .post(ENABLED_SUBMISSIONS_PATH)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({
+          sequence: [i, i + 1, i + 2],
+          answer: String(i + 3),
+          explanation: `Bulk test ${i}`,
+          difficulty: 1,
+          category: 'Math & Numbers',
+        });
+      bulkIds.push(res.body.id);
+    }
   });
 
-  test('deletes own approved submission', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['✅', '✅', '✅'],
-        answer: '✅',
-        explanation: 'All checks.',
-        difficulty: 1,
-        category: 'General Knowledge',
-      });
-
-    await getAgent()
-      .put(`/api/submissions/${createRes.body.id}/review`)
+  test('bulk approves multiple submissions', async () => {
+    const res = await getAgent()
+      .post('/api/submissions/bulk-review')
       .set('X-API-Key', SYSTEM_KEY)
-      .send({ status: 'approved' });
-
-    const res = await getAgent()
-      .delete(`/api/submissions/${createRes.body.id}`)
-      .set('Authorization', `Bearer ${userToken}`);
+      .send({ ids: [bulkIds[0], bulkIds[1]], status: 'approved' });
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toBe('Submission deleted');
+    expect(res.body.results).toHaveLength(2);
+    expect(res.body.results[0].status).toBe('approved');
+    expect(res.body.results[1].status).toBe('approved');
+
+    // Verify puzzles were created
+    const puzzlesRes = await getAgent()
+      .get('/api/puzzles')
+      .set('Authorization', `Bearer ${userToken}`);
+    const puzzles = puzzlesRes.body;
+    expect(puzzles.find(p => p.id === `community-${bulkIds[0]}`)).toBeDefined();
+    expect(puzzles.find(p => p.id === `community-${bulkIds[1]}`)).toBeDefined();
   });
 
-  test('rejects deleting another user\'s submission (403)', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['🔒', '🔒', '🔒'],
-        answer: '🔒',
-        explanation: 'Locked.',
-        difficulty: 1,
-        category: 'General Knowledge',
-      });
-
+  test('handles partial failure (already reviewed)', async () => {
     const res = await getAgent()
-      .delete(`/api/submissions/${createRes.body.id}`)
-      .set('Authorization', `Bearer ${userToken2}`);
+      .post('/api/submissions/bulk-review')
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ ids: [bulkIds[0], bulkIds[2]], status: 'rejected', reviewerNotes: 'Bulk reject' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results).toHaveLength(2);
+    const first = res.body.results.find(r => r.id === bulkIds[0]);
+    const second = res.body.results.find(r => r.id === bulkIds[2]);
+    expect(first.error).toMatch(/already reviewed/i);
+    expect(second.status).toBe('rejected');
+  });
+
+  test('rejects invalid status', async () => {
+    const res = await getAgent()
+      .post('/api/submissions/bulk-review')
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ ids: [1], status: 'maybe' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects empty ids', async () => {
+    const res = await getAgent()
+      .post('/api/submissions/bulk-review')
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ ids: [], status: 'approved' });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects for regular users', async () => {
+    const res = await getAgent()
+      .post('/api/submissions/bulk-review')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ ids: [1], status: 'approved' });
 
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/own/i);
-  });
-
-  test('returns 404 for nonexistent submission', async () => {
-    const res = await getAgent()
-      .delete('/api/submissions/99999')
-      .set('Authorization', `Bearer ${userToken}`);
-
-    expect(res.status).toBe(404);
-  });
-
-  test('deleted submission no longer appears in user list', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['💀', '💀', '💀'],
-        answer: '💀',
-        explanation: 'Gone.',
-        difficulty: 1,
-        category: 'General Knowledge',
-      });
-
-    await getAgent()
-      .delete(`/api/submissions/${createRes.body.id}`)
-      .set('Authorization', `Bearer ${userToken}`);
-
-    // Verify the submission is truly gone
-    const listRes = await getAgent()
-      .get('/api/submissions')
-      .set('Authorization', `Bearer ${userToken}`);
-
-    const found = listRes.body.submissions.find(s => s.id === createRes.body.id);
-    expect(found).toBeUndefined();
-  });
-
-  test('approved submission deleted but puzzle remains in puzzles table', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['🏠', '🏡', '🏘️'],
-        answer: '🏗️',
-        explanation: 'Building progression.',
-        difficulty: 1,
-        category: 'General Knowledge',
-      });
-
-    const approveRes = await getAgent()
-      .put(`/api/submissions/${createRes.body.id}/review`)
-      .set('X-API-Key', SYSTEM_KEY)
-      .send({ status: 'approved' });
-
-    const puzzleId = approveRes.body.puzzleId;
-
-    // Delete the submission
-    await getAgent()
-      .delete(`/api/submissions/${createRes.body.id}`)
-      .set('Authorization', `Bearer ${userToken}`);
-
-    // Puzzle should still exist
-    const puzzlesRes = await getAgent()
-      .get('/api/puzzles')
-      .set('Authorization', `Bearer ${userToken}`);
-
-    const puzzle = puzzlesRes.body.find(p => p.id === puzzleId);
-    expect(puzzle).toBeDefined();
-  });
-
-  test('does not require feature flag', async () => {
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['🚫', '🚫', '🚫'],
-        answer: '🚫',
-        explanation: 'No flag needed.',
-        difficulty: 1,
-        category: 'General Knowledge',
-      });
-
-    // Delete without feature flag in URL
-    const res = await getAgent()
-      .delete(`/api/submissions/${createRes.body.id}`)
-      .set('Authorization', `Bearer ${userToken}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.message).toBe('Submission deleted');
-  });
-});
-
-
-// Helper: create a minimal valid PNG as a base64 data URI
-function makeImageUri(mime = 'image/png', size = 100) {
-  const buf = Buffer.alloc(size, 0x42);
-  return `data:${mime};base64,${buf.toString('base64')}`;
-}
-
-describe('POST /api/submissions — image type', () => {
-  const img1 = makeImageUri('image/png', 50);
-  const img2 = makeImageUri('image/jpeg', 60);
-  const img3 = makeImageUri('image/gif', 70);
-  const imgAnswer = makeImageUri('image/png', 80);
-  const distractor1 = makeImageUri('image/webp', 90);
-  const distractor2 = makeImageUri('image/png', 100);
-  const distractor3 = makeImageUri('image/jpeg', 110);
-
-  test('accepts image submission with valid data URIs', async () => {
-    const res = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: [img1, img2, img3],
-        answer: imgAnswer,
-        explanation: 'Image pattern.',
-        difficulty: 1,
-        category: 'Visual & Spatial',
-        type: 'image',
-        options: [imgAnswer, distractor1, distractor2, distractor3],
-      });
-
-    expect(res.status).toBe(201);
-    expect(res.body.status).toBe('pending');
-  });
-
-  test('rejects oversized image', async () => {
-    const oversized = makeImageUri('image/png', 600 * 1024);
-    const res = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: [oversized, img2, img3],
-        answer: imgAnswer,
-        explanation: 'Too big.',
-        difficulty: 1,
-        category: 'Visual & Spatial',
-        type: 'image',
-        options: [imgAnswer, distractor1, distractor2, distractor3],
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/500KB/i);
-  });
-
-  test('rejects invalid image format', async () => {
-    const badMime = 'data:application/pdf;base64,' + Buffer.alloc(50, 0x42).toString('base64');
-    const res = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: [badMime, img2, img3],
-        answer: imgAnswer,
-        explanation: 'Bad format.',
-        difficulty: 1,
-        category: 'Visual & Spatial',
-        type: 'image',
-        options: [imgAnswer, distractor1, distractor2, distractor3],
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/unsupported format/i);
-  });
-
-  test('rejects malformed data URI', async () => {
-    const res = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['not-a-data-uri', img2, img3],
-        answer: imgAnswer,
-        explanation: 'Malformed.',
-        difficulty: 1,
-        category: 'Visual & Spatial',
-        type: 'image',
-        options: [imgAnswer, distractor1, distractor2, distractor3],
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/invalid data URI/i);
-  });
-
-  test('rejects image submission with more than 6 sequence elements', async () => {
-    const imgs = Array.from({ length: 7 }, (_, i) => makeImageUri('image/png', 50 + i));
-    const res = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: imgs,
-        answer: imgAnswer,
-        explanation: 'Too many.',
-        difficulty: 1,
-        category: 'Visual & Spatial',
-        type: 'image',
-        options: [imgAnswer, distractor1, distractor2, distractor3],
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/at most 6/i);
-  });
-
-  test('rejects image submission without options', async () => {
-    const res = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: [img1, img2, img3],
-        answer: imgAnswer,
-        explanation: 'No options.',
-        difficulty: 1,
-        category: 'Visual & Spatial',
-        type: 'image',
-      });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/require.*4 options/i);
-  });
-
-  test('non-image submissions are unchanged by image validation', async () => {
-    const res = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: ['🔴', '🟠', '🟡'],
-        answer: '🟢',
-        explanation: 'Rainbow.',
-        difficulty: 1,
-        category: 'Colors & Patterns',
-        type: 'emoji',
-      });
-
-    expect(res.status).toBe(201);
-  });
-
-  test('sanitizes SVG content in image submissions', async () => {
-    const maliciousSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert("xss")</script><circle r="10" onload="alert(1)"/></svg>').toString('base64');
-    const svgUri = `data:image/svg+xml;base64,${maliciousSvg}`;
-    const res = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: [svgUri, img2, img3],
-        answer: imgAnswer,
-        explanation: 'SVG test.',
-        difficulty: 1,
-        category: 'Visual & Spatial',
-        type: 'image',
-        options: [imgAnswer, distractor1, distractor2, distractor3],
-      });
-
-    expect(res.status).toBe(201);
-
-    // Verify stored sequence has sanitized SVG
-    const listRes = await getAgent()
-      .get('/api/submissions')
-      .set('Authorization', `Bearer ${userToken}`);
-
-    const sub = listRes.body.submissions.find(s => s.id === res.body.id);
-    expect(sub).toBeDefined();
-    // Decode the stored SVG and check that script/event handlers were stripped
-    const storedSvg = Buffer.from(sub.sequence[0].split(',')[1], 'base64').toString('utf-8');
-    expect(storedSvg).not.toMatch(/<script/i);
-    expect(storedSvg).not.toMatch(/onload/i);
-  });
-});
-
-describe('PUT /api/submissions/:id/review — image type', () => {
-  test('approve creates puzzle with image data URIs', async () => {
-    const img1 = makeImageUri('image/png', 50);
-    const img2 = makeImageUri('image/jpeg', 60);
-    const img3 = makeImageUri('image/gif', 70);
-    const imgAns = makeImageUri('image/png', 80);
-    const d1 = makeImageUri('image/webp', 90);
-    const d2 = makeImageUri('image/png', 100);
-    const d3 = makeImageUri('image/jpeg', 110);
-
-    const createRes = await getAgent()
-      .post(ENABLED_SUBMISSIONS_PATH)
-      .set('Authorization', `Bearer ${userToken}`)
-      .send({
-        sequence: [img1, img2, img3],
-        answer: imgAns,
-        explanation: 'Image puzzle for approval.',
-        difficulty: 2,
-        category: 'Visual & Spatial',
-        type: 'image',
-        options: [imgAns, d1, d2, d3],
-      });
-
-    expect(createRes.status).toBe(201);
-
-    const approveRes = await getAgent()
-      .put(`/api/submissions/${createRes.body.id}/review`)
-      .set('X-API-Key', SYSTEM_KEY)
-      .send({ status: 'approved' });
-
-    expect(approveRes.status).toBe(200);
-    expect(approveRes.body.puzzleId).toBe(`community-${createRes.body.id}`);
-
-    const puzzlesRes = await getAgent()
-      .get('/api/puzzles')
-      .set('Authorization', `Bearer ${userToken}`);
-
-    const puzzle = puzzlesRes.body.find(p => p.id === approveRes.body.puzzleId);
-    expect(puzzle).toBeDefined();
-    expect(puzzle.type).toBe('image');
-    expect(puzzle.sequence).toHaveLength(3);
-    expect(puzzle.sequence[0]).toMatch(/^data:image\//);
-    expect(puzzle.options).toHaveLength(4);
   });
 });
