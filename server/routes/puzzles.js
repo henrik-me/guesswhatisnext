@@ -99,7 +99,7 @@ router.get('/community', optionalAuth, async (req, res, next) => {
     const total = countRow.cnt;
 
     const rows = await db.all(
-      `SELECT * FROM puzzles WHERE ${whereClauses} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM puzzles WHERE ${whereClauses} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
 

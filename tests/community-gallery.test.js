@@ -30,8 +30,7 @@ async function insertCommunityPuzzle(overrides = {}) {
     ...overrides,
   };
 
-  // Use the system key to insert directly via DB
-  // We need to use the server's DB adapter
+  // Insert directly via the server's DB adapter for test setup.
   const db = require('../server/db');
   const adapter = await db.getDbAdapter();
   await adapter.run(
@@ -53,6 +52,8 @@ describe('GET /api/puzzles/community', () => {
     expect(res.status).toBe(200);
     expect(res.body.puzzles).toBeDefined();
     expect(Array.isArray(res.body.puzzles)).toBe(true);
+    expect(res.body.puzzles.length).toBeGreaterThan(0);
+    expect(res.body.puzzles.map(p => p.id)).toContain('community-test-1');
 
     // All returned puzzles should have submitted_by
     for (const p of res.body.puzzles) {
@@ -77,6 +78,8 @@ describe('GET /api/puzzles/community', () => {
     const res = await getAgent().get('/api/puzzles/community?category=Science');
 
     expect(res.status).toBe(200);
+    expect(res.body.puzzles.length).toBeGreaterThan(0);
+    expect(res.body.puzzles.map(p => p.id)).toContain('community-sci-1');
     for (const p of res.body.puzzles) {
       expect(p.category).toBe('Science');
     }

@@ -2667,7 +2667,7 @@ let galleryCategory = '';
 let galleryDifficulty = 'all';
 let galleryReturnScreen = null;
 
-/** Populate the category dropdown from the server's categories. */
+/** Populate the category dropdown from the shared category list. */
 function populateGalleryCategoryFilter() {
   const select = document.getElementById('gallery-category-filter');
   if (!select || select.options.length > 1) return;
