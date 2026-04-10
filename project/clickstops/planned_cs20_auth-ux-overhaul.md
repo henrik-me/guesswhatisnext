@@ -14,7 +14,7 @@
 | CS20-3 | Hide multiplayer until logged in | ⬜ Pending | Don't show the "Multiplayer" option on the home screen until the user is logged in. Currently it shows but redirects to auth — instead, hide it entirely. |
 | CS20-4 | Leaderboard access without login | ⬜ Pending | Make leaderboard viewable without login. Show unauthenticated user's own scores as "User" in the leaderboard. Server endpoint currently requires auth — add an optional-auth mode for leaderboard. |
 | CS20-5 | "To keep score, sign in" prompt | ⬜ Pending | When a not-logged-in user selects Free Play or Daily Challenge, show a non-blocking message: "To keep score, sign in" with a link to sign in/register. Let them continue playing without signing in. |
-| CS20-6 | Update E2E tests for auth UX | ⬜ Pending | Update auth E2E tests (`auth.spec.mjs`) and any tests that depend on the current footer auth layout. Add tests for the new top bar behavior, multiplayer hiding, and leaderboard anonymous access. |
+| CS20-6 | Update E2E tests for auth UX | ⬜ Pending | Update auth E2E tests (`tests/e2e/auth.spec.mjs`) and any tests that depend on the current footer auth layout. Add tests for the new top bar behavior, multiplayer hiding, and leaderboard anonymous access. |
 
 ---
 

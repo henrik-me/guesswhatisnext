@@ -105,7 +105,7 @@ Move community puzzle submission from the home screen into a dedicated sub-page,
 
 ## Clickstop CS20 — Authentication UX Overhaul
 
-Restructure auth UI: move controls to top header, simplify login/logout states, hide multiplayer until logged in, make leaderboard accessible without login, add "to keep score, sign-in" prompts. See [full details](project/clickstops/planned_cs20_auth-ux-overhaul.md).
+Restructure auth UI: move controls to top header, simplify login/logout states, hide multiplayer until logged in, make leaderboard accessible without login, add "to keep score, sign in" prompts. See [full details](project/clickstops/planned_cs20_auth-ux-overhaul.md).
 
 ---
 
