@@ -52,7 +52,7 @@ jobs:
           IMAGE_PATH="${IMAGE_NAME#${REGISTRY}/}"
           echo "Checking for image $IMAGE_NAME:${{ inputs.image-tag }}"
           RESPONSE=$(curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w '%{http_code}' \
-            -u "${{ vars.GHCR_USERNAME }}:${{ secrets.GHCR_PAT }}" \
+            -u "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json" \
             "https://${REGISTRY}/v2/${IMAGE_PATH}/manifests/${{ inputs.image-tag }}")
           if [ "$RESPONSE" = "200" ]; then
@@ -61,7 +61,7 @@ jobs:
           fi
 
           if [ "$RESPONSE" = "401" ]; then
-            echo "::error::Unauthorized when checking image in GHCR (HTTP $RESPONSE). Check GHCR_USERNAME/GHCR_PAT credentials and package visibility."
+            echo "::error::Unauthorized when checking image in GHCR (HTTP $RESPONSE). Verify the workflow has packages:read permission and the package is visible to this repository."
             exit 1
           fi
 
