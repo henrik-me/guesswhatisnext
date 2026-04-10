@@ -27,8 +27,8 @@
 **Flag scope by task:**
 | Scope | Tasks | Rationale |
 |---|---|---|
-| Always visible (no flag) | CS14-80 discovery UI, CS14-81 dashboard, CS14-83 gallery | Discovery, browsing, and viewing own submissions are non-destructive read operations |
-| Behind `submitPuzzle` flag | CS14-80 actual submit action, CS14-82 authoring form, CS14-85 edit/delete, CS14-87 image upload | Write operations that create or modify submissions |
+| Always visible (no flag) | CS14-80 discovery UI, CS14-81 dashboard, CS14-83 gallery, CS14-85 delete own submission | Discovery, browsing, viewing own submissions, and allowing users to remove their own submissions are available without the authoring flag |
+| Behind `submitPuzzle` flag | CS14-80 actual submit action, CS14-82 authoring form, CS14-85 edit pending submission, CS14-87 image upload | Operations that create submissions or change submission content remain gated behind the authoring feature flag |
 | Behind `requireSystem` | CS14-84 moderation, CS14-86 admin-triggered notifications | Admin-only operations |
 
 > **Note:** Puzzle authoring format reference is in the [CS9 archive](done_cs9_content-growth.md).
@@ -41,7 +41,6 @@ Current migrations: 001–004. New migrations for CS14:
 |---|---|---|
 | 005 | CS14-82 | Add `type` and `options` columns to `puzzle_submissions` |
 | 006 | CS14-86 | Create `notifications` table |
-| 007 | CS14-87 | Add `image_data` column to `puzzle_submissions` |
 
 ### Global: Shared Components
 
@@ -78,9 +77,9 @@ Current migrations: 001–004. New migrations for CS14:
 
 3. **Logged-out user experience:**
    - "Create Puzzle" button shows on home screen for all users
-   - Clicking while logged out navigates to `#screen-login` with `data-return="submit-puzzle"` attribute
+   - Clicking while logged out navigates to `#screen-auth` with `data-return="submit-puzzle"` attribute
    - After successful login, auto-redirect to submit screen
-   - The return-redirect logic goes in `app.js` login success handler
+   - The return-redirect logic goes in `public/js/app.js` login success handler
 
 **API changes:** None — existing endpoints suffice.
 
@@ -131,7 +130,7 @@ Current migrations: 001–004. New migrations for CS14:
    - Submit screen: add "View My Submissions" link below the form
    - After successful submission: show confirmation with link to "View My Submissions"
 
-3. **JS behavior (`app.js`):**
+3. **JS behavior (`public/js/app.js`):**
    - `showMySubmissions()` function: fetch `GET /api/submissions`, render cards, handle empty state
    - Screen registered in navigation handler
    - Refresh on screen show (always fetch fresh data)
@@ -278,7 +277,7 @@ Current migrations: 001–004. New migrations for CS14:
        "puzzles": [
          {
            "id": "community-42",
-           "category": "nature",
+           "category": "Nature",
            "difficulty": 2,
            "type": "emoji",
            "sequence": ["🌱", "🌿", "🌳"],
@@ -656,43 +655,35 @@ This is a performance optimization, not required for initial implementation.
 **API changes:**
 
 1. **Modified `POST /api/submissions`:**
-   - When `type = 'image'`, accept `sequence` as array of **base64-encoded image strings** (format: `data:image/png;base64,...`)
+   - When `type = 'image'`, accept `sequence` as an array of **resolvable image source strings**. In Phase 1/MVP these are base64 data URIs (format: `data:image/png;base64,...`).
+   - Canonical contract for image puzzles: `sequence`, `answer`, and any image-valued entries in `options` are stored and returned in the same resolvable format the client can pass directly to `<img src>`.
    - Alternative considered and rejected: separate upload endpoint with file references. Base64-in-JSON is simpler for the MVP — no multipart handling, no temporary file management, no separate upload state. The size limits (below) keep payloads reasonable.
    - Validation for image submissions:
      - Each sequence element: valid base64 data URI with recognized MIME type
      - Allowed formats: `image/png`, `image/jpeg`, `image/gif`, `image/svg+xml`, `image/webp`
      - Max size per image: 500KB (base64-encoded, ~375KB raw)
      - Max sequence length for images: 6 elements (to limit total payload)
-     - Answer: also a base64 image string (or text label for the image)
-     - Options: array of 4 items — answer + 3 distractors (can be base64 images or text labels)
-
-2. **New `GET /api/submissions/:id/images/:index`:**
-   - Auth: `requireAuth` (own submission) or `requireSystem` (moderation)
-   - Returns the stored image for a specific sequence index
-   - Response: image binary with correct `Content-Type` header
-   - Purpose: avoid sending all images in every API response — lazy load per image
-   - Note: for the puzzles table (approved community puzzles), images are served via the same mechanism since `puzzles.sequence` stores the same JSON format
+     - Answer: also a resolvable image source string (base64 data URI for image-based answers)
+     - Options: array of 4 items — answer + 3 distractors; for image puzzles, all option values use the same resolvable image source format
 
 **Database changes:**
 
-- **Migration 007:** Add `image_data` column to `puzzle_submissions`
-  ```sql
-  ALTER TABLE puzzle_submissions ADD COLUMN image_data TEXT;  -- JSON blob of base64 images, nullable
-  ```
-  - For image-type submissions, `sequence` stores descriptive labels (e.g., `["red circle", "blue square", "green triangle"]`) while `image_data` stores the actual base64 content as a JSON object: `{"0": "data:image/png;base64,...", "1": "data:image/png;base64,...", ...}`
-  - For non-image submissions, `image_data` is NULL
-  - This separation keeps `GET /api/submissions` responses lightweight (labels only, not megabytes of image data)
+- **Migration 007:** No separate `image_data` column needed in the MVP.
+  - For image-type submissions, `puzzle_submissions.sequence` stores the canonical image source strings (base64 data URIs) directly, same as emoji/text submissions store their sequence data.
+  - `answer` and image-valued `options` likewise store the same canonical representation directly.
+  - On approval, `puzzles.sequence` stores the same canonical image source strings so approved community puzzles render without client-side transformation.
+  - For non-image submissions, storage remains unchanged.
+  - Note: this means submission rows for image puzzles will be larger (~3MB max), but keeps the data model simple and consistent across all puzzle types.
 
 **Storage strategy:**
 
-- **Phase 1 (this task):** Store images as base64 in the database (`image_data` column). Simple, no external dependencies, works in both dev and prod.
-  - Tradeoff: larger DB size, but community submission volume is expected to be low initially
-  - Max storage per submission: ~6 images × 500KB = ~3MB in DB per image submission
-- **Phase 2 (future, not in CS14):** Migrate to Azure Blob Storage for production if image volume grows. This would involve:
+- **Phase 1 (this task):** Store image puzzle assets inline as base64 data URIs in the existing JSON fields (`sequence`, `answer`, and image-valued `options`). Simple, no external dependencies, works in both dev and prod, and matches the current client expectation that image entries are directly usable as `<img src>` values.
+  - Tradeoff: larger DB rows and API payloads, but community submission volume is expected to be low initially
+  - Max storage per submission: ~6 images × 500KB = ~3MB in DB per image submission, plus answer/options if image-based
+- **Phase 2 (future, not in CS14):** Migrate to Azure Blob Storage for production if image volume grows while preserving the same API contract that image entries are resolvable `src` values. This would involve:
   - New `AZURE_BLOB_CONNECTION_STRING` config var
-  - Upload to blob on submit, store blob URL in `image_data` instead of base64
-  - Serve via blob URL or proxy endpoint
-  - Migration script to move existing base64 data to blobs
+  - Upload to blob on submit and replace stored data URIs with blob URLs in `sequence` / `answer` / image-valued `options`
+  - Serve directly via blob URL or proxy endpoint, while keeping read responses backward-compatible for the client
 - **Dev environment:** always uses DB storage (no Azure dependency)
 
 **Client UI changes:**
@@ -715,8 +706,8 @@ This is a performance optimization, not required for initial implementation.
    - Uses `URL.createObjectURL()` for local preview before upload (no server round-trip)
 
 3. **Image display in moderation (CS14-84 extension):**
-   - Moderation preview renders images from `GET /api/submissions/:id/images/:index`
-   - Lazy loading: only fetch images when preview is expanded
+   - Moderation preview renders images directly from `sequence` data (base64 data URIs are directly usable as `<img src>`)
+   - Lazy loading: use `loading="lazy"` attribute on `<img>` elements for large image sequences
 
 **Feature flag considerations:**
 - Image type option: behind `submitPuzzle` flag (same as all submission writes)
@@ -724,15 +715,14 @@ This is a performance optimization, not required for initial implementation.
 
 **Test requirements:**
 - Unit (Vitest):
-  - Submit image puzzle: valid base64, correct MIME types
+  - Submit image puzzle: valid base64 data URIs, correct MIME types
   - Validation: reject oversized images, invalid formats, too many sequence elements
-  - `GET /api/submissions/:id/images/:index` returns correct image with content type
-  - Image ownership check (can't access other user's submission images)
-  - Approve image submission: puzzle created with image data
-  - Non-image submissions: `image_data` remains NULL
+  - Validation: reject malformed data URIs, non-image MIME types
+  - Approve image submission: puzzle created with image data URIs in sequence/options
+  - Non-image submissions: storage unchanged, no data URI validation applied
 - E2E (Playwright):
   - Upload images in authoring form, verify preview renders
-  - Submit image puzzle, verify it appears in My Submissions
+  - Submit image puzzle, verify it appears in My Submissions with image previews
   - (Moderation preview of image puzzles covered by CS14-84 tests)
 
 **Edge cases:**
@@ -768,7 +758,7 @@ CS14-80 (Discovery & Onboarding)
 
 ## Notes
 
-**Migration order is strict:** 005 (CS14-82) → 006 (CS14-86) → 007 (CS14-87). Each migration is additive (ALTER TABLE ADD COLUMN) so they don't conflict, but the numbering must be sequential to work with `_tracker.js`.
+**Migration order is strict:** 005 (CS14-82) → 006 (CS14-86). Each migration is additive so they don't conflict. `_tracker.js` only requires migration versions to be unique and increasing so they sort correctly; keeping the numbering sequential is a team convention for clarity and easier tracking. CS14-87 requires no migration — image data is stored inline in existing JSON fields.
 
 **No breaking API changes:** All new body fields are optional with backward-compatible defaults. Existing clients and tests continue to work without modification.
 
