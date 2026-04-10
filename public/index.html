@@ -424,11 +424,11 @@
               <span class="type-card-label">Text</span>
               <span class="type-card-desc">Use words, numbers, or text patterns</span>
             </label>
-            <label class="type-card disabled" data-type="image" aria-disabled="true">
-              <input type="radio" name="puzzle-type" value="image" disabled>
+            <label class="type-card" data-type="image">
+              <input type="radio" name="puzzle-type" value="image">
               <span class="type-card-icon" aria-hidden="true">🖼️</span>
               <span class="type-card-label">Image</span>
-              <span class="type-card-desc">Coming soon</span>
+              <span class="type-card-desc">Upload images for your sequence</span>
             </label>
           </div>
         </div>
@@ -468,17 +468,34 @@
             <option value="3">Hard</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="sp-sequence-group">
           <label for="sp-sequence">Sequence (comma-separated, at least 3 items)</label>
           <input type="text" id="sp-sequence" placeholder="e.g. 🌑, 🌒, 🌓, 🌔" required>
           <p class="field-error" data-error="sequence" aria-live="polite"></p>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="sp-image-sequence-group" style="display:none">
+          <label>Sequence Images (3–6 images, max 500KB each)</label>
+          <div class="image-upload-grid" id="sp-image-sequence" aria-label="Sequence images">
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="sp-add-seq-image" aria-label="Add sequence image">+ Add Image</button>
+          <p class="field-error" data-error="image-sequence" aria-live="polite"></p>
+        </div>
+        <div class="form-group" id="sp-answer-group">
           <label for="sp-answer">Answer (the next item)</label>
           <input type="text" id="sp-answer" placeholder="e.g. 🌕" required>
           <p class="field-error" data-error="answer" aria-live="polite"></p>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="sp-image-answer-group" style="display:none">
+          <label>Answer Image (max 500KB)</label>
+          <div class="image-upload-single" id="sp-image-answer" aria-label="Answer image">
+            <div class="image-drop-zone" data-image-slot="answer">
+              <span class="drop-zone-text">Click or drag to upload</span>
+              <input type="file" class="image-file-input" accept=".png,.jpg,.jpeg,.gif,.svg,.webp" aria-label="Upload answer image">
+            </div>
+          </div>
+          <p class="field-error" data-error="image-answer" aria-live="polite"></p>
+        </div>
+        <div class="form-group" id="sp-options-group">
           <label>Answer Choices (4 options — players pick from these)</label>
           <div class="options-editor" aria-label="Answer choices">
             <div class="option-row">
@@ -499,6 +516,24 @@
             </div>
           </div>
           <p class="field-error" data-error="options" aria-live="polite"></p>
+        </div>
+        <div class="form-group" id="sp-image-distractors-group" style="display:none">
+          <label>Distractor Images (3 wrong-answer options, max 500KB each)</label>
+          <div class="image-upload-grid" id="sp-image-distractors" aria-label="Distractor images">
+            <div class="image-drop-zone" data-image-slot="distractor-0">
+              <span class="drop-zone-text">Distractor 1</span>
+              <input type="file" class="image-file-input" accept=".png,.jpg,.jpeg,.gif,.svg,.webp" aria-label="Upload distractor 1">
+            </div>
+            <div class="image-drop-zone" data-image-slot="distractor-1">
+              <span class="drop-zone-text">Distractor 2</span>
+              <input type="file" class="image-file-input" accept=".png,.jpg,.jpeg,.gif,.svg,.webp" aria-label="Upload distractor 2">
+            </div>
+            <div class="image-drop-zone" data-image-slot="distractor-2">
+              <span class="drop-zone-text">Distractor 3</span>
+              <input type="file" class="image-file-input" accept=".png,.jpg,.jpeg,.gif,.svg,.webp" aria-label="Upload distractor 3">
+            </div>
+          </div>
+          <p class="field-error" data-error="image-distractors" aria-live="polite"></p>
         </div>
         <div class="form-group">
           <label for="sp-explanation">Explanation</label>

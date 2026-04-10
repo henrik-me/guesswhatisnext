@@ -3137,6 +3137,153 @@ function showComingSoonTooltip(target) {
 /** Currently selected puzzle type for the authoring form. */
 let selectedPuzzleType = 'emoji';
 
+/** Image data storage for the authoring form. */
+const imageFormState = {
+  sequence: [],   // Array of { file, dataUri, objectUrl }
+  answer: null,   // { file, dataUri, objectUrl }
+  distractors: [null, null, null], // Array of { file, dataUri, objectUrl } or null
+};
+
+const IMAGE_MAX_SIZE = 500 * 1024; // 500KB
+const IMAGE_ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp'];
+
+/** Convert a File to a base64 data URI. */
+function fileToDataUri(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Revoke an object URL if present. */
+function revokeObjectUrl(entry) {
+  if (entry && entry.objectUrl) {
+    URL.revokeObjectURL(entry.objectUrl);
+    entry.objectUrl = null;
+  }
+}
+
+/** Clean up all image form state object URLs. */
+function clearImageFormState() {
+  imageFormState.sequence.forEach(revokeObjectUrl);
+  imageFormState.sequence = [];
+  revokeObjectUrl(imageFormState.answer);
+  imageFormState.answer = null;
+  imageFormState.distractors.forEach(revokeObjectUrl);
+  imageFormState.distractors = [null, null, null];
+}
+
+/** Toggle form fields between text/emoji and image mode. */
+function toggleImageMode(isImage) {
+  const textGroups = ['sp-sequence-group', 'sp-answer-group', 'sp-options-group'];
+  const imageGroups = ['sp-image-sequence-group', 'sp-image-answer-group', 'sp-image-distractors-group'];
+  textGroups.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isImage ? 'none' : '';
+  });
+  imageGroups.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isImage ? '' : 'none';
+  });
+}
+
+/** Validate a file for image upload. Returns error string or null. */
+function validateImageFile(file) {
+  if (!file) return 'No file selected';
+  if (!IMAGE_ACCEPTED_TYPES.includes(file.type)) {
+    return `Unsupported format: ${file.type || 'unknown'}. Use PNG, JPG, GIF, SVG, or WebP.`;
+  }
+  if (file.size > IMAGE_MAX_SIZE) {
+    return `File too large (${(file.size / 1024).toFixed(0)}KB). Max 500KB.`;
+  }
+  return null;
+}
+
+/** Process an uploaded image file — validate, create preview, convert to data URI. */
+async function processImageFile(file) {
+  const error = validateImageFile(file);
+  if (error) return { error };
+  const dataUri = await fileToDataUri(file);
+  const objectUrl = URL.createObjectURL(file);
+  return { file, dataUri, objectUrl };
+}
+
+/** Render an image drop zone with optional preview. */
+function renderDropZone(container, entry, label) {
+  container.innerHTML = '';
+  container.classList.toggle('has-image', !!entry);
+  if (entry) {
+    const img = document.createElement('img');
+    img.src = entry.objectUrl || entry.dataUri;
+    img.alt = label;
+    img.className = 'image-preview-thumb';
+    img.loading = 'lazy';
+    container.appendChild(img);
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'image-remove-btn';
+    removeBtn.textContent = '×';
+    removeBtn.setAttribute('aria-label', `Remove ${label}`);
+    container.appendChild(removeBtn);
+  } else {
+    const span = document.createElement('span');
+    span.className = 'drop-zone-text';
+    span.textContent = label;
+    container.appendChild(span);
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.className = 'image-file-input';
+    input.accept = '.png,.jpg,.jpeg,.gif,.svg,.webp';
+    input.setAttribute('aria-label', `Upload ${label}`);
+    container.appendChild(input);
+  }
+}
+
+/** Rebuild the sequence image upload grid from state. */
+function rebuildSequenceImageGrid() {
+  const grid = document.getElementById('sp-image-sequence');
+  if (!grid) return;
+  grid.innerHTML = '';
+  imageFormState.sequence.forEach((entry, i) => {
+    const zone = document.createElement('div');
+    zone.className = 'image-drop-zone';
+    zone.dataset.imageSlot = `seq-${i}`;
+    renderDropZone(zone, entry, `Sequence ${i + 1}`);
+    grid.appendChild(zone);
+  });
+  // Enable/disable add button
+  const addBtn = document.getElementById('sp-add-seq-image');
+  if (addBtn) addBtn.style.display = imageFormState.sequence.length >= 6 ? 'none' : '';
+  updateImageValidation();
+  updateSubmitButtonState();
+  schedulePreviewUpdate();
+}
+
+/** Update image field validation messages. */
+function updateImageValidation() {
+  const seqErr = document.querySelector('[data-error="image-sequence"]');
+  if (seqErr) {
+    if (imageFormState.sequence.length > 0 && imageFormState.sequence.length < 3) {
+      seqErr.textContent = 'Need at least 3 sequence images';
+    } else {
+      seqErr.textContent = '';
+    }
+  }
+  const ansErr = document.querySelector('[data-error="image-answer"]');
+  if (ansErr) ansErr.textContent = '';
+  const distErr = document.querySelector('[data-error="image-distractors"]');
+  if (distErr) {
+    const filled = imageFormState.distractors.filter(Boolean).length;
+    if (filled > 0 && filled < 3) {
+      distErr.textContent = 'All 3 distractor images are required';
+    } else {
+      distErr.textContent = '';
+    }
+  }
+}
+
 /** Reset the submit-puzzle form and status message. */
 function resetSubmitPuzzleForm() {
   const form = document.getElementById('submit-puzzle-form');
@@ -3155,6 +3302,16 @@ function resetSubmitPuzzleForm() {
   // Reset submit button
   const submitBtn = document.getElementById('sp-submit-btn');
   if (submitBtn) submitBtn.disabled = true;
+  // Reset image state
+  clearImageFormState();
+  toggleImageMode(false);
+  rebuildSequenceImageGrid();
+  // Reset answer/distractor drop zones
+  const answerZone = document.querySelector('#sp-image-answer .image-drop-zone');
+  if (answerZone) renderDropZone(answerZone, null, 'Click or drag to upload');
+  document.querySelectorAll('#sp-image-distractors .image-drop-zone').forEach((zone, i) => {
+    renderDropZone(zone, null, `Distractor ${i + 1}`);
+  });
   // Reset preview
   updatePuzzlePreview();
 }
@@ -3165,13 +3322,18 @@ function resetSubmitPuzzleForm() {
  * @param {{type?: string, sequence?: string[], answer?: string, options?: string[], explanation?: string}} data
  * @returns {string} HTML string for the preview
  */
-function renderPuzzlePreview({ type: _type, sequence, answer, options, explanation }) {
+function renderPuzzlePreview({ type: pType, sequence, answer, options, explanation }) {
   if (!sequence || sequence.length === 0) {
     return '<p class="preview-empty">Fill in the form to see a live preview</p>';
   }
+  const isImage = pType === 'image';
   let html = '<div class="preview-sequence">';
   for (const item of sequence) {
-    html += `<span class="preview-sequence-item">${escapeHTML(String(item))}</span>`;
+    if (isImage && (typeof item === 'string') && item.startsWith('data:')) {
+      html += `<span class="preview-sequence-item"><img src="${item}" alt="sequence item" loading="lazy"></span>`;
+    } else {
+      html += `<span class="preview-sequence-item">${escapeHTML(String(item))}</span>`;
+    }
   }
   html += '<span class="preview-sequence-item" style="opacity:0.4">?</span>';
   html += '</div>';
@@ -3179,8 +3341,13 @@ function renderPuzzlePreview({ type: _type, sequence, answer, options, explanati
   if (options && options.length > 0) {
     html += '<div class="preview-options">';
     for (const opt of options) {
-      const isCorrect = answer && opt.trim() === answer.trim();
-      html += `<div class="preview-option-btn${isCorrect ? ' correct' : ''}">${escapeHTML(String(opt))}</div>`;
+      const isCorrect = answer && opt === answer;
+      if (isImage && (typeof opt === 'string') && opt.startsWith('data:')) {
+        html += `<div class="preview-option-btn${isCorrect ? ' correct' : ''}"><img src="${opt}" alt="option" loading="lazy"></div>`;
+      } else {
+        const correctClass = answer && opt.trim() === (typeof answer === 'string' ? answer.trim() : answer);
+        html += `<div class="preview-option-btn${correctClass ? ' correct' : ''}">${escapeHTML(String(opt))}</div>`;
+      }
     }
     html += '</div>';
   }
@@ -3203,6 +3370,24 @@ function schedulePreviewUpdate() {
 function updatePuzzlePreview() {
   const container = document.querySelector('[data-bind="preview-content"]');
   if (!container) return;
+
+  if (selectedPuzzleType === 'image') {
+    const sequence = imageFormState.sequence.map(e => e.objectUrl || e.dataUri);
+    const answer = imageFormState.answer ? (imageFormState.answer.objectUrl || imageFormState.answer.dataUri) : '';
+    const options = [];
+    if (answer) options.push(answer);
+    imageFormState.distractors.forEach(d => { if (d) options.push(d.objectUrl || d.dataUri); });
+    const explanation = (document.getElementById('sp-explanation')?.value || '').trim();
+    container.innerHTML = renderPuzzlePreview({
+      type: 'image',
+      sequence,
+      answer,
+      options: options.length > 0 ? options : undefined,
+      explanation,
+    });
+    return;
+  }
+
   const sequenceRaw = (document.getElementById('sp-sequence')?.value || '').trim();
   const answer = (document.getElementById('sp-answer')?.value || '').trim();
   const explanation = (document.getElementById('sp-explanation')?.value || '').trim();
@@ -3271,10 +3456,21 @@ function validateField(name) {
 function updateSubmitButtonState() {
   const btn = document.getElementById('sp-submit-btn');
   if (!btn) return;
-  const sequenceRaw = (document.getElementById('sp-sequence')?.value || '').trim();
-  const answer = (document.getElementById('sp-answer')?.value || '').trim();
+
   const explanation = (document.getElementById('sp-explanation')?.value || '').trim();
   const category = document.getElementById('sp-category')?.value || '';
+
+  if (selectedPuzzleType === 'image') {
+    const seqOk = imageFormState.sequence.length >= 3;
+    const ansOk = !!imageFormState.answer;
+    const distOk = imageFormState.distractors.filter(Boolean).length === 3;
+    const isValid = seqOk && ansOk && distOk && explanation && category;
+    btn.disabled = !isValid;
+    return;
+  }
+
+  const sequenceRaw = (document.getElementById('sp-sequence')?.value || '').trim();
+  const answer = (document.getElementById('sp-answer')?.value || '').trim();
   const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
 
   const optionVals = [];
@@ -3291,6 +3487,50 @@ function updateSubmitButtonState() {
   btn.disabled = !isValid;
 }
 
+/** Initialize a single image drop zone with upload, drag-drop, and remove handlers. */
+function initImageDropZone(selector, label, onUpload, onRemove) {
+  const zone = document.querySelector(selector);
+  if (!zone) return;
+  zone.addEventListener('click', (e) => {
+    if (e.target.closest('.image-remove-btn')) {
+      onRemove();
+      return;
+    }
+    // If zone already has image, don't open file dialog on zone click
+    if (zone.classList.contains('has-image')) return;
+  });
+  zone.addEventListener('change', async (e) => {
+    if (!e.target.classList.contains('image-file-input')) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const result = await processImageFile(file);
+    if (result.error) {
+      // Show error temporarily
+      const parent = zone.closest('.form-group');
+      const errEl = parent?.querySelector('.field-error');
+      if (errEl) errEl.textContent = result.error;
+      return;
+    }
+    onUpload(result);
+  });
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    const result = await processImageFile(file);
+    if (result.error) {
+      const parent = zone.closest('.form-group');
+      const errEl = parent?.querySelector('.field-error');
+      if (errEl) errEl.textContent = result.error;
+      return;
+    }
+    onUpload(result);
+  });
+}
+
 /** Wire submit-puzzle form handler inside init (called once). */
 function initSubmitPuzzleForm() {
   const form = document.getElementById('submit-puzzle-form');
@@ -3303,6 +3543,138 @@ function initSubmitPuzzleForm() {
       document.querySelectorAll('.type-card').forEach(card => {
         card.classList.toggle('active', card.dataset.type === radio.value);
       });
+      toggleImageMode(radio.value === 'image');
+      updateSubmitButtonState();
+      schedulePreviewUpdate();
+    });
+  });
+
+  // Image upload — sequence add button
+  const addSeqBtn = document.getElementById('sp-add-seq-image');
+  if (addSeqBtn) {
+    addSeqBtn.addEventListener('click', () => {
+      if (imageFormState.sequence.length >= 6) return;
+      // Create a temporary file input
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.png,.jpg,.jpeg,.gif,.svg,.webp';
+      input.addEventListener('change', async () => {
+        if (!input.files || !input.files[0]) return;
+        const result = await processImageFile(input.files[0]);
+        if (result.error) {
+          const errEl = document.querySelector('[data-error="image-sequence"]');
+          if (errEl) errEl.textContent = result.error;
+          return;
+        }
+        imageFormState.sequence.push(result);
+        rebuildSequenceImageGrid();
+      });
+      input.click();
+    });
+  }
+
+  // Image upload — delegated events for sequence grid
+  const seqGrid = document.getElementById('sp-image-sequence');
+  if (seqGrid) {
+    seqGrid.addEventListener('click', (e) => {
+      const removeBtn = e.target.closest('.image-remove-btn');
+      if (removeBtn) {
+        const zone = removeBtn.closest('.image-drop-zone');
+        const slot = zone?.dataset.imageSlot;
+        if (slot && slot.startsWith('seq-')) {
+          const idx = parseInt(slot.replace('seq-', ''), 10);
+          revokeObjectUrl(imageFormState.sequence[idx]);
+          imageFormState.sequence.splice(idx, 1);
+          rebuildSequenceImageGrid();
+        }
+        return;
+      }
+    });
+    seqGrid.addEventListener('change', async (e) => {
+      if (!e.target.classList.contains('image-file-input')) return;
+      const zone = e.target.closest('.image-drop-zone');
+      const slot = zone?.dataset.imageSlot;
+      if (!slot || !slot.startsWith('seq-')) return;
+      const idx = parseInt(slot.replace('seq-', ''), 10);
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const result = await processImageFile(file);
+      if (result.error) {
+        const errEl = document.querySelector('[data-error="image-sequence"]');
+        if (errEl) errEl.textContent = result.error;
+        return;
+      }
+      revokeObjectUrl(imageFormState.sequence[idx]);
+      imageFormState.sequence[idx] = result;
+      rebuildSequenceImageGrid();
+    });
+    // Drag-and-drop for sequence grid
+    seqGrid.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const zone = e.target.closest('.image-drop-zone');
+      if (zone) zone.classList.add('drag-over');
+    });
+    seqGrid.addEventListener('dragleave', (e) => {
+      const zone = e.target.closest('.image-drop-zone');
+      if (zone) zone.classList.remove('drag-over');
+    });
+    seqGrid.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const zone = e.target.closest('.image-drop-zone');
+      if (zone) zone.classList.remove('drag-over');
+      const file = e.dataTransfer?.files?.[0];
+      if (!file) return;
+      const result = await processImageFile(file);
+      if (result.error) {
+        const errEl = document.querySelector('[data-error="image-sequence"]');
+        if (errEl) errEl.textContent = result.error;
+        return;
+      }
+      const slot = zone?.dataset.imageSlot;
+      if (slot && slot.startsWith('seq-')) {
+        const idx = parseInt(slot.replace('seq-', ''), 10);
+        revokeObjectUrl(imageFormState.sequence[idx]);
+        imageFormState.sequence[idx] = result;
+      } else {
+        if (imageFormState.sequence.length >= 6) return;
+        imageFormState.sequence.push(result);
+      }
+      rebuildSequenceImageGrid();
+    });
+  }
+
+  // Image upload — answer drop zone
+  initImageDropZone('#sp-image-answer .image-drop-zone', 'Click or drag to upload', (entry) => {
+    revokeObjectUrl(imageFormState.answer);
+    imageFormState.answer = entry;
+    const zone = document.querySelector('#sp-image-answer .image-drop-zone');
+    if (zone) renderDropZone(zone, entry, 'Click or drag to upload');
+    updateSubmitButtonState();
+    schedulePreviewUpdate();
+  }, () => {
+    revokeObjectUrl(imageFormState.answer);
+    imageFormState.answer = null;
+    const zone = document.querySelector('#sp-image-answer .image-drop-zone');
+    if (zone) renderDropZone(zone, null, 'Click or drag to upload');
+    updateSubmitButtonState();
+    schedulePreviewUpdate();
+  });
+
+  // Image upload — distractor drop zones
+  document.querySelectorAll('#sp-image-distractors .image-drop-zone').forEach((zone, i) => {
+    initImageDropZone(`#sp-image-distractors .image-drop-zone[data-image-slot="distractor-${i}"]`, `Distractor ${i + 1}`, (entry) => {
+      revokeObjectUrl(imageFormState.distractors[i]);
+      imageFormState.distractors[i] = entry;
+      renderDropZone(zone, entry, `Distractor ${i + 1}`);
+      updateImageValidation();
+      updateSubmitButtonState();
+      schedulePreviewUpdate();
+    }, () => {
+      revokeObjectUrl(imageFormState.distractors[i]);
+      imageFormState.distractors[i] = null;
+      renderDropZone(zone, null, `Distractor ${i + 1}`);
+      updateImageValidation();
+      updateSubmitButtonState();
       schedulePreviewUpdate();
     });
   });
@@ -3391,29 +3763,10 @@ function initSubmitPuzzleForm() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const status = document.querySelector('[data-bind="submit-puzzle-status"]');
-    const sequenceRaw = document.getElementById('sp-sequence').value.trim();
-    const answer = document.getElementById('sp-answer').value.trim();
     const explanation = document.getElementById('sp-explanation').value.trim();
     const difficulty = parseInt(document.getElementById('sp-difficulty').value, 10);
     const category = document.getElementById('sp-category').value;
 
-    const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
-
-    // Collect options (only send if all 4 are filled)
-    const optionVals = [];
-    document.querySelectorAll('.option-input').forEach(el => optionVals.push(el.value.trim()));
-    const nonEmptyOptions = optionVals.filter(Boolean);
-    const options = nonEmptyOptions.length === 4 ? optionVals : undefined;
-
-    // Client validation
-    if (sequence.length < 3) {
-      if (status) { status.textContent = 'Sequence must have at least 3 items.'; status.className = 'submit-puzzle-status error'; }
-      return;
-    }
-    if (!answer) {
-      if (status) { status.textContent = 'Answer is required.'; status.className = 'submit-puzzle-status error'; }
-      return;
-    }
     if (!explanation) {
       if (status) { status.textContent = 'Explanation is required.'; status.className = 'submit-puzzle-status error'; }
       return;
@@ -3423,8 +3776,50 @@ function initSubmitPuzzleForm() {
       return;
     }
 
-    const payload = { sequence, answer, explanation, difficulty, category, type: selectedPuzzleType };
-    if (options) payload.options = options;
+    let payload;
+
+    if (selectedPuzzleType === 'image') {
+      // Image mode — build payload from image state
+      if (imageFormState.sequence.length < 3) {
+        if (status) { status.textContent = 'Need at least 3 sequence images.'; status.className = 'submit-puzzle-status error'; }
+        return;
+      }
+      if (!imageFormState.answer) {
+        if (status) { status.textContent = 'Answer image is required.'; status.className = 'submit-puzzle-status error'; }
+        return;
+      }
+      const distractorsFilled = imageFormState.distractors.filter(Boolean);
+      if (distractorsFilled.length < 3) {
+        if (status) { status.textContent = 'All 3 distractor images are required.'; status.className = 'submit-puzzle-status error'; }
+        return;
+      }
+      const sequence = imageFormState.sequence.map(e => e.dataUri);
+      const answer = imageFormState.answer.dataUri;
+      const options = [answer, ...imageFormState.distractors.map(d => d.dataUri)];
+      payload = { sequence, answer, explanation, difficulty, category, type: 'image', options };
+    } else {
+      // Text/emoji mode
+      const sequenceRaw = document.getElementById('sp-sequence').value.trim();
+      const answer = document.getElementById('sp-answer').value.trim();
+      const sequence = sequenceRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+      const optionVals = [];
+      document.querySelectorAll('.option-input').forEach(el => optionVals.push(el.value.trim()));
+      const nonEmptyOptions = optionVals.filter(Boolean);
+      const options = nonEmptyOptions.length === 4 ? optionVals : undefined;
+
+      if (sequence.length < 3) {
+        if (status) { status.textContent = 'Sequence must have at least 3 items.'; status.className = 'submit-puzzle-status error'; }
+        return;
+      }
+      if (!answer) {
+        if (status) { status.textContent = 'Answer is required.'; status.className = 'submit-puzzle-status error'; }
+        return;
+      }
+
+      payload = { sequence, answer, explanation, difficulty, category, type: selectedPuzzleType };
+      if (options) payload.options = options;
+    }
 
     try {
       const res = await apiFetch(getFeatureAwarePath('/api/submissions'), {
