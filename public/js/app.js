@@ -675,10 +675,16 @@ function init() {
           const expanded = nList.style.display !== 'none';
           nList.style.display = expanded ? 'none' : '';
           toggleBtn.setAttribute('aria-expanded', String(!expanded));
-          const countText = document.querySelector('[data-bind="notifications-unread-count"]')?.textContent || '0';
-          toggleBtn.textContent = expanded
-            ? `🔔 Notifications (${countText} unread) ▸`
-            : `🔔 Notifications (${countText} unread) ▾`;
+          const unreadCountEl =
+            toggleBtn.querySelector('[data-bind="notifications-unread-count"]')
+            || document.querySelector('[data-bind="notifications-unread-count"]');
+          if (unreadCountEl) {
+            toggleBtn.replaceChildren(
+              document.createTextNode('🔔 Notifications ('),
+              unreadCountEl,
+              document.createTextNode(expanded ? ' unread) ▸' : ' unread) ▾')
+            );
+          }
         }
         break;
       }

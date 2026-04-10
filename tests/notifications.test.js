@@ -78,28 +78,42 @@ describe('GET /api/notifications', () => {
   });
 
   test('respects unread filter', async () => {
-    // First get all notifications
+    // Create two notifications in a self-contained manner
+    const firstSubId = await createSubmission(userToken);
+    await reviewSubmission(firstSubId, 'approved');
+    const secondSubId = await createSubmission(userToken);
+    await reviewSubmission(secondSubId, 'approved');
+
     const allRes = await getAgent()
       .get('/api/notifications')
       .set('Authorization', `Bearer ${userToken}`);
-    const total = allRes.body.notifications.length;
-    expect(total).toBeGreaterThan(0);
+    expect(allRes.status).toBe(200);
 
-    // Mark one as read
-    const firstId = allRes.body.notifications[0].id;
-    await getAgent()
-      .put(`/api/notifications/${firstId}/read`)
+    const firstNotif = allRes.body.notifications.find(
+      n => n.type === 'submission_approved' && n.data?.submissionId === firstSubId
+    );
+    const secondNotif = allRes.body.notifications.find(
+      n => n.type === 'submission_approved' && n.data?.submissionId === secondSubId
+    );
+    expect(firstNotif).toBeDefined();
+    expect(secondNotif).toBeDefined();
+
+    // Mark one as read and assert success
+    const markRes = await getAgent()
+      .put(`/api/notifications/${firstNotif.id}/read`)
       .set('Authorization', `Bearer ${userToken}`);
+    expect(markRes.status).toBe(200);
 
-    // Filter to unread only
+    // Filter to unread only — marked notification should be absent
     const unreadRes = await getAgent()
       .get('/api/notifications?unread=true')
       .set('Authorization', `Bearer ${userToken}`);
     expect(unreadRes.status).toBe(200);
-    // All returned should be unread
     for (const n of unreadRes.body.notifications) {
       expect(n.read).toBe(false);
     }
+    expect(unreadRes.body.notifications.find(n => n.id === firstNotif.id)).toBeUndefined();
+    expect(unreadRes.body.notifications.find(n => n.id === secondNotif.id)).toBeDefined();
   });
 });
 

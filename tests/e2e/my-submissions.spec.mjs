@@ -317,7 +317,7 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('.notification-message')).toContainText('approved');
   });
 
-  test('mark notification as read updates badge count', async ({ page, request }) => {
+  test('mark all notifications as read updates badge count', async ({ page, request }) => {
     const username = uniqueUser();
     const password = 'testpass123';
     const ip = uniqueIP();

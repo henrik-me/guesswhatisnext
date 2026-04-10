@@ -24,11 +24,19 @@ module.exports = {
         );
       `);
       await db.exec(`
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_notifications_user_read')
+        IF NOT EXISTS (
+          SELECT 1 FROM sys.indexes
+          WHERE name = 'idx_notifications_user_read'
+            AND object_id = OBJECT_ID('notifications')
+        )
           CREATE INDEX idx_notifications_user_read ON notifications(user_id, [read]);
       `);
       await db.exec(`
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_notifications_user_created')
+        IF NOT EXISTS (
+          SELECT 1 FROM sys.indexes
+          WHERE name = 'idx_notifications_user_created'
+            AND object_id = OBJECT_ID('notifications')
+        )
           CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
       `);
     } else {

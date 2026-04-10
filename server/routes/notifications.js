@@ -25,7 +25,12 @@ router.get('/', requireAuth, async (req, res, next) => {
       query += ' AND read = 0';
     }
 
-    query += ' ORDER BY created_at DESC LIMIT 50';
+    query += ' ORDER BY created_at DESC';
+    if (db.dialect === 'mssql') {
+      query += ' OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY';
+    } else {
+      query += ' LIMIT 50';
+    }
 
     const notifications = await db.all(query, params);
 
@@ -35,11 +40,13 @@ router.get('/', requireAuth, async (req, res, next) => {
     );
 
     res.json({
-      notifications: notifications.map(n => ({
-        ...n,
-        read: !!n.read,
-        data: n.data ? JSON.parse(n.data) : null,
-      })),
+      notifications: notifications.map(n => {
+        let data = null;
+        if (n.data) {
+          try { data = JSON.parse(n.data); } catch { /* malformed JSON — treat as null */ }
+        }
+        return { ...n, read: !!n.read, data };
+      }),
       unread_count: countRow ? countRow.count : 0,
     });
   } catch (err) {
