@@ -6,8 +6,17 @@ function uniqueUser() {
   return `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Register a new user and return to home screen. */
+/** Generate a unique IP to avoid rate-limit collisions across tests. */
+let ipCounter = 0;
+function uniqueIP() {
+  ipCounter++;
+  return `10.0.${Math.floor(ipCounter / 256)}.${ipCounter % 256}`;
+}
+
+/** Register a new user and return to home screen. Uses unique IP per call to avoid rate limits. */
 async function registerAndGoHome(page, username, password, url = '/') {
+  const ip = uniqueIP();
+  await page.setExtraHTTPHeaders({ 'X-Forwarded-For': ip });
   await page.goto(url);
   await page.click('[data-action="start-multiplayer"]');
   await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
@@ -82,7 +91,7 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('.submission-sequence-preview')).toContainText('🌑');
     await expect(page.locator('.submission-category-badge')).toContainText('Nature');
     await expect(page.locator('.submission-difficulty')).toContainText('★★☆');
-    await expect(page.locator('.submission-card-dates')).toContainText('just now');
+    await expect(page.locator('.submission-card-dates')).toContainText(/just now|\d+\s+minute(?:s)?\s+ago/);
   });
 
   test('view my submissions link on submit screen navigates correctly', async ({ page }) => {

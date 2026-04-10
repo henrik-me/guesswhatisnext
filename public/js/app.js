@@ -579,11 +579,12 @@ function init() {
         }
         break;
       case 'toggle-reviewer-notes': {
-        const notesContent = e.target.closest('.submission-reviewer-notes')?.querySelector('.submission-notes-content');
-        if (notesContent) {
+        const toggleButton = e.target.closest('[data-action="toggle-reviewer-notes"]');
+        const notesContent = toggleButton?.closest('.submission-reviewer-notes')?.querySelector('.submission-notes-content');
+        if (toggleButton && notesContent) {
           const isExpanded = notesContent.classList.toggle('expanded');
-          e.target.setAttribute('aria-expanded', String(isExpanded));
-          e.target.textContent = isExpanded ? '📝 Reviewer notes ▾' : '📝 Reviewer notes ▸';
+          toggleButton.setAttribute('aria-expanded', String(isExpanded));
+          toggleButton.textContent = isExpanded ? '📝 Reviewer notes ▾' : '📝 Reviewer notes ▸';
         }
         break;
       }
@@ -2542,10 +2543,13 @@ function renderSubmissionCard(submission) {
     ? seq.slice(0, 3).map(item => escapeHTML(String(item))).join(', ') + ', …'
     : seq.map(item => escapeHTML(String(item))).join(', ');
 
-  const statusClass = `status-${submission.status}`;
+  const VALID_STATUSES = ['pending', 'approved', 'rejected'];
+  const safeStatus = VALID_STATUSES.includes(submission.status) ? submission.status : 'pending';
+  const statusClass = `status-${safeStatus}`;
   const statusLabels = { pending: '🟡 Pending', approved: '🟢 Approved', rejected: '🔴 Rejected' };
-  const statusLabel = statusLabels[submission.status] || submission.status;
+  const statusLabel = statusLabels[safeStatus];
 
+  const safeId = Number(submission.id) || 0;
   const createdAgo = formatRelativeTime(submission.created_at);
 
   let datesHtml = `<span>Submitted ${escapeHTML(createdAgo)}</span>`;
@@ -2565,7 +2569,7 @@ function renderSubmissionCard(submission) {
       </div>`;
   }
 
-  return `<div class="submission-card" data-submission-id="${submission.id}">
+  return `<div class="submission-card" data-submission-id="${safeId}">
     <div class="submission-card-header">
       <span class="submission-sequence-preview">${preview}</span>
       <span class="submission-status-badge ${statusClass}">${statusLabel}</span>
