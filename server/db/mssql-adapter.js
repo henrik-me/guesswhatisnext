@@ -11,6 +11,105 @@ const BaseAdapter = require('./base-adapter');
 /* ── helpers ─────────────────────────────────────────────────────────── */
 
 /**
+ * Rewrite SQLite-specific SQL idioms to T-SQL equivalents.
+ *
+ * Called before rewriteParams so `?` placeholders are still intact.
+ * Returns both the rewritten SQL and (possibly reordered) params because
+ * LIMIT ? OFFSET ? → OFFSET ? ROWS FETCH NEXT ? ROWS ONLY swaps the
+ * two parameter positions.
+ *
+ * @param {string} sqlStr  - SQL text with SQLite idioms
+ * @param {Array}  params  - Positional parameter values
+ * @returns {{ sql: string, params: Array }}
+ */
+function rewriteSql(sqlStr, params = []) {
+  let sql = sqlStr;
+  let p = [...params];
+
+  // 1. LIMIT / OFFSET → OFFSET / FETCH NEXT
+  //    Must handle LIMIT ? OFFSET ? first (more specific), then plain LIMIT ?
+  const limitOffsetRe = /\bORDER\s+BY\s+([\s\S]+?)\bLIMIT\s+\?\s+OFFSET\s+\?/i;
+  const limitOnlyRe = /\bORDER\s+BY\s+([\s\S]+?)\bLIMIT\s+\?/i;
+
+  const loMatch = sql.match(limitOffsetRe);
+  if (loMatch) {
+    // Find the positions of the two `?` that belong to LIMIT and OFFSET.
+    // They are the last two `?` in the statement (LIMIT ? ... OFFSET ?).
+    const qPositions = findPlaceholderPositions(sql);
+    const limitIdx = qPositions.length - 2; // LIMIT ?
+    const offsetIdx = qPositions.length - 1; // OFFSET ?
+
+    // Rewrite SQL: keep ORDER BY part, replace LIMIT ? OFFSET ? with OFFSET/FETCH
+    sql = sql.replace(
+      limitOffsetRe,
+      `ORDER BY $1OFFSET ? ROWS FETCH NEXT ? ROWS ONLY`
+    );
+
+    // Swap params: SQLite has (LIMIT, OFFSET) but T-SQL needs (OFFSET, FETCH)
+    const newParams = [...p];
+    newParams[limitIdx] = p[offsetIdx]; // OFFSET value goes first
+    newParams[offsetIdx] = p[limitIdx]; // FETCH NEXT value goes second
+    // But after rewrite, the two `?` are now at positions limitIdx and offsetIdx
+    // in the SQL, so we just swap those entries in the array.
+    p = newParams;
+  } else {
+    const lMatch = sql.match(limitOnlyRe);
+    if (lMatch) {
+      sql = sql.replace(
+        limitOnlyRe,
+        'ORDER BY $1OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY'
+      );
+    }
+  }
+
+  // 2. RANDOM() → NEWID()
+  sql = sql.replace(/\bRANDOM\(\)/gi, 'NEWID()');
+
+  // 3. Date functions
+  //    datetime('now', '-N days|hours') → DATEADD(day|hour, -N, GETUTCDATE())
+  sql = sql.replace(
+    /\bdatetime\(\s*'now'\s*,\s*'-(\d+)\s+(days?|hours?)'\s*\)/gi,
+    (_match, n, unit) => {
+      const sqlUnit = unit.toLowerCase().startsWith('hour') ? 'hour' : 'day';
+      return `DATEADD(${sqlUnit}, -${n}, GETUTCDATE())`;
+    }
+  );
+
+  //    date('now') / DATE('now') → CAST(GETUTCDATE() AS DATE)
+  sql = sql.replace(/\bdate\(\s*'now'\s*\)/gi, 'CAST(GETUTCDATE() AS DATE)');
+
+  //    date(expr) / DATE(expr) → CAST(expr AS DATE)  (non-'now' expressions)
+  sql = sql.replace(
+    /\bdate\(([^')][^)]*)\)/gi,
+    'CAST($1 AS DATE)'
+  );
+
+  return { sql, params: p };
+}
+
+/**
+ * Return the zero-based positions of `?` placeholders in SQL,
+ * skipping those inside single-quoted strings.
+ */
+function findPlaceholderPositions(sqlStr) {
+  const positions = [];
+  let inString = false;
+  for (let i = 0; i < sqlStr.length; i++) {
+    const ch = sqlStr[i];
+    if (ch === "'") {
+      if (i + 1 < sqlStr.length && sqlStr[i + 1] === "'") {
+        i++;
+      } else {
+        inString = !inString;
+      }
+    } else if (ch === '?' && !inString) {
+      positions.push(positions.length);
+    }
+  }
+  return positions;
+}
+
+/**
  * Rewrite `?` positional placeholders to `@p1, @p2, …` named params.
  * Question-marks inside single-quoted string literals are left alone.
  *
@@ -63,6 +162,62 @@ function bindInputs(request, inputs) {
   }
 }
 
+/* ── INSERT helpers ───────────────────────────────────────────────────── */
+
+const INSERT_OR_IGNORE_RE = /^\s*INSERT\s+OR\s+IGNORE\s+INTO\b/i;
+const INSERT_INTO_RE = /^\s*INSERT\s+INTO\b/i;
+const INSERT_SELECT_RE = /^\s*INSERT\s+INTO\b[^)]*\)\s*SELECT\b/i;
+
+/**
+ * Shared _run implementation for both MssqlAdapter and MssqlTxAdapter.
+ *
+ * Handles:
+ * - SQL rewriting (LIMIT, RANDOM, dates)
+ * - INSERT OR IGNORE → strip OR IGNORE, catch duplicate key errors
+ * - Plain INSERT → append SCOPE_IDENTITY() for lastId
+ *
+ * @param {string}   sqlStr   - Original SQL with `?` placeholders
+ * @param {Array}    params   - Positional parameter values
+ * @param {function} execFn   - (sql, params) => Promise<mssqlResult>
+ *                               Called with rewriteSql'd SQL (still using `?`).
+ *                               The callback should rewriteParams + execute.
+ * @returns {Promise<{changes: number, lastId: number}>}
+ */
+async function runWithInsertHandling(sqlStr, params, execFn) {
+  const rw = rewriteSql(sqlStr, params);
+  let { sql } = rw;
+  const rwParams = rw.params;
+
+  // INSERT OR IGNORE → strip OR IGNORE, catch duplicate key errors
+  if (INSERT_OR_IGNORE_RE.test(sql)) {
+    sql = sql.replace(/\bOR\s+IGNORE\s+/i, '');
+    try {
+      const result = await execFn(sql, rwParams);
+      return {
+        changes: result.rowsAffected[0] || 0,
+        lastId: (result.recordset && result.recordset[0] && result.recordset[0].lastId) || 0,
+      };
+    } catch (err) {
+      // 2627 = unique constraint violation, 2601 = unique index violation
+      if (err.number === 2627 || err.number === 2601) {
+        return { changes: 0, lastId: 0 };
+      }
+      throw err;
+    }
+  }
+
+  // Plain INSERT (not INSERT … SELECT) → append SCOPE_IDENTITY()
+  if (INSERT_INTO_RE.test(sql) && !INSERT_SELECT_RE.test(sql)) {
+    sql = `${sql}; SELECT SCOPE_IDENTITY() AS lastId`;
+  }
+
+  const result = await execFn(sql, rwParams);
+  return {
+    changes: result.rowsAffected[0] || 0,
+    lastId: (result.recordset && result.recordset[0] && result.recordset[0].lastId) || 0,
+  };
+}
+
 /* ── Transaction-scoped adapter ──────────────────────────────────────── */
 
 /**
@@ -83,7 +238,8 @@ class MssqlTxAdapter extends BaseAdapter {
   async _connect() { /* no-op */ }
 
   async _get(sqlStr, params = []) {
-    const { sql: rewritten, inputs } = rewriteParams(sqlStr, params);
+    const rw = rewriteSql(sqlStr, params);
+    const { sql: rewritten, inputs } = rewriteParams(rw.sql, rw.params);
     const request = new this._sql.Request(this._tx);
     bindInputs(request, inputs);
     const result = await request.query(rewritten);
@@ -91,7 +247,8 @@ class MssqlTxAdapter extends BaseAdapter {
   }
 
   async _all(sqlStr, params = []) {
-    const { sql: rewritten, inputs } = rewriteParams(sqlStr, params);
+    const rw = rewriteSql(sqlStr, params);
+    const { sql: rewritten, inputs } = rewriteParams(rw.sql, rw.params);
     const request = new this._sql.Request(this._tx);
     bindInputs(request, inputs);
     const result = await request.query(rewritten);
@@ -99,14 +256,12 @@ class MssqlTxAdapter extends BaseAdapter {
   }
 
   async _run(sqlStr, params = []) {
-    const { sql: rewritten, inputs } = rewriteParams(sqlStr, params);
-    const request = new this._sql.Request(this._tx);
-    bindInputs(request, inputs);
-    const result = await request.query(rewritten);
-    return {
-      changes: result.rowsAffected[0] || 0,
-      lastId: (result.recordset && result.recordset[0] && result.recordset[0].lastId) || 0,
-    };
+    return runWithInsertHandling(sqlStr, params, (finalSql, finalParams) => {
+      const { sql: rewritten, inputs } = rewriteParams(finalSql, finalParams);
+      const request = new this._sql.Request(this._tx);
+      bindInputs(request, inputs);
+      return request.query(rewritten);
+    });
   }
 
   async _exec(sqlStr) {
@@ -141,7 +296,8 @@ class MssqlAdapter extends BaseAdapter {
   }
 
   async _get(sqlStr, params = []) {
-    const { sql: rewritten, inputs } = rewriteParams(sqlStr, params);
+    const rw = rewriteSql(sqlStr, params);
+    const { sql: rewritten, inputs } = rewriteParams(rw.sql, rw.params);
     const request = this._pool.request();
     bindInputs(request, inputs);
     const result = await request.query(rewritten);
@@ -149,7 +305,8 @@ class MssqlAdapter extends BaseAdapter {
   }
 
   async _all(sqlStr, params = []) {
-    const { sql: rewritten, inputs } = rewriteParams(sqlStr, params);
+    const rw = rewriteSql(sqlStr, params);
+    const { sql: rewritten, inputs } = rewriteParams(rw.sql, rw.params);
     const request = this._pool.request();
     bindInputs(request, inputs);
     const result = await request.query(rewritten);
@@ -157,16 +314,13 @@ class MssqlAdapter extends BaseAdapter {
   }
 
   async _run(sqlStr, params = []) {
-    const { sql: rewritten, inputs } = rewriteParams(sqlStr, params);
-    const request = this._pool.request();
-    bindInputs(request, inputs);
-    const result = await request.query(rewritten);
-    return {
-      changes: result.rowsAffected[0] || 0,
-      // TODO: For INSERT with IDENTITY, callers can append
-      //       `; SELECT SCOPE_IDENTITY() AS lastId` to the SQL.
-      lastId: (result.recordset && result.recordset[0] && result.recordset[0].lastId) || 0,
-    };
+    const pool = this._pool;
+    return runWithInsertHandling(sqlStr, params, (finalSql, finalParams) => {
+      const { sql: rewritten, inputs } = rewriteParams(finalSql, finalParams);
+      const request = pool.request();
+      bindInputs(request, inputs);
+      return request.query(rewritten);
+    });
   }
 
   async _exec(sqlStr) {
@@ -200,7 +354,8 @@ class MssqlAdapter extends BaseAdapter {
   }
 }
 
-// Expose rewriteParams for testing
+// Expose helpers for testing
 MssqlAdapter._rewriteParams = rewriteParams;
+MssqlAdapter._rewriteSql = rewriteSql;
 
 module.exports = MssqlAdapter;
