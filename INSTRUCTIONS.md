@@ -474,8 +474,8 @@ NOT allowed on main checkout:
 2. Read WORKBOARD.md for current active work and task assignments
 3. Read CONTEXT.md for project state and available clickstops
 4. Determine agent ID from hostname + repo suffix (see § Agent Identification)
-5. Update WORKBOARD.md to register the session (update Orchestrators table)
-6. Prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
+5. Update WORKBOARD.md to register the session (update Orchestrators table), then commit and push immediately
+6. Once a task is claimed, prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 
 **Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, updating WORKBOARD.md, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
 
