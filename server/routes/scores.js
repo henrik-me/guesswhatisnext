@@ -102,10 +102,13 @@ router.get('/leaderboard/multiplayer', requireAuth, async (req, res, next) => {
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
 
     let dateFilter = '';
+    let dateFilterW = '';
     if (period === 'daily') {
       dateFilter = "AND date(m.finished_at) = date('now')";
+      dateFilterW = "AND date(m_w.finished_at) = date('now')";
     } else if (period === 'weekly') {
       dateFilter = "AND m.finished_at >= datetime('now', '-7 days')";
+      dateFilterW = "AND m_w.finished_at >= datetime('now', '-7 days')";
     }
 
     const db = await getDbAdapter();
@@ -124,7 +127,7 @@ router.get('/leaderboard/multiplayer', requireAuth, async (req, res, next) => {
         SELECT mp_w.user_id, COUNT(*) as wins
         FROM match_players mp_w
         JOIN matches m_w ON mp_w.match_id = m_w.id
-        WHERE m_w.status = 'finished' ${dateFilter}
+        WHERE m_w.status = 'finished' ${dateFilterW}
           AND mp_w.score = (
             SELECT MAX(mp2.score) FROM match_players mp2 WHERE mp2.match_id = mp_w.match_id
           )
