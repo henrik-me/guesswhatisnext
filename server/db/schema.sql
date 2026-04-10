@@ -93,6 +93,8 @@ CREATE TABLE IF NOT EXISTS puzzle_submissions (
   explanation TEXT NOT NULL,
   difficulty INTEGER NOT NULL CHECK(difficulty BETWEEN 1 AND 3),
   category TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'emoji' CHECK(type IN ('emoji', 'text')),
+  options TEXT,                 -- nullable JSON array; null = auto-generate on approval
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
   reviewer_notes TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
