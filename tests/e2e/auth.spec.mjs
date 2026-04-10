@@ -37,7 +37,7 @@ test.describe('Authentication', () => {
     await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
   });
 
-  test('submit puzzle button stays hidden by default after registration', async ({ page }) => {
+  test('create puzzle button is hidden on community screen by default after registration', async ({ page }) => {
     const username = uniqueUser();
     const password = 'testpass123';
 
@@ -54,7 +54,11 @@ test.describe('Authentication', () => {
     await page.locator('[data-screen="multiplayer"] [data-action="go-home"]').click();
     await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
     await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
-    await expect(page.locator('[data-bind="submit-puzzle-btn"]')).toBeHidden();
+
+    // Navigate to community screen — create puzzle should be hidden (feature flag off)
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
   });
 
   test('session persists after reload (token in localStorage)', async ({ page }) => {

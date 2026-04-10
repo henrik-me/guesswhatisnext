@@ -264,33 +264,19 @@ body::before {
 /* ===========================
    Community Section
    =========================== */
-.community-section {
-  width: 100%;
-  margin-top: 1.5rem;
-  padding: 1.25rem;
-  background-color: var(--color-surface);
-  border: 2px solid var(--color-surface-border);
-  border-radius: var(--radius-lg);
-  text-align: center;
-}
-
-.community-heading {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-  color: var(--color-text);
-}
-
-.community-buttons {
+.community-menu {
   display: flex;
+  flex-direction: column;
   gap: 0.75rem;
-  justify-content: center;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0 1rem;
 }
 
-.community-buttons .btn {
-  flex: 1;
-  max-width: 200px;
-  font-size: 0.9rem;
+.community-menu .btn {
+  width: 100%;
+  font-size: 1rem;
 }
 
 /* ===========================

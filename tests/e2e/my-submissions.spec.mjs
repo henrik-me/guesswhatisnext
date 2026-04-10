@@ -33,21 +33,30 @@ async function registerAndGoHome(page, username, password, url = '/') {
   await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
 }
 
+/** Navigate from home to community screen. */
+async function goToCommunity(page) {
+  await page.click('[data-action="show-community"]');
+  await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
+}
+
 test.describe('My Submissions Dashboard', () => {
-  test('my submissions button is hidden when logged out', async ({ page }) => {
+  test('my submissions button is hidden on community screen when logged out', async ({ page }) => {
     await page.goto('/');
+    await goToCommunity(page);
     await expect(page.locator('[data-bind="my-submissions-btn"]')).toBeHidden();
   });
 
-  test('my submissions button is visible when logged in', async ({ page }) => {
+  test('my submissions button is visible on community screen when logged in', async ({ page }) => {
     const username = uniqueUser();
     await registerAndGoHome(page, username, 'testpass123');
+    await goToCommunity(page);
     await expect(page.locator('[data-bind="my-submissions-btn"]')).toBeVisible();
   });
 
-  test('navigate to my submissions, see empty state, and return home with back button', async ({ page }) => {
+  test('navigate to my submissions, see empty state, and return to community with back button', async ({ page }) => {
     const username = uniqueUser();
     await registerAndGoHome(page, username, 'testpass123');
+    await goToCommunity(page);
 
     await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
@@ -59,17 +68,18 @@ test.describe('My Submissions Dashboard', () => {
     // CTA button links to create puzzle
     await expect(page.locator('.my-submissions-empty [data-action="create-puzzle"]')).toBeVisible();
 
-    // Back button returns to home
-    await page.click('#screen-my-submissions [data-action="go-home"]');
-    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
+    // Back button returns to community screen
+    await page.click('#screen-my-submissions [data-action="go-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
   });
 
   test('submit a puzzle and see it in my submissions with pending status', async ({ page }) => {
     const username = uniqueUser();
     await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
 
-    // Navigate to submit puzzle screen (flag enabled via URL on initial load)
-    await page.click('[data-action="show-submit-puzzle"]');
+    // Navigate to submit puzzle screen via community screen
+    await goToCommunity(page);
+    await page.click('[data-action="create-puzzle"]');
     await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
 
     // Fill in the form
@@ -103,8 +113,9 @@ test.describe('My Submissions Dashboard', () => {
     const username = uniqueUser();
     await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
 
-    // Navigate to submit puzzle screen
-    await page.click('[data-action="show-submit-puzzle"]');
+    // Navigate to submit puzzle screen via community
+    await goToCommunity(page);
+    await page.click('[data-action="create-puzzle"]');
     await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
 
     // Click "View My Submissions" link below form
@@ -146,6 +157,7 @@ test.describe('My Submissions Dashboard', () => {
     }, { t: token, u: username });
 
     await page.goto('/?ff_submit_puzzle=true');
+    await goToCommunity(page);
     await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
     await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
@@ -197,6 +209,7 @@ test.describe('My Submissions Dashboard', () => {
     }, { t: token, u: username });
 
     await page.goto('/');
+    await goToCommunity(page);
     await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
     await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
@@ -247,6 +260,7 @@ test.describe('My Submissions Dashboard', () => {
     }, { t: token, u: username });
 
     await page.goto('/');
+    await goToCommunity(page);
     await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
     await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
@@ -303,6 +317,9 @@ test.describe('My Submissions Dashboard', () => {
 
     await page.goto('/');
 
+    // Navigate to community screen to see badge
+    await goToCommunity(page);
+
     // Badge should be visible
     await expect(page.locator('[data-bind="notification-badge"]')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('[data-bind="notification-badge"]')).toHaveText(/[1-9]/);
@@ -356,6 +373,7 @@ test.describe('My Submissions Dashboard', () => {
     }, { t: token, u: username });
 
     await page.goto('/');
+    await goToCommunity(page);
     await expect(page.locator('[data-bind="notification-badge"]')).toBeVisible({ timeout: 10000 });
 
     await page.click('[data-bind="my-submissions-btn"]');
@@ -368,9 +386,9 @@ test.describe('My Submissions Dashboard', () => {
     // Notification should be marked read (class change)
     await expect(page.locator('.notification-item.notification-read')).toHaveCount(1);
 
-    // Navigate back to Home to assert badge on the visible home screen
+    // Navigate to community screen to verify badge is gone
     await page.goto('/');
-    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/, { timeout: 5000 });
+    await goToCommunity(page);
 
     // Badge should disappear
     await expect(page.locator('[data-bind="notification-badge"]')).toBeHidden({ timeout: 5000 });
