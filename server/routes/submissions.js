@@ -16,7 +16,7 @@ const router = express.Router();
 
 const VALID_TYPES = ['emoji', 'text', 'image'];
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp'];
-const MAX_IMAGE_SIZE_BYTES = 500 * 1024; // 500KB base64-encoded
+const MAX_IMAGE_SIZE_BYTES = 500 * 1024; // 500KB decoded bytes
 const MAX_IMAGE_SEQUENCE_LENGTH = 6;
 const DATA_URI_REGEX = /^data:([a-z]+\/[a-z0-9.+_-]+);base64,(.+)$/i;
 
@@ -28,7 +28,7 @@ function parseDataUri(str) {
   return { mime: match[1].toLowerCase(), data: match[2] };
 }
 
-/** Sanitize SVG content — strip <script> tags and event handlers. */
+/** Sanitize SVG content — strip dangerous elements, attributes, and URLs. */
 function sanitizeSvg(base64Data) {
   let svgText;
   try {
@@ -39,8 +39,14 @@ function sanitizeSvg(base64Data) {
   // Strip <script> blocks
   svgText = svgText.replace(/<script[\s\S]*?<\/script>/gi, '');
   svgText = svgText.replace(/<script[^>]*\/>/gi, '');
+  // Strip dangerous elements: foreignObject, iframe, embed, object
+  svgText = svgText.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
+  svgText = svgText.replace(/<(iframe|embed|object)[\s\S]*?<\/\1>/gi, '');
+  svgText = svgText.replace(/<(iframe|embed|object)[^>]*\/>/gi, '');
   // Strip event handlers (on*)
   svgText = svgText.replace(/\s+on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi, '');
+  // Strip javascript: URLs in href/xlink:href/src attributes
+  svgText = svgText.replace(/\s+(href|xlink:href|src)\s*=\s*["']?\s*javascript:[^"'>\s]*/gi, '');
   return Buffer.from(svgText, 'utf-8').toString('base64');
 }
 
