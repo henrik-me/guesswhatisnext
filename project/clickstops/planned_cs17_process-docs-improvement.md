@@ -13,11 +13,12 @@
 | CS17-4 | Implement orchestrator doc improvements | ⬜ Pending | CS17-1 | Apply agreed changes from CS17-1 review. |
 | CS17-5 | Implement sub-agent doc improvements | ⬜ Pending | CS17-2 | Apply agreed changes from CS17-2 review. |
 | CS17-6 | Implement doc structure improvements | ⬜ Pending | CS17-3 | Apply agreed changes from CS17-3 review. |
+| CS17-7 | Investigate session history for orchestrator clarifications | ⬜ Pending | — | Query sessions since last major doc update (CS16, 2026-04-09). Find patterns where orchestrators needed clarification or correction from the user. Compare gaps with current INSTRUCTIONS.md and propose updates. |
 
 ## Design Decisions
 
 ### Approach
-This is an iterative review clickstop. Tasks CS17-1 through CS17-3 are review/audit tasks done collaboratively with the user. Tasks CS17-4 through CS17-6 implement the agreed improvements. Review tasks can run in parallel; implementation tasks depend on their respective reviews.
+This is an iterative review clickstop. Tasks CS17-1 through CS17-3 are review/audit tasks done collaboratively with the user. CS17-7 is a data-driven investigation that mines session history for patterns where orchestrators needed user correction — its findings feed into all implementation tasks. Tasks CS17-4 through CS17-6 implement the agreed improvements.
 
 ### Scope
 - **In scope:** INSTRUCTIONS.md, CONTEXT.md, WORKBOARD.md, LEARNINGS.md, and any supporting files in project/clickstops/ that affect the process.
