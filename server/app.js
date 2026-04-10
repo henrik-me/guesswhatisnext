@@ -34,14 +34,6 @@ const pkg = require('../package.json');
 async function initializeDatabase() {
   const db = await getDbAdapter();
 
-  // Migrations and seeding are currently SQLite-specific; fail fast for MSSQL.
-  if (db.dialect === 'mssql') {
-    throw new Error(
-      'MSSQL backend is not yet supported for automatic database initialization. ' +
-      'Please implement MSSQL-compatible migrations and seeding before using DB_BACKEND=mssql.'
-    );
-  }
-
   await db.migrate(migrations);
 
   // Seed system account if it doesn't exist
@@ -364,10 +356,25 @@ function createServer() {
         logger.info({ attempt: selfInitAttempt }, 'Database self-initialized');
       } catch (err) {
         dbInitialized = false;
-        const isLockError = err.code === 'SQLITE_BUSY' ||
-          err.code === 'SQLITE_LOCKED' ||
-          err.code === 'SQLITE_BUSY_SNAPSHOT';
-        if (!isLockError) {
+        const db = isAdapterInitialized() ? await getDbAdapter() : null;
+        const dialect = db ? db.dialect : config.DB_BACKEND;
+
+        let isRetryable;
+        if (dialect === 'mssql') {
+          // MSSQL transient errors: serverless auto-pause wake-up, pool timeouts, Azure transient failures
+          const MSSQL_TRANSIENT_NUMBERS = new Set([40613, 40197, 40501, 49918, 49919, 49920]);
+          const errNumber = err.number || (err.originalError && err.originalError.number);
+          isRetryable = MSSQL_TRANSIENT_NUMBERS.has(errNumber) ||
+            /ETIMEOUT|ECONNREFUSED|ESOCKET|ECONNRESET/.test(err.code) ||
+            /connection.*timeout|pool.*failed|database.*paused|database.*unavailable/i.test(err.message);
+        } else {
+          // SQLite lock / busy errors
+          isRetryable = err.code === 'SQLITE_BUSY' ||
+            err.code === 'SQLITE_LOCKED' ||
+            err.code === 'SQLITE_BUSY_SNAPSHOT';
+        }
+
+        if (!isRetryable) {
           try { await closeDbAdapter(); } catch { /* ignore */ }
           draining = true;
           logger.error({ err }, 'Self-init failed with non-retryable error — call POST /api/admin/init-db after fixing the underlying issue');

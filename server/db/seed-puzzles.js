@@ -1,6 +1,7 @@
 /**
  * Seed puzzles into the database from puzzleData.js.
- * Idempotent — uses INSERT OR REPLACE so it can be run repeatedly.
+ * Idempotent — SQLite uses INSERT OR REPLACE (upsert), MSSQL uses
+ * conditional INSERT (skips existing rows).
  *
  * Usage: node server/db/seed-puzzles.js
  */
@@ -14,11 +15,22 @@ async function seedPuzzles() {
 
   await db.transaction(async (tx) => {
     for (const p of puzzles) {
-      await tx.run(
-        `INSERT OR REPLACE INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [p.id, p.category, p.difficulty, p.type, JSON.stringify(p.sequence), p.answer, JSON.stringify(p.options), p.explanation]
-      );
+      const params = [p.id, p.category, p.difficulty, p.type, JSON.stringify(p.sequence), p.answer, JSON.stringify(p.options), p.explanation];
+      if (db.dialect === 'mssql') {
+        // Single-query conditional INSERT; pass id twice for the WHERE NOT EXISTS check
+        await tx.run(
+          `INSERT INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active)
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, 1
+           WHERE NOT EXISTS (SELECT 1 FROM puzzles WHERE id = ?)`,
+          [...params, p.id]
+        );
+      } else {
+        await tx.run(
+          `INSERT OR REPLACE INTO puzzles (id, category, difficulty, type, sequence, answer, options, explanation, active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          params
+        );
+      }
     }
   });
 
@@ -31,12 +43,6 @@ if (require.main === module) {
     try {
       const migrations = require('./migrations');
       const db = await getDbAdapter();
-      if (db.dialect === 'mssql') {
-        throw new Error(
-          'The seed-puzzles script does not support the MSSQL backend. ' +
-          'Configure a supported DB_BACKEND before running this script.'
-        );
-      }
       await db.migrate(migrations);
       await seedPuzzles();
     } catch (err) {
