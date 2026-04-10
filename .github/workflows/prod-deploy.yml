@@ -167,7 +167,7 @@ jobs:
             az containerapp update \
               --name gwn-production \
               --resource-group gwn-rg \
-              --min-replicas 0 \
+              --min-replicas 1 \
               --max-replicas 5 \
               --yaml /tmp/deploy-template.yaml
         env:
@@ -190,12 +190,12 @@ jobs:
             done
 
       - name: Wait for deployment to stabilize
-        run: sleep 90
+        run: sleep 120
 
       - name: Verify production deployment
         id: healthcheck
         run: |
-          for i in 1 2 3 4 5; do
+          for i in 1 2 3 4 5 6 7 8; do
             HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
               -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
               "${{ secrets.PROD_URL }}/api/health" || true)
@@ -205,7 +205,7 @@ jobs:
               echo "healthy=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            sleep 20
+            sleep 30
           done
           echo "healthy=false" >> "$GITHUB_OUTPUT"
           echo "::warning::Health check failed after 5 attempts (last: $HTTP_STATUS)"
