@@ -25,7 +25,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS8 | User Experience | ✅ Complete | 4/4 | [details](project/clickstops/done_cs8_user-experience.md) |
 | CS9 | Content & Growth | ✅ Complete | 2/2 | [details](project/clickstops/done_cs9_content-growth.md) |
 | CS10 | CI/CD Pipeline | ✅ Complete | 6/6 | [details](project/clickstops/done_cs10_cicd-pipeline.md) |
-| CS11 | Database Migration | 🔄 Active | 8/18 | [details](project/clickstops/active_cs11_database-migration.md) |
+| CS11 | Database Migration | 🔄 Active | 13/18 | [details](project/clickstops/active_cs11_database-migration.md) |
 | CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/done_cs12_test-infrastructure.md) |
 | CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done_cs13_observability-logging.md) |
 | CS14 | Community Puzzle Submission UX | ⬜ Planned | 0/8 | [details](project/clickstops/planned_cs14_community-puzzle-ux.md) |
