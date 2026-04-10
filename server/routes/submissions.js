@@ -14,7 +14,7 @@ const logger = require('../logger');
 
 const router = express.Router();
 
-const VALID_TYPES = ['emoji', 'text', 'image'];
+const VALID_TYPES = ['emoji', 'text'];
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp'];
 const MAX_IMAGE_SIZE_BYTES = 500 * 1024; // 500KB decoded bytes
 const MAX_IMAGE_SEQUENCE_LENGTH = 6;
@@ -265,70 +265,6 @@ function validateSubmission(body) {
 }
 
 /** Validate a partial submission update. Returns an error string or null. */
-function validatePartialSubmission(body) {
-  const { sequence, answer, explanation, difficulty, category, type, options } = body;
-
-  if (sequence !== undefined) {
-    if (!Array.isArray(sequence) || sequence.length < 3) {
-      return 'sequence must be an array of at least 3 elements';
-    }
-  }
-  if (answer !== undefined) {
-    if (answer === null) {
-      return 'answer is required';
-    }
-    const trimmedAnswer = typeof answer === 'string' ? answer.trim() : String(answer);
-    if (trimmedAnswer.length === 0) {
-      return 'answer is required';
-    }
-  }
-  if (explanation !== undefined) {
-    if (typeof explanation !== 'string' || explanation.trim().length === 0) {
-      return 'explanation is required';
-    }
-  }
-  if (difficulty !== undefined) {
-    const diff = Number(difficulty);
-    if (!Number.isInteger(diff) || diff < 1 || diff > 3) {
-      return 'difficulty must be 1, 2, or 3';
-    }
-  }
-  if (category !== undefined) {
-    if (typeof category !== 'string' || !VALID_CATEGORIES.includes(category)) {
-      return `category must be one of: ${VALID_CATEGORIES.join(', ')}`;
-    }
-  }
-  if (type !== undefined && type !== null) {
-    if (typeof type !== 'string' || !VALID_TYPES.includes(type)) {
-      return `type must be one of: ${VALID_TYPES.join(', ')}`;
-    }
-  }
-  if (options !== undefined && options !== null) {
-    if (!Array.isArray(options) || options.length !== 4) {
-      return 'options must be an array of exactly 4 items';
-    }
-    for (let i = 0; i < options.length; i++) {
-      if (typeof options[i] !== 'string' || options[i].trim().length === 0) {
-        return 'each option must be a non-empty string';
-      }
-    }
-    const trimmedOptions = options.map(o => o.trim());
-    const uniqueOptions = new Set(trimmedOptions);
-    if (uniqueOptions.size !== 4) {
-      return 'options must not contain duplicates';
-    }
-    // Cross-validate: if answer is also provided in the update, ensure options include it.
-    // When answer is omitted, the PUT handler performs the cross-check against the stored answer.
-    const trimmedAnswer = answer !== undefined
-      ? (typeof answer === 'string' ? answer.trim() : String(answer))
-      : null;
-    if (trimmedAnswer !== null && !trimmedOptions.includes(trimmedAnswer)) {
-      return 'options must include the answer';
-    }
-  }
-
-  return null;
-}
 
 /** POST /api/submissions — submit a puzzle proposal (requires auth). */
 router.post('/', requireAuth, async (req, res, next) => {
@@ -1028,7 +964,8 @@ router.post('/bulk-review', requireSystem, async (req, res, next) => {
             results.push({ id, status: 'rejected' });
           }
         } catch (e) {
-          results.push({ id, error: e.message || 'Failed to reject' });
+          req.log?.error?.({ submissionId: id, err: e }, 'bulk-review reject failed');
+          results.push({ id, error: 'Internal error' });
         }
       }
     }

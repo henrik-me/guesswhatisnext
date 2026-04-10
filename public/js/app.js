@@ -4226,6 +4226,7 @@ function initModerationScreen() {
   if (selectAll) {
     selectAll.addEventListener('change', () => {
       const checked = selectAll.checked;
+      selectAll.indeterminate = false;
       document.querySelectorAll('.mod-card-checkbox').forEach(cb => {
         cb.checked = checked;
         const id = cb.dataset.modSelect;
