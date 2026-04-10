@@ -136,10 +136,35 @@ jobs:
               --username ${{ vars.GHCR_USERNAME }} \
               --password ${{ secrets.GHCR_PAT }}
 
+      - name: Ensure Container App is running
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            STATUS=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.runningStatus" -o tsv 2>/dev/null || echo "Unknown")
+            echo "Container App status: $STATUS"
+            if [ "$STATUS" != "Running" ]; then
+              echo "Starting Container App..."
+              RESOURCE_ID=$(az containerapp show --name gwn-production --resource-group gwn-rg --query "id" -o tsv)
+              az rest --method POST \
+                --url "https://management.azure.com${RESOURCE_ID}/start?api-version=2024-03-01" \
+                || true
+              sleep 15
+              echo "Container App started"
+            fi
+
       - name: Deploy to production Container App
         uses: azure/cli@v2
         with:
           inlineScript: |
+            # Derive CANONICAL_HOST from PROD_URL (strip protocol and trailing path)
+            CANONICAL_HOST=$(echo "$PROD_URL" | sed 's|^https\?://||' | sed 's|[/?#].*||' | sed 's|/$||')
+            if [ -z "$CANONICAL_HOST" ]; then
+              echo "::error::CANONICAL_HOST could not be derived from PROD_URL"
+              exit 1
+            fi
+            echo "Using CANONICAL_HOST=$CANONICAL_HOST"
+
             trap 'rm -f /tmp/deploy-template.yaml' EXIT
             cat > /tmp/deploy-template.yaml <<YAMLEOF
             properties:
@@ -160,6 +185,8 @@ jobs:
                         value: /tmp/game.db
                       - name: DATABASE_URL
                         value: "${DATABASE_URL}"
+                      - name: CANONICAL_HOST
+                        value: "${CANONICAL_HOST}"
                     resources:
                       cpu: 0.5
                       memory: 1Gi
@@ -174,6 +201,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROD_URL: ${{ secrets.PROD_URL }}
 
       - name: Deactivate old revisions
         uses: azure/cli@v2
@@ -216,6 +244,9 @@ jobs:
         with:
           inlineScript: |
             echo "::error::Rolling back to previous image: ${{ steps.rollback.outputs.current-image }}"
+            # Derive CANONICAL_HOST from PROD_URL
+            CANONICAL_HOST=$(echo "$PROD_URL" | sed 's|^https\?://||' | sed 's|[/?#].*||' | sed 's|/$||')
+
             trap 'rm -f /tmp/deploy-template.yaml' EXIT
             cat > /tmp/deploy-template.yaml <<YAMLEOF
             properties:
@@ -236,6 +267,8 @@ jobs:
                         value: /tmp/game.db
                       - name: DATABASE_URL
                         value: "${DATABASE_URL}"
+                      - name: CANONICAL_HOST
+                        value: "${CANONICAL_HOST}"
                     resources:
                       cpu: 0.5
                       memory: 1Gi
@@ -267,6 +300,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PROD_URL: ${{ secrets.PROD_URL }}
 
       - name: Fail if unhealthy
         if: steps.healthcheck.outputs.healthy != 'true'
