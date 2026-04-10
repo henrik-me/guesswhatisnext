@@ -3310,10 +3310,8 @@ function resetSubmitPuzzleForm() {
   // Reset submit button
   const submitBtn = document.getElementById('sp-submit-btn');
   if (submitBtn) submitBtn.disabled = true;
-  // Reset image state
-  clearImageFormState();
+  // Reset image state via the standard mode toggle path
   toggleImageMode(false);
-  rebuildSequenceImageGrid();
   // Reset answer/distractor drop zones
   const answerZone = document.querySelector('#sp-image-answer .image-drop-zone');
   if (answerZone) renderDropZone(answerZone, null, 'Click or drag to upload');
