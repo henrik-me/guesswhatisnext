@@ -2666,8 +2666,10 @@ function validateField(name) {
     inputs.forEach(el => { vals.push(el.value.trim()); el.classList.remove('has-error'); });
     const answer = (document.getElementById('sp-answer')?.value || '').trim();
     const nonEmpty = vals.filter(Boolean);
+    // Treat a single auto-synced answer option as "no custom options"
+    const hasOnlyAutoSyncedOption = answer && nonEmpty.length === 1 && nonEmpty[0] === answer;
 
-    if (nonEmpty.length > 0 && nonEmpty.length < 4) {
+    if (nonEmpty.length > 0 && nonEmpty.length < 4 && !hasOnlyAutoSyncedOption) {
       msg = 'All 4 options are required';
       valid = false;
       inputs.forEach(el => { if (!el.value.trim()) el.classList.add('has-error'); });
@@ -2695,11 +2697,12 @@ function updateSubmitButtonState() {
   const optionVals = [];
   document.querySelectorAll('.option-input').forEach(el => optionVals.push(el.value.trim()));
   const nonEmptyOptions = optionVals.filter(Boolean);
-  const optionsValid = nonEmptyOptions.length === 0 || (
-    nonEmptyOptions.length === 4 &&
+  // Treat a single auto-synced answer option as "no custom options"
+  const hasOnlyAutoSyncedAnswerOption = answer && nonEmptyOptions.length === 1 && nonEmptyOptions[0] === answer;
+  const hasValidCustomOptions = nonEmptyOptions.length === 4 &&
     new Set(optionVals).size === 4 &&
-    optionVals.includes(answer)
-  );
+    optionVals.includes(answer);
+  const optionsValid = nonEmptyOptions.length === 0 || hasOnlyAutoSyncedAnswerOption || hasValidCustomOptions;
 
   const isValid = sequence.length >= 3 && answer && explanation && category && optionsValid;
   btn.disabled = !isValid;
