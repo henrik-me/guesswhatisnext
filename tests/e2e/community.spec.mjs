@@ -74,15 +74,24 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
   let username;
   const password = 'testpass123';
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, request }) => {
     username = uniqueUser();
-    // Register and navigate to submit screen with feature flag
+    // Register via API with a unique IP to avoid hitting the shared rate limiter
+    const ip = `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+    const res = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    const { token } = await res.json();
+
+    // Inject auth into localStorage before page scripts run
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
     await page.goto('/?ff_submit_puzzle=true');
     await page.click('[data-action="create-puzzle"]');
-    await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
-    await page.fill('#auth-username', username);
-    await page.fill('#auth-password', password);
-    await page.click('[data-action="auth-register"]');
     await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
   });
 
