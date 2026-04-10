@@ -477,7 +477,7 @@ NOT allowed on main checkout:
 5. Update WORKBOARD.md to register the session (update Orchestrators table)
 6. Prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 
-**Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. ALL implementation tasks — code changes, investigation, research, analysis — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, updating WORKBOARD.md, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
+**Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, updating WORKBOARD.md, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
 
 **Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation.
 
@@ -633,7 +633,7 @@ Filled-in checklists are recorded in the clickstop's archive file upon completio
 WORKBOARD.md is the real-time coordination file for multi-agent work. It tracks who is working on what, right now.
 
 **Direct commit on main (no PR required):**
-Unlike other project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. **The push is critical** — a local-only commit provides zero coordination value to other agents. Always commit and push in one step: `git add WORKBOARD.md && git commit -m "workboard: ..." && git push`. This enables fast task assignment without PR review overhead. The workboard must be updated immediately when:
+Unlike other project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. **The push is critical** — a local-only commit provides zero coordination value to other agents. Always commit and push together (see the multi-line commit format with `Agent:` trailer in § Commit Convention for workboard updates below). This enables fast task assignment without PR review overhead. The workboard must be updated immediately when:
 - An orchestrator claims a task (add to Active Work)
 - A task completes or is blocked (move between sections)
 - An orchestrator starts or stops a session (update Orchestrators table)
