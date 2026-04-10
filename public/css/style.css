@@ -980,12 +980,13 @@ body::before {
 
 /* Card removal animation */
 @keyframes card-remove {
-  from { opacity: 1; max-height: 500px; margin-bottom: 0; }
-  to { opacity: 0; max-height: 0; margin-bottom: 0; padding: 0; overflow: hidden; }
+  from { opacity: 1; transform: scaleY(1); margin-bottom: 0; }
+  to { opacity: 0; transform: scaleY(0); margin-bottom: 0; padding: 0; overflow: hidden; }
 }
 
 .submission-card.card-removing {
   animation: card-remove 0.3s ease-out forwards;
+  transform-origin: top;
 }
 
 .submit-puzzle-links {

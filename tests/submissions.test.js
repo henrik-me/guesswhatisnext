@@ -892,6 +892,29 @@ describe('PUT /api/submissions/:id', () => {
     expect(res.status).toBe(200);
     expect(res.body.answer).toBe('E');
   });
+
+  test('clears options by sending options: null', async () => {
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['X', 'Y', 'Z'],
+        answer: 'W',
+        explanation: 'Options clearing test',
+        difficulty: 1,
+        category: 'Nature',
+        options: ['W', 'X', 'Y', 'Z'],
+      });
+    const sid = createRes.body.id;
+
+    const res = await getAgent()
+      .put(`/api/submissions/${sid}?ff_submit_puzzle=1`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ options: null });
+
+    expect(res.status).toBe(200);
+    expect(res.body.options).toBeNull();
+  });
 });
 
 describe('DELETE /api/submissions/:id', () => {
@@ -968,7 +991,7 @@ describe('DELETE /api/submissions/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  test('hard delete removes row from database', async () => {
+  test('deleted submission no longer appears in user list', async () => {
     const createRes = await getAgent()
       .post(ENABLED_SUBMISSIONS_PATH)
       .set('Authorization', `Bearer ${userToken}`)
