@@ -91,6 +91,26 @@ describe('GET /api/scores/leaderboard/multiplayer', () => {
     expect(Array.isArray(res.body.leaderboard)).toBe(true);
     expect(res.body.mode).toBe('multiplayer');
   });
+
+  test('filters by weekly period', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard/multiplayer?period=weekly')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.leaderboard)).toBe(true);
+    expect(res.body.period).toBe('weekly');
+  });
+
+  test('filters by daily period', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard/multiplayer?period=daily')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.leaderboard)).toBe(true);
+    expect(res.body.period).toBe('daily');
+  });
 });
 
 describe('GET /api/scores/me', () => {
