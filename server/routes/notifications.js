@@ -18,11 +18,11 @@ router.get('/', requireAuth, async (req, res, next) => {
     const userId = req.user.id;
     const unreadOnly = req.query.unread === 'true' || req.query.unread === '1';
 
-    let query = 'SELECT id, user_id, type, message, data, read, created_at FROM notifications WHERE user_id = ?';
+    let query = 'SELECT id, user_id, type, message, data, is_read, created_at FROM notifications WHERE user_id = ?';
     const params = [userId];
 
     if (unreadOnly) {
-      query += ' AND read = 0';
+      query += ' AND is_read = 0';
     }
 
     query += ' ORDER BY created_at DESC';
@@ -35,7 +35,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const notifications = await db.all(query, params);
 
     const countRow = await db.get(
-      'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND read = 0',
+      'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0',
       [userId]
     );
 
@@ -45,7 +45,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         if (n.data) {
           try { data = JSON.parse(n.data); } catch { /* malformed JSON — treat as null */ }
         }
-        return { ...n, read: !!n.read, data };
+        return { ...n, is_read: undefined, read: !!n.is_read, data };
       }),
       unread_count: countRow ? countRow.count : 0,
     });
@@ -59,7 +59,7 @@ router.get('/count', requireAuth, async (req, res, next) => {
   try {
     const db = await getDbAdapter();
     const row = await db.get(
-      'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND read = 0',
+      'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0',
       [req.user.id]
     );
     res.json({ unread_count: row ? row.count : 0 });
@@ -85,7 +85,7 @@ router.put('/:id/read', requireAuth, async (req, res, next) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    await db.run('UPDATE notifications SET read = 1 WHERE id = ?', [id]);
+    await db.run('UPDATE notifications SET is_read = 1 WHERE id = ?', [id]);
     res.json({ id, read: true });
   } catch (err) {
     next(err);
@@ -97,7 +97,7 @@ router.put('/read-all', requireAuth, async (req, res, next) => {
   try {
     const db = await getDbAdapter();
     const result = await db.run(
-      'UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0',
+      'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
       [req.user.id]
     );
     res.json({ updated: result.changes || 0 });

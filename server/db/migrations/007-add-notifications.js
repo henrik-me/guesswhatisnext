@@ -18,7 +18,7 @@ module.exports = {
           type NVARCHAR(100) NOT NULL,
           message NVARCHAR(MAX) NOT NULL,
           data NVARCHAR(MAX),
-          [read] BIT NOT NULL DEFAULT 0,
+          is_read BIT NOT NULL DEFAULT 0,
           created_at DATETIME DEFAULT GETDATE(),
           FOREIGN KEY (user_id) REFERENCES users(id)
         );
@@ -29,7 +29,7 @@ module.exports = {
           WHERE name = 'idx_notifications_user_read'
             AND object_id = OBJECT_ID('notifications')
         )
-          CREATE INDEX idx_notifications_user_read ON notifications(user_id, [read]);
+          CREATE INDEX idx_notifications_user_read ON notifications(user_id, is_read);
       `);
       await db.exec(`
         IF NOT EXISTS (
@@ -47,14 +47,14 @@ module.exports = {
           type TEXT NOT NULL,
           message TEXT NOT NULL,
           data TEXT,
-          read INTEGER NOT NULL DEFAULT 0,
+          is_read INTEGER NOT NULL DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users(id)
         );
       `);
       await db.exec(`
         CREATE INDEX IF NOT EXISTS idx_notifications_user_read
-          ON notifications(user_id, read);
+          ON notifications(user_id, is_read);
       `);
       await db.exec(`
         CREATE INDEX IF NOT EXISTS idx_notifications_user_created
