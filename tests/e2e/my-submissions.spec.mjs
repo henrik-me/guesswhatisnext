@@ -112,4 +112,98 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
     await expect(page.locator('.my-submissions-empty')).toBeVisible();
   });
+
+  test('edit a pending submission inline', async ({ page }) => {
+    const username = uniqueUser();
+    await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
+
+    // Create a submission
+    await page.click('[data-action="show-submit-puzzle"]');
+    await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
+    await page.selectOption('#sp-category', 'Nature');
+    await page.fill('#sp-sequence', '🌑, 🌒, 🌓');
+    await page.fill('#sp-answer', '🌔');
+    await page.fill('#sp-explanation', 'Moon phases in order');
+    await page.click('#submit-puzzle-form button[type="submit"]');
+    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 5000 });
+
+    // Go to my submissions
+    await page.click('[data-bind="submit-puzzle-status"] [data-action="show-my-submissions"]');
+    await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+    await expect(page.locator('.submission-card')).toHaveCount(1);
+
+    // Click edit button
+    await page.click('[data-action="edit-submission"]');
+    await expect(page.locator('.submission-edit-form')).toBeVisible({ timeout: 3000 });
+
+    // Change explanation
+    await page.fill('.edit-explanation', 'Updated moon explanation');
+    await page.click('[data-action="save-edit-submission"]');
+
+    // After save, submissions list reloads — card should show updated data
+    await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
+    // The edit form should be gone
+    await expect(page.locator('.submission-edit-form')).toHaveCount(0);
+  });
+
+  test('delete a submission with confirmation', async ({ page }) => {
+    const username = uniqueUser();
+    await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
+
+    // Create a submission
+    await page.click('[data-action="show-submit-puzzle"]');
+    await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
+    await page.selectOption('#sp-category', 'Nature');
+    await page.fill('#sp-sequence', '🌱, 🌿, 🌳');
+    await page.fill('#sp-answer', '🌲');
+    await page.fill('#sp-explanation', 'Plants growing');
+    await page.click('#submit-puzzle-form button[type="submit"]');
+    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 5000 });
+
+    // Go to my submissions
+    await page.click('[data-bind="submit-puzzle-status"] [data-action="show-my-submissions"]');
+    await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+    await expect(page.locator('.submission-card')).toHaveCount(1);
+
+    // Click delete button — confirmation should appear
+    await page.click('[data-action="delete-submission"]');
+    await expect(page.locator('.submission-delete-confirm')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.delete-confirm-text')).toContainText('cannot be undone');
+
+    // Confirm deletion
+    await page.click('[data-action="confirm-delete-submission"]');
+
+    // Card should be removed (animation)
+    await expect(page.locator('.submission-card')).toHaveCount(0, { timeout: 5000 });
+    // Empty state should appear
+    await expect(page.locator('.my-submissions-empty')).toBeVisible();
+  });
+
+  test('cancel delete does not remove the submission', async ({ page }) => {
+    const username = uniqueUser();
+    await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
+
+    // Create a submission
+    await page.click('[data-action="show-submit-puzzle"]');
+    await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
+    await page.selectOption('#sp-category', 'Nature');
+    await page.fill('#sp-sequence', '🐕, 🐈, 🐟');
+    await page.fill('#sp-answer', '🐦');
+    await page.fill('#sp-explanation', 'Common pets');
+    await page.click('#submit-puzzle-form button[type="submit"]');
+    await expect(page.locator('[data-bind="submit-puzzle-status"]')).toContainText('submitted for review', { timeout: 5000 });
+
+    // Go to my submissions
+    await page.click('[data-bind="submit-puzzle-status"] [data-action="show-my-submissions"]');
+    await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
+
+    // Click delete, then cancel
+    await page.click('[data-action="delete-submission"]');
+    await expect(page.locator('.submission-delete-confirm')).toBeVisible({ timeout: 3000 });
+    await page.click('[data-action="cancel-delete-submission"]');
+
+    // Confirmation should be gone, card still there
+    await expect(page.locator('.submission-delete-confirm')).toHaveCount(0);
+    await expect(page.locator('.submission-card')).toHaveCount(1);
+  });
 });
