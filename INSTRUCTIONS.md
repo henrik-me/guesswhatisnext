@@ -426,7 +426,7 @@ Commit locally after every meaningful, working change — each commit should be 
 
 ### Agent Progress Reporting
 
-All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
+All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
 
 Background agents **must** report progress to the orchestrating agent:
 - **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
@@ -548,7 +548,7 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 
 **Task parallelism:**
 - **Worktree tasks** (code changes, tests, PRs): bounded by worktree slots wt-1 through wt-4. Each needs a git worktree, a unique port, and `npm install`.
-- **Non-worktree tasks** (research, investigation, session queries, planning, analysis): not bounded by worktree slots. These run as background agents via the `task` tool without consuming a worktree slot. No port or npm install needed.
+- **Non-worktree tasks** (research, investigation, session queries, planning, analysis): not bounded by worktree slots. These run as non-worktree background agents without consuming a worktree slot. No port or npm install needed.
 
 The orchestrator should maximize parallelism by running non-worktree tasks concurrently with worktree tasks. There is no fixed limit on non-worktree background tasks.
 
