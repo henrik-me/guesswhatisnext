@@ -818,6 +818,14 @@ function init() {
         loadSettingsUI();
         showScreen('settings');
         break;
+      case 'show-community':
+        showScreen('community');
+        updateCommunityAuthDisplay();
+        break;
+      case 'go-community':
+        showScreen('community');
+        updateCommunityAuthDisplay();
+        break;
       case 'show-profile':
         if (isLoggedIn()) {
           showScreen('profile');
@@ -1194,24 +1202,38 @@ async function refreshFeatureFlags() {
 function updateHomeAuthDisplay() {
   const row = document.querySelector('[data-bind="home-user-display"]');
   const label = document.querySelector('[data-bind="home-user-label"]');
-  const submitBtn = document.querySelector('[data-bind="submit-puzzle-btn"]');
-  const modBtn = document.querySelector('[data-bind="moderation-btn"]');
-  const mySubBtn = document.querySelector('[data-bind="my-submissions-btn"]');
   if (!row) return;
   if (isLoggedIn() && authUsername) {
     if (label) label.textContent = `👤 Logged in as ${authUsername}`;
     row.style.display = '';
-    if (submitBtn) submitBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
-    if (modBtn) modBtn.style.display = (authRole === 'admin' || authRole === 'system') ? '' : 'none';
-    if (mySubBtn) mySubBtn.style.display = '';
     startNotificationPolling();
   } else {
     row.style.display = 'none';
-    if (submitBtn) submitBtn.style.display = 'none';
-    if (modBtn) modBtn.style.display = 'none';
-    if (mySubBtn) mySubBtn.style.display = 'none';
     stopNotificationPolling();
     updateNotificationBadge(0);
+  }
+}
+
+/** Update community screen to reflect auth + feature flag state. */
+function updateCommunityAuthDisplay() {
+  const createBtn = document.querySelector('[data-bind="community-create-btn"]');
+  const mySubBtn = document.querySelector('[data-bind="my-submissions-btn"]');
+  const modBtn = document.querySelector('[data-bind="moderation-btn"]');
+
+  if (isLoggedIn() && isFeatureEnabled('submitPuzzle')) {
+    if (createBtn) createBtn.style.display = '';
+    if (mySubBtn) mySubBtn.style.display = '';
+  } else if (isLoggedIn()) {
+    // Logged in but flag is off — hide create, show my-submissions
+    if (createBtn) createBtn.style.display = 'none';
+    if (mySubBtn) mySubBtn.style.display = '';
+  } else {
+    // Not logged in — show create (it will redirect to auth), hide my-submissions
+    if (createBtn) createBtn.style.display = '';
+    if (mySubBtn) mySubBtn.style.display = 'none';
+  }
+  if (modBtn) {
+    modBtn.style.display = (isLoggedIn() && (authRole === 'admin' || authRole === 'system')) ? '' : 'none';
   }
 }
 

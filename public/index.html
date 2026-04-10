@@ -29,18 +29,9 @@
         <button class="btn btn-secondary" data-action="start-multiplayer" aria-label="Start Multiplayer">⚔️ Multiplayer</button>
         <button class="btn btn-secondary" data-action="show-leaderboard" aria-label="View Leaderboard">🏆 Leaderboard</button>
         <button class="btn btn-secondary" data-action="show-achievements" aria-label="View Achievements">🏅 Achievements</button>
-        <button class="btn btn-secondary" data-action="show-submit-puzzle" data-bind="submit-puzzle-btn" aria-label="Submit a Puzzle" style="display:none">📝 Submit Puzzle</button>
-        <button class="btn btn-secondary" data-action="show-moderation" data-bind="moderation-btn" aria-label="Review Submissions" style="display:none">🛡️ Moderation</button>
+        <button class="btn btn-secondary" data-action="show-community" aria-label="Community Puzzles">🌍 Community Puzzles</button>
         <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
-      <section id="community-section" class="community-section" aria-label="Community Puzzles">
-        <h2 class="community-heading">🌍 Community Puzzles</h2>
-        <div class="community-buttons">
-          <button class="btn btn-secondary" data-action="browse-community" aria-label="Browse Community Puzzles">🔍 Browse Community</button>
-          <button class="btn btn-secondary" data-action="create-puzzle" aria-label="Create a Puzzle">✏️ Create Puzzle</button>
-          <button class="btn btn-secondary" data-action="show-my-submissions" data-bind="my-submissions-btn" aria-label="View My Submissions" style="display:none">📋 My Submissions <span class="notification-badge" data-bind="notification-badge" role="status" aria-live="polite" aria-atomic="true" style="display:none"></span></button>
-        </div>
-      </section>
       <footer class="home-stats">
         <div class="home-user-row" data-bind="home-user-display" style="display:none">
           <p class="home-user" data-bind="home-user-label"></p>
@@ -49,6 +40,21 @@
         </div>
         <p class="high-score">🏆 High Score: <span data-bind="high-score">0</span></p>
       </footer>
+    </section>
+
+    <!-- Community Hub Screen -->
+    <section id="screen-community" class="screen" data-screen="community" aria-label="Community Puzzles">
+      <header class="screen-header">
+        <h2>🌍 Community Puzzles</h2>
+        <p class="screen-description">Browse, create, and share puzzles with the community</p>
+      </header>
+      <nav class="community-menu" aria-label="Community options">
+        <button class="btn btn-primary" data-action="browse-community" aria-label="Browse Community Puzzles">🔍 Browse Community</button>
+        <button class="btn btn-secondary" data-action="create-puzzle" data-bind="community-create-btn" aria-label="Create a Puzzle" style="display:none">✏️ Create Puzzle</button>
+        <button class="btn btn-secondary" data-action="show-my-submissions" data-bind="my-submissions-btn" aria-label="View My Submissions" style="display:none">📋 My Submissions <span class="notification-badge" data-bind="notification-badge" role="status" aria-live="polite" aria-atomic="true" style="display:none"></span></button>
+        <button class="btn btn-secondary" data-action="show-moderation" data-bind="moderation-btn" aria-label="Review Submissions" style="display:none">🛡️ Moderation</button>
+      </nav>
+      <button class="btn btn-back" data-action="go-home" aria-label="Go back to home screen">← Back</button>
     </section>
 
     <!-- Category Select Screen -->
@@ -554,7 +560,7 @@
       <div class="submit-puzzle-links">
         <button class="btn-link" data-action="show-my-submissions" aria-label="View My Submissions">📋 View My Submissions</button>
       </div>
-      <button class="btn btn-back" data-action="go-home">← Back</button>
+      <button class="btn btn-back" data-action="go-community">← Back</button>
     </section>
 
     <!-- Community Gallery Screen -->
@@ -580,7 +586,7 @@
       <div class="gallery-pagination" data-bind="gallery-pagination" style="display:none">
         <button class="btn btn-secondary" data-action="gallery-load-more">Load More</button>
       </div>
-      <button class="btn btn-back" data-action="go-home">← Back</button>
+      <button class="btn btn-back" data-action="go-community">← Back</button>
     </section>
 
     <!-- My Submissions Screen -->
@@ -599,7 +605,7 @@
       <div class="my-submissions-list" data-bind="my-submissions-list" aria-label="Your submissions" role="list">
         <p class="my-submissions-loading">Loading submissions…</p>
       </div>
-      <button class="btn btn-back" data-action="go-home">← Back</button>
+      <button class="btn btn-back" data-action="go-community">← Back</button>
     </section>
 
     <!-- Admin Moderation Screen -->
@@ -661,7 +667,7 @@
       </div>
 
       <p class="moderation-status" data-bind="moderation-status" role="status" aria-live="polite"></p>
-      <button class="btn btn-back" data-action="go-home">← Back</button>
+      <button class="btn btn-back" data-action="go-community">← Back</button>
     </section>
     <div id="reconnect-overlay" class="reconnect-overlay" style="display:none" aria-live="assertive">
       <div class="reconnect-content">
