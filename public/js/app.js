@@ -2777,7 +2777,10 @@ async function saveEditSubmission(card) {
     if (status) { status.textContent = 'Please fill in all 4 options or leave them all empty.'; status.className = 'submission-edit-status error'; }
     return;
   }
-  const options = nonEmpty.length === 4 ? optionVals : undefined;
+  // If all 4 filled: use them. If all empty and submission had options: send null to clear. Otherwise: omit.
+  const cachedSub = mySubmissionsCache.find(s => String(s.id) === submissionId);
+  const hadOptions = cachedSub && Array.isArray(cachedSub.options) && cachedSub.options.length > 0;
+  const options = nonEmpty.length === 4 ? optionVals : (nonEmpty.length === 0 && hadOptions ? null : undefined);
 
   if (sequence.length < 3) {
     if (status) { status.textContent = 'Sequence must have at least 3 items.'; status.className = 'submission-edit-status error'; }
@@ -2798,7 +2801,7 @@ async function saveEditSubmission(card) {
   }
 
   const payload = { sequence, answer, explanation, difficulty, category, type };
-  if (options) payload.options = options;
+  if (options !== undefined) payload.options = options;
 
   try {
     const res = await apiFetch(getFeatureAwarePath(`/api/submissions/${submissionId}`), {
