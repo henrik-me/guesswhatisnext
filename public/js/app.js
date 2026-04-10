@@ -468,12 +468,14 @@ function init() {
           // Ignore storage errors during startup token cleanup
         }
         updateHomeAuthDisplay();
+        if (currentScreen === 'community') updateCommunityAuthDisplay();
       } else if (res.ok) {
         return res.json().then(data => {
           if (data.user && data.user.role) {
             authRole = data.user.role;
             localStorage.setItem('gwn_auth_role', authRole);
             updateHomeAuthDisplay();
+            if (currentScreen === 'community') updateCommunityAuthDisplay();
           }
         });
       }
@@ -819,9 +821,6 @@ function init() {
         showScreen('settings');
         break;
       case 'show-community':
-        showScreen('community');
-        updateCommunityAuthDisplay();
-        break;
       case 'go-community':
         showScreen('community');
         updateCommunityAuthDisplay();
@@ -1183,6 +1182,7 @@ async function refreshFeatureFlags() {
     if (!res.ok) {
       resetFeatureFlags();
       updateHomeAuthDisplay();
+      if (currentScreen === 'community') updateCommunityAuthDisplay();
       return;
     }
 
@@ -1196,6 +1196,7 @@ async function refreshFeatureFlags() {
   }
 
   updateHomeAuthDisplay();
+  if (currentScreen === 'community') updateCommunityAuthDisplay();
 }
 
 /** Update home screen to reflect auth state. */

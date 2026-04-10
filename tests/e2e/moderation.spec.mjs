@@ -118,6 +118,7 @@ test.describe('Admin Moderation Improvements', () => {
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="show-moderation"]');
+    await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });
 
     // Wait for the specific submission cards to load
     const card1 = page.locator(`[data-submission-id="${id1}"]`);
