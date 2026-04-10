@@ -818,6 +818,80 @@ describe('PUT /api/submissions/:id', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/no fields/i);
   });
+
+  test('rejects updating only answer when stored options do not include new answer', async () => {
+    // Create a submission with options
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Cross-field test',
+        difficulty: 1,
+        category: 'Nature',
+        options: ['D', 'E', 'F', 'G'],
+      });
+    const sid = createRes.body.id;
+
+    // Try to change answer to something not in stored options
+    const res = await getAgent()
+      .put(`/api/submissions/${sid}?ff_submit_puzzle=1`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ answer: 'Z' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/options must include the answer/i);
+  });
+
+  test('rejects updating only options when stored answer is not in new options', async () => {
+    // Create a submission with answer 'D'
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Cross-field test 2',
+        difficulty: 1,
+        category: 'Nature',
+        options: ['D', 'E', 'F', 'G'],
+      });
+    const sid = createRes.body.id;
+
+    // Try to change options to exclude stored answer 'D'
+    const res = await getAgent()
+      .put(`/api/submissions/${sid}?ff_submit_puzzle=1`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ options: ['X', 'Y', 'Z', 'W'] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/options must include the answer/i);
+  });
+
+  test('accepts updating answer when stored options include new answer', async () => {
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['A', 'B', 'C'],
+        answer: 'D',
+        explanation: 'Cross-field valid',
+        difficulty: 1,
+        category: 'Nature',
+        options: ['D', 'E', 'F', 'G'],
+      });
+    const sid = createRes.body.id;
+
+    // Change answer to 'E' which is in stored options
+    const res = await getAgent()
+      .put(`/api/submissions/${sid}?ff_submit_puzzle=1`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ answer: 'E' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.answer).toBe('E');
+  });
 });
 
 describe('DELETE /api/submissions/:id', () => {

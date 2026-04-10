@@ -154,13 +154,14 @@ test.describe('My Submissions Dashboard', () => {
     await page.click('[data-action="edit-submission"]');
     await expect(page.locator('.submission-edit-form')).toBeVisible({ timeout: 3000 });
 
-    // Change explanation
-    await page.fill('.edit-explanation', 'Updated moon explanation');
+    // Change category from Nature to Music (visible on card after save)
+    await page.selectOption('.edit-category', 'Music');
     await page.click('[data-action="save-edit-submission"]');
 
-    // After save, submissions list reloads
+    // After save, submissions list reloads with updated category
     await expect(page.locator('.submission-card')).toHaveCount(1, { timeout: 5000 });
     await expect(page.locator('.submission-edit-form')).toHaveCount(0);
+    await expect(page.locator('.submission-category-badge')).toContainText('Music');
   });
 
   test('delete a submission with confirmation', async ({ page, request }) => {

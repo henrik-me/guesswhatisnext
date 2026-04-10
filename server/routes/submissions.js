@@ -16,8 +16,11 @@ const router = express.Router();
 
 const VALID_TYPES = ['emoji', 'text'];
 
-/** Validate provided fields of a partial submission update. Returns an error string or null. */
-function validatePartialSubmission(body) {
+/** Validate provided fields of a partial submission update.
+ *  @param {object} body - request body with partial fields
+ *  @param {object} [existing] - stored submission row for cross-field validation
+ *  Returns an error string or null. */
+function validatePartialSubmission(body, existing) {
   const { sequence, answer, explanation, difficulty, category, type, options } = body;
 
   if (sequence !== undefined) {
@@ -51,6 +54,16 @@ function validatePartialSubmission(body) {
       return `type must be one of: ${VALID_TYPES.join(', ')}`;
     }
   }
+
+  // Cross-field options/answer validation: merge with stored values
+  const effectiveAnswer = answer !== undefined
+    ? (typeof answer === 'string' ? answer.trim() : String(answer))
+    : (existing ? existing.answer : null);
+
+  const effectiveOptions = options !== undefined
+    ? options
+    : (existing && existing.options ? JSON.parse(existing.options) : null);
+
   if (options !== undefined && options !== null) {
     if (!Array.isArray(options) || options.length !== 4) {
       return 'options must be an array of exactly 4 items';
@@ -64,11 +77,13 @@ function validatePartialSubmission(body) {
     if (new Set(trimmedOptions).size !== 4) {
       return 'options must not contain duplicates';
     }
-    // Resolve answer for options validation: use provided answer or existing answer from body
-    const resolvedAnswer = answer !== undefined
-      ? (typeof answer === 'string' ? answer.trim() : String(answer))
-      : null;
-    if (resolvedAnswer !== null && !trimmedOptions.includes(resolvedAnswer)) {
+    if (effectiveAnswer && !trimmedOptions.includes(effectiveAnswer)) {
+      return 'options must include the answer';
+    }
+  } else if (answer !== undefined && effectiveOptions && Array.isArray(effectiveOptions)) {
+    // Answer changed but options not provided — check new answer against stored options
+    const trimmedStored = effectiveOptions.map(o => String(o).trim());
+    if (effectiveAnswer && !trimmedStored.includes(effectiveAnswer)) {
       return 'options must include the answer';
     }
   }
@@ -386,7 +401,7 @@ router.put('/:id', requireAuth, async (req, res, next) => {
       return res.status(409).json({ error: 'Cannot edit a reviewed submission' });
     }
 
-    const error = validatePartialSubmission(req.body);
+    const error = validatePartialSubmission(req.body, submission);
     if (error) {
       return res.status(400).json({ error });
     }
@@ -431,10 +446,14 @@ router.put('/:id', requireAuth, async (req, res, next) => {
     }
 
     params.push(id);
-    await db.run(
+    const updateResult = await db.run(
       `UPDATE puzzle_submissions SET ${updates.join(', ')} WHERE id = ? AND status = 'pending'`,
       params
     );
+
+    if (!updateResult || updateResult.changes === 0) {
+      return res.status(409).json({ error: 'Cannot edit a reviewed submission' });
+    }
 
     // Fetch the updated submission to return
     const updated = await db.get(

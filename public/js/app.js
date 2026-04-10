@@ -2662,14 +2662,14 @@ async function showMySubmissions() {
   }
 }
 
-/** Generate the VALID_CATEGORIES list for inline edit dropdown. */
-const EDIT_CATEGORIES = [
-  'Nature', 'Math & Numbers', 'Colors & Patterns', 'General Knowledge',
-  'Emoji Sequences', 'Music', 'Flags', 'Science', 'Sports', 'Food',
-  'Animals', 'Pop Culture', 'Letter & Word Patterns', 'Logic Sequences',
-  'Visual & Spatial', 'Creative & Mixed', 'Geography', 'History',
-  'Technology', 'Art & Design', 'Language & Grammar',
-];
+/** Derive category list from the existing submit-puzzle select element. */
+function getEditCategories() {
+  const select = document.querySelector('#sp-category');
+  if (!select) return [];
+  return Array.from(select.options)
+    .map(o => o.value)
+    .filter(v => v && v !== '');
+}
 
 /** Open an inline edit form inside the submission card. */
 function openEditSubmission(submissionId) {
@@ -2684,7 +2684,7 @@ function openEditSubmission(submissionId) {
 
   const seq = Array.isArray(submission.sequence) ? submission.sequence.join(', ') : '';
   const opts = Array.isArray(submission.options) ? submission.options : ['', '', '', ''];
-  const categoryOptions = EDIT_CATEGORIES.map(cat =>
+  const categoryOptions = getEditCategories().map(cat =>
     `<option value="${escapeHTML(cat)}"${cat === submission.category ? ' selected' : ''}>${escapeHTML(cat)}</option>`
   ).join('');
   const typeEmoji = submission.type === 'text' ? '' : ' selected';
@@ -2693,44 +2693,44 @@ function openEditSubmission(submissionId) {
   const formHtml = `
     <div class="submission-edit-form">
       <div class="form-group">
-        <label>Type</label>
-        <select class="edit-type">
+        <label for="edit-type-${submissionId}">Type</label>
+        <select id="edit-type-${submissionId}" class="edit-type">
           <option value="emoji"${typeEmoji}>Emoji</option>
           <option value="text"${typeText}>Text</option>
         </select>
       </div>
       <div class="form-group">
-        <label>Category</label>
-        <select class="edit-category">${categoryOptions}</select>
+        <label for="edit-category-${submissionId}">Category</label>
+        <select id="edit-category-${submissionId}" class="edit-category">${categoryOptions}</select>
       </div>
       <div class="form-group">
-        <label>Difficulty</label>
-        <select class="edit-difficulty">
+        <label for="edit-difficulty-${submissionId}">Difficulty</label>
+        <select id="edit-difficulty-${submissionId}" class="edit-difficulty">
           <option value="1"${submission.difficulty === 1 ? ' selected' : ''}>Easy</option>
           <option value="2"${submission.difficulty === 2 ? ' selected' : ''}>Medium</option>
           <option value="3"${submission.difficulty === 3 ? ' selected' : ''}>Hard</option>
         </select>
       </div>
       <div class="form-group">
-        <label>Sequence (comma-separated)</label>
-        <input type="text" class="edit-sequence" value="${escapeHTML(seq)}">
+        <label for="edit-sequence-${submissionId}">Sequence (comma-separated)</label>
+        <input type="text" id="edit-sequence-${submissionId}" class="edit-sequence" value="${escapeHTML(seq)}">
       </div>
       <div class="form-group">
-        <label>Answer</label>
-        <input type="text" class="edit-answer" value="${escapeHTML(String(submission.answer || ''))}">
+        <label for="edit-answer-${submissionId}">Answer</label>
+        <input type="text" id="edit-answer-${submissionId}" class="edit-answer" value="${escapeHTML(String(submission.answer || ''))}">
       </div>
       <div class="form-group">
         <label>Options (4 choices)</label>
         <div class="edit-options">
-          <input type="text" class="edit-option" data-idx="0" value="${escapeHTML(opts[0] || '')}" placeholder="Option 1">
-          <input type="text" class="edit-option" data-idx="1" value="${escapeHTML(opts[1] || '')}" placeholder="Option 2">
-          <input type="text" class="edit-option" data-idx="2" value="${escapeHTML(opts[2] || '')}" placeholder="Option 3">
-          <input type="text" class="edit-option" data-idx="3" value="${escapeHTML(opts[3] || '')}" placeholder="Option 4">
+          <input type="text" class="edit-option" data-idx="0" value="${escapeHTML(opts[0] || '')}" placeholder="Option 1" aria-label="Option 1">
+          <input type="text" class="edit-option" data-idx="1" value="${escapeHTML(opts[1] || '')}" placeholder="Option 2" aria-label="Option 2">
+          <input type="text" class="edit-option" data-idx="2" value="${escapeHTML(opts[2] || '')}" placeholder="Option 3" aria-label="Option 3">
+          <input type="text" class="edit-option" data-idx="3" value="${escapeHTML(opts[3] || '')}" placeholder="Option 4" aria-label="Option 4">
         </div>
       </div>
       <div class="form-group">
-        <label>Explanation</label>
-        <textarea class="edit-explanation" rows="2">${escapeHTML(submission.explanation || '')}</textarea>
+        <label for="edit-explanation-${submissionId}">Explanation</label>
+        <textarea id="edit-explanation-${submissionId}" class="edit-explanation" rows="2">${escapeHTML(submission.explanation || '')}</textarea>
       </div>
       <div class="submission-edit-actions">
         <button class="btn btn-primary btn-sm" data-action="save-edit-submission">Save Changes</button>
@@ -2772,6 +2772,11 @@ async function saveEditSubmission(card) {
   const optionVals = [];
   optionInputs.forEach(el => optionVals.push(el.value.trim()));
   const nonEmpty = optionVals.filter(Boolean);
+  // Require all 4 or none — reject partial fills
+  if (nonEmpty.length > 0 && nonEmpty.length < 4) {
+    if (status) { status.textContent = 'Please fill in all 4 options or leave them all empty.'; status.className = 'submission-edit-status error'; }
+    return;
+  }
   const options = nonEmpty.length === 4 ? optionVals : undefined;
 
   if (sequence.length < 3) {
@@ -2784,6 +2789,11 @@ async function saveEditSubmission(card) {
   }
   if (!explanation) {
     if (status) { status.textContent = 'Explanation is required.'; status.className = 'submission-edit-status error'; }
+    return;
+  }
+  // If all 4 options are provided, validate answer is included
+  if (options && !options.includes(answer)) {
+    if (status) { status.textContent = 'Options must include the answer.'; status.className = 'submission-edit-status error'; }
     return;
   }
 
@@ -2843,8 +2853,7 @@ async function confirmDeleteSubmission(submissionId) {
     const res = await apiFetch(`/api/submissions/${submissionId}`, { method: 'DELETE' });
     const data = await res.json();
     if (res.ok) {
-      card.classList.add('card-removing');
-      card.addEventListener('animationend', () => {
+      const removeCard = () => {
         card.remove();
         mySubmissionsCache = mySubmissionsCache.filter(s => s.id !== submissionId);
         // If no cards remain, show empty state
@@ -2857,7 +2866,11 @@ async function confirmDeleteSubmission(submissionId) {
               <button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>
             </div>`;
         }
-      }, { once: true });
+      };
+      card.classList.add('card-removing');
+      card.addEventListener('animationend', removeCard, { once: true });
+      // Fallback: remove after 500ms if animation doesn't fire (e.g., reduced motion)
+      setTimeout(() => { if (card.parentNode) removeCard(); }, 500);
     } else {
       showToast(data.error || 'Delete failed');
       const overlay = card.querySelector('.submission-delete-confirm');
