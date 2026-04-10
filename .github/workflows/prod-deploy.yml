@@ -61,7 +61,7 @@ jobs:
           fi
 
           if [ "$RESPONSE" = "401" ]; then
-            echo "::error::Unauthorized when checking image in GHCR (HTTP $RESPONSE). Check GHCR_USERNAME/GHCR_PAT credentials and package visibility."
+            echo "::error::Unauthorized when checking image in GHCR (HTTP $RESPONSE). Verify the workflow has packages:read permission and the package is visible to this repository."
             exit 1
           fi
 
