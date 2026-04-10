@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required. This enables fast task assignment and status tracking.
 
-> **Last updated:** 2026-04-10T03:55Z
+> **Last updated:** 2026-04-10T05:41Z
 
 ## Orchestrators
 
@@ -17,6 +17,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
+| CS11-65 | Database Migration | Production deploy (65a–65c) | yoga-gwn | wt-1 | yoga-gwn/cs11-65a-prod-deploy-mssql | — | 2026-04-10 |
 | CS14-83 | Community Puzzle UX | Wave 3: Community gallery | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs14-83-community-gallery | — | 2026-04-10 |
 | CS14-84 | Community Puzzle UX | Wave 3: Admin moderation | yoga-gwn-c3 | wt-2 | yoga-gwn-c3/cs14-84-moderation | — | 2026-04-10 |
 | CS14-85 | Community Puzzle UX | Wave 3: Edit & delete | yoga-gwn-c3 | wt-3 | yoga-gwn-c3/cs14-85-edit-delete | — | 2026-04-10 |
@@ -26,7 +27,7 @@ Orchestrators update this file directly on main — no PR required. This enables
 
 | Task ID | Clickstop | Description | Depends On |
 |---------|-----------|-------------|------------|
-| CS11-65 | Database Migration | Production deploy (wire workflow, deploy, verify) | CS11-64 ✅ |
+| — | — | No queued tasks | — |
 
 ## Recently Completed
 
