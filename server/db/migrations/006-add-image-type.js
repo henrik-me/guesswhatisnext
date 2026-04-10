@@ -20,8 +20,9 @@ module.exports = {
       `);
     } else {
       // SQLite: rebuild table to update CHECK constraint
+      await db.exec('DROP TABLE IF EXISTS puzzle_submissions_new;');
       await db.exec(`
-        CREATE TABLE IF NOT EXISTS puzzle_submissions_new (
+        CREATE TABLE puzzle_submissions_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER NOT NULL,
           sequence TEXT NOT NULL,
