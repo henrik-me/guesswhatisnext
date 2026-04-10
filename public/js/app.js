@@ -515,6 +515,7 @@ function init() {
       case 'go-home':
         disconnectWebSocket();
         resetMatchState();
+        if (currentScreen === 'auth') authReturnScreen = null;
         showScreen('home');
         bindText('high-score', Storage.getHighScore());
         updateHomeAuthDisplay();
@@ -552,9 +553,7 @@ function init() {
         if (!isLoggedIn()) {
           showScreen('auth');
         } else if (isFeatureEnabled('submitPuzzle')) {
-          showScreen('submit-puzzle');
-          resetSubmitPuzzleForm();
-          showOnboarding();
+          openSubmitPuzzleScreen();
         } else {
           showToast('Puzzle submissions are not enabled for your account yet');
         }
@@ -567,9 +566,7 @@ function init() {
           authReturnScreen = 'submit-puzzle';
           showScreen('auth');
         } else if (isFeatureEnabled('submitPuzzle')) {
-          showScreen('submit-puzzle');
-          resetSubmitPuzzleForm();
-          showOnboarding();
+          openSubmitPuzzleScreen();
         } else {
           showComingSoonTooltip(e.target.closest('[data-action]'));
         }
@@ -1232,9 +1229,7 @@ async function authAction(action) {
       const returnTo = authReturnScreen;
       authReturnScreen = null;
       if (returnTo === 'submit-puzzle' && isFeatureEnabled('submitPuzzle')) {
-        showScreen('submit-puzzle');
-        resetSubmitPuzzleForm();
-        showOnboarding();
+        openSubmitPuzzleScreen();
       } else if (returnTo === 'submit-puzzle') {
         showScreen('home');
         showToast('Puzzle submissions are not enabled for your account yet');
@@ -2500,6 +2495,13 @@ function renderMatchHistory(history) {
    =========================== */
 
 const ONBOARDING_DISMISSED_KEY = 'gwn_submit_onboarding_dismissed';
+
+/** Navigate to the submit-puzzle screen, resetting form and showing onboarding. */
+function openSubmitPuzzleScreen() {
+  showScreen('submit-puzzle');
+  resetSubmitPuzzleForm();
+  showOnboarding();
+}
 
 /** Show the onboarding explainer if not previously dismissed. */
 function showOnboarding() {
