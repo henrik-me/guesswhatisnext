@@ -426,7 +426,7 @@ Commit locally after every meaningful, working change — each commit should be 
 
 ### Agent Progress Reporting
 
-All task work happens in background agents on worktrees — never in the main session. Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
+All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Background agents handle the full lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
 
 Background agents **must** report progress to the orchestrating agent:
 - **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
@@ -477,16 +477,16 @@ NOT allowed on main checkout:
 5. Update WORKBOARD.md to register the session (update Orchestrators table)
 6. Prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 
-**Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. ALL tasks — code changes, investigation, research, analysis — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, updating WORKBOARD.md, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
+**Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. ALL implementation tasks — code changes, investigation, research, analysis — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, updating WORKBOARD.md, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
 
-**Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff HEAD~1 -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation.
+**Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation.
 
 **Copilot CLI commands (reference):** The user has access to CLI commands that the orchestrator should be aware of:
 - `/rename <name>` — rename the current session (orchestrator should prompt for this after claiming a task)
 - `/remote` — start a remote cloud session
 - `/tasks` — view running background tasks
 
-**Sub-agents in worktrees**— handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
+**Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
 
 Sub-agents are responsible for:
 - All file changes (code, docs, config) and all commits/pushes
@@ -552,7 +552,7 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 
 The orchestrator should maximize parallelism by running non-worktree tasks concurrently with worktree tasks. There is no fixed limit on non-worktree background tasks.
 
-**Agent setup:**Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
+**Agent setup:** Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
 
 **Branch lifecycle:**
 1. Work on `{agent-id}/{task-id}-{description}` branch in slot
