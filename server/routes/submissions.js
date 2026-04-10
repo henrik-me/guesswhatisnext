@@ -45,8 +45,8 @@ function sanitizeSvg(base64Data) {
   svgText = svgText.replace(/<(iframe|embed|object)[^>]*\/>/gi, '');
   // Strip event handlers (on*)
   svgText = svgText.replace(/\s+on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi, '');
-  // Strip javascript: URLs in href/xlink:href/src attributes
-  svgText = svgText.replace(/\s+(href|xlink:href|src)\s*=\s*["']?\s*javascript:[^"'>\s]*/gi, '');
+  // Strip javascript: URLs in href/xlink:href/src attributes (handles quoted and unquoted)
+  svgText = svgText.replace(/\s+(href|xlink:href|src)\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*'|\s*javascript:[^\s>]*)/gi, '');
   return Buffer.from(svgText, 'utf-8').toString('base64');
 }
 
@@ -296,6 +296,16 @@ router.post('/', requireAuth, async (req, res, next) => {
       storedSequence = sequence.map(sanitizeImageUri);
       storedAnswer = sanitizeImageUri(trimmedAnswer);
       storedOptions = Array.isArray(options) ? options.map(sanitizeImageUri) : null;
+      // Re-check uniqueness after sanitization (SVG sanitization can make distinct URIs collide)
+      if (storedOptions) {
+        const unique = new Set(storedOptions);
+        if (unique.size !== storedOptions.length) {
+          return res.status(400).json({ error: 'options must not contain duplicates (after sanitization)' });
+        }
+        if (!storedOptions.includes(storedAnswer)) {
+          return res.status(400).json({ error: 'options must include the answer (after sanitization)' });
+        }
+      }
     }
 
     const submissionOptions = Array.isArray(storedOptions)
@@ -441,6 +451,10 @@ router.put('/:id/review', requireSystem, async (req, res, next) => {
       const options = submission.options
         ? submission.options
         : (puzzleType === 'image' ? null : JSON.stringify(generateOptions(submission.sequence, submission.answer)));
+
+      if (puzzleType === 'image' && !options) {
+        return res.status(400).json({ error: 'Cannot approve image puzzle without options' });
+      }
 
       try {
         await db.transaction(async (tx) => {

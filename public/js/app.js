@@ -3181,11 +3181,16 @@ function toggleImageMode(isImage) {
   const imageGroups = ['sp-image-sequence-group', 'sp-image-answer-group', 'sp-image-distractors-group'];
   textGroups.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = isImage ? 'none' : '';
+    if (!el) return;
+    el.style.display = isImage ? 'none' : '';
+    // Disable inputs so native required validation doesn't block image mode
+    el.querySelectorAll('input, select, textarea').forEach(ctrl => { ctrl.disabled = isImage; });
   });
   imageGroups.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = isImage ? '' : 'none';
+    if (!el) return;
+    el.style.display = isImage ? '' : 'none';
+    el.querySelectorAll('input, select, textarea').forEach(ctrl => { ctrl.disabled = !isImage; });
   });
 }
 
