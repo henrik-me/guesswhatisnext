@@ -7,7 +7,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 - **Completed clickstop archives:** [project/clickstops/](project/clickstops/)
 - **Development guidelines:** [INSTRUCTIONS.md](INSTRUCTIONS.md)
 
-> **Last updated:** 2026-04-09
+> **Last updated:** 2026-04-10
 
 ---
 
@@ -25,7 +25,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS8 | User Experience | ✅ Complete | 4/4 | [details](project/clickstops/done_cs8_user-experience.md) |
 | CS9 | Content & Growth | ✅ Complete | 2/2 | [details](project/clickstops/done_cs9_content-growth.md) |
 | CS10 | CI/CD Pipeline | ✅ Complete | 6/6 | [details](project/clickstops/done_cs10_cicd-pipeline.md) |
-| CS11 | Database Migration | 🔄 Active | 13/18 | [details](project/clickstops/active_cs11_database-migration.md) |
+| CS11 | Database Migration | ✅ Complete | 18/18 | [details](project/clickstops/done_cs11_database-migration.md) |
 | CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/done_cs12_test-infrastructure.md) |
 | CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done_cs13_observability-logging.md) |
 | CS14 | Community Puzzle Submission UX | ⬜ Planned | 0/8 | [details](project/clickstops/planned_cs14_community-puzzle-ux.md) |
@@ -69,7 +69,7 @@ Every Copilot review comment thread must be replied to with a meaningful message
 
 ## Clickstop CS11 — Database Migration
 
-Database abstraction layer (SQLite + Azure SQL) with repository pattern, versioned migrations, and config-driven backend selection. Azure Files cleanup complete; async route conversion complete; Azure SQL provisioning and production deploy remaining. See [full details](project/clickstops/active_cs11_database-migration.md).
+✅ Complete. Database abstraction layer (SQLite + Azure SQL) with repository pattern, versioned migrations, and config-driven backend selection. Azure Files cleanup, async route conversion, Azure SQL provisioning, and production deployment all done. Production running on Azure SQL (serverless free tier, centralus). See [archive](project/clickstops/done_cs11_database-migration.md).
 
 ---
 
@@ -88,8 +88,8 @@ Improve puzzle submission discovery, authoring, moderation, and notifications. F
 ## Blockers / Open Questions
 
 - **Azure Files storage cleanup**: ✅ Done (PR #49). Azure storage resources (`gwn-storage-staging`, `gwn-storage-production`) still exist in Azure and should be deleted manually.
-- **Staging auto-deploy disabled**: Must manually trigger `workflow_dispatch` after merging to main. Re-enable once CS11 is stable.
-- **Production not yet deployed**: Depends on Azure SQL migration (CS11c) since Azure Files SMB is broken for SQLite.
+- **Staging auto-deploy disabled**: Must manually trigger `workflow_dispatch` after merging to main. Re-enable once stable.
+- **Production deployed**: ✅ Running on Azure SQL (serverless free tier). FQDN responds, all migrations applied, 504 puzzles seeded.
 - **Azure SQL free tier limit**: 1 free DB per subscription. Production gets the free DB; staging uses ephemeral local SQLite.
 
 ---
