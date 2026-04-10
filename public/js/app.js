@@ -3241,13 +3241,14 @@ function renderDropZone(container, entry, label) {
     span.className = 'drop-zone-text';
     span.textContent = label;
     container.appendChild(span);
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.className = 'image-file-input';
-    input.accept = '.png,.jpg,.jpeg,.gif,.svg,.webp';
-    input.setAttribute('aria-label', `Upload ${label}`);
-    container.appendChild(input);
   }
+  // Always render file input so delegated change handlers can fire
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.className = 'image-file-input';
+  input.accept = '.png,.jpg,.jpeg,.gif,.svg,.webp';
+  input.setAttribute('aria-label', `Upload ${label}`);
+  container.appendChild(input);
 }
 
 /** Rebuild the sequence image upload grid from state. */

@@ -1073,3 +1073,223 @@ describe('DELETE /api/submissions/:id', () => {
     expect(res.body.message).toBe('Submission deleted');
   });
 });
+
+
+// Helper: create a minimal valid PNG as a base64 data URI
+function makeImageUri(mime = 'image/png', size = 100) {
+  const buf = Buffer.alloc(size, 0x42);
+  return `data:${mime};base64,${buf.toString('base64')}`;
+}
+
+describe('POST /api/submissions — image type', () => {
+  const img1 = makeImageUri('image/png', 50);
+  const img2 = makeImageUri('image/jpeg', 60);
+  const img3 = makeImageUri('image/gif', 70);
+  const imgAnswer = makeImageUri('image/png', 80);
+  const distractor1 = makeImageUri('image/webp', 90);
+  const distractor2 = makeImageUri('image/png', 100);
+  const distractor3 = makeImageUri('image/jpeg', 110);
+
+  test('accepts image submission with valid data URIs', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [img1, img2, img3],
+        answer: imgAnswer,
+        explanation: 'Image pattern.',
+        difficulty: 1,
+        category: 'Visual & Spatial',
+        type: 'image',
+        options: [imgAnswer, distractor1, distractor2, distractor3],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('pending');
+  });
+
+  test('rejects oversized image', async () => {
+    const oversized = makeImageUri('image/png', 600 * 1024);
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [oversized, img2, img3],
+        answer: imgAnswer,
+        explanation: 'Too big.',
+        difficulty: 1,
+        category: 'Visual & Spatial',
+        type: 'image',
+        options: [imgAnswer, distractor1, distractor2, distractor3],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/500KB/i);
+  });
+
+  test('rejects invalid image format', async () => {
+    const badMime = 'data:application/pdf;base64,' + Buffer.alloc(50, 0x42).toString('base64');
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [badMime, img2, img3],
+        answer: imgAnswer,
+        explanation: 'Bad format.',
+        difficulty: 1,
+        category: 'Visual & Spatial',
+        type: 'image',
+        options: [imgAnswer, distractor1, distractor2, distractor3],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/unsupported format/i);
+  });
+
+  test('rejects malformed data URI', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['not-a-data-uri', img2, img3],
+        answer: imgAnswer,
+        explanation: 'Malformed.',
+        difficulty: 1,
+        category: 'Visual & Spatial',
+        type: 'image',
+        options: [imgAnswer, distractor1, distractor2, distractor3],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid data URI/i);
+  });
+
+  test('rejects image submission with more than 6 sequence elements', async () => {
+    const imgs = Array.from({ length: 7 }, (_, i) => makeImageUri('image/png', 50 + i));
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: imgs,
+        answer: imgAnswer,
+        explanation: 'Too many.',
+        difficulty: 1,
+        category: 'Visual & Spatial',
+        type: 'image',
+        options: [imgAnswer, distractor1, distractor2, distractor3],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/at most 6/i);
+  });
+
+  test('rejects image submission without options', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [img1, img2, img3],
+        answer: imgAnswer,
+        explanation: 'No options.',
+        difficulty: 1,
+        category: 'Visual & Spatial',
+        type: 'image',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/require.*4 options/i);
+  });
+
+  test('non-image submissions are unchanged by image validation', async () => {
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: ['🔴', '🟠', '🟡'],
+        answer: '🟢',
+        explanation: 'Rainbow.',
+        difficulty: 1,
+        category: 'Colors & Patterns',
+        type: 'emoji',
+      });
+
+    expect(res.status).toBe(201);
+  });
+
+  test('sanitizes SVG content in image submissions', async () => {
+    const maliciousSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert("xss")</script><circle r="10" onload="alert(1)"/></svg>').toString('base64');
+    const svgUri = `data:image/svg+xml;base64,${maliciousSvg}`;
+    const res = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [svgUri, img2, img3],
+        answer: imgAnswer,
+        explanation: 'SVG test.',
+        difficulty: 1,
+        category: 'Visual & Spatial',
+        type: 'image',
+        options: [imgAnswer, distractor1, distractor2, distractor3],
+      });
+
+    expect(res.status).toBe(201);
+
+    // Verify stored sequence has sanitized SVG
+    const listRes = await getAgent()
+      .get('/api/submissions')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    const sub = listRes.body.submissions.find(s => s.id === res.body.id);
+    expect(sub).toBeDefined();
+    // Decode the stored SVG and check that script/event handlers were stripped
+    const storedSvg = Buffer.from(sub.sequence[0].split(',')[1], 'base64').toString('utf-8');
+    expect(storedSvg).not.toMatch(/<script/i);
+    expect(storedSvg).not.toMatch(/onload/i);
+  });
+});
+
+describe('PUT /api/submissions/:id/review — image type', () => {
+  test('approve creates puzzle with image data URIs', async () => {
+    const img1 = makeImageUri('image/png', 50);
+    const img2 = makeImageUri('image/jpeg', 60);
+    const img3 = makeImageUri('image/gif', 70);
+    const imgAns = makeImageUri('image/png', 80);
+    const d1 = makeImageUri('image/webp', 90);
+    const d2 = makeImageUri('image/png', 100);
+    const d3 = makeImageUri('image/jpeg', 110);
+
+    const createRes = await getAgent()
+      .post(ENABLED_SUBMISSIONS_PATH)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        sequence: [img1, img2, img3],
+        answer: imgAns,
+        explanation: 'Image puzzle for approval.',
+        difficulty: 2,
+        category: 'Visual & Spatial',
+        type: 'image',
+        options: [imgAns, d1, d2, d3],
+      });
+
+    expect(createRes.status).toBe(201);
+
+    const approveRes = await getAgent()
+      .put(`/api/submissions/${createRes.body.id}/review`)
+      .set('X-API-Key', SYSTEM_KEY)
+      .send({ status: 'approved' });
+
+    expect(approveRes.status).toBe(200);
+    expect(approveRes.body.puzzleId).toBe(`community-${createRes.body.id}`);
+
+    const puzzlesRes = await getAgent()
+      .get('/api/puzzles')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    const puzzle = puzzlesRes.body.find(p => p.id === approveRes.body.puzzleId);
+    expect(puzzle).toBeDefined();
+    expect(puzzle.type).toBe('image');
+    expect(puzzle.sequence).toHaveLength(3);
+    expect(puzzle.sequence[0]).toMatch(/^data:image\//);
+    expect(puzzle.options).toHaveLength(4);
+  });
+});

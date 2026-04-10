@@ -4,6 +4,7 @@
  * For databases where migration 005 already ran with the old constraint
  * (only 'emoji','text'), this recreates the table with the updated CHECK.
  * SQLite doesn't support ALTER CHECK, so we use the table-rebuild pattern.
+ * Skipped when the constraint already includes 'image' (fresh installs).
  */
 
 module.exports = {
@@ -19,6 +20,14 @@ module.exports = {
           ADD CONSTRAINT CK_puzzle_submissions_type CHECK(type IN ('emoji', 'text', 'image'));
       `);
     } else {
+      // Check if the constraint already includes 'image' (fresh installs)
+      const row = await db.get(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='puzzle_submissions'"
+      );
+      if (row && row.sql && row.sql.includes("'image'")) {
+        return; // Already up to date
+      }
+
       // SQLite: rebuild table to update CHECK constraint
       await db.exec('DROP TABLE IF EXISTS puzzle_submissions_new;');
       await db.exec(`
@@ -40,12 +49,12 @@ module.exports = {
         );
       `);
       await db.exec(`
-        INSERT OR IGNORE INTO puzzle_submissions_new
+        INSERT INTO puzzle_submissions_new
           (id, user_id, sequence, answer, explanation, difficulty, category, status, reviewer_notes, created_at, reviewed_at, type, options)
         SELECT id, user_id, sequence, answer, explanation, difficulty, category, status, reviewer_notes, created_at, reviewed_at, type, options
         FROM puzzle_submissions;
       `);
-      await db.exec('DROP TABLE IF EXISTS puzzle_submissions;');
+      await db.exec('DROP TABLE puzzle_submissions;');
       await db.exec('ALTER TABLE puzzle_submissions_new RENAME TO puzzle_submissions;');
       // Recreate indexes dropped during table rebuild
       await db.exec('CREATE INDEX IF NOT EXISTS idx_puzzle_submissions_user ON puzzle_submissions(user_id);');
