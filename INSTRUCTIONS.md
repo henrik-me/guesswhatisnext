@@ -27,87 +27,7 @@ For clickstops, task plans, detailed test specifications, tool evaluations, and 
 
 ## 1. Architecture Principles
 
-### Software Architecture
-
-```
-guesswhatisnext/
-├── public/                         # Client (served as static files)
-│   ├── index.html                  # Game shell — 16 screens (SPA)
-│   ├── css/style.css               # Styling, responsive, animations, themes
-│   ├── js/
-│   │   ├── app.js                  # Entry point, screen nav, auth, multiplayer UI
-│   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
-│   │   ├── puzzles.js              # Client-side puzzle data
-│   │   ├── daily.js                # Date-seeded daily challenge logic
-│   │   ├── storage.js              # LocalStorage persistence
-│   │   └── audio.js                # Web Audio API sound effects
-│   └── img/                        # SVG image assets for puzzles
-│       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
-│       └── colors/                 # Color circles (red → purple)
-├── server/
-│   ├── index.js                    # Entry point: telemetry init, config, server bootstrap
-│   ├── app.js                      # Express app factory, middleware, route wiring
-│   ├── puzzleData.js               # Server-side puzzle pool (multiplayer)
-│   ├── routes/                      # Route modules
-│   │   ├── achievements.js         # Achievement API routes
-│   │   ├── auth.js                 # Register, login, JWT tokens
-│   │   ├── features.js             # Feature flag status endpoint
-│   │   ├── matches.js              # Room create/join + match history
-│   │   ├── notifications.js        # Notifications API routes
-│   │   ├── puzzles.js              # Puzzle API
-│   │   ├── scores.js               # Score submission + leaderboards
-│   │   ├── submissions.js          # User-submitted puzzles
-│   │   ├── telemetry.js            # Client telemetry ingestion
-│   │   └── users.js                # User profiles + management
-│   ├── ws/matchHandler.js          # WebSocket match engine (2–10 players)
-│   ├── db/
-│   │   ├── index.js                # DB factory (auto-selects SQLite or MSSQL via DATABASE_URL)
-│   │   ├── base-adapter.js         # Abstract async adapter interface
-│   │   ├── sqlite-adapter.js       # SQLite adapter (local dev, tests)
-│   │   ├── mssql-adapter.js        # MSSQL/Azure SQL adapter with SQL rewriting
-│   │   ├── migrations/             # Versioned schema migrations (dialect-aware)
-│   │   └── connection.js           # DB init + seeding
-│   └── middleware/auth.js          # JWT + API key verification middleware
-├── data/                           # SQLite database (local dev, git-ignored)
-├── Dockerfile                      # Production container image
-├── docker-compose.yml              # Local container dev (SQLite)
-├── docker-compose.mssql.yml        # MSSQL validation stack (SQL Server + HTTPS)
-├── .github/workflows/              # CI, deploy, load-test, and health-monitor workflows
-├── scripts/                        # Local health-check scripts (sh + ps1)
-├── infra/                          # Azure deployment (deploy.sh + README)
-├── eslint.config.mjs              # ESLint flat config
-├── package.json
-├── INSTRUCTIONS.md                 # This file
-├── CONTEXT.md                      # Project plan & status tracker
-└── README.md                       # User & developer documentation
-```
-
-### System Architecture
-
-```
-  Browser (Client)                     Server (Node.js)
- ┌─────────────────┐               ┌──────────────────────┐
- │  index.html     │               │  Express (port 3000)  │
- │  ┌───────────┐  │   HTTP/REST   │  ┌────────────────┐  │
- │  │  app.js   │──┼──────────────▶│  │ Routes (API)   │  │
- │  │  game.js  │  │               │  │ auth, scores,  │  │
- │  │  daily.js │  │   WebSocket   │  │ matches, puzzles│  │
- │  │ puzzles.js│  │◀─────────────▶│  └───────┬────────┘  │
- │  │ storage.js│  │               │          │           │
- │  └───────────┘  │               │  ┌───────▼────────┐  │
- │  LocalStorage   │               │  │ DB Adapter      │  │
- └─────────────────┘               │  │ SQLite / MSSQL  │  │
-                                   │  └────────────────┘  │
-                                   │  ┌────────────────┐  │
-                                   │  │ WebSocket (ws)  │  │
-                                   │  │ matchHandler.js │  │
-                                   │  └────────────────┘  │
-                                   └──────────────────────┘
-```
-
-### Deployment Architecture
-
-See the deployment architecture diagram in [CONTEXT.md § Deployment Architecture](CONTEXT.md#deployment-architecture).
+For architecture diagrams and codebase structure, see [README.md](README.md) and [CONTEXT.md](CONTEXT.md).
 
 ### Separation of Concerns
 - **Game engine** (`game.js`) handles logic only — no DOM manipulation
@@ -349,11 +269,6 @@ In test mode, auto-logging is fully disabled to keep test output clean.
 ---
 
 ## 5. Git Workflow
-
-### Repository Setup
-- Initialize with `git init` at project root
-- `.gitignore` configured for Node.js, OS files, and database files
-- Main branch: `main`
 
 ### Commit Conventions
 Use **conventional commits** for clear, parseable history:
@@ -803,27 +718,7 @@ gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THRE
 - ⚠️ Tasks that both modify `matchHandler.js` should be sequential
 - ❌ Never parallelize two tasks that both rewrite the same function
 
-### Deployment Environments
-| Environment | Trigger | Approval | Infrastructure | Rollback |
-|---|---|---|---|---|
-| **Local (SQLite)** | `npm start` or `docker compose up` | None | Developer machine | N/A |
-| **Local (MSSQL)** | `npm run docker:mssql` | None | Docker (SQL Server 2022 + Caddy HTTPS) | N/A |
-| **Ephemeral staging** | Push to main + workflow_dispatch (gated by `STAGING_AUTO_DEPLOY`) | Automatic | GitHub Actions (container in workflow) | N/A (ephemeral) |
-| **Azure staging** | After ephemeral validation passes | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-staging | Redeploy previous SHA-tagged image |
-| **Production** | After Azure staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps + Azure SQL | Auto-rollback to previous SHA-tagged image |
-
-### CI/CD Pipeline Overview
-
-**PR checks (ci.yml):** Lint, test, and E2E checks run on every pull request. No Docker build — fast feedback.
-
-**Push to `main`:** Does **not** trigger any deployment. All deployments flow through the staging pipeline first.
-
-### Rollback Policy
-- Docker images are tagged with git SHA (`ghcr.io/henrik-me/guesswhatisnext:<sha>`) — every version is recoverable
-- Post-deploy verification runs health check + smoke tests against production
-- On failure: auto-rollback to previous image tag + GitHub issue created with `deployment-failure` label
-- Manual rollback available via `az containerapp update --image <previous-tag>`
-- **Database migrations must be backward-compatible** (additive only: new columns with defaults, new tables) to ensure rollback safety
+For deployment environments, CI/CD pipeline, and rollback policy, see [CONTEXT.md](CONTEXT.md).
 
 ---
 
