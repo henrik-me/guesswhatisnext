@@ -414,7 +414,7 @@ Background agents **must** report progress to the orchestrating agent:
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
 ### Branch Strategy & Merge Model
-- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates committed directly on `main` by orchestrating agents (see § WORKBOARD.md — Live Coordination below).
+- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates and clickstop plan files (with associated CONTEXT.md summary rows) committed directly on `main` by orchestrating agents.
 - Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
@@ -426,7 +426,7 @@ The orchestrating agent **must actively relay progress to the user** — never d
   - Require CI status checks to pass (`lint`, `test`, `e2e`) — CI uses `paths-ignore` for docs-only PRs
 
   - No force pushes
-  - No direct commits (except WORKBOARD.md by orchestrating agents)
+  - No direct commits (except WORKBOARD.md and clickstop plan files by orchestrating agents)
 
 ### Agent Work Model
 
@@ -440,8 +440,8 @@ Allowed on main checkout:
 - Planning, decomposing, and delegating work to sub-agents
 
 NOT allowed on main checkout:
-- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates are committed and pushed directly from main
-- No `git push` from main (except WORKBOARD.md updates)
+- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates and clickstop plan files (with CONTEXT.md summary rows) are committed and pushed directly from main
+- No `git push` from main (except WORKBOARD.md and clickstop plan file updates)
 - No merge conflict resolution on main, **except for conflicts confined to `WORKBOARD.md` and handled per the WORKBOARD.md conflict-handling guidance** — if `git pull` conflicts on anything else, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
 **Orchestrator Startup Checklist** (first actions in every new session):
