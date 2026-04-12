@@ -436,8 +436,8 @@ Background agents **must** report progress to the orchestrating agent:
 - **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
 - **On milestone:** "CS11-64: completed \<step\>, running validation..."
 - **On validation pass:** "CS11-64: lint ✓ test ✓ e2e ✓ — creating PR"
-- **On validation fail:** "CS11-64: validation FAILED — <error summary>. Fixing..."
-- **On abort:** "CS11-64: BLOCKED — <reason>. Needs orchestrator intervention."
+- **On validation fail:** "CS11-64: validation FAILED — \<error summary\>. Fixing..."
+- **On abort:** "CS11-64: BLOCKED — \<reason\>. Needs orchestrator intervention."
 - **On PR created:** "CS11-64: PR #\<N\> created, requesting Copilot review"
 - **On review loop:** "CS11-64: Copilot review round \<N\> — fixing \<count\> issues"
 - **On ready:** "CS11-64: PR #\<N\> ready for merge (Copilot approved, CI green)"
@@ -521,7 +521,7 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 2. Read WORKBOARD.md for current project context and active work
 3. Run `npm install` in worktree
 4. Set `$env:PORT = "300N"` for the assigned slot
-5. Implement the task (commit after each meaningful step with `Agent:` trailer)
+5. Implement the task (commit after each meaningful step with `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer)
 6. Run full validation: `npm run lint && npm test && npm run test:e2e`
    - If validation fails, fix the issue and re-run. Repeat until all checks pass. If stuck after 3 attempts, report the failure to the orchestrator with error details and stop.
 7. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
