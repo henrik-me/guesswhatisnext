@@ -436,6 +436,8 @@ Background agents **must** report progress to the orchestrating agent:
 - **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
 - **On milestone:** "CS11-64: completed \<step\>, running validation..."
 - **On validation pass:** "CS11-64: lint ✓ test ✓ e2e ✓ — creating PR"
+- **On validation fail:** "CS11-64: validation FAILED — <error summary>. Fixing..."
+- **On abort:** "CS11-64: BLOCKED — <reason>. Needs orchestrator intervention."
 - **On PR created:** "CS11-64: PR #\<N\> created, requesting Copilot review"
 - **On review loop:** "CS11-64: Copilot review round \<N\> — fixing \<count\> issues"
 - **On ready:** "CS11-64: PR #\<N\> ready for merge (Copilot approved, CI green)"
@@ -509,22 +511,26 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 3. **Worktree context:** Which slot (`wt-N`), branch name using `{agent-id}/{task-id}-{description}` format, and port number (`300N`).
 4. **Validation command:** `npm run lint && npm test && npm run test:e2e`
 5. **PR workflow:** Create PR with task ID in title (e.g., `cs11-64: description`), include agent metadata block in description, request Copilot review, complete full review loop.
-6. **Commit conventions:** Use `Agent:` trailer in all commits. Conventional commit format with task scope (e.g., `feat(cs11-64): description`).
+6. **Commit conventions:** Use `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer in all commits. Conventional commit format with task scope (e.g., `feat(cs11-64): description`).
 7. **Review loop reminder:** Reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments.
+8. **Failure handling:** If validation fails, fix and re-run (up to 3 attempts). If stuck, report failure details to the orchestrator and stop.
+9. **Merge conflicts:** Before pushing, rebase onto `origin/main`. Resolve conflicts in the worktree branch and re-run validation.
 
-**Sub-Agent Checklist** (include verbatim in every sub-agent prompt):
+**Sub-Agent Checklist** (include verbatim in every sub-agent prompt — this is the execution plan the sub-agent follows, complementing the Briefing Requirements above which define what context the orchestrator must provide):
 1. Read INSTRUCTIONS.md in the repository root before starting any work
 2. Read WORKBOARD.md for current project context and active work
 3. Run `npm install` in worktree
 4. Set `$env:PORT = "300N"` for the assigned slot
 5. Implement the task (commit after each meaningful step with `Agent:` trailer)
 6. Run full validation: `npm run lint && npm test && npm run test:e2e`
-7. Push branch and create PR with task ID in title and agent metadata in description
-8. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-9. Wait for review (poll per "Waiting for Copilot Review" section — do NOT skip this)
-10. Address all review comments (reply + fix + resolve threads)
-11. Re-request review and repeat until clean
-12. Report completion with PR number and summary
+   - If validation fails, fix the issue and re-run. Repeat until all checks pass. If stuck after 3 attempts, report the failure to the orchestrator with error details and stop.
+7. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
+8. Push branch and create PR with task ID in title and agent metadata in description
+9. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
+10. Wait for review (poll per "Waiting for Copilot Review" section — do NOT skip this)
+11. Address all review comments (reply + fix + resolve threads)
+12. Re-request review and repeat until clean
+13. Report completion with PR number and summary
 
 **Model selection:** GPT models require more explicit procedural prompting for workflow steps (e.g., review loop polling). Always include the full Sub-Agent Checklist when dispatching GPT-based sub-agents. Claude models better internalize workflow instructions from high-level descriptions. See LEARNINGS.md for detailed model evaluation results and task-specific recommendations.
 
