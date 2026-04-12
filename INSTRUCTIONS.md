@@ -464,12 +464,12 @@ NOT allowed on main checkout:
 **Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
 
 Sub-agents are responsible for:
-- All file changes (code, docs, config) and all commits/pushes
+- All implementation file changes (code, docs, config) and all commits/pushes in worktrees
 - PR creation (`gh pr create`)
 - Copilot review loop (reply to comments, resolve threads, re-request review)
 - Merge conflict resolution (rebase/merge `origin/main` into the feature branch)
 
-This keeps `main` clean and ensures every change flows through a PR.
+This keeps `main` clean and ensures implementation changes flow through PRs. (Clickstop plan files and WORKBOARD.md are the exceptions — those are committed directly on `main` by the orchestrator.)
 
 **Sub-Agent Briefing Requirements:**
 
