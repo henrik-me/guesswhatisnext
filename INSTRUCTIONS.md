@@ -676,6 +676,8 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 **Conflict handling:** Since multiple orchestrators may update WORKBOARD.md concurrently, conflicts are possible. Orchestrators should `git pull` before updating. If a conflict occurs **only in `WORKBOARD.md`**, this is the one exception to the general "do not resolve merge conflicts in the main checkout" rule: resolve it by keeping both agents' entries (additive merge), then complete the workboard-only update. If the pull produces conflicts in any other file, abort the merge and follow the normal abort + worktree workflow instead.
 
+**Public repository note:** When branch protection is enabled with required reviews, the repository owner (henrik-me) uses a repository ruleset bypass to allow direct WORKBOARD.md pushes. This bypass is configured in Settings → Rules → Rulesets and applies only to the owner role. Non-owner orchestrating agents (if any) would need to use PR-based workboard updates instead.
+
 #### CONTEXT.md — Project State Updates
 
 CONTEXT.md tracks clickstop summaries and current project state. Updates to CONTEXT.md **require PR review** because:
