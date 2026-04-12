@@ -232,6 +232,7 @@ jobs:
           done
         env:
           BASE_URL: http://localhost:3000
+          SYSTEM_API_KEY: ephemeral-smoke-test-key
 
       - name: Upload Playwright results
         if: failure()

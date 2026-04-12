@@ -23,12 +23,12 @@ async function registerAndGoHome(page, username, password, url = '/') {
 }
 
 /** Navigate to community screen. When flag is off, the home button is hidden (cs32),
- *  so we navigate directly via showScreen. */
+ *  so we force-click it. */
 async function goToCommunity(page, { flagOn = false } = {}) {
   if (flagOn) {
     await page.click('[data-action="show-community"]');
   } else {
-    await page.evaluate(() => showScreen('community'));
+    await page.click('[data-action="show-community"]', { force: true });
   }
   await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
 }
@@ -306,7 +306,7 @@ test.describe('My Submissions Dashboard', () => {
     // Approve via API
     const reviewRes = await request.put(`/api/submissions/${subId}/review`, {
       data: { status: 'approved' },
-      headers: { 'X-API-Key': 'test-system-api-key' },
+      headers: { 'X-API-Key': process.env.SYSTEM_API_KEY || 'test-system-api-key' },
     });
     expect(reviewRes.ok()).toBeTruthy();
 
@@ -362,7 +362,7 @@ test.describe('My Submissions Dashboard', () => {
 
     await request.put(`/api/submissions/${subId}/review`, {
       data: { status: 'rejected', reviewerNotes: 'Too simple' },
-      headers: { 'X-API-Key': 'test-system-api-key' },
+      headers: { 'X-API-Key': process.env.SYSTEM_API_KEY || 'test-system-api-key' },
     });
 
     // Inject auth and go to my-submissions

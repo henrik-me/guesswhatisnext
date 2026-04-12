@@ -70,9 +70,9 @@ test.describe('Admin Moderation Improvements', () => {
       };
     }, SYSTEM_KEY);
 
-    await page.goto('/?ff_submit_puzzle=true');
-    // Navigate to community screen, then click moderation
-    await page.click('[data-action="show-community"]');
+    await page.goto('/');
+    // Navigate to community screen (force-click: button may be hidden when flag is off)
+    await page.click('[data-action="show-community"]', { force: true });
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="show-moderation"]');
     await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });
@@ -114,8 +114,8 @@ test.describe('Admin Moderation Improvements', () => {
       };
     }, SYSTEM_KEY);
 
-    await page.goto('/?ff_submit_puzzle=true');
-    await page.click('[data-action="show-community"]');
+    await page.goto('/');
+    await page.click('[data-action="show-community"]', { force: true });
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="show-moderation"]');
     await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });

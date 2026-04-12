@@ -20,7 +20,8 @@ test.describe('Community Discovery & Onboarding', () => {
 
   test('community screen shows browse button, create puzzle and my submissions hidden by default', async ({ page }) => {
     await page.goto('/');
-    await page.evaluate(() => showScreen('community'));
+    // Community button is hidden when flag is off (cs32), force-click it
+    await page.click('[data-action="show-community"]', { force: true });
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await expect(page.locator('[data-action="browse-community"]')).toBeVisible();
     // Create button is hidden when feature flag is off (default)
@@ -49,9 +50,9 @@ test.describe('Community Discovery & Onboarding', () => {
     }, { t: token, u: username });
 
     // Navigate without feature flag — community button is hidden (cs32),
-    // so navigate directly to community screen
+    // so force-click to navigate to community screen
     await page.goto('/');
-    await page.evaluate(() => showScreen('community'));
+    await page.click('[data-action="show-community"]', { force: true });
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
 
     // Browse should be visible regardless of flag
@@ -307,7 +308,7 @@ test.describe('Community Gallery', () => {
     const { id: submissionId } = await subRes.json();
 
     // Approve the submission via system API
-    const systemKey = 'test-system-api-key';
+    const systemKey = process.env.SYSTEM_API_KEY || 'test-system-api-key';
     const reviewRes = await request.put(`/api/submissions/${submissionId}/review`, {
       data: { status: 'approved' },
       headers: { 'X-API-Key': systemKey },
