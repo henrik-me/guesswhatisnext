@@ -68,7 +68,7 @@ describe('GET /api/scores/leaderboard', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.leaderboard)).toBe(true);
     expect(res.body.mode).toBe('freeplay');
-    expect(res.body.period).toBe('all');
+    expect(res.body.period).toBe('alltime');
   });
 
   test('filters by period', async () => {

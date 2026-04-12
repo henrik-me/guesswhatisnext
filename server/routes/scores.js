@@ -56,7 +56,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 /** GET /api/scores/leaderboard?mode=freeplay|daily&period=alltime|weekly|daily&limit=20 */
 router.get('/leaderboard', optionalAuth, async (req, res, next) => {
   try {
-    const { mode = 'freeplay', period = 'all', limit = 20 } = req.query;
+    const { mode = 'freeplay', period = 'alltime', limit = 20 } = req.query;
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
 
     let dateFilter = '';
@@ -98,7 +98,7 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
 /** GET /api/scores/leaderboard/multiplayer?period=alltime|weekly|daily&limit=20 */
 router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
   try {
-    const { period = 'all', limit = 20 } = req.query;
+    const { period = 'alltime', limit = 20 } = req.query;
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
 
     let dateFilter = '';

@@ -430,6 +430,7 @@ function showSignInBanner() {
     e.preventDefault();
     e.stopPropagation();
     banner.remove();
+    authReturnScreen = 'home';
     showScreen('auth');
   });
 
