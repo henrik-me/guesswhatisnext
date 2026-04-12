@@ -607,7 +607,7 @@ yoga-gwn/cs11-64-provision-azure-sql
 yoga-gwn-c2/cs14-82-authoring-form
 ```
 
-**Commits:** Include `Agent:` trailer
+**Commits:** Include `Agent:` and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailers
 ```
 feat(cs11-64): provision Azure SQL server
 
