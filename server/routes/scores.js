@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { getDbAdapter } = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { checkAndUnlockAchievements } = require('../achievements');
 
 const router = express.Router();
@@ -54,7 +54,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 });
 
 /** GET /api/scores/leaderboard?mode=freeplay&period=all|weekly|daily&limit=20 */
-router.get('/leaderboard', requireAuth, async (req, res, next) => {
+router.get('/leaderboard', optionalAuth, async (req, res, next) => {
   try {
     const { mode = 'freeplay', period = 'all', limit = 20 } = req.query;
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
@@ -96,7 +96,7 @@ router.get('/leaderboard', requireAuth, async (req, res, next) => {
 });
 
 /** GET /api/scores/leaderboard/multiplayer?period=all|weekly|daily&limit=20 */
-router.get('/leaderboard/multiplayer', requireAuth, async (req, res, next) => {
+router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
   try {
     const { period = 'all', limit = 20 } = req.query;
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));

@@ -16,6 +16,18 @@
 <body>
   <div id="app">
 
+    <!-- Persistent Auth Top Bar -->
+    <header id="auth-top-bar" class="auth-top-bar" aria-label="Account">
+      <div class="auth-top-bar-logged-out" data-bind="auth-bar-logged-out">
+        <button class="btn btn-auth-bar" data-action="show-auth-login" aria-label="Log in">Login</button>
+        <button class="btn btn-auth-bar btn-auth-bar-register" data-action="show-auth-register" aria-label="Create account">Register</button>
+      </div>
+      <div class="auth-top-bar-logged-in" data-bind="auth-bar-logged-in" style="display:none">
+        <button class="auth-bar-username" data-action="show-profile" aria-label="View Profile"><span data-bind="auth-bar-username-text"></span></button>
+        <button class="btn btn-auth-bar btn-auth-bar-logout" data-action="logout" aria-label="Log out">Logout</button>
+      </div>
+    </header>
+
     <!-- Home Screen -->
     <section id="screen-home" class="screen active" data-screen="home" aria-label="Home">
       <header class="screen-header home-header">
@@ -33,11 +45,6 @@
         <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
       <footer class="home-stats">
-        <div class="home-user-row" data-bind="home-user-display" style="display:none">
-          <p class="home-user" data-bind="home-user-label"></p>
-          <button class="btn btn-profile" data-action="show-profile" aria-label="View Profile">👤 Profile</button>
-          <button class="btn btn-logout" data-action="logout">Logout</button>
-        </div>
         <p class="high-score">🏆 High Score: <span data-bind="high-score">0</span></p>
       </footer>
     </section>
@@ -345,6 +352,9 @@
       </header>
       <div class="profile-content" data-bind="profile-content">
         <div class="profile-loading">Loading profile...</div>
+      </div>
+      <div class="profile-actions">
+        <button class="btn btn-logout-profile" data-action="logout" aria-label="Log out">Logout</button>
       </div>
       <button class="btn btn-back" data-action="go-home">← Back</button>
     </section>
