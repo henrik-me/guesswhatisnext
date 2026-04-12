@@ -1238,7 +1238,7 @@ async function refreshFeatureFlags() {
   if (currentScreen === 'community') updateCommunityAuthDisplay();
 }
 
-/** Update auth top bar and home screen to reflect auth state. */
+/** Update auth top bar and home screen to reflect auth + feature flag state. */
 function updateHomeAuthDisplay() {
   // Update persistent top bar
   const loggedOutBar = document.querySelector('[data-bind="auth-bar-logged-out"]');
@@ -1260,6 +1260,10 @@ function updateHomeAuthDisplay() {
   // CS20-3: Hide multiplayer button when not logged in
   const mpBtn = document.querySelector('[data-action="start-multiplayer"]');
   if (mpBtn) mpBtn.style.display = isLoggedIn() ? '' : 'none';
+
+  // Community button is gated behind submitPuzzle flag
+  const communityBtn = document.querySelector('[data-bind="home-community-btn"]');
+  if (communityBtn) communityBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
 }
 
 /** Update community screen to reflect auth + feature flag state. */
@@ -1267,6 +1271,7 @@ function updateCommunityAuthDisplay() {
   const createBtn = document.querySelector('[data-bind="community-create-btn"]');
   const mySubBtn = document.querySelector('[data-bind="my-submissions-btn"]');
   const modBtn = document.querySelector('[data-bind="moderation-btn"]');
+  const desc = document.querySelector('[data-bind="community-description"]');
 
   // Create Puzzle is gated behind submitPuzzle flag (visible only when flag is on)
   if (createBtn) createBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
@@ -1275,6 +1280,12 @@ function updateCommunityAuthDisplay() {
   // Moderation requires admin/system role
   if (modBtn) {
     modBtn.style.display = (isLoggedIn() && (authRole === 'admin' || authRole === 'system')) ? '' : 'none';
+  }
+  // Description changes based on whether creation is enabled
+  if (desc) {
+    desc.textContent = isFeatureEnabled('submitPuzzle')
+      ? 'Browse, create, and share puzzles with the community'
+      : 'Browse puzzles created by the community';
   }
 }
 

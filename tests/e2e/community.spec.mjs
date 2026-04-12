@@ -8,14 +8,39 @@ function uniqueUser() {
 }
 
 test.describe('Community Discovery & Onboarding', () => {
-  test('community puzzles button is visible on home screen', async ({ page }) => {
+  test('community puzzles button is hidden on home screen when flag is off', async ({ page }) => {
     await page.goto('/');
+    await expect(page.locator('[data-action="show-community"]')).toBeHidden();
+  });
+
+  test('community puzzles button is visible on home screen when flag is on', async ({ page }) => {
+    await page.goto('/?ff_submit_puzzle=true');
     await expect(page.locator('[data-action="show-community"]')).toBeVisible();
+  });
+
+  test('community screen shows browse-only description when flag is off', async ({ page }) => {
+    await page.goto('/?ff_submit_puzzle=true');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
+    // Navigate back and reload without flag to test flag-off description
+    await page.goto('/');
+    // Navigate directly to community screen via dispatching click on hidden button
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-bind="community-description"]')).toContainText('Browse puzzles created by the community');
+  });
+
+  test('community screen shows full description when flag is on', async ({ page }) => {
+    await page.goto('/?ff_submit_puzzle=true');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-bind="community-description"]')).toContainText('Browse, create, and share puzzles with the community');
   });
 
   test('community screen shows browse button, create puzzle and my submissions hidden by default', async ({ page }) => {
     await page.goto('/');
-    await page.click('[data-action="show-community"]');
+    // Navigate to community screen directly (button is hidden when flag is off)
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await expect(page.locator('[data-action="browse-community"]')).toBeVisible();
     // Create button is hidden when feature flag is off (default)
@@ -45,7 +70,8 @@ test.describe('Community Discovery & Onboarding', () => {
 
     // Navigate without feature flag
     await page.goto('/');
-    await page.click('[data-action="show-community"]');
+    // Navigate to community screen directly (button is hidden when flag is off)
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
 
     // Browse should be visible regardless of flag
@@ -64,7 +90,7 @@ test.describe('Community Discovery & Onboarding', () => {
   });
 
   test('browse community button opens gallery screen', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="browse-community"]');
@@ -237,7 +263,7 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
 
 test.describe('Community Gallery', () => {
   test('gallery screen shows empty state when no community puzzles', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="browse-community"]');
@@ -248,7 +274,7 @@ test.describe('Community Gallery', () => {
   });
 
   test('gallery has filter controls', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await page.click('[data-action="show-community"]');
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
@@ -264,7 +290,7 @@ test.describe('Community Gallery', () => {
   });
 
   test('gallery back button returns to community screen', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await page.click('[data-action="show-community"]');
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
@@ -309,7 +335,7 @@ test.describe('Community Gallery', () => {
     expect(reviewRes.ok()).toBeTruthy();
 
     // Now visit the gallery via community screen
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await page.click('[data-action="show-community"]');
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);

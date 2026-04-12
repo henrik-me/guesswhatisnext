@@ -148,7 +148,8 @@ test.describe('Authentication — Community', () => {
     await page.goto('/');
     await registerUser(page, username, 'testpass123');
 
-    await page.click('[data-action="show-community"]');
+    // Community button is hidden on home when flag is off, so dispatch click directly
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
   });

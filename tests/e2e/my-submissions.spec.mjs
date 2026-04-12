@@ -22,9 +22,9 @@ async function registerAndGoHome(page, username, password, url = '/') {
   await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
 }
 
-/** Navigate from home to community screen. */
+/** Navigate from home to community screen. Uses dispatchEvent since button may be hidden when flag is off. */
 async function goToCommunity(page) {
-  await page.click('[data-action="show-community"]');
+  await page.locator('[data-action="show-community"]').dispatchEvent('click');
   await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
 }
 

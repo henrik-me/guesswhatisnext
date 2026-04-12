@@ -41,7 +41,7 @@
         <button class="btn btn-secondary" data-action="start-multiplayer" aria-label="Start Multiplayer">⚔️ Multiplayer</button>
         <button class="btn btn-secondary" data-action="show-leaderboard" aria-label="View Leaderboard">🏆 Leaderboard</button>
         <button class="btn btn-secondary" data-action="show-achievements" aria-label="View Achievements">🏅 Achievements</button>
-        <button class="btn btn-secondary" data-action="show-community" aria-label="Community Puzzles">🌍 Community Puzzles</button>
+        <button class="btn btn-secondary" data-action="show-community" data-bind="home-community-btn" aria-label="Community Puzzles" style="display:none">🌍 Community Puzzles</button>
         <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
       <footer class="home-stats">
@@ -53,7 +53,7 @@
     <section id="screen-community" class="screen" data-screen="community" aria-label="Community Puzzles">
       <header class="screen-header">
         <h2>🌍 Community Puzzles</h2>
-        <p class="screen-description">Browse, create, and share puzzles with the community</p>
+        <p class="screen-description" data-bind="community-description">Browse, create, and share puzzles with the community</p>
       </header>
       <nav class="community-menu" aria-label="Community options">
         <button class="btn btn-primary" data-action="browse-community" aria-label="Browse Community Puzzles">🔍 Browse Community</button>

@@ -71,8 +71,8 @@ test.describe('Admin Moderation Improvements', () => {
     }, SYSTEM_KEY);
 
     await page.goto('/');
-    // Navigate to community screen, then click moderation
-    await page.click('[data-action="show-community"]');
+    // Community button is hidden on home when flag is off, dispatch click directly
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="show-moderation"]');
     await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });
@@ -115,7 +115,8 @@ test.describe('Admin Moderation Improvements', () => {
     }, SYSTEM_KEY);
 
     await page.goto('/');
-    await page.click('[data-action="show-community"]');
+    // Community button is hidden on home when flag is off, dispatch click directly
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="show-moderation"]');
     await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });
