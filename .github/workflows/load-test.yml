@@ -37,6 +37,7 @@ jobs:
 
     env:
       NODE_ENV: test
+      # Dev/test default only — not used in production. Production values are in GitHub Secrets.
       JWT_SECRET: ci-load-test-secret
       SYSTEM_API_KEY: ci-load-test-system-key
 

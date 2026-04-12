@@ -3,6 +3,7 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       ACCEPT_EULA: "Y"
+      # Dev/test default only — not used in production. Production values are in GitHub Secrets.
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-GwnTest1!}
     healthcheck:
       test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1"
@@ -15,6 +16,7 @@ services:
     build: .
     environment:
       NODE_ENV: production
+      # Dev/test defaults only — not used in production. Production values are in GitHub Secrets.
       JWT_SECRET: gwn-docker-mssql-validation
       SYSTEM_API_KEY: gwn-docker-mssql-validation
       CANONICAL_HOST: "localhost"
