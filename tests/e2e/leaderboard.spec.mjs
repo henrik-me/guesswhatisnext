@@ -67,8 +67,8 @@ test.describe('Leaderboard', () => {
   });
 
   test('leaderboard shows sign-in message for personal bests when not logged in', async ({ page }) => {
-    await page.goto('/');
     await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
+    await page.goto('/');
 
     // Go to leaderboard without logging in
     await page.click('[data-action="show-leaderboard"]');

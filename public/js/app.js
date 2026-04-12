@@ -992,7 +992,7 @@ function renderPersonalBests(stats) {
   const multiplayer = stats.find(s => s.mode === 'multiplayer');
 
   if (!freeplay && !multiplayer) {
-    container.innerHTML = '<div class="personal-bests-card"><p class="personal-bests-empty">Play some games to see your stats here! 🎮</p></div>';
+    container.innerHTML = '<div class="personal-bests-card"><p class="personal-bests-empty">Play some Free Play or Multiplayer games to see your stats here! 🎮</p></div>';
     return;
   }
 
@@ -1093,13 +1093,12 @@ function renderLeaderboard(entries) {
   }
 
   const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
-  const currentUser = Storage.getUsername?.() || null;
 
   container.innerHTML = entries.map((entry, i) => {
     const rank = entry.rank ?? i + 1;
     const medal = medals[rank] || '';
     const rankClass = rank <= 3 ? ` rank-${rank}` : '';
-    const isUser = entry.isCurrentUser || (currentUser && entry.username === currentUser);
+    const isUser = entry.isCurrentUser || (authUsername && entry.username === authUsername);
     const userClass = isUser ? ' current-user' : '';
     const name = escapeHTML(entry.username || 'Anonymous');
     const score = entry.score ?? 0;
@@ -1122,13 +1121,12 @@ function renderMultiplayerLeaderboard(entries) {
   }
 
   const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
-  const currentUser = Storage.getUsername?.() || null;
 
   container.innerHTML = entries.map((entry, i) => {
     const rank = entry.rank ?? i + 1;
     const medal = medals[rank] || '';
     const rankClass = rank <= 3 ? ` rank-${rank}` : '';
-    const isUser = entry.isCurrentUser || (currentUser && entry.username === currentUser);
+    const isUser = entry.isCurrentUser || (authUsername && entry.username === authUsername);
     const userClass = isUser ? ' current-user' : '';
     const name = escapeHTML(entry.username || 'Anonymous');
 
