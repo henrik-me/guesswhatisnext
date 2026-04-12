@@ -425,9 +425,10 @@ function showSignInBanner() {
   const banner = document.createElement('div');
   banner.className = 'sign-in-banner';
   banner.setAttribute('role', 'status');
-  banner.innerHTML = `To keep score, <a href="#" data-action="show-auth-login" class="sign-in-banner-link">sign in</a>`;
+  banner.innerHTML = `To keep score, <a href="#" class="sign-in-banner-link">sign in</a>`;
   banner.querySelector('.sign-in-banner-link').addEventListener('click', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     banner.remove();
     showScreen('auth');
   });
@@ -439,7 +440,12 @@ function showSignInBanner() {
   dismissBtn.addEventListener('click', () => banner.remove());
   banner.appendChild(dismissBtn);
 
-  document.getElementById('app').prepend(banner);
+  const authTopBar = document.getElementById('auth-top-bar');
+  if (authTopBar && authTopBar.parentNode) {
+    authTopBar.after(banner);
+  } else {
+    document.getElementById('app').prepend(banner);
+  }
   setTimeout(() => { if (banner.parentNode) banner.remove(); }, 8000);
 }
 
