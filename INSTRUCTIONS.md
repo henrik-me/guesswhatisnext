@@ -14,6 +14,8 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Run local review loop (GPT 5.4) before Copilot review — skip Copilot for docs-only PRs
 - Report progress to user after dispatching agents — never go silent
 - Commit after each meaningful step — don't batch unrelated changes
+- Record local review findings in PR description
+- Do not remove task from WORKBOARD.md until completion docs PR is merged
 
 ---
 
@@ -495,6 +497,18 @@ Before requesting Copilot PR review, sub-agents **must** run a local review loop
 2. Address all issues found by the local review — commit fixes
 3. Re-run the local review until clean (no issues found)
 4. **Then** proceed to Copilot review or skip, based on PR type:
+
+**Documenting review findings:**
+After each local review round, update the PR description with a log of findings and fixes:
+```
+### Local Review Log
+| Round | Finding | Fix |
+|-------|---------|-----|
+| 1 | CONTEXT.md workflow text still says "pre-branch-protection" | Fixed in [`abc1234`](commit-url) |
+| 2 | CS26-8 references WORKBOARD.md instead of INSTRUCTIONS.md | Fixed in [`def5678`](commit-url) |
+| 3 | Clean — no issues found | — |
+```
+This preserves the review audit trail in the PR for future reference.
 
 **PR type determines Copilot review requirement:**
 
