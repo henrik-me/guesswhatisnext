@@ -3,6 +3,7 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       ACCEPT_EULA: "Y"
+      # Local MSSQL validation default only — not a real secret. Override via MSSQL_SA_PASSWORD env var.
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-GwnTest1!}
     healthcheck:
       test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1"
@@ -15,6 +16,7 @@ services:
     build: .
     environment:
       NODE_ENV: production
+      # Local MSSQL validation defaults only — not real secrets. Production uses Azure-managed secrets.
       JWT_SECRET: gwn-docker-mssql-validation
       SYSTEM_API_KEY: gwn-docker-mssql-validation
       CANONICAL_HOST: "localhost"

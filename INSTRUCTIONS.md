@@ -1,3 +1,21 @@
+# Quick Reference Checklist
+
+Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't change.
+
+- After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
+- After every `git pull` → re-read this checklist; if INSTRUCTIONS.md changed, re-read fully
+- Never do implementation work in main checkout — dispatch to worktree sub-agents
+- Update WORKBOARD.md immediately on task claim/complete — commit AND push
+- Only modify your own rows in WORKBOARD.md Active Work
+- Check CS number conflicts before creating new clickstops
+- Deferred tasks → must create new `planned_` clickstop (never silently drop)
+- Sub-agent prompts must include full Sub-Agent Checklist verbatim
+- Poll for Copilot review — never assume empty reviews = approved
+- Report progress to user after dispatching agents — never go silent
+- Commit after each meaningful step — don't batch unrelated changes
+
+---
+
 # Development Instructions
 
 This document defines architecture decisions, coding standards, testing strategy, and git workflow for the **Guess What's Next** project.
@@ -485,7 +503,7 @@ NOT allowed on main checkout:
 
 **Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, git operations on main (`git pull`, `git worktree add/remove`), updating WORKBOARD.md, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
 
-**Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation.
+**Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation. Additionally, re-read the Quick Reference Checklist at the top of this file after every `git pull`, regardless of whether the file changed.
 
 **Copilot CLI commands (reference):** The user has access to CLI commands that the orchestrator should be aware of:
 - `/rename <name>` — rename the current session (orchestrator should prompt for this after claiming a task)
@@ -681,6 +699,8 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```
 
 **Conflict handling:** Since multiple orchestrators may update WORKBOARD.md concurrently, conflicts are possible. Orchestrators should `git pull` before updating. If a conflict occurs **only in `WORKBOARD.md`**, this is the one exception to the general "do not resolve merge conflicts in the main checkout" rule: resolve it by keeping both agents' entries (additive merge), then complete the workboard-only update. If the pull produces conflicts in any other file, abort the merge and follow the normal abort + worktree workflow instead.
+
+**Public repository note:** When branch protection is enabled with required reviews, the repository owner (henrik-me) uses a repository ruleset bypass to allow direct WORKBOARD.md pushes. This bypass is configured in Settings → Rules → Rulesets and applies only to the owner role. Non-owner orchestrating agents (if any) would need to use PR-based workboard updates instead.
 
 #### CONTEXT.md — Project State Updates
 

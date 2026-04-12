@@ -29,21 +29,21 @@ jobs:
     outputs:
       image-tag: ${{ steps.meta.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set image tag
         id: meta
         run: echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
         with:
           context: .
           push: true
@@ -185,9 +185,9 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
 
@@ -234,7 +234,7 @@ jobs:
 
       - name: Upload Playwright results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: staging-e2e-results
           path: test-results/
@@ -245,7 +245,7 @@ jobs:
     needs: smoke-test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -276,12 +276,12 @@ jobs:
       IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
     steps:
       - name: Log in to Azure
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Configure GHCR registry credentials
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             az containerapp registry set \
@@ -292,7 +292,7 @@ jobs:
               --password ${{ secrets.GHCR_PAT }}
 
       - name: Ensure multiple revision mode
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             az containerapp revision set-mode \
@@ -302,7 +302,7 @@ jobs:
 
       - name: Deploy new revision (0% traffic)
         id: deploy
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             # Derive CANONICAL_HOST from STAGING_URL if not explicitly set
@@ -404,7 +404,7 @@ jobs:
           STAGING_URL: ${{ vars.STAGING_URL }}
 
       - name: Switch traffic to new revision
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
@@ -414,7 +414,7 @@ jobs:
               --revision-weight "$NEW_REV=100"
 
       - name: Deactivate old revisions
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
@@ -432,7 +432,7 @@ jobs:
             sleep 15
 
       - name: Verify staging deployment
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
@@ -481,7 +481,7 @@ jobs:
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             CURRENT_REV="${{ steps.deploy.outputs.current-revision }}"
@@ -540,14 +540,14 @@ jobs:
             fi
 
       - name: Tag deployment
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
         with:
           inlineScript: |
             REVISION=$(az containerapp show --name gwn-staging --resource-group gwn-rg --query "properties.latestRevisionName" -o tsv)
             echo "Tagging commit as: $REVISION"
             echo "REVISION=$REVISION" >> "$GITHUB_ENV"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 1
 

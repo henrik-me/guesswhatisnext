@@ -421,6 +421,10 @@ node scripts/dev-server.js --no-log-file
 
 ---
 
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute, coding standards, and the pull request process.
+
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
