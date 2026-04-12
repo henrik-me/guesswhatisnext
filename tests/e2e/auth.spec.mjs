@@ -6,8 +6,21 @@ function uniqueUser() {
   return `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** Generate a unique IP to avoid rate-limit collisions across tests. */
+const ipSeed = ((Date.now() & 0xffff) ^ Math.floor(Math.random() * 0xffff)) >>> 0;
+const ipBaseSecondOctet = (ipSeed % 254) + 1;
+const ipBaseThirdOctet = Math.floor(ipSeed / 256) % 256;
+let ipCounter = 0;
+function uniqueIP() {
+  const offset = ipCounter++;
+  const thirdOctet = (ipBaseThirdOctet + Math.floor(offset / 254)) % 256;
+  const fourthOctet = (offset % 254) + 1;
+  return `10.${ipBaseSecondOctet}.${thirdOctet}.${fourthOctet}`;
+}
+
 /** Register a new user via the top-bar → auth screen flow. */
 async function registerUser(page, username, password) {
+  await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
   await page.click('[data-action="show-auth-register"]');
   await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
   await page.fill('#auth-username', username);
