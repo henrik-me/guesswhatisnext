@@ -52,6 +52,7 @@ guesswhatisnext/
 │   │   ├── auth.js                 # Register, login, JWT tokens
 │   │   ├── features.js             # Feature flag status endpoint
 │   │   ├── matches.js              # Room create/join + match history
+│   │   ├── notifications.js        # Notifications API routes
 │   │   ├── puzzles.js              # Puzzle API
 │   │   ├── scores.js               # Score submission + leaderboards
 │   │   ├── submissions.js          # User-submitted puzzles
@@ -105,58 +106,7 @@ guesswhatisnext/
 
 ### Deployment Architecture
 
-```
-  Developer                    GitHub                              Azure
- ┌─────────┐              ┌───────────────┐
- │ git push│──────────────▶│ GitHub Actions │
- │ to main │              │               │
- └─────────┘              │ ┌───────────┐ │
-                          │ │Lint+Test+E2E│ │
-                          │ └─────┬─────┘ │
-                          │       │       │
-                          │ ┌─────▼─────┐ │
-                          │ │ Build     │ │  push to GHCR (SHA-tagged)
-                          │ │ Docker    │─┼──────────┐
-                          │ └─────┬─────┘ │          │
-                          │       │       │          │
-                          │ ┌─────▼─────┐ │        ┌─▼────────────────┐
-                          │ │ Deploy    │─┼───────▶│ STAGING           │
-                          │ │ Staging   │ │        │ gwn-staging       │
-                          │ └─────┬─────┘ │        │ Container Apps    │
-                          │       │       │        └──────────────────┘
-                          │ ┌─────▼─────┐ │
-                          │ │ Smoke     │ │
-                          │ │ Tests     │ │
-                          │ └─────┬─────┘ │
-                          │       │       │
-                          │ ┌─────▼─────┐ │
-                          │ │ ⏸️ Manual  │ │  (GitHub Environment protection)
-                          │ │ Approval  │ │
-                          │ └─────┬─────┘ │
-                          │       │       │        ┌──────────────────┐
-                          │ ┌─────▼─────┐ │        │ PRODUCTION       │
-                          │ │ Deploy    │─┼───────▶│ gwn-prod         │
-                          │ │ Prod      │ │  same  │ Container Apps   │
-                          │ └─────┬─────┘ │  image │ Scale-to-zero    │
-                          │       │       │        └──────────────────┘
-                          │ ┌─────▼─────┐ │               ▲
-                          │ │ Prod      │─┼───────────────┘
-                          │ │ Verify    │ │  health + smoke tests
-                          │ └─────┬─────┘ │
-                          │       │       │
-                          │   ❌ fail?    │
-                          │ ┌─────▼─────┐ │        ┌──────────────────┐
-                          │ │ Rollback  │─┼───────▶│ Redeploy prev    │
-                          │ │ + Issue   │ │        │ SHA-tagged image  │
-                          │ └───────────┘ │        └──────────────────┘
-                          │               │
-                          │ ┌───────────┐ │               ▲
-                          │ │ Health    │─┼───────────────┘
-                          │ │ Monitor   │ │  every 6 hours
-                          │ │ (cron)    │ │  on failure → GH Issue
-                          │ └───────────┘ │
-                          └───────────────┘
-```
+See the deployment architecture diagram in [CONTEXT.md § Deployment Architecture](CONTEXT.md#deployment-architecture).
 
 ### Separation of Concerns
 - **Game engine** (`game.js`) handles logic only — no DOM manipulation

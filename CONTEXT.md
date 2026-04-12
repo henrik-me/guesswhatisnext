@@ -36,8 +36,8 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS19 | Community Puzzle Navigation & Testing | ✅ Complete | 4/5 | [details](project/clickstops/done_cs19_community-puzzle-navigation.md) |
 | CS20 | Authentication UX Overhaul | ⬜ Planned | 0/6 | [details](project/clickstops/planned_cs20_auth-ux-overhaul.md) |
 | CS21 | High Score Synchronization | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs21_highscore-sync.md) |
-| CS22 | Answer Randomization Fix | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs22_answer-randomization.md) |
-| CS23 | Documentation Review | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs23_docs-review.md) |
+| CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/clickstops/done_cs22_answer-randomization.md) |
+| CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/clickstops/done_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ⬜ Planned | 0/11 | [details](project/clickstops/planned_cs26_public-repo-transition.md) |
@@ -168,34 +168,38 @@ Note: `ci-cd.yml` has been removed from the tree.
 
 ### Test Inventory
 
-**Vitest (26 suites, 241 tests):**
+**Vitest (28 suites, 343 tests):**
 
 | Suite | Tests | Suite | Tests |
 |---|---|---|---|
-| achievements | 4 | mssql-adapter | 34 |
-| admin-endpoints | 10 | nplayer | 4 |
-| auth | 11 | opentelemetry | 7 |
+| achievements | 4 | mssql-adapter | 60 |
+| admin-endpoints | 10 | notifications | 14 |
+| auth | 11 | nplayer | 4 |
+| community-gallery | 14 | opentelemetry | 7 |
 | e2e-multiplayer | 10 | promotion-and-roles | 14 |
 | e2e-singleplayer | 4 | puzzles | 6 |
 | error-handler | 9 | reconnection | 4 |
-| feature-flags | 4 | rematch | 4 |
-| features | 4 | scores | 8 |
+| feature-flags | 5 | rematch | 4 |
+| features | 4 | scores | 10 |
 | health | 3 | security | 8 |
 | log-format | 4 | spectator | 10 |
 | logger | 21 | sqlite-adapter | 24 |
-| matches | 9 | submissions | 21 |
+| matches | 9 | submissions | 51 |
 | | | telemetry | 14 |
 | | | wal-cleanup | 5 |
 
-**Playwright E2E (6 specs, 21 tests):**
+**Playwright E2E (9 specs, 46 tests):**
 
 | Spec | Tests |
 |---|---|
 | auth | 5 |
+| community | 13 |
 | daily | 2 |
 | freeplay | 2 |
 | keyboard | 2 |
 | leaderboard | 1 |
+| moderation | 2 |
+| my-submissions | 10 |
 | telemetry | 9 |
 
 ### Server Architecture
@@ -215,6 +219,7 @@ server/
 │   ├── auth.js           # /api/auth (register, login, me)
 │   ├── scores.js         # /api/scores (submit, leaderboard, multiplayer-lb, me)
 │   ├── matches.js        # /api/matches (create, join, history, get)
+│   ├── notifications.js  # /api/notifications (list, mark-read)
 │   ├── puzzles.js        # /api/puzzles (list)
 │   ├── achievements.js   # /api/achievements (list, me)
 │   ├── features.js       # /api/features (list)
@@ -305,8 +310,8 @@ public/
   │  [Lint] + [Test] + [E2E]  (parallel)                        │
   └──────────────────────────────────────────────────────────────┘
 
-  Manual trigger (staging-deploy.yml — auto-deploy disabled in PR #41)
-         │  (concurrency: cancel superseded)
+  Push to main (non-docs paths) or manual workflow_dispatch
+         │  (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY; concurrency: cancel superseded)
          ▼
   ┌──────────────────────────────────────────────────────────────────────────────────┐
   │  Staging Pipeline                                                                │

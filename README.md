@@ -209,23 +209,22 @@ For parallel work, the project uses **fixed git worktree slots** with task-speci
 git worktree list    # see which branch is in which slot
 ```
 
-Each worktree agent pushes its branch and merges to main remotely. See [INSTRUCTIONS.md](INSTRUCTIONS.md) for full workflow details.
+Each worktree agent pushes its branch and creates a PR. The orchestrating agent merges approved PRs. See [INSTRUCTIONS.md](INSTRUCTIONS.md) for full workflow details.
 
-**Current workflow:** Push branch → merge to main → push main.
-**Future (with branch protection):** Push branch → create PR → CI + review → merge.
+**Current workflow:** Push branch → create PR → Copilot review → squash-merge to main.
 
 ### Architecture
 
 **Software Structure:**
 ```
 guesswhatisnext/
-├── public/                         # Client (served by Express)
-│   ├── index.html                  # Game shell — all screens (SPA)
-│   ├── css/style.css               # Styling, responsive, animations
+├── public/                         # Client (served as static files)
+│   ├── index.html                  # Game shell — SPA
+│   ├── css/style.css               # Styling, responsive, animations, themes
 │   ├── js/
-│   │   ├── app.js                  # Entry point, screen nav, multiplayer UI
+│   │   ├── app.js                  # Entry point, screen nav, auth, multiplayer UI
 │   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
-│   │   ├── puzzles.js              # 85 puzzles across 12 categories (server has 287 across 16)
+│   │   ├── puzzles.js              # Client-side puzzle data
 │   │   ├── daily.js                # Date-seeded daily challenge logic
 │   │   ├── storage.js              # LocalStorage persistence
 │   │   └── audio.js                # Web Audio API sound effects
@@ -233,27 +232,45 @@ guesswhatisnext/
 │       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
 │       └── colors/                 # Color circles (red → purple)
 ├── server/
-│   ├── index.js                    # Express app + HTTP + WebSocket bootstrap
+│   ├── index.js                    # Entry point: telemetry init, config, server bootstrap
+│   ├── app.js                      # Express app factory, middleware, route wiring
+│   ├── config.js                   # Centralized env vars with startup validation
+│   ├── logger.js                   # Pino structured logging, OTel trace mixin
+│   ├── telemetry.js                # OpenTelemetry SDK, Azure Monitor exporter
+│   ├── achievements.js             # Achievement unlock logic
+│   ├── categories.js               # Puzzle category definitions
+│   ├── feature-flags.js            # Feature flag evaluation (submitPuzzle)
 │   ├── puzzleData.js               # Server-side puzzle pool (multiplayer)
 │   ├── routes/
+│   │   ├── achievements.js         # Achievement API routes
 │   │   ├── auth.js                 # Register, login, JWT tokens
-│   │   ├── scores.js               # Score submission + leaderboards
+│   │   ├── features.js             # Feature flag status endpoint
 │   │   ├── matches.js              # Room create/join + match history
-│   │   └── puzzles.js              # Puzzle API
-│   ├── ws/matchHandler.js          # WebSocket head-to-head match engine
+│   │   ├── notifications.js        # Notifications API routes
+│   │   ├── puzzles.js              # Puzzle API
+│   │   ├── scores.js               # Score submission + leaderboards
+│   │   ├── submissions.js          # User-submitted puzzles
+│   │   ├── telemetry.js            # Client telemetry ingestion
+│   │   └── users.js                # User profiles + management
+│   ├── ws/matchHandler.js          # WebSocket match engine (2–10 players)
 │   ├── db/
-│   │   ├── index.js                   # DB factory (auto-selects SQLite or MSSQL)
-│   │   ├── base-adapter.js            # Abstract async adapter interface
-│   │   ├── sqlite-adapter.js          # SQLite adapter (local dev, tests)
-│   │   ├── mssql-adapter.js           # MSSQL adapter with SQL rewriting
-│   │   ├── migrations/                # Versioned schema migrations
-│   │   └── connection.js              # DB init + seeding
-│   └── middleware/auth.js          # JWT + API key verification middleware
+│   │   ├── index.js                # DB factory (auto-selects SQLite or MSSQL via DATABASE_URL)
+│   │   ├── base-adapter.js         # Abstract async adapter interface
+│   │   ├── sqlite-adapter.js       # SQLite adapter (local dev, tests)
+│   │   ├── mssql-adapter.js        # MSSQL/Azure SQL adapter with SQL rewriting
+│   │   ├── migrations/             # Versioned schema migrations (dialect-aware)
+│   │   └── connection.js           # DB init + seeding
+│   └── middleware/
+│       ├── auth.js                 # JWT + API key verification middleware
+│       └── security.js             # Helmet headers, HTTPS redirect, HSTS, CSP
 ├── data/                           # SQLite database (local dev, git-ignored)
 ├── Dockerfile                      # Production container image
 ├── docker-compose.yml              # Local container dev (SQLite)
 ├── docker-compose.mssql.yml        # MSSQL validation stack (SQL Server + HTTPS)
-├── .github/workflows/              # CI/CD + health monitor
+├── .github/workflows/              # CI, deploy, load-test, and health-monitor workflows
+├── scripts/                        # Local health-check scripts (sh + ps1)
+├── infra/                          # Azure deployment (deploy.sh + README)
+├── eslint.config.mjs               # ESLint flat config
 ├── package.json
 ├── INSTRUCTIONS.md                 # Architecture & coding guidelines
 ├── CONTEXT.md                      # Project plan & status tracker
@@ -308,15 +325,15 @@ guesswhatisnext/
   │ Test     │
   └──────────┘
 
-  Hourly cron (staging-deploy.yml — planned)
+  Push to main (non-docs paths) or manual trigger (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY repo variable)
        │
   ┌────▼──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌───────────┐
-  │ New commits   │─▶│ Build &  │─▶│ Ephemeral │─▶│ ⏸️ Manual │─▶│ Deploy to │
-  │ on main?      │  │ Push to  │  │ Staging   │  │ Approval │  │ Azure     │
-  │ (ff release/) │  │ GHCR     │  │ (in CI)   │  │          │  │ Staging   │
+  │ workflow_     │─▶│ Build &  │─▶│ Ephemeral │─▶│ ⏸️ Manual │─▶│ Deploy to │
+  │ dispatch or   │  │ Push to  │  │ Staging   │  │ Approval │  │ Azure     │
+  │ push to main  │  │ GHCR     │  │ (in CI)   │  │          │  │ Staging   │
   └───────────────┘  └──────────┘  └───────────┘  └──────────┘  └───────────┘
 
-  Manual trigger (prod-deploy.yml — planned)
+  Manual trigger (prod-deploy.yml)
        │  (requires staging green)
   ┌────▼─────┐  ┌──────────┐
   │ Deploy   │─▶│ Verify   │─▶ ❌ fail → Auto-rollback + GitHub Issue
@@ -324,18 +341,19 @@ guesswhatisnext/
   │(same img)│  │          │
   └──────────┘  └──────────┘
 
-  Health Monitor (every 5 min) ───────────────────────────────────▶ gwn-prod
+  Health Monitor (every 6 hours) ──────────────────────────────────▶ gwn-prod
        │ on failure → GitHub Issue
 ```
 
-> **Note:** Push to `main` does **not** trigger deployment. All code reaches production
-> through the staging pipeline: hourly cron → staging validation → manual prod deploy.
+> **Note:** Push to `main` does **not** deploy by default. Deployment runs when triggered
+> manually via `workflow_dispatch`, or automatically on push when `STAGING_AUTO_DEPLOY` is enabled.
+> All code reaches production through the staging pipeline: staging validation → manual prod deploy.
 
 | Environment | Cost | Trigger | Approval | Rollback |
 |---|---|---|---|---|
 | Local (SQLite) | Free | `npm start` / `docker compose up` | None | N/A |
 | Local (MSSQL) | Free | `npm run docker:mssql` | None | N/A |
-| Ephemeral staging | $0 (GitHub Actions) | Hourly cron (if new commits) | Automatic | N/A (ephemeral) |
+| Ephemeral staging | $0 (GitHub Actions) | Manual `workflow_dispatch`, or `push` to `main` when `STAGING_AUTO_DEPLOY` is enabled | Automatic | N/A (ephemeral) |
 | Azure staging | $0 (scale-to-zero) | After ephemeral validation | Manual | Redeploy previous SHA tag |
 | Production | $0+ (pay-per-use, Azure SQL) | Manual trigger (staging must be green) | Manual | Auto-rollback to previous SHA tag |
 

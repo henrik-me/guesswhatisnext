@@ -334,7 +334,7 @@ This keeps the pattern consistent across all pages without duplicating timer log
 **Why not now:**
 - **Alpha software** — APIs and CLI commands may change between releases
 - **Overhead for project size** — Single developer, 12 well-defined remaining tasks with clear dependency chains. Squad is designed for larger teams/projects with many parallel workstreams
-- **Existing documentation overlap** — INSTRUCTIONS.md, CONTEXT.md, and plan.md already serve the role of Squad's `decisions.md` + agent `history.md`
+- **Existing documentation overlap** — INSTRUCTIONS.md, CONTEXT.md, and LEARNINGS.md already serve the role of Squad's `decisions.md` + agent `history.md`
 - **Limited parallelism benefit** — Most of our tasks have dependency chains; few are truly independent
 - **Setup cost** — Defining agents, routing rules, and casting configuration takes time better spent implementing
 
