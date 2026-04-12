@@ -37,7 +37,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS20 | Authentication UX Overhaul | ⬜ Planned | 0/6 | [details](project/clickstops/planned_cs20_auth-ux-overhaul.md) |
 | CS21 | High Score Synchronization | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs21_highscore-sync.md) |
 | CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/clickstops/done_cs22_answer-randomization.md) |
-| CS23 | Documentation Review | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs23_docs-review.md) |
+| CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/clickstops/done_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ⬜ Planned | 0/11 | [details](project/clickstops/planned_cs26_public-repo-transition.md) |
