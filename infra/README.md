@@ -211,6 +211,8 @@ Use the included scripts to check any environment from your machine:
 .\scripts\health-check.ps1 -BaseUrl http://localhost:3000 -ApiKey gwn-dev-system-key
 ```
 
+> **Note:** The examples above use the local dev default key (`gwn-dev-system-key`). When checking a Docker container started via `docker-compose.yml`, use `test-system-api-key` instead (the key configured for E2E testing).
+
 The scripts check:
 1. `GET /api/health` — status and response time
 2. Auth flow — register → login → fetch scores

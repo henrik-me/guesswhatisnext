@@ -148,7 +148,7 @@ docker compose -p <project-name> down
 
 Project name format: `gwn-<suffix>-wt<N>` (e.g., `gwn-c4-wt1`). Default port (no HOST_PORT) is 3000.
 
-**Note:** 5 E2E tests in community/moderation/my-submissions specs fail in containers due to a pre-existing SYSTEM_API_KEY mismatch (`docker-compose.yml` uses `gwn-dev-system-key`, tests expect `test-system-api-key`). These are known and pre-existing on main.
+**Note:** Container E2E tests use the same `SYSTEM_API_KEY` value as playwright.config.mjs (`test-system-api-key`). If adding a new docker-compose file, ensure it uses the same key.
 
 ---
 

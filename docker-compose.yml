@@ -7,6 +7,6 @@ services:
       # Dev/test defaults only — not used in production. Production values are in GitHub Secrets.
       - NODE_ENV=development
       - JWT_SECRET=gwn-dev-secret-change-in-production
-      - SYSTEM_API_KEY=gwn-dev-system-key
+      - SYSTEM_API_KEY=test-system-api-key
       - PORT=3000
     restart: unless-stopped
