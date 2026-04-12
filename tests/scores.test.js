@@ -68,7 +68,7 @@ describe('GET /api/scores/leaderboard', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.leaderboard)).toBe(true);
     expect(res.body.mode).toBe('freeplay');
-    expect(res.body.period).toBe('all');
+    expect(res.body.period).toBe('alltime');
   });
 
   test('filters by period', async () => {
@@ -110,6 +110,24 @@ describe('GET /api/scores/leaderboard/multiplayer', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.leaderboard)).toBe(true);
     expect(res.body.period).toBe('daily');
+  });
+});
+
+describe('GET /api/scores/leaderboard (unauthenticated)', () => {
+  test('returns leaderboard without auth', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard');
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.leaderboard)).toBe(true);
+  });
+
+  test('returns multiplayer leaderboard without auth', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard/multiplayer');
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.leaderboard)).toBe(true);
   });
 });
 

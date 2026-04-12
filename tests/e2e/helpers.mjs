@@ -35,3 +35,21 @@ export async function playOneRound(page) {
 
   return gameOver.isVisible();
 }
+
+/**
+ * Generate a unique IP to avoid rate-limit collisions across tests.
+ * Each worker process/module instance gets a unique seed when this helper
+ * module is loaded, and each call within that instance increments a counter
+ * for a unique fourth octet.
+ */
+const ipSeed = ((Date.now() & 0xffff) ^ Math.floor(Math.random() * 0xffff)) >>> 0;
+const ipBaseSecondOctet = (ipSeed % 254) + 1;
+const ipBaseThirdOctet = Math.floor(ipSeed / 256) % 256;
+let ipCounter = 0;
+
+export function uniqueIP() {
+  const offset = ipCounter++;
+  const thirdOctet = (ipBaseThirdOctet + Math.floor(offset / 254)) % 256;
+  const fourthOctet = (offset % 254) + 1;
+  return `10.${ipBaseSecondOctet}.${thirdOctet}.${fourthOctet}`;
+}

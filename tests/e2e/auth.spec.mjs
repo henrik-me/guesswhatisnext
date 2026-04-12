@@ -1,108 +1,155 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
+import { uniqueIP } from './helpers.mjs';
 
 /** Generate a unique username for test isolation. */
 function uniqueUser() {
   return `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-test.describe('Authentication', () => {
-  test('clicking multiplayer without login redirects to auth screen', async ({ page }) => {
+/** Register a new user via the top-bar → auth screen flow. */
+async function registerUser(page, username, password) {
+  await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
+  await page.click('[data-action="show-auth-register"]');
+  await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
+  await page.fill('#auth-username', username);
+  await page.fill('#auth-password', password);
+  await page.click('[data-action="auth-register"]');
+  // After registration, navigates to multiplayer (default) — go home
+  await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, { timeout: 5000 });
+  await page.locator('[data-screen="multiplayer"] [data-action="go-home"]').click();
+  await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
+}
+
+test.describe('Authentication — Top Bar', () => {
+  test('top bar shows login and register when not logged in', async ({ page }) => {
     await page.goto('/');
-    await page.click('[data-action="start-multiplayer"]');
+    await expect(page.locator('[data-bind="auth-bar-logged-out"]')).toBeVisible();
+    await expect(page.locator('[data-bind="auth-bar-logged-in"]')).toBeHidden();
+  });
+
+  test('clicking login in top bar shows auth screen', async ({ page }) => {
+    await page.goto('/');
+    await page.click('[data-action="show-auth-login"]');
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
   });
 
-  test('register new user and verify logged in', async ({ page }) => {
+  test('register new user and verify top bar shows username', async ({ page }) => {
     const username = uniqueUser();
-    const password = 'testpass123';
-
     await page.goto('/');
-    await page.click('[data-action="start-multiplayer"]');
-    await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
+    await registerUser(page, username, 'testpass123');
 
-    // Fill registration form
-    await page.fill('#auth-username', username);
-    await page.fill('#auth-password', password);
-    await page.click('[data-action="auth-register"]');
-
-    // After registration, app navigates to multiplayer screen
-    await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, {
-      timeout: 5000,
-    });
-
-    // Go home and verify username is displayed
-    await page.locator('[data-screen="multiplayer"] [data-action="go-home"]').click();
-    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
+    // Top bar should show logged-in state with username
+    await expect(page.locator('[data-bind="auth-bar-logged-in"]')).toBeVisible();
+    await expect(page.locator('[data-bind="auth-bar-username-text"]')).toContainText(username);
+    await expect(page.locator('[data-bind="auth-bar-logged-out"]')).toBeHidden();
   });
 
-  test('create puzzle button is hidden on community screen by default after registration', async ({ page }) => {
+  test('logout from top bar clears auth state', async ({ page }) => {
     const username = uniqueUser();
-    const password = 'testpass123';
-
     await page.goto('/');
-    await page.click('[data-action="start-multiplayer"]');
-    await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
-    await page.fill('#auth-username', username);
-    await page.fill('#auth-password', password);
-    await page.click('[data-action="auth-register"]');
-    await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, {
-      timeout: 5000,
-    });
+    await registerUser(page, username, 'testpass123');
 
-    await page.locator('[data-screen="multiplayer"] [data-action="go-home"]').click();
-    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
+    // Click logout in top bar
+    await page.locator('[data-bind="auth-bar-logged-in"] [data-action="logout"]').click();
 
-    // Navigate to community screen — create puzzle should be hidden (feature flag off)
-    await page.click('[data-action="show-community"]');
-    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
-    await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
+    // Should revert to logged-out state
+    await expect(page.locator('[data-bind="auth-bar-logged-out"]')).toBeVisible();
+    await expect(page.locator('[data-bind="auth-bar-logged-in"]')).toBeHidden();
   });
 
   test('session persists after reload (token in localStorage)', async ({ page }) => {
     const username = uniqueUser();
-    const password = 'testpass123';
-
     await page.goto('/');
-    await page.click('[data-action="start-multiplayer"]');
-    await page.fill('#auth-username', username);
-    await page.fill('#auth-password', password);
-    await page.click('[data-action="auth-register"]');
-    await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, {
-      timeout: 5000,
-    });
+    await registerUser(page, username, 'testpass123');
 
-    // Reload the page
     await page.reload();
     await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/, { timeout: 5000 });
 
-    // Username should still be visible (token persisted)
-    await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
+    // Username should still be visible in top bar
+    await expect(page.locator('[data-bind="auth-bar-username-text"]')).toContainText(username);
   });
 
-  test('logout clears user display', async ({ page }) => {
+  test('username in top bar navigates to profile', async ({ page }) => {
     const username = uniqueUser();
-    const password = 'testpass123';
-
     await page.goto('/');
-    await page.click('[data-action="start-multiplayer"]');
-    await page.fill('#auth-username', username);
-    await page.fill('#auth-password', password);
-    await page.click('[data-action="auth-register"]');
-    await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, {
-      timeout: 5000,
-    });
+    await registerUser(page, username, 'testpass123');
 
-    // Go home to see logged-in state
-    await page.locator('[data-screen="multiplayer"] [data-action="go-home"]').click();
-    await expect(page.locator('[data-bind="home-user-label"]')).toContainText(username);
+    await page.click('[data-action="show-profile"]');
+    await expect(page.locator('[data-screen="profile"]')).toHaveClass(/active/);
+  });
+});
 
-    // Logout
-    await page.click('[data-action="logout"]');
+test.describe('Authentication — Multiplayer Gating', () => {
+  test('multiplayer button is hidden when not logged in', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('[data-action="start-multiplayer"]')).toBeHidden();
+  });
 
-    // Username label should be hidden or empty
-    await expect(page.locator('[data-bind="home-user-label"]')).toBeHidden();
+  test('multiplayer button is visible after login', async ({ page }) => {
+    const username = uniqueUser();
+    await page.goto('/');
+    await registerUser(page, username, 'testpass123');
+    await expect(page.locator('[data-action="start-multiplayer"]')).toBeVisible();
+  });
+});
+
+test.describe('Authentication — Leaderboard Anonymous Access', () => {
+  test('leaderboard loads without login', async ({ page }) => {
+    await page.goto('/');
+    await page.click('[data-action="show-leaderboard"]');
+    await expect(page.locator('[data-screen="leaderboard"]')).toHaveClass(/active/);
+
+    // Should not show the old "log in to view" error
+    await expect(page.locator('.leaderboard-error')).toBeHidden({ timeout: 5000 });
+  });
+});
+
+test.describe('Authentication — Profile Logout', () => {
+  test('profile screen has logout button', async ({ page }) => {
+    const username = uniqueUser();
+    await page.goto('/');
+    await registerUser(page, username, 'testpass123');
+
+    await page.click('[data-action="show-profile"]');
+    await expect(page.locator('[data-screen="profile"]')).toHaveClass(/active/);
+
+    // Logout button should exist on profile page
+    const logoutBtn = page.locator('[data-screen="profile"] [data-action="logout"]');
+    await expect(logoutBtn).toBeVisible();
+
+    await logoutBtn.click();
+    // Should return to home, logged out
+    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-bind="auth-bar-logged-out"]')).toBeVisible();
+  });
+});
+
+test.describe('Authentication — Sign-in Banner', () => {
+  test('sign-in banner appears when starting free play without login', async ({ page }) => {
+    await page.goto('/');
+    await page.click('[data-action="start-freeplay"]');
+    await expect(page.locator('.sign-in-banner')).toBeVisible();
+  });
+
+  test('sign-in banner can be dismissed', async ({ page }) => {
+    await page.goto('/');
+    await page.click('[data-action="start-freeplay"]');
+    await expect(page.locator('.sign-in-banner')).toBeVisible();
+
+    await page.click('.sign-in-banner-dismiss');
+    await expect(page.locator('.sign-in-banner')).toBeHidden();
+  });
+});
+
+test.describe('Authentication — Community', () => {
+  test('create puzzle button is hidden on community screen by default after registration', async ({ page }) => {
+    const username = uniqueUser();
+    await page.goto('/');
+    await registerUser(page, username, 'testpass123');
+
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
   });
 });

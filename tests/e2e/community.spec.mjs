@@ -78,6 +78,7 @@ test.describe('Community Discovery & Onboarding', () => {
 
     // Navigate with feature flag, go to community, click create puzzle → redirected to auth
     await page.goto('/?ff_submit_puzzle=true');
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="create-puzzle"]');

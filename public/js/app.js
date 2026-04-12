@@ -418,6 +418,39 @@ function showToast(message) {
   setTimeout(() => toast.remove(), 2200);
 }
 
+/** Show a non-blocking sign-in banner for unauthenticated players. */
+function showSignInBanner() {
+  const existing = document.querySelector('.sign-in-banner');
+  if (existing) existing.remove();
+
+  const banner = document.createElement('div');
+  banner.className = 'sign-in-banner';
+  banner.setAttribute('role', 'status');
+  banner.innerHTML = `To keep score, <a href="#" class="sign-in-banner-link">sign in</a>`;
+  banner.querySelector('.sign-in-banner-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    banner.remove();
+    authReturnScreen = 'home';
+    showScreen('auth');
+  });
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.className = 'sign-in-banner-dismiss';
+  dismissBtn.textContent = '✕';
+  dismissBtn.setAttribute('aria-label', 'Dismiss sign-in banner');
+  dismissBtn.addEventListener('click', () => banner.remove());
+  banner.appendChild(dismissBtn);
+
+  const authTopBar = document.getElementById('auth-top-bar');
+  if (authTopBar && authTopBar.parentNode) {
+    authTopBar.after(banner);
+  } else {
+    document.getElementById('app').prepend(banner);
+  }
+  setTimeout(() => { if (banner.parentNode) banner.remove(); }, 8000);
+}
+
 /** Show confetti celebration for perfect scores. */
 function showConfetti() {
   const container = document.createElement('div');
@@ -547,10 +580,12 @@ function init() {
 
     switch (action) {
       case 'start-freeplay':
+        if (!isLoggedIn()) showSignInBanner();
         showScreen('category');
         renderCategories();
         break;
       case 'start-daily':
+        if (!isLoggedIn()) showSignInBanner();
         Game.startDaily(localPuzzles, ui);
         break;
       case 'go-home':
@@ -751,6 +786,12 @@ function init() {
           showScreen('auth');
         }
         break;
+      case 'show-auth-login':
+        showScreen('auth');
+        break;
+      case 'show-auth-register':
+        showScreen('auth');
+        break;
       case 'auth-login':
         authAction('login');
         break;
@@ -949,11 +990,6 @@ async function fetchLeaderboard(period) {
       ? `/api/scores/leaderboard/multiplayer?period=${period}`
       : `/api/scores/leaderboard?mode=freeplay&period=${period}`;
     const res = await apiFetch(url);
-    if (res.status === 401) {
-      container.innerHTML =
-        '<div class="leaderboard-error">Log in to view the leaderboard 🔒</div>';
-      return;
-    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (leaderboardMode === 'multiplayer') {
@@ -1202,20 +1238,28 @@ async function refreshFeatureFlags() {
   if (currentScreen === 'community') updateCommunityAuthDisplay();
 }
 
-/** Update home screen to reflect auth state. */
+/** Update auth top bar and home screen to reflect auth state. */
 function updateHomeAuthDisplay() {
-  const row = document.querySelector('[data-bind="home-user-display"]');
-  const label = document.querySelector('[data-bind="home-user-label"]');
-  if (!row) return;
+  // Update persistent top bar
+  const loggedOutBar = document.querySelector('[data-bind="auth-bar-logged-out"]');
+  const loggedInBar = document.querySelector('[data-bind="auth-bar-logged-in"]');
+  const usernameText = document.querySelector('[data-bind="auth-bar-username-text"]');
+
   if (isLoggedIn() && authUsername) {
-    if (label) label.textContent = `👤 Logged in as ${authUsername}`;
-    row.style.display = '';
+    if (loggedOutBar) loggedOutBar.style.display = 'none';
+    if (loggedInBar) loggedInBar.style.display = '';
+    if (usernameText) usernameText.textContent = authUsername;
     startNotificationPolling();
   } else {
-    row.style.display = 'none';
+    if (loggedOutBar) loggedOutBar.style.display = '';
+    if (loggedInBar) loggedInBar.style.display = 'none';
     stopNotificationPolling();
     updateNotificationBadge(0);
   }
+
+  // CS20-3: Hide multiplayer button when not logged in
+  const mpBtn = document.querySelector('[data-action="start-multiplayer"]');
+  if (mpBtn) mpBtn.style.display = isLoggedIn() ? '' : 'none';
 }
 
 /** Update community screen to reflect auth + feature flag state. */

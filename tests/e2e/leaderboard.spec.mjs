@@ -1,6 +1,6 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
-import { playOneRound } from './helpers.mjs';
+import { playOneRound, uniqueIP } from './helpers.mjs';
 
 /** Generate a unique username for test isolation. */
 function uniqueUser() {
@@ -12,9 +12,10 @@ test.describe('Leaderboard', () => {
     const username = uniqueUser();
     const password = 'testpass123';
 
-    // Register
+    // Register via top bar
     await page.goto('/');
-    await page.click('[data-action="start-multiplayer"]');
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
+    await page.click('[data-action="show-auth-register"]');
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
     await page.fill('#auth-username', username);
     await page.fill('#auth-password', password);
