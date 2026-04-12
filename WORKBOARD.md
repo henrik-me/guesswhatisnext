@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-12T19:10Z
+> **Last updated:** 2026-04-12T20:15Z
 
 ## Orchestrators
 
@@ -18,7 +18,6 @@ Orchestrators update this file directly on main — no PR required.
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS24 | Custom Domain (gwn.metzger.dk) | DNS + Azure binding + TLS + deploy vars | yoga-gwn-c3 | — | — | — | 2026-04-12T19:10Z |
 | CS28 | Staging Deployment| Deploy to staging and validate | yoga-gwn-c2 | — | — | — | 2026-04-12 |
 | CS33 | Auth Header Polish | Refine auth header UX from CS20 | yoga-gwn-c4 | wt-1 | yoga-gwn-c4/cs33-auth-header-polish | — | 2026-04-12 |
 | CS21 | Leaderboard Personal Bests | Remove home high score, add personal bests to leaderboard | yoga-gwn | wt-1 | yoga-gwn/cs21-leaderboard-personal-bests | — | 2026-04-12T19:52Z |
