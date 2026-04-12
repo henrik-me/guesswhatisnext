@@ -35,7 +35,7 @@
 
 ### 🟢 Already Safe
 - No leaked secrets in git history
-- All workflow secrets use `${{ secrets.* }}` — not hardcoded
+- No production secrets are hardcoded; sensitive workflow values use GitHub Secrets/Variables where needed
 - CI workflow uses no repo secrets — safe for fork PRs
 - No `pull_request_target` triggers
 - `.gitignore` excludes `.env`, `.env.local`, `.env.*.local`, and database files
