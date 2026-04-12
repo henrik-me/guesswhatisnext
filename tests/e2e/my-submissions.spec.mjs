@@ -46,16 +46,23 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('[data-bind="my-submissions-btn"]')).toBeHidden();
   });
 
-  test('my submissions button is visible on community screen when logged in', async ({ page }) => {
+  test('my submissions button is visible on community screen when logged in with flag on', async ({ page }) => {
     const username = uniqueUser();
-    await registerAndGoHome(page, username, 'testpass123');
+    await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
     await goToCommunity(page);
     await expect(page.locator('[data-bind="my-submissions-btn"]')).toBeVisible();
   });
 
-  test('navigate to my submissions, see empty state, and return to community with back button', async ({ page }) => {
+  test('my submissions button is hidden on community screen when logged in but flag off', async ({ page }) => {
     const username = uniqueUser();
     await registerAndGoHome(page, username, 'testpass123');
+    await goToCommunity(page);
+    await expect(page.locator('[data-bind="my-submissions-btn"]')).toBeHidden();
+  });
+
+  test('navigate to my submissions, see empty state, and return to community with back button', async ({ page }) => {
+    const username = uniqueUser();
+    await registerAndGoHome(page, username, 'testpass123', '/?ff_submit_puzzle=true');
     await goToCommunity(page);
 
     await page.click('[data-bind="my-submissions-btn"]');
@@ -65,7 +72,7 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('.my-submissions-empty')).toBeVisible();
     await expect(page.locator('.my-submissions-empty-text')).toContainText('No submissions yet');
 
-    // CTA button links to create puzzle
+    // CTA button links to create puzzle (visible when flag is on)
     await expect(page.locator('.my-submissions-empty [data-action="create-puzzle"]')).toBeVisible();
 
     // Back button returns to community screen
@@ -208,7 +215,7 @@ test.describe('My Submissions Dashboard', () => {
       localStorage.setItem('gwn_auth_username', u);
     }, { t: token, u: username });
 
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await goToCommunity(page);
     await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
@@ -259,7 +266,7 @@ test.describe('My Submissions Dashboard', () => {
       localStorage.setItem('gwn_auth_username', u);
     }, { t: token, u: username });
 
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await goToCommunity(page);
     await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
@@ -315,9 +322,7 @@ test.describe('My Submissions Dashboard', () => {
       localStorage.setItem('gwn_auth_username', u);
     }, { t: token, u: username });
 
-    await page.goto('/');
-
-    // Navigate to community screen to see badge
+    await page.goto('/?ff_submit_puzzle=true');
     await goToCommunity(page);
 
     // Badge should be visible
@@ -372,7 +377,7 @@ test.describe('My Submissions Dashboard', () => {
       localStorage.setItem('gwn_auth_username', u);
     }, { t: token, u: username });
 
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await goToCommunity(page);
     await expect(page.locator('[data-bind="notification-badge"]')).toBeVisible({ timeout: 10000 });
 
@@ -387,7 +392,7 @@ test.describe('My Submissions Dashboard', () => {
     await expect(page.locator('.notification-item.notification-read')).toHaveCount(1);
 
     // Navigate to community screen to verify badge is gone
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await goToCommunity(page);
 
     // Badge should disappear

@@ -12,13 +12,46 @@ test.describe('Community Discovery & Onboarding', () => {
     await expect(page.locator('[data-action="show-community"]')).toBeVisible();
   });
 
-  test('community screen shows browse button, create puzzle hidden by default', async ({ page }) => {
+  test('community screen shows browse button, create puzzle and my submissions hidden by default', async ({ page }) => {
     await page.goto('/');
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await expect(page.locator('[data-action="browse-community"]')).toBeVisible();
     // Create button is hidden when feature flag is off (default)
     await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
+    // My Submissions button is hidden when feature flag is off (default)
+    await expect(page.locator('[data-bind="my-submissions-btn"]')).toBeHidden();
+  });
+
+  test('logged-in user sees no Create or My Submissions when submitPuzzle flag is off', async ({ page, request }) => {
+    const username = uniqueUser();
+    const password = 'testpass123';
+    const ip = `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+
+    // Register via API
+    const res = await request.post('/api/auth/register', {
+      data: { username, password },
+      headers: { 'X-Forwarded-For': ip },
+    });
+    expect(res.ok()).toBeTruthy();
+    const { token } = await res.json();
+
+    // Inject auth into localStorage before page scripts run
+    await page.addInitScript(({ t, u }) => {
+      localStorage.setItem('gwn_auth_token', t);
+      localStorage.setItem('gwn_auth_username', u);
+    }, { t: token, u: username });
+
+    // Navigate without feature flag
+    await page.goto('/');
+    await page.click('[data-action="show-community"]');
+    await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
+
+    // Browse should be visible regardless of flag
+    await expect(page.locator('[data-action="browse-community"]')).toBeVisible();
+    // Create and My Submissions should be hidden when flag is off
+    await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
+    await expect(page.locator('[data-bind="my-submissions-btn"]')).toBeHidden();
   });
 
   test('clicking create puzzle while logged out redirects to auth', async ({ page }) => {
