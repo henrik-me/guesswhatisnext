@@ -269,6 +269,8 @@ function shareResult() {
   return text;
 }
 
+export { shuffle };
+
 export const Game = {
   calculateScore,
   startFreePlay,
