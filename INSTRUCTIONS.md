@@ -274,7 +274,7 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 4. Set `$env:PORT = "300N"` for the assigned slot
 5. Implement the task (commit after each meaningful step with `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer)
 6. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
-7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs)
+7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs). If validation fails, fix and re-run (up to 3 attempts). If stuck, report failure details to the orchestrator and stop.
 8. Push branch and create PR with task ID in title and agent metadata in description
 9. Run local review loop (see § Local Review Loop): launch `code-review` agent with `model=gpt-5.4`, fix issues, push fixes, repeat until clean
 10. **Document local review findings in PR description** (see § Local Review Loop for format)
