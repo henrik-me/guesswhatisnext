@@ -119,6 +119,37 @@ All three must pass. CI runs the same checks for PRs that change application cod
 - Each test suite cleans up after itself — no cross-test contamination
 - E2E tests use a separate server instance on a random port
 
+### Container Validation
+
+Sub-agents should validate changes in Docker containers before merging. The `docker-compose.yml` supports port isolation via `HOST_PORT` env var.
+
+**Port isolation for multi-agent/multi-worktree usage:**
+
+Each agent/worktree can run its own isolated container using a unique `HOST_PORT` and Docker Compose project name (`-p`):
+
+```powershell
+cd <worktree-path>
+$env:HOST_PORT = "<port>"
+docker compose -p <project-name> build
+docker compose -p <project-name> up -d
+# Validate: curl http://localhost:<port>/healthz
+# E2E: $env:BASE_URL = "http://localhost:<port>"; npx playwright test
+docker compose -p <project-name> down
+```
+
+**Port scheme:**
+
+| Agent | wt-1 | wt-2 | wt-3 | wt-4 |
+|-------|------|------|------|------|
+| Main (no suffix) | 4011 | 4012 | 4013 | 4014 |
+| _copilot2 | 4021 | 4022 | 4023 | 4024 |
+| _copilot3 | 4031 | 4032 | 4033 | 4034 |
+| _copilot4 | 4041 | 4042 | 4043 | 4044 |
+
+Project name format: `gwn-<suffix>-wt<N>` (e.g., `gwn-c4-wt1`). Default port (no HOST_PORT) is 3000.
+
+**Note:** 5 E2E tests in community/moderation/my-submissions specs fail in containers due to a pre-existing SYSTEM_API_KEY mismatch (`docker-compose.yml` uses `gwn-dev-system-key`, tests expect `test-system-api-key`). These are known and pre-existing on main.
+
 ---
 
 ## 4. Logging Conventions
