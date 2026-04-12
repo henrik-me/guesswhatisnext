@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-12T18:05Z
+> **Last updated:** 2026-04-12T18:16Z
 
 ## Orchestrators
 
@@ -18,6 +18,7 @@ Orchestrators update this file directly on main — no PR required.
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
+| CS31 | Instructions Optimization | Simplify, remove irrelevant, strengthen weak areas | yoga-gwn-c3 | — | — | — | 2026-04-12 |
 | CS20 | Authentication UX Overhaul | Auth header, multiplayer gating, leaderboard anon | yoga-gwn-c4 | wt-1 | yoga-gwn-c4/cs20-auth-ux-overhaul | — | 2026-04-12 |
 | CS28 | Staging Deployment | Deploy to staging and validate | yoga-gwn-c2 | — | — | — | 2026-04-12 |
 | CS27 | Feature Flag Gating | Fix submitPuzzle UI leakage in community hub | yoga-gwn | wt-1 | yoga-gwn/cs27-feature-flag-gating | — | 2026-04-12 |
