@@ -42,7 +42,9 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done_cs26_public-repo-transition.md) |
 | CS27 | Feature Flag Gating | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs27_feature-flag-gating.md) |
-| CS28 | Local Review Loop | ✅ Complete | 5/5 | [details](project/clickstops/done_cs28_local-review-loop.md) |
+| CS28 | Staging Deployment & Validation | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs28_staging-deployment.md) |
+| CS29 | Production Deployment & Verification | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs29_production-deployment.md) |
+| CS30 | Local Review Loop | ✅ Complete | 5/5 | [details](project/clickstops/done_cs30_local-review-loop.md) |
 
 ---
 
@@ -145,9 +147,9 @@ Repository secured and made public. Branch protection, environment protection (s
 
 ---
 
-## Clickstop CS28 — Local Review Loop
+## Clickstop CS30 — Local Review Loop
 
-Add GPT 5.4 local review as a fast pre-review step (~60s vs 10+ min Copilot polling). Docs-only PRs skip Copilot review; code PRs use both. See [full details](project/clickstops/done_cs28_local-review-loop.md).
+Add GPT 5.4 local review as a fast pre-review step (~60s vs 10+ min Copilot polling). Docs-only PRs skip Copilot review; code PRs use both. See [full details](project/clickstops/done_cs30_local-review-loop.md).
 
 ---
 
