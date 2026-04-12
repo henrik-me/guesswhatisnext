@@ -209,7 +209,7 @@ For parallel work, the project uses **fixed git worktree slots** with task-speci
 git worktree list    # see which branch is in which slot
 ```
 
-Each worktree agent pushes its branch and merges to main remotely. See [INSTRUCTIONS.md](INSTRUCTIONS.md) for full workflow details.
+Each worktree agent pushes its branch and creates a PR. The orchestrating agent merges approved PRs. See [INSTRUCTIONS.md](INSTRUCTIONS.md) for full workflow details.
 
 **Current workflow:** Push branch → create PR → Copilot review → squash-merge to main.
 
