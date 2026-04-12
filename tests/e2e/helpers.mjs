@@ -1,6 +1,18 @@
 // @ts-check
 import { expect } from '@playwright/test';
 
+/** Generate a unique IP to avoid rate-limit collisions across tests and spec files. */
+const ipSeed = ((Date.now() & 0xffff) ^ Math.floor(Math.random() * 0xffff)) >>> 0;
+const ipBaseSecondOctet = (ipSeed % 254) + 1;
+const ipBaseThirdOctet = Math.floor(ipSeed / 256) % 256;
+let ipCounter = 0;
+export function uniqueIP() {
+  const offset = ipCounter++;
+  const thirdOctet = (ipBaseThirdOctet + Math.floor(offset / 254)) % 256;
+  const fourthOctet = (offset % 254) + 1;
+  return `10.${ipBaseSecondOctet}.${thirdOctet}.${fourthOctet}`;
+}
+
 /**
  * Play through one full round: click an option, wait for result, click next-round.
  * Returns true when the game-over screen appears.

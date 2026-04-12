@@ -2679,6 +2679,18 @@ function renderDifficultyStars(difficulty) {
   return '★'.repeat(filled) + '☆'.repeat(3 - filled);
 }
 
+/** Render the empty-state HTML for My Submissions (with optional Create CTA). */
+function renderSubmissionsEmptyState() {
+  const createBtn = isFeatureEnabled('submitPuzzle')
+    ? '<button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>'
+    : '';
+  return `<div class="my-submissions-empty" role="listitem">
+      <div class="my-submissions-empty-icon" aria-hidden="true">📭</div>
+      <p class="my-submissions-empty-text">No submissions yet</p>
+      ${createBtn}
+    </div>`;
+}
+
 /** Render a single submission card. */
 function renderSubmissionCard(submission) {
   const seq = Array.isArray(submission.sequence) ? submission.sequence : [];
@@ -2915,15 +2927,7 @@ async function showMySubmissions() {
     const submissions = data.submissions || [];
     mySubmissionsCache = submissions;
     if (submissions.length === 0) {
-      const createBtn = isFeatureEnabled('submitPuzzle')
-        ? '<button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>'
-        : '';
-      container.innerHTML = `
-        <div class="my-submissions-empty" role="listitem">
-          <div class="my-submissions-empty-icon" aria-hidden="true">📭</div>
-          <p class="my-submissions-empty-text">No submissions yet</p>
-          ${createBtn}
-        </div>`;
+      container.innerHTML = renderSubmissionsEmptyState();
       return;
     }
 
@@ -3136,15 +3140,7 @@ async function confirmDeleteSubmission(submissionId) {
         // If no cards remain, show empty state
         const container = document.querySelector('[data-bind="my-submissions-list"]');
         if (container && !container.querySelector('.submission-card')) {
-          const createBtn = isFeatureEnabled('submitPuzzle')
-            ? '<button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>'
-            : '';
-          container.innerHTML = `
-            <div class="my-submissions-empty" role="listitem">
-              <div class="my-submissions-empty-icon" aria-hidden="true">📭</div>
-              <p class="my-submissions-empty-text">No submissions yet</p>
-              ${createBtn}
-            </div>`;
+          container.innerHTML = renderSubmissionsEmptyState();
         }
       };
       card.classList.add('card-removing');
