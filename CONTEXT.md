@@ -7,7 +7,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 - **Completed clickstop archives:** [project/clickstops/](project/clickstops/)
 - **Development guidelines:** [INSTRUCTIONS.md](INSTRUCTIONS.md)
 
-> **Last updated:** 2026-04-10
+> **Last updated:** 2026-04-12
 
 ---
 
