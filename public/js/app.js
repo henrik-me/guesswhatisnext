@@ -624,10 +624,12 @@ function init() {
         }
         break;
       case 'show-my-submissions':
-        if (isLoggedIn()) {
+        if (!isLoggedIn()) {
+          showScreen('auth');
+        } else if (isFeatureEnabled('submitPuzzle')) {
           showMySubmissions();
         } else {
-          showScreen('auth');
+          showToast('Submissions are not enabled for your account yet');
         }
         break;
       case 'toggle-reviewer-notes': {
@@ -1224,8 +1226,8 @@ function updateCommunityAuthDisplay() {
 
   // Create Puzzle is gated behind submitPuzzle flag (visible only when flag is on)
   if (createBtn) createBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
-  // My Submissions requires login
-  if (mySubBtn) mySubBtn.style.display = isLoggedIn() ? '' : 'none';
+  // My Submissions requires login AND submitPuzzle flag
+  if (mySubBtn) mySubBtn.style.display = (isLoggedIn() && isFeatureEnabled('submitPuzzle')) ? '' : 'none';
   // Moderation requires admin/system role
   if (modBtn) {
     modBtn.style.display = (isLoggedIn() && (authRole === 'admin' || authRole === 'system')) ? '' : 'none';
@@ -2913,11 +2915,14 @@ async function showMySubmissions() {
     const submissions = data.submissions || [];
     mySubmissionsCache = submissions;
     if (submissions.length === 0) {
+      const createBtn = isFeatureEnabled('submitPuzzle')
+        ? '<button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>'
+        : '';
       container.innerHTML = `
         <div class="my-submissions-empty" role="listitem">
           <div class="my-submissions-empty-icon" aria-hidden="true">📭</div>
           <p class="my-submissions-empty-text">No submissions yet</p>
-          <button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>
+          ${createBtn}
         </div>`;
       return;
     }
@@ -3131,11 +3136,14 @@ async function confirmDeleteSubmission(submissionId) {
         // If no cards remain, show empty state
         const container = document.querySelector('[data-bind="my-submissions-list"]');
         if (container && !container.querySelector('.submission-card')) {
+          const createBtn = isFeatureEnabled('submitPuzzle')
+            ? '<button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>'
+            : '';
           container.innerHTML = `
             <div class="my-submissions-empty" role="listitem">
               <div class="my-submissions-empty-icon" aria-hidden="true">📭</div>
               <p class="my-submissions-empty-text">No submissions yet</p>
-              <button class="btn btn-primary" data-action="create-puzzle">Create your first puzzle →</button>
+              ${createBtn}
             </div>`;
         }
       };
