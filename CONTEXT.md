@@ -40,6 +40,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS23 | Documentation Review | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
+| CS26 | Public Repository Transition | ⬜ Planned | 0/10 | [details](project/clickstops/planned_cs26_public-repo-transition.md) |
 
 ---
 
@@ -133,6 +134,12 @@ E2E browser tests against Docker MSSQL stack. Deferred from CS19-4. See [full de
 ## Clickstop CS24 — Custom Domain (gwn.metzger.dk)
 
 Configure `gwn.metzger.dk` as the production custom domain. DNS, Azure custom domain binding, managed TLS certificate, and deploy variable updates. See [full details](project/clickstops/planned_cs24_custom-domain.md).
+
+---
+
+## Clickstop CS26 — Public Repository Transition
+
+Secure the repository (branch protection, environment protection, action pinning, CODEOWNERS enforcement) and make it public. Ensure only the owner can deploy, approve PRs, and modify CI/CD config. External contributors via fork PRs only. See [full details](project/clickstops/planned_cs26_public-repo-transition.md).
 
 ---
 
