@@ -90,24 +90,26 @@ body::before {
    Auth Top Bar
    =========================== */
 .auth-top-bar {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  z-index: 100;
   display: flex;
-  justify-content: flex-end;
   align-items: center;
-  padding: 0.5rem 0;
-  min-height: 2rem;
-  flex-shrink: 0;
 }
 
 .auth-top-bar-logged-out,
 .auth-top-bar-logged-in {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
-.btn-auth-bar {
-  font-size: 0.8rem;
-  padding: 0.3rem 0.75rem;
+.btn.btn-auth-bar {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.6rem;
+  width: auto;
+  max-width: none;
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
@@ -116,42 +118,38 @@ body::before {
   transition: all 0.2s;
 }
 
-.btn-auth-bar:hover {
+.btn.btn-auth-bar:hover {
   background: var(--color-surface-hover);
   border-color: var(--color-primary);
 }
 
-.btn-auth-bar-register {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #fff;
-}
-
-.btn-auth-bar-register:hover {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-}
-
-.btn-auth-bar-logout {
+.btn.btn-auth-bar.btn-auth-bar-logout {
   background: var(--color-surface);
   color: var(--color-text-muted);
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
 }
 
-.btn-auth-bar-logout:hover {
+.btn.btn-auth-bar.btn-auth-bar-logout:hover {
   background: var(--color-danger, #e74c3c);
   color: #fff;
   border-color: var(--color-danger, #e74c3c);
 }
 
-.auth-bar-username {
+.auth-bar-user-icon {
   font-size: 0.85rem;
+  line-height: 1;
+}
+
+.auth-bar-username {
+  font-size: 0.75rem;
   color: var(--color-text);
   background: none;
   border: none;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
-  padding: 0.25rem 0.5rem;
+  padding: 0.15rem 0.3rem;
   transition: color 0.2s;
 }
 
@@ -2195,6 +2193,30 @@ body::before {
   gap: 0.75rem;
   align-items: center;
   margin-top: 0.25rem;
+}
+
+.auth-toggle-text {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.auth-toggle-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0;
+  font-family: var(--font-main);
+  transition: color 0.2s;
+}
+
+.auth-toggle-link:hover {
+  color: var(--color-primary-hover);
 }
 
 /* ===========================
