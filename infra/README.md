@@ -250,10 +250,12 @@ Production uses a custom domain: **gwn.metzger.dk**
 
 Two DNS records are required before binding the custom domain in Azure:
 
-| Type | Name | Value |
+| Type | Host (zone-relative) | Value |
 |------|------|-------|
-| CNAME | `gwn.metzger.dk` | `gwn-production.<env-id>.<region>.azurecontainerapps.io` |
-| TXT | `asuid.gwn.metzger.dk` | Domain verification ID from Azure (`az containerapp show --query "properties.customDomainVerificationId"`) |
+| CNAME | `gwn` | `gwn-production.<env-id>.<region>.azurecontainerapps.io` |
+| TXT | `asuid.gwn` | Domain verification ID from Azure (`az containerapp show --query "properties.customDomainVerificationId"`) |
+
+> **Note:** Some DNS providers expect zone-relative hostnames (e.g. `gwn` in the `metzger.dk` zone), others expect FQDNs (`gwn.metzger.dk`). Use whichever format your provider requires.
 
 ### Binding the Domain
 
