@@ -5,7 +5,9 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 - After every `git pull` → re-read this checklist; if INSTRUCTIONS.md changed, re-read fully
 - Never do implementation work in main checkout — dispatch to worktree sub-agents
-- Update WORKBOARD.md immediately on task claim/complete — commit AND push
+- Never modify files related to another agent's active task — check WORKBOARD.md first
+- Maximize parallelism — dispatch independent tasks simultaneously
+- Update WORKBOARD.md immediately on task claim/complete — commit AND push (use ISO datetime: `2026-04-12T18:27Z`)
 - Only modify your own rows in WORKBOARD.md Active Work
 - Check CS number conflicts before creating new clickstops
 - Commit clickstop plan file to main BEFORE starting implementation work
@@ -14,6 +16,9 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Run local review loop (GPT 5.4) before Copilot review — skip Copilot for docs-only PRs
 - Report progress to user after dispatching agents — never go silent
 - Commit after each meaningful step — don't batch unrelated changes
+- Record local review findings in PR description
+- Do not remove task from WORKBOARD.md until PR is merged and task is fully complete
+- When removing content from INSTRUCTIONS.md, ensure it lands in CONTEXT.md or README.md — no information loss
 
 ---
 
@@ -27,87 +32,7 @@ For clickstops, task plans, detailed test specifications, tool evaluations, and 
 
 ## 1. Architecture Principles
 
-### Software Architecture
-
-```
-guesswhatisnext/
-├── public/                         # Client (served as static files)
-│   ├── index.html                  # Game shell — 16 screens (SPA)
-│   ├── css/style.css               # Styling, responsive, animations, themes
-│   ├── js/
-│   │   ├── app.js                  # Entry point, screen nav, auth, multiplayer UI
-│   │   ├── game.js                 # Core game engine (scoring, timer, rounds)
-│   │   ├── puzzles.js              # Client-side puzzle data
-│   │   ├── daily.js                # Date-seeded daily challenge logic
-│   │   ├── storage.js              # LocalStorage persistence
-│   │   └── audio.js                # Web Audio API sound effects
-│   └── img/                        # SVG image assets for puzzles
-│       ├── shapes/                 # Triangle, square, pentagon, hexagon, etc.
-│       └── colors/                 # Color circles (red → purple)
-├── server/
-│   ├── index.js                    # Entry point: telemetry init, config, server bootstrap
-│   ├── app.js                      # Express app factory, middleware, route wiring
-│   ├── puzzleData.js               # Server-side puzzle pool (multiplayer)
-│   ├── routes/                      # Route modules
-│   │   ├── achievements.js         # Achievement API routes
-│   │   ├── auth.js                 # Register, login, JWT tokens
-│   │   ├── features.js             # Feature flag status endpoint
-│   │   ├── matches.js              # Room create/join + match history
-│   │   ├── notifications.js        # Notifications API routes
-│   │   ├── puzzles.js              # Puzzle API
-│   │   ├── scores.js               # Score submission + leaderboards
-│   │   ├── submissions.js          # User-submitted puzzles
-│   │   ├── telemetry.js            # Client telemetry ingestion
-│   │   └── users.js                # User profiles + management
-│   ├── ws/matchHandler.js          # WebSocket match engine (2–10 players)
-│   ├── db/
-│   │   ├── index.js                # DB factory (auto-selects SQLite or MSSQL via DATABASE_URL)
-│   │   ├── base-adapter.js         # Abstract async adapter interface
-│   │   ├── sqlite-adapter.js       # SQLite adapter (local dev, tests)
-│   │   ├── mssql-adapter.js        # MSSQL/Azure SQL adapter with SQL rewriting
-│   │   ├── migrations/             # Versioned schema migrations (dialect-aware)
-│   │   └── connection.js           # DB init + seeding
-│   └── middleware/auth.js          # JWT + API key verification middleware
-├── data/                           # SQLite database (local dev, git-ignored)
-├── Dockerfile                      # Production container image
-├── docker-compose.yml              # Local container dev (SQLite)
-├── docker-compose.mssql.yml        # MSSQL validation stack (SQL Server + HTTPS)
-├── .github/workflows/              # CI, deploy, load-test, and health-monitor workflows
-├── scripts/                        # Local health-check scripts (sh + ps1)
-├── infra/                          # Azure deployment (deploy.sh + README)
-├── eslint.config.mjs              # ESLint flat config
-├── package.json
-├── INSTRUCTIONS.md                 # This file
-├── CONTEXT.md                      # Project plan & status tracker
-└── README.md                       # User & developer documentation
-```
-
-### System Architecture
-
-```
-  Browser (Client)                     Server (Node.js)
- ┌─────────────────┐               ┌──────────────────────┐
- │  index.html     │               │  Express (port 3000)  │
- │  ┌───────────┐  │   HTTP/REST   │  ┌────────────────┐  │
- │  │  app.js   │──┼──────────────▶│  │ Routes (API)   │  │
- │  │  game.js  │  │               │  │ auth, scores,  │  │
- │  │  daily.js │  │   WebSocket   │  │ matches, puzzles│  │
- │  │ puzzles.js│  │◀─────────────▶│  └───────┬────────┘  │
- │  │ storage.js│  │               │          │           │
- │  └───────────┘  │               │  ┌───────▼────────┐  │
- │  LocalStorage   │               │  │ DB Adapter      │  │
- └─────────────────┘               │  │ SQLite / MSSQL  │  │
-                                   │  └────────────────┘  │
-                                   │  ┌────────────────┐  │
-                                   │  │ WebSocket (ws)  │  │
-                                   │  │ matchHandler.js │  │
-                                   │  └────────────────┘  │
-                                   └──────────────────────┘
-```
-
-### Deployment Architecture
-
-See the deployment architecture diagram in [CONTEXT.md § Deployment Architecture](CONTEXT.md#deployment-architecture).
+For architecture diagrams and codebase structure, see [README.md](README.md) and [CONTEXT.md](CONTEXT.md).
 
 ### Separation of Concerns
 - **Game engine** (`game.js`) handles logic only — no DOM manipulation
@@ -174,84 +99,19 @@ The project uses a central feature-flag module for staged rollouts. The client m
 ### Comments
 - **Do** comment: non-obvious algorithms, scoring formulas, date-seed logic
 - **Don't** comment: obvious code, getters/setters, self-describing function names
-- Use JSDoc for public function signatures:
-  ```js
-  /**
-   * Calculate the score for a round.
-   * @param {boolean} correct - Whether the answer was correct
-   * @param {number} timeMs - Time taken to answer in milliseconds
-   * @param {number} streak - Current streak count
-   * @returns {object} { points, speedBonus, multiplier, total }
-   */
-  function calculateScore(correct, timeMs, streak) { ... }
-  ```
+- Use JSDoc for public function signatures (see existing code for examples)
 
 ---
 
 ## 3. Testing Strategy
 
-### Coverage Targets
-
-| Category | Target | Measured By |
-|---|---|---|
-| **Unit tests** | ≥ 90% line coverage on game logic, scoring, auth, DB helpers | Vitest with `--coverage` |
-| **API / integration tests** | 100% of endpoints with success + error cases | supertest |
-| **WebSocket tests** | All message types (join, answer, roundResult, gameOver, reconnect) | ws client in tests |
-| **E2E tests** | All critical user flows | Playwright |
-| **Overall** | ≥ 80% line coverage across the project | `npm run test:coverage` |
-
 Tests **must pass** before any merge to `main`. The **full validation suite** is:
-
-1. **Lint:** `npm run lint` — ESLint with zero errors (warnings capped at 50)
-2. **Unit + integration tests:** `npm test` — Vitest, all must pass
-3. **E2E tests:** `npm run test:e2e` — Playwright browser tests
-
-CI runs all three in parallel on PRs that change application code (non-docs changes). Agents must run the full suite locally before pushing.
-
-### Test Framework & Tools
-
-
-**Test isolation model:**
-Each test file gets its own:
-- **Temp directory** — created via `fs.mkdtempSync()`, cleaned up in `afterAll`
-- **SQLite database** — via `GWN_DB_PATH` env var pointing to temp dir
-- **Express server** — listening on port 0 (OS-assigned random port)
-- **supertest agent** — bound to that server instance
-
-This means tests can run in parallel with zero cross-contamination, and worktree
-agents can each run `npm test` independently without port or DB conflicts.
-
-**Tools:**
-- **Vitest** — Unit + integration test runner (fast, native ESM, built-in coverage)
-- **supertest** — HTTP API testing without starting the server
-- **Playwright** — Browser-based E2E tests (cross-browser, headless)
-- **@vitest/coverage-v8** — Coverage reporting
-
-**npm scripts:**
-```json
-{
-  "test": "vitest run",
-  "test:watch": "vitest",
-  "test:coverage": "vitest run --coverage",
-  "test:e2e": "playwright test",
-  "test:all": "vitest run && playwright test",
-  "lint": "eslint . --max-warnings 50"
-}
-```
-
-### Test Runner
-
-Tests use Vitest with supertest for API and ws for WebSocket testing. Run with `npm test`. Each suite gets an isolated temp database and random port. Tests are safe to run in parallel across worktrees.
-
-### Validation Before Pushing
-
-Run the full validation sequence before pushing a branch:
 
 ```bash
 npm run lint && npm test && npm run test:e2e
 ```
 
-All three must pass. CI runs the same checks for PRs that trigger the workflow; docs-only changes may be skipped.
+All three must pass. CI runs the same checks for PRs that change application code; docs-only changes may be skipped.
 
 ### Test Data Management
 - Tests use an **isolated temp-directory SQLite database** via `GWN_DB_PATH` — never the real `data/game.db`
@@ -265,17 +125,6 @@ All three must pass. CI runs the same checks for PRs that trigger the workflow; 
 
 The project uses **Pino** for structured JSON logging (`server/logger.js` singleton). All server code must use the logger — never `console.*` (except in `config.js` and the early bootstrap path in `telemetry.js`, where the logger is not yet available due to load order).
 
-### Log Levels
-
-| Level | When to use | Example |
-|---|---|---|
-| `fatal` | Process is about to crash — unrecoverable errors | Uncaught exception handler, out-of-memory |
-| `error` | Operation failed and could not be recovered | 5xx response, DB write failure, WebSocket crash |
-| `warn` | Handled anomaly that deserves attention | 4xx client error, rate limit hit, auth failure, deprecated usage |
-| `info` | Normal operational events worth recording | Server start, DB initialized, user registered, match created |
-| `debug` | Diagnostic detail useful during development | Route handler entry/exit, cache hit/miss, query timing |
-| `trace` | Ultra-verbose, rarely enabled | Full request/response bodies, internal state dumps |
-
 **Defaults per environment:**
 - **development:** `debug` (with pino-pretty for human-readable output)
 - **test:** `silent` (suppress all output during test runs)
@@ -288,72 +137,22 @@ Always pass a context object as the **first** argument to log methods, followed 
 
 ```js
 logger.info({ userId, matchId, rounds: 5 }, 'Match created');
-logger.warn({ err, status: 429, ip: req.ip }, 'Rate limit exceeded');
 logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled request error');
 ```
 
-**What to include in context objects:**
-- `err` — the Error instance (Pino serialises it with message + stack automatically)
-- `userId` / `username` — who triggered the event
-- `matchId` / `roomCode` — relevant entity identifiers
-- `method`, `url`, `status` — HTTP request context
-- `requestId` — from `req.id` (assigned by pino-http)
-- `remoteAddress` — `req.ip` for rate-limiting / abuse tracking (logged per-request, not stored long-term)
-- Duration/timing values for performance-sensitive operations
-
 ### Sensitive Data Handling
 
-**Redacted automatically** (via Pino `redact` config with `remove: true`):
-- `req.headers.authorization`
-- `req.headers.cookie`
-- `req.headers["x-api-key"]`
-- `req.headers["x-access-token"]`
-- `res.headers["set-cookie"]`
-
 **Never log these manually:**
-- Passwords, password hashes, or JWT secrets
-- Full JWT tokens (log a truncated prefix if needed for debugging)
+- Passwords, password hashes, JWT secrets, or full JWT tokens
 - Database connection strings
 - Raw request bodies that may contain user credentials
 - PII beyond username (no email, no IP addresses persisted to database, etc.)
 
-### Trace ID Correlation
-
-When OpenTelemetry is active (staging/production), the Pino mixin automatically attaches `trace_id` and `span_id` (snake_case) to each log entry via the OTel context. This allows correlating logs with distributed traces in Azure Monitor / Application Insights.
-
-- In development: no trace IDs by default (OTel SDK only activates when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set)
-- In staging/production: trace IDs appear automatically on every request-scoped log line (connection string is always set)
-- Manual log calls outside request scope won't have trace IDs unless you explicitly propagate context
-- The bootstrap only enables the HTTP and Express instrumentations; startup/shutdown failures are reported via the early console bootstrap path instead of surfacing as unhandled promise rejections
-
-### Client Error Reporting
-
-The `POST /api/telemetry/errors` endpoint accepts client-side errors (no auth required):
-- Rate limited: 10 requests/minute per IP
-- Required field: `message` (string)
-- Optional fields: `type`, `source`, `lineno`, `colno`, `stack`
-- Missing, empty, or non-JSON bodies return `400` with a validation error instead of throwing
-- Logged at `warn` level with `{ component: 'client' }` context
-- Authenticated requests include `userId` in the log entry
-- Client JS hooks: `window.onerror` and `unhandledrejection` handlers report errors (max 10 per minute, sliding window)
-
-### Request Logging
-
-Pino-http middleware logs every request/response automatically, with these exceptions (auto-logging ignore list):
-- `/api/health` and `/healthz` — health probes (too noisy)
-- `/api/telemetry/*` — telemetry endpoints (avoid recursion)
-- Static file extensions (`.css`, `.js`, `.map`, `.ico`, `.png`, etc.)
-
-In test mode, auto-logging is fully disabled to keep test output clean.
+Pino `redact` config automatically removes `authorization`, `cookie`, `x-api-key`, `x-access-token`, and `set-cookie` headers from logs.
 
 ---
 
 ## 5. Git Workflow
-
-### Repository Setup
-- Initialize with `git init` at project root
-- `.gitignore` configured for Node.js, OS files, and database files
-- Main branch: `main`
 
 ### Commit Conventions
 Use **conventional commits** for clear, parseable history:
@@ -471,35 +270,22 @@ Sub-agents are responsible for:
 
 This keeps `main` clean and ensures implementation changes flow through PRs. (Clickstop plan files and WORKBOARD.md are the exceptions — those are committed directly on `main` by the orchestrator.)
 
-**Sub-Agent Briefing Requirements:**
-
-When the orchestrator launches a sub-agent, the prompt **MUST** include all of the following:
-
-1. **Read instructions first:** Every sub-agent prompt must start with: "Read INSTRUCTIONS.md in the repository root before starting any work."
-2. **Task description:** Clear, complete description including task ID (e.g., CS11-64), acceptance criteria, affected files, and edge cases.
-3. **Worktree context:** Which slot (`wt-N`), branch name using `{agent-id}/{task-id}-{description}` format, and port number (`300N`).
-4. **Validation command:** `npm run lint && npm test && npm run test:e2e`
-5. **PR workflow:** Create PR with task ID in title (e.g., `cs11-64: description`), include agent metadata block in description. Run local review loop, then request Copilot review for code/config PRs (skip Copilot for docs-only PRs — see § Local Review Loop).
-6. **Commit conventions:** Use `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer in all commits. Conventional commit format with task scope (e.g., `feat(cs11-64): description`).
-7. **Review loop reminder:** For code/config PRs, reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments. Docs-only PRs skip Copilot review.
-8. **Failure handling:** If validation fails, fix and re-run (up to 3 attempts). If stuck, report failure details to the orchestrator and stop.
-9. **Merge conflicts:** Before pushing, rebase onto `origin/main`. Resolve conflicts in the worktree branch and re-run validation.
-
-**Sub-Agent Checklist** (include verbatim in every sub-agent prompt — this is the execution plan the sub-agent follows, complementing the Briefing Requirements above which define what context the orchestrator must provide):
+**Sub-Agent Checklist** (include verbatim in every sub-agent prompt — the orchestrator must provide: task ID, acceptance criteria, worktree slot, branch name, port, and edge cases):
 1. Read INSTRUCTIONS.md in the repository root before starting any work
 2. Read WORKBOARD.md for current project context and active work
 3. Run `npm install` in worktree
 4. Set `$env:PORT = "300N"` for the assigned slot
 5. Implement the task (commit after each meaningful step with `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer)
 6. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
-7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs)
+7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs). If validation fails, fix and re-run (up to 3 attempts). If stuck, report failure details to the orchestrator and stop.
 8. Push branch and create PR with task ID in title and agent metadata in description
 9. Run local review loop (see § Local Review Loop): launch `code-review` agent with `model=gpt-5.4`, fix issues, push fixes, repeat until clean
-10. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per § Waiting for Copilot Review
-11. **For docs-only PRs:** Skip Copilot review — local review is sufficient
-12. Address all review comments (reply + fix + resolve threads)
-13. Re-request review and repeat until clean (code PRs only)
-14. Report completion with PR number and summary
+10. **Document local review findings in PR description** (see § Local Review Loop for format)
+11. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per § Waiting for Copilot Review
+12. **For docs-only PRs:** Skip Copilot review — local review is sufficient
+13. Address all review comments (reply + fix + resolve threads)
+14. Re-request review and repeat until clean (code PRs only)
+15. Report completion with PR number and summary
 
 **Model selection:** GPT models require more explicit procedural prompting for workflow steps (e.g., review loop polling). Always include the full Sub-Agent Checklist when dispatching GPT-based sub-agents. Claude models better internalize workflow instructions from high-level descriptions. See LEARNINGS.md for detailed model evaluation results and task-specific recommendations.
 
@@ -529,7 +315,7 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 - **Worktree tasks** (code changes, tests, PRs): bounded by worktree slots wt-1 through wt-4. Each needs a git worktree, a unique port, and `npm install`.
 - **Non-worktree tasks** (research, investigation, session queries, planning, analysis): not bounded by worktree slots. These run as non-worktree background agents without consuming a worktree slot. No port or npm install needed.
 
-The orchestrator should maximize parallelism by running non-worktree tasks concurrently with worktree tasks. There is no fixed limit on non-worktree background tasks.
+The orchestrator must maximize parallelism by running non-worktree tasks concurrently with worktree tasks. There is no fixed limit on non-worktree background tasks.
 
 **Agent setup:** Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
 
@@ -640,12 +426,16 @@ Unlike most project files, WORKBOARD.md is updated by orchestrating agents direc
 
 **Update frequency:** Orchestrators should update WORKBOARD.md often — at minimum on task start, task complete, and session start/end. Between those events, update whenever meaningful progress occurs (e.g., PR created, review round complete).
 
+**Timestamps:** Use ISO 8601 format with time in the "Started" column and "Last updated" header: `2026-04-12T18:27Z` (not just `2026-04-12`). Time precision matters when multiple agents claim tasks on the same day.
+
 **Task locking:** When a task appears in Active Work assigned to an agent ID, no other orchestrator may pick up that task. The assignment is a lock. If an orchestrator crashes or stops working:
 - The task remains assigned in WORKBOARD.md
 - When that orchestrator restarts, it reads WORKBOARD.md, finds its assigned tasks, and resumes work
 - There is no automated process for reassigning stalled tasks — a human must manually update WORKBOARD.md to release the lock if an orchestrator is permanently unavailable
 
 **Row ownership:** Each orchestrator may only modify its own rows in Active Work. When completing a task, remove only your own row — never edit or remove another agent's entries. When adding a task, append a new row without altering existing rows.
+
+**Task ownership extends to files:** Never modify, rename, or interact with files related to another agent's active task. Before making changes, check WORKBOARD.md Active Work to ensure no other agent owns that clickstop or file. If a merge conflict involves another agent's files, keep their content unchanged (additive merge).
 
 **Clickstop assignment:** An entire clickstop can be assigned to one orchestrator. When a clickstop is assigned, all tasks within it belong to that orchestrator. Other orchestrators must not pick up individual tasks from an assigned clickstop unless explicitly released.
 
@@ -715,6 +505,18 @@ Before requesting Copilot PR review, sub-agents **must** run a local review loop
 3. Re-run the local review until clean (no issues found)
 4. **Then** proceed to Copilot review or skip, based on PR type:
 
+**Documenting review findings:**
+After each local review round, update the PR description with a log of findings and fixes:
+```
+### Local Review Log
+| Round | Finding | Fix |
+|-------|---------|-----|
+| 1 | CONTEXT.md workflow text still says "pre-branch-protection" | Fixed in [`abc1234`](commit-url) |
+| 2 | CS26-8 references WORKBOARD.md instead of INSTRUCTIONS.md | Fixed in [`def5678`](commit-url) |
+| 3 | Clean — no issues found | — |
+```
+This preserves the review audit trail in the PR for future reference.
+
 **PR type determines Copilot review requirement:**
 
 | PR Type | Local Review | Copilot Review | Rationale |
@@ -745,32 +547,14 @@ Requesting review (requires gh CLI ≥ 2.88.0): `gh pr edit <PR#> --add-reviewer
 
 **Waiting for Copilot Review (CRITICAL):**
 
-After requesting review with `gh pr edit <PR#> --add-reviewer "@copilot"`, Copilot takes **2–5 minutes** to post its review. You **MUST** wait for the review to appear before proceeding. Do not assume an empty review list means approval — it means Copilot hasn't responded yet.
-
-Polling procedure:
-1. Record the current review count before requesting (re-)review:
-   ```powershell
-   $reviewCountBefore = gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
-   ```
-2. Request review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-3. Wait 60 seconds: `Start-Sleep -Seconds 60`
-4. Check if a new review has been posted:
-   ```powershell
-   $reviewCountAfter = gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
-   ```
-5. If `$reviewCountAfter` is greater than `$reviewCountBefore`, a new review exists — proceed to read comments
-6. If the count has not incremented, repeat from step 3 (up to **10 times** — 10 minutes total)
-7. After 10 attempts, report a timeout to the orchestrating agent
-
-Check the latest review state:
+After requesting review, Copilot takes **2–5 minutes** to post its review. **DO NOT** assume an empty review list means approval — it means Copilot hasn't responded yet. Poll every 60 seconds, up to 10 times (10 minutes total). After 10 attempts, report a timeout to the orchestrating agent. Compare Copilot review count before/after using:
+```powershell
+gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | length'
+```
+Check latest review state (`APPROVED`, `CHANGES_REQUESTED`, or `COMMENTED`):
 ```powershell
 gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer")] | last | .state'
 ```
-- `APPROVED` — Copilot is satisfied, PR is ready to merge
-- `CHANGES_REQUESTED` — read the review comments and address them
-- `COMMENTED` — informational feedback, review the comments
-
-**DO NOT** conclude "no review comments" without first confirming a new Copilot review has been posted after your most recent push. A missing review means Copilot hasn't responded yet — not that there are no comments.
 
 **Replying to review comments (REST API):**
 ```powershell
@@ -803,27 +587,9 @@ gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THRE
 - ⚠️ Tasks that both modify `matchHandler.js` should be sequential
 - ❌ Never parallelize two tasks that both rewrite the same function
 
-### Deployment Environments
-| Environment | Trigger | Approval | Infrastructure | Rollback |
-|---|---|---|---|---|
-| **Local (SQLite)** | `npm start` or `docker compose up` | None | Developer machine | N/A |
-| **Local (MSSQL)** | `npm run docker:mssql` | None | Docker (SQL Server 2022 + Caddy HTTPS) | N/A |
-| **Ephemeral staging** | Push to main + workflow_dispatch (gated by `STAGING_AUTO_DEPLOY`) | Automatic | GitHub Actions (container in workflow) | N/A (ephemeral) |
-| **Azure staging** | After ephemeral validation passes | Manual (GitHub Environment reviewers) | Azure Container Apps (Consumption) — gwn-staging | Redeploy previous SHA-tagged image |
-| **Production** | After Azure staging smoke tests pass | Manual (GitHub Environment reviewers) | Azure Container Apps + Azure SQL | Auto-rollback to previous SHA-tagged image |
+For deployment environments, CI/CD pipeline, and rollback policy, see [CONTEXT.md](CONTEXT.md) and [README.md](README.md).
 
-### CI/CD Pipeline Overview
-
-**PR checks (ci.yml):** Lint, test, and E2E checks run on every pull request. No Docker build — fast feedback.
-
-**Push to `main`:** Does **not** trigger any deployment. All deployments flow through the staging pipeline first.
-
-### Rollback Policy
-- Docker images are tagged with git SHA (`ghcr.io/henrik-me/guesswhatisnext:<sha>`) — every version is recoverable
-- Post-deploy verification runs health check + smoke tests against production
-- On failure: auto-rollback to previous image tag + GitHub issue created with `deployment-failure` label
-- Manual rollback available via `az containerapp update --image <previous-tag>`
-- **Database migrations must be backward-compatible** (additive only: new columns with defaults, new tables) to ensure rollback safety
+**Database migrations must be backward-compatible** (additive only: new columns with defaults, new tables) to ensure rollback safety.
 
 ---
 
