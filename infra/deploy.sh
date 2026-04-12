@@ -598,9 +598,11 @@ fi
 # After binding, update the GitHub repo settings:
 #   PROD_URL secret       → https://gwn.metzger.dk
 #
-# Note: re-running this script recomputes PROD_URL from the Azure FQDN.
-# To preserve the custom domain, set PRODUCTION_CANONICAL_HOST=gwn.metzger.dk
-# in the environment before running, or restore PROD_URL manually afterward.
+# Note: re-running this script recomputes PROD_URL from the Azure FQDN
+# and may overwrite the PROD_URL GitHub secret with that Azure hostname.
+# Until this script supports overriding PROD_URL for a custom domain,
+# restore PROD_URL manually after re-running if you want to keep using
+# the custom domain in production deploys.
 # ────────────────────────────────────────────────────────────────────────────
 
 echo ""

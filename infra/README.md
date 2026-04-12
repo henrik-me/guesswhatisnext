@@ -253,7 +253,7 @@ Two DNS records are required before binding the custom domain in Azure:
 | Type | Host (zone-relative) | Value |
 |------|------|-------|
 | CNAME | `gwn` | `gwn-production.<env-id>.<region>.azurecontainerapps.io` |
-| TXT | `asuid.gwn` | Domain verification ID from Azure (`az containerapp show --query "properties.customDomainVerificationId"`) |
+| TXT | `asuid.gwn` | Domain verification ID from Azure (`az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.customDomainVerificationId" -o tsv`) |
 
 > **Note:** Some DNS providers expect zone-relative hostnames (e.g. `gwn` in the `metzger.dk` zone), others expect FQDNs (`gwn.metzger.dk`). Use whichever format your provider requires.
 
@@ -293,7 +293,7 @@ After custom domain binding, update the GitHub repository secret for the product
 
 The production `CANONICAL_HOST` env var is derived from `PROD_URL` by the production deploy workflow — there is no separate repo variable for it. The repo-level `CANONICAL_HOST` variable controls **staging** only and should keep the staging Azure FQDN.
 
-> **Note:** Re-running `infra/deploy.sh` or `infra/deploy.ps1` will reset `PROD_URL` to the Azure FQDN unless you override it. To preserve the custom domain, set `PRODUCTION_CANONICAL_HOST=gwn.metzger.dk` in the environment before running the script, or manually restore `PROD_URL` afterward.
+> **Note:** Re-running `infra/deploy.sh` or `infra/deploy.ps1` will reset the GitHub `PROD_URL` secret to the Azure FQDN. Setting `PRODUCTION_CANONICAL_HOST=gwn.metzger.dk` before running the script affects only the production container app's `CANONICAL_HOST`; it does **not** preserve the `PROD_URL` secret. After the script finishes, manually restore `PROD_URL` to `https://gwn.metzger.dk` if you want GitHub Actions to keep using the custom domain.
 
 ### Backward Compatibility
 
