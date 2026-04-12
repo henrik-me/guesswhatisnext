@@ -8,6 +8,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Update WORKBOARD.md immediately on task claim/complete — commit AND push
 - Only modify your own rows in WORKBOARD.md Active Work
 - Check CS number conflicts before creating new clickstops
+- Commit clickstop plan file to main BEFORE starting implementation work
 - Deferred tasks → must create new `planned_` clickstop (never silently drop)
 - Sub-agent prompts must include full Sub-Agent Checklist verbatim
 - Poll for Copilot review — never assume empty reviews = approved
@@ -552,6 +553,13 @@ The orchestrator should maximize parallelism by running non-worktree tasks concu
 #### Task IDs
 Format: `CS<clickstop#>-<task#>` (e.g., `CS11-64`, `CS14-82`). Used in branch names, commit messages, PR titles, and WORKBOARD.md.
 
+**CS number allocation:** Before assigning a new clickstop number, verify the number is not already taken by checking BOTH:
+1. **Existing clickstop files:** `ls project/clickstops/` — check all `planned_`, `active_`, and `done_` files for the highest CS number
+2. **WORKBOARD.md Active Work:** Another agent may have just claimed a CS number but not yet committed the plan file — check Active Work for any CS numbers in use
+3. **CONTEXT.md clickstop summary table:** Cross-reference the summary table for any CS numbers added by other agents
+
+Use the next number after the highest found across all three sources. If in doubt, use a higher number — gaps in CS numbering are harmless, collisions cause real problems.
+
 #### Task Statuses
 - ⬜ Pending — not started, may have unmet dependencies
 - 🔜 Ready — dependencies met, can be picked up
@@ -681,7 +689,7 @@ Each clickstop gets a detail file in `project/clickstops/` with a status prefix:
 
 **Lifecycle transitions:**
 
-1. **New clickstop defined** → create `planned_{cs-id}_{kebab-name}.md` with task table and design notes. Add a summary row to the CONTEXT.md clickstop summary table linking to the file.
+1. **New clickstop defined** → create `planned_{cs-id}_{kebab-name}.md` with task table and design notes. **Commit and push the plan file to main before starting any implementation work.** The plan must exist on main before a sub-agent begins coding in a worktree. Add a summary row to the CONTEXT.md clickstop summary table linking to the file (can be bundled with the plan commit or the implementation PR).
 2. **First task starts** → rename file from `planned_` to `active_` (use `git mv`). Update the CONTEXT.md summary row status and link.
 3. **All tasks complete** → rename file from `active_` to `done_` (use `git mv`). Update the CONTEXT.md summary row. Fill in the completion checklist inside the file. Replace the CONTEXT.md section with a 2-4 line summary linking to the archive.
 
