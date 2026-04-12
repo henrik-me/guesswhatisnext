@@ -97,6 +97,7 @@ function showScreen(name) {
   }
   screens[name].classList.add('active');
   currentScreen = name;
+  if (name === 'auth') setAuthMode('login');
 }
 
 /** Update a data-bind element's text content. */
@@ -786,14 +787,11 @@ function init() {
       case 'show-auth-login':
         showScreen('auth');
         break;
-      case 'show-auth-register':
-        showScreen('auth');
+      case 'auth-submit':
+        authAction(currentAuthMode);
         break;
-      case 'auth-login':
-        authAction('login');
-        break;
-      case 'auth-register':
-        authAction('register');
+      case 'auth-toggle-mode':
+        setAuthMode(currentAuthMode === 'login' ? 'register' : 'login');
         break;
       case 'logout':
         logout();
@@ -1224,6 +1222,7 @@ let ws = null;
 let authToken = localStorage.getItem('gwn_auth_token');
 let authUsername = localStorage.getItem('gwn_auth_username');
 let authRole = localStorage.getItem('gwn_auth_role');
+let currentAuthMode = 'login';
 const DEFAULT_FEATURE_FLAGS = Object.freeze({
   submitPuzzle: false,
 });
@@ -1321,6 +1320,32 @@ function updateHomeAuthDisplay() {
   if (mpBtn) mpBtn.style.display = isLoggedIn() ? '' : 'none';
   // Community Puzzles button hidden when submitPuzzle flag is off
   if (communityBtn) communityBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
+}
+
+/** Switch auth screen between login and register modes. */
+function setAuthMode(mode) {
+  currentAuthMode = mode;
+  const title = document.querySelector('[data-bind="auth-screen-title"]');
+  const subtitle = document.querySelector('[data-bind="auth-screen-subtitle"]');
+  const submitBtn = document.querySelector('[data-bind="auth-submit-btn"]');
+  const togglePrompt = document.querySelector('[data-bind="auth-toggle-prompt"]');
+  const toggleLink = document.querySelector('[data-bind="auth-toggle-link"]');
+
+  if (mode === 'register') {
+    if (title) title.textContent = 'Create Account';
+    if (subtitle) subtitle.textContent = 'Register a new account for multiplayer';
+    if (submitBtn) { submitBtn.textContent = 'Register'; submitBtn.setAttribute('aria-label', 'Create account'); }
+    if (togglePrompt) togglePrompt.textContent = 'Already have an account?';
+    if (toggleLink) toggleLink.textContent = 'Login';
+  } else {
+    if (title) title.textContent = 'Sign In';
+    if (subtitle) subtitle.textContent = 'Log in to access multiplayer';
+    if (submitBtn) { submitBtn.textContent = 'Login'; submitBtn.setAttribute('aria-label', 'Log in'); }
+    if (togglePrompt) togglePrompt.textContent = "Don\u2019t have an account?";
+    if (toggleLink) toggleLink.textContent = 'Register';
+  }
+
+  bindText('auth-error', '');
 }
 
 /** Update community screen to reflect auth + feature flag state. */

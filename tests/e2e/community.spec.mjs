@@ -93,9 +93,10 @@ test.describe('Community Discovery & Onboarding', () => {
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
 
     // Register → should auto-redirect to submit-puzzle (return URL)
+    await page.click('[data-action="auth-toggle-mode"]');
     await page.fill('#auth-username', username);
     await page.fill('#auth-password', password);
-    await page.click('[data-action="auth-register"]');
+    await page.click('[data-action="auth-submit"]');
     await expect(page.locator('[data-screen="submit-puzzle"]')).toHaveClass(/active/, { timeout: 5000 });
 
     // Onboarding should be visible on first visit

@@ -12,11 +12,12 @@ async function registerAndGoHome(page, username, password, url = '/') {
   const ip = uniqueIP();
   await page.setExtraHTTPHeaders({ 'X-Forwarded-For': ip });
   await page.goto(url);
-  await page.click('[data-action="show-auth-register"]');
+  await page.click('[data-action="show-auth-login"]');
   await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
+  await page.click('[data-action="auth-toggle-mode"]');
   await page.fill('#auth-username', username);
   await page.fill('#auth-password', password);
-  await page.click('[data-action="auth-register"]');
+  await page.click('[data-action="auth-submit"]');
   await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, { timeout: 5000 });
   await page.click('#screen-multiplayer [data-action="go-home"]');
   await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);

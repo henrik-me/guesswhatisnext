@@ -16,13 +16,13 @@
 <body>
   <div id="app">
 
-    <!-- Persistent Auth Top Bar -->
+    <!-- Persistent Auth Top Bar (positioned top-right, overlays header) -->
     <header id="auth-top-bar" class="auth-top-bar" aria-label="Account">
       <div class="auth-top-bar-logged-out" data-bind="auth-bar-logged-out">
         <button class="btn btn-auth-bar" data-action="show-auth-login" aria-label="Log in">Login</button>
-        <button class="btn btn-auth-bar btn-auth-bar-register" data-action="show-auth-register" aria-label="Create account">Register</button>
       </div>
       <div class="auth-top-bar-logged-in" data-bind="auth-bar-logged-in" style="display:none">
+        <span class="auth-bar-user-icon" aria-hidden="true">👤</span>
         <button class="auth-bar-username" data-action="show-profile" aria-label="View Profile"><span data-bind="auth-bar-username-text"></span></button>
         <button class="btn btn-auth-bar btn-auth-bar-logout" data-action="logout" aria-label="Log out">Logout</button>
       </div>
@@ -178,8 +178,8 @@
     <section id="screen-auth" class="screen" data-screen="auth" aria-label="Login or Register">
       <header class="screen-header">
         <div class="title-icon" aria-hidden="true">🔑</div>
-        <h2>Sign In to Play</h2>
-        <p class="screen-description">Log in or create an account for multiplayer</p>
+        <h2 data-bind="auth-screen-title">Sign In</h2>
+        <p class="screen-description" data-bind="auth-screen-subtitle">Log in to access multiplayer</p>
       </header>
       <form class="auth-form" id="auth-form" autocomplete="off">
         <div class="auth-field">
@@ -192,9 +192,12 @@
         </div>
         <div class="auth-error" data-bind="auth-error" role="alert" aria-live="polite"></div>
         <div class="auth-actions">
-          <button class="btn btn-primary" type="button" data-action="auth-login" aria-label="Log in">Login</button>
-          <button class="btn btn-secondary" type="button" data-action="auth-register" aria-label="Create account">Register</button>
+          <button class="btn btn-primary" type="button" data-action="auth-submit" aria-label="Submit" data-bind="auth-submit-btn">Login</button>
         </div>
+        <p class="auth-toggle-text">
+          <span data-bind="auth-toggle-prompt">Don't have an account?</span>
+          <button class="auth-toggle-link" type="button" data-action="auth-toggle-mode" data-bind="auth-toggle-link">Register</button>
+        </p>
       </form>
       <button class="btn btn-back" data-action="go-home" aria-label="Go back to home screen">← Back</button>
     </section>

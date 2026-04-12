@@ -10,11 +10,12 @@ function uniqueUser() {
 /** Register a new user via the top-bar → auth screen flow. */
 async function registerUser(page, username, password) {
   await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
-  await page.click('[data-action="show-auth-register"]');
+  await page.click('[data-action="show-auth-login"]');
   await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
+  await page.click('[data-action="auth-toggle-mode"]');
   await page.fill('#auth-username', username);
   await page.fill('#auth-password', password);
-  await page.click('[data-action="auth-register"]');
+  await page.click('[data-action="auth-submit"]');
   // After registration, navigates to multiplayer (default) — go home
   await expect(page.locator('[data-screen="multiplayer"]')).toHaveClass(/active/, { timeout: 5000 });
   await page.locator('[data-screen="multiplayer"] [data-action="go-home"]').click();
