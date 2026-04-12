@@ -48,7 +48,8 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS30 | Local Review Loop | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs30_local-review-loop.md) |
 | CS31 | Instructions Optimization | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs31_instructions-optimization.md) |
 | CS33 | Auth Header Polish | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs33_auth-header-polish.md) |
-| CS35 | Clickstop File Cleanup | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs35_clickstop-cleanup.md) |
+| CS35 | Clickstop File Cleanup | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs35_clickstop-cleanup.md) |
+| CS36 | Instructions Lifecycle Clarity | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs36_instructions-lifecycle.md) |
 
 ---
 
