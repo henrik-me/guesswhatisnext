@@ -1,7 +1,9 @@
 # CS24 — Custom Domain (gwn.metzger.dk)
 
-**Status:** ⬜ Planned
+**Status:** ✅ Complete
 **Goal:** Configure the production environment to be accessible via `gwn.metzger.dk` custom domain with HTTPS, replacing the default Azure Container Apps FQDN.
+
+**Verified:** `https://gwn.metzger.dk/healthz` returns 200 OK, CSP header shows `wss://gwn.metzger.dk`.
 
 ---
 
@@ -9,11 +11,11 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS24-1 | Configure DNS for gwn.metzger.dk | ⬜ Pending | Add CNAME (or A + TXT validation) record in the metzger.dk DNS zone pointing `gwn` to the Azure Container Apps custom domain verification endpoint. Document the required DNS records. |
-| CS24-2 | Add Azure custom domain binding | ⬜ Pending | Bind `gwn.metzger.dk` as a custom hostname on the `gwn-production` Container App using `az containerapp hostname add`. Add domain validation. Update `infra/deploy.sh` and `infra/deploy.ps1` with the custom domain binding commands. |
-| CS24-3 | Configure managed TLS certificate | ⬜ Pending | Provision an Azure-managed free TLS certificate for `gwn.metzger.dk` via `az containerapp hostname bind --hostname gwn.metzger.dk --certificate-type ManagedCertificate`. Add to deploy scripts. |
-| CS24-4 | Update CANONICAL_HOST and deploy vars | ⬜ Pending | Update GitHub secret `PROD_URL` to `https://gwn.metzger.dk`. Update `CANONICAL_HOST` env var on the container app to `gwn.metzger.dk`. This propagates to HTTPS redirect, CSP headers, and WebSocket policy automatically via `server/middleware/security.js`. |
-| CS24-5 | Verify deploy workflows and update documentation | ⬜ Pending | Verify that `.github/workflows/prod-deploy.yml` and related automation contain no hard-coded production URLs; only update workflows if any `azurecontainerapps.io` references remain. Update `infra/README.md` with custom domain setup documentation. Update `README.md` with the production URL. |
+| CS24-1 | Configure DNS for gwn.metzger.dk | ✅ Done | CNAME `gwn` → `gwn-production.blackbay-4189fc2a.eastus.azurecontainerapps.io` + TXT verification record configured in metzger.dk DNS zone. |
+| CS24-2 | Add Azure custom domain binding | ✅ Done | Bound `gwn.metzger.dk` as custom hostname on `gwn-production` via `az containerapp hostname add`. Deploy scripts updated. |
+| CS24-3 | Configure managed TLS certificate | ✅ Done | Azure-managed free TLS certificate provisioned (cert `mc-gwn-env-gwn-metzger-dk-4767`, SNI-enabled). Auto-renewal handled by Azure. |
+| CS24-4 | Update CANONICAL_HOST and deploy vars | ✅ Done | GitHub secret `PROD_URL` updated to `https://gwn.metzger.dk`. `CANONICAL_HOST` env var set to `gwn.metzger.dk` on the container app. HTTPS redirect, CSP headers, and WebSocket policy all reflect the custom domain. |
+| CS24-5 | Verify deploy workflows and update documentation | ✅ Done | Deploy scripts, `infra/README.md`, `README.md`, and `CONTEXT.md` updated with custom domain details. PR #155. |
 
 ---
 
@@ -39,3 +41,17 @@
 - Access to the `metzger.dk` DNS zone (domain owner manages this)
 - Azure CLI access to the `gwn-rg` resource group
 - The `gwn-production` container app must be running for domain validation
+
+---
+
+## Completion Checklist
+
+- [x] All tasks done and merged (5/5 — PR #155)
+- [x] README updated (production URL updated to gwn.metzger.dk)
+- [x] INSTRUCTIONS.md updated (N/A — no architectural/workflow changes)
+- [x] CONTEXT.md updated with final state
+- [x] Tests added/updated (N/A — infrastructure-only, no code changes)
+- [x] Performance/load test evaluation (N/A — DNS/TLS change only)
+- [x] Data structure changes documented (N/A)
+- [x] Staging deployed and verified (N/A — custom domain is production-only)
+- [x] Production deployed and verified — `https://gwn.metzger.dk/healthz` returns 200 OK
