@@ -394,14 +394,6 @@ body::before {
   font-size: 0.95rem;
 }
 
-.high-score {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-surface-border);
-  border-radius: var(--radius);
-  padding: 0.75rem 1.5rem;
-  display: inline-block;
-}
-
 /* ===========================
    Community Section
    =========================== */
@@ -1965,7 +1957,93 @@ body::before {
 
 .leaderboard-row.current-user {
   border-color: var(--color-primary);
-  box-shadow: 0 0 12px var(--color-primary-glow), 0 0 24px rgba(108, 92, 231, 0.1);
+  border-width: 2px;
+  background: linear-gradient(135deg, rgba(108, 92, 231, 0.12), var(--color-surface));
+  box-shadow: 0 0 12px var(--color-primary-glow), 0 0 24px rgba(108, 92, 231, 0.15);
+}
+
+.you-badge {
+  display: inline-block;
+  background: var(--color-primary);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.75rem;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Personal Bests Section */
+.personal-bests {
+  width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.personal-bests-card {
+  background: linear-gradient(135deg, rgba(108, 92, 231, 0.08), var(--color-surface));
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+
+.personal-bests-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: var(--color-text);
+}
+
+.personal-bests-grid {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.personal-bests-stat {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.personal-bests-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.personal-bests-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.personal-bests-detail {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.personal-bests-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.personal-bests-signin {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  background-color: var(--color-surface);
+  border: 1px dashed var(--color-surface-border);
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
 }
 
 .leaderboard-rank {

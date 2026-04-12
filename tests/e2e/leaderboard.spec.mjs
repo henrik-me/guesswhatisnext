@@ -8,7 +8,7 @@ function uniqueUser() {
 }
 
 test.describe('Leaderboard', () => {
-  test('logged-in user plays freeplay, score appears on leaderboard', async ({ page }) => {
+  test('logged-in user plays freeplay, score appears on leaderboard with You badge', async ({ page }) => {
     const username = uniqueUser();
     const password = 'testpass123';
 
@@ -54,5 +54,39 @@ test.describe('Leaderboard', () => {
     // Wait for leaderboard table to load and contain our username
     const table = page.locator('[data-bind="leaderboard-table"]');
     await expect(table).toContainText(username, { timeout: 10000 });
+
+    // Verify current-user highlighting and "You" badge
+    const userRow = table.locator('.current-user');
+    await expect(userRow).toBeVisible({ timeout: 5000 });
+    await expect(userRow.locator('.you-badge')).toHaveText('You');
+
+    // Verify personal bests section shows stats
+    const personalBests = page.locator('[data-bind="personal-bests"]');
+    await expect(personalBests).toContainText('My Personal Bests', { timeout: 10000 });
+    await expect(personalBests).toContainText('Free Play');
+  });
+
+  test('leaderboard shows sign-in message for personal bests when not logged in', async ({ page }) => {
+    await page.goto('/');
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
+
+    // Go to leaderboard without logging in
+    await page.click('[data-action="show-leaderboard"]');
+    await expect(page.locator('[data-screen="leaderboard"]')).toHaveClass(/active/, {
+      timeout: 5000,
+    });
+
+    // Verify sign-in prompt in personal bests section
+    const personalBests = page.locator('[data-bind="personal-bests"]');
+    await expect(personalBests).toContainText('Sign in to track your scores', { timeout: 5000 });
+  });
+
+  test('home screen does not show high score element', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
+
+    // High score element should not exist
+    await expect(page.locator('.high-score')).toHaveCount(0);
+    await expect(page.locator('[data-bind="high-score"]')).toHaveCount(0);
   });
 });

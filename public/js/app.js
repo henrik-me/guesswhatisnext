@@ -478,9 +478,6 @@ function init() {
     screens[el.dataset.screen] = el;
   });
 
-  // Update high score display
-  bindText('high-score', Storage.getHighScore());
-
   // Update auth display on home screen
   updateHomeAuthDisplay();
   refreshFeatureFlags();
@@ -598,7 +595,6 @@ function init() {
         } else {
           galleryReturnScreen = null;
           showScreen('home');
-          bindText('high-score', Storage.getHighScore());
           updateHomeAuthDisplay();
         }
         break;
@@ -626,6 +622,7 @@ function init() {
         leaderboardMode = 'freeplay';
         setActiveLeaderboardMode('freeplay');
         setActiveLeaderboardTab('alltime');
+        fetchPersonalBests();
         fetchLeaderboard('alltime');
         break;
       case 'show-achievements':
@@ -962,6 +959,65 @@ function loadSettingsUI() {
 
 let leaderboardMode = 'freeplay';
 
+/** Fetch and render personal bests section on the leaderboard screen. */
+async function fetchPersonalBests() {
+  const container = document.querySelector('[data-bind="personal-bests"]');
+  if (!container) return;
+
+  if (!isLoggedIn()) {
+    container.innerHTML = '<div class="personal-bests-signin">🔑 Sign in to track your scores</div>';
+    return;
+  }
+
+  try {
+    const res = await apiFetch('/api/scores/me');
+    if (res.status === 401) {
+      container.innerHTML = '<div class="personal-bests-signin">🔑 Sign in to track your scores</div>';
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderPersonalBests(data.stats || []);
+  } catch {
+    container.innerHTML = '';
+  }
+}
+
+/** Render personal bests card from stats data. */
+function renderPersonalBests(stats) {
+  const container = document.querySelector('[data-bind="personal-bests"]');
+  if (!container) return;
+
+  const freeplay = stats.find(s => s.mode === 'freeplay');
+  const multiplayer = stats.find(s => s.mode === 'multiplayer');
+
+  if (!freeplay && !multiplayer) {
+    container.innerHTML = '<div class="personal-bests-card"><p class="personal-bests-empty">Play some games to see your stats here! 🎮</p></div>';
+    return;
+  }
+
+  let html = '<div class="personal-bests-card"><h3 class="personal-bests-title">📊 My Personal Bests</h3><div class="personal-bests-grid">';
+
+  if (freeplay) {
+    html += `<div class="personal-bests-stat">
+      <span class="personal-bests-label">🎮 Free Play</span>
+      <span class="personal-bests-value">${Number(freeplay.high_score).toLocaleString()}</span>
+      <span class="personal-bests-detail">${freeplay.games_played} games · ${Number(freeplay.avg_score).toLocaleString()} avg</span>
+    </div>`;
+  }
+
+  if (multiplayer) {
+    html += `<div class="personal-bests-stat">
+      <span class="personal-bests-label">⚔️ Multiplayer</span>
+      <span class="personal-bests-value">${Number(multiplayer.high_score).toLocaleString()}</span>
+      <span class="personal-bests-detail">${multiplayer.games_played} games · 🔥 ${multiplayer.best_streak} streak</span>
+    </div>`;
+  }
+
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+
 /** Set the active leaderboard mode tab visually. */
 function setActiveLeaderboardMode(mode) {
   document.querySelectorAll('.leaderboard-mode-tab').forEach(tab => {
@@ -1049,7 +1105,7 @@ function renderLeaderboard(entries) {
 
     return `<div class="leaderboard-row${rankClass}${userClass}" role="listitem">
       ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
-      <span class="leaderboard-name">${name}</span>
+      <span class="leaderboard-name">${name}${userClass ? ' <span class="you-badge">You</span>' : ''}</span>
       <span class="leaderboard-score">${score.toLocaleString()}</span>
     </div>`;
   }).join('');
@@ -1076,7 +1132,7 @@ function renderMultiplayerLeaderboard(entries) {
 
     return `<div class="leaderboard-row${rankClass}${userClass}" role="listitem">
       ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
-      <span class="leaderboard-name">${name}</span>
+      <span class="leaderboard-name">${name}${userClass ? ' <span class="you-badge">You</span>' : ''}</span>
       <span class="leaderboard-stats">
         <span class="leaderboard-wins">${entry.wins}W</span>
         <span class="leaderboard-winrate">${entry.winRate}%</span>

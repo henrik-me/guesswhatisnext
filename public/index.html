@@ -44,9 +44,7 @@
         <button class="btn btn-secondary" data-action="show-community" aria-label="Community Puzzles" style="display:none">🌍 Community Puzzles</button>
         <button class="btn btn-secondary" data-action="show-settings" aria-label="Settings">⚙️ Settings</button>
       </nav>
-      <footer class="home-stats">
-        <p class="high-score">🏆 High Score: <span data-bind="high-score">0</span></p>
-      </footer>
+      <footer class="home-stats"></footer>
     </section>
 
     <!-- Community Hub Screen -->
@@ -161,6 +159,7 @@
         <h2>🏆 Leaderboard</h2>
         <p class="screen-description">Top players ranked by score</p>
       </header>
+      <div class="personal-bests" data-bind="personal-bests" aria-label="Your personal bests"></div>
       <div class="leaderboard-mode-tabs" role="tablist" aria-label="Leaderboard mode">
         <button class="leaderboard-mode-tab active" data-action="leaderboard-mode" data-mode="freeplay" role="tab" aria-selected="true">🎮 Free Play</button>
         <button class="leaderboard-mode-tab" data-action="leaderboard-mode" data-mode="multiplayer" role="tab" aria-selected="false">⚔️ Multiplayer</button>
