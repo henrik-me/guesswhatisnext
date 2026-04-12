@@ -99,9 +99,9 @@ describe('Reconnection & Edge Cases', () => {
 
     // All answer round 0
     const resultPromises = allSockets.map(ws => waitForMessage(ws, 'roundResult'));
-    hostWs.send(JSON.stringify({ type: 'answer', answerId: rounds[0].puzzle.options[0], timeMs: 2000 }));
-    p2Ws.send(JSON.stringify({ type: 'answer', answerId: rounds[1].puzzle.options[0], timeMs: 2000 }));
-    p3Ws.send(JSON.stringify({ type: 'answer', answerId: rounds[2].puzzle.options[0], timeMs: 2000 }));
+    hostWs.send(JSON.stringify({ type: 'answer', answerId: rounds[0].puzzle.answer, timeMs: 2000 }));
+    p2Ws.send(JSON.stringify({ type: 'answer', answerId: rounds[1].puzzle.answer, timeMs: 2000 }));
+    p3Ws.send(JSON.stringify({ type: 'answer', answerId: rounds[2].puzzle.answer, timeMs: 2000 }));
     await Promise.all(resultPromises);
 
     // P3 disconnects
