@@ -3,7 +3,7 @@
  * Manages which screen is visible and delegates to game modules.
  */
 
-import { Game } from './game.js';
+import { Game, shuffle } from './game.js';
 import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
@@ -187,10 +187,11 @@ const ui = {
         : '';
     }
 
-    // Options grid
+    // Options grid (shuffled to prevent position bias)
     const optContainer = document.querySelector('[data-bind="options"]');
     optContainer.innerHTML = '';
-    puzzle.options.forEach((option, index) => {
+    const shuffledOptions = shuffle(puzzle.options);
+    shuffledOptions.forEach((option, index) => {
       const btn = document.createElement('button');
       btn.className = 'option-btn';
       btn.style.setProperty('--opt-i', index);
@@ -1764,10 +1765,11 @@ function onRound(msg) {
       : '';
   }
 
-  // Options
+  // Options (shuffled client-side to prevent position bias)
   const optContainer = document.querySelector('[data-bind="match-options"]');
   optContainer.innerHTML = '';
-  puzzle.options.forEach((option, index) => {
+  const shuffledMatchOptions = shuffle(puzzle.options);
+  shuffledMatchOptions.forEach((option, index) => {
     const btn = document.createElement('button');
     btn.className = 'option-btn';
     btn.style.setProperty('--opt-i', index);
@@ -4027,7 +4029,7 @@ function initSubmitPuzzleForm() {
       }
       const sequence = imageFormState.sequence.map(e => e.dataUri);
       const answer = imageFormState.answer.dataUri;
-      const options = [answer, ...imageFormState.distractors.map(d => d.dataUri)];
+      const options = shuffle([answer, ...imageFormState.distractors.map(d => d.dataUri)]);
       payload = { sequence, answer, explanation, difficulty, category, type: 'image', options };
     } else {
       // Text/emoji mode
@@ -4038,7 +4040,7 @@ function initSubmitPuzzleForm() {
       const optionVals = [];
       document.querySelectorAll('.option-input').forEach(el => optionVals.push(el.value.trim()));
       const nonEmptyOptions = optionVals.filter(Boolean);
-      const options = nonEmptyOptions.length === 4 ? optionVals : undefined;
+      const options = nonEmptyOptions.length === 4 ? shuffle(optionVals) : undefined;
 
       if (sequence.length < 3) {
         if (status) { status.textContent = 'Sequence must have at least 3 items.'; status.className = 'submit-puzzle-status error'; }
