@@ -40,10 +40,21 @@ const REDACT_PATHS = [
   'res.headers["set-cookie"]',
 ];
 
+function isPinoPrettyAvailable() {
+  try {
+    require.resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function buildLoggerOptions(configOverride = config) {
   const mixin = (configOverride.NODE_ENV === 'production' || configOverride.NODE_ENV === 'staging')
     ? buildOtelMixin()
     : undefined;
+
+  const usePretty = configOverride.NODE_ENV === 'development' && isPinoPrettyAvailable();
 
   return {
     level: configOverride.LOG_LEVEL,
@@ -52,7 +63,7 @@ function buildLoggerOptions(configOverride = config) {
       paths: REDACT_PATHS,
       remove: true,
     },
-    ...(configOverride.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : {}),
+    ...(usePretty ? { transport: { target: 'pino-pretty' } } : {}),
   };
 }
 
