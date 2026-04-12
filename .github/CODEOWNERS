@@ -2,8 +2,8 @@
 * @henrik-me
 
 # Critical CI/CD and deployment paths (explicit for visibility)
-.github/ @henrik-me
-infra/ @henrik-me
-Dockerfile @henrik-me
-docker-compose*.yml @henrik-me
-scripts/ @henrik-me
+/.github/ @henrik-me
+/infra/ @henrik-me
+/Dockerfile @henrik-me
+/docker-compose*.yml @henrik-me
+/scripts/ @henrik-me

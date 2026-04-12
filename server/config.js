@@ -16,8 +16,8 @@ const CANONICAL_HOST_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0
 const config = {
   NODE_ENV,
   PORT: parseInt(process.env.PORT, 10) || 3000,
-  JWT_SECRET: process.env.JWT_SECRET || (isProduction ? '' : 'gwn-dev-secret-change-in-production'), // Dev/test default only — not used in production
-  SYSTEM_API_KEY: process.env.SYSTEM_API_KEY || (isProduction ? '' : 'gwn-dev-system-key'), // Dev/test default only — not used in production
+  JWT_SECRET: process.env.JWT_SECRET || (isProduction ? '' : 'gwn-dev-secret-change-in-production'), // Dev/test default only — production/staging requires JWT_SECRET to be set and validates it at startup
+  SYSTEM_API_KEY: process.env.SYSTEM_API_KEY || (isProduction ? '' : 'gwn-dev-system-key'), // Dev/test default only — production/staging requires SYSTEM_API_KEY to be set and validates it at startup
   GWN_DB_PATH: process.env.GWN_DB_PATH || path.join(__dirname, '..', 'data', 'game.db'),
   CANONICAL_HOST: (process.env.CANONICAL_HOST || '').trim(),
   DB_BACKEND: process.env.DATABASE_URL ? 'mssql' : 'sqlite',
