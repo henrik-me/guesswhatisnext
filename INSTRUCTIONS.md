@@ -478,9 +478,9 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 2. **Task description:** Clear, complete description including task ID (e.g., CS11-64), acceptance criteria, affected files, and edge cases.
 3. **Worktree context:** Which slot (`wt-N`), branch name using `{agent-id}/{task-id}-{description}` format, and port number (`300N`).
 4. **Validation command:** `npm run lint && npm test && npm run test:e2e`
-5. **PR workflow:** Create PR with task ID in title (e.g., `cs11-64: description`), include agent metadata block in description, request Copilot review, complete full review loop.
+5. **PR workflow:** Create PR with task ID in title (e.g., `cs11-64: description`), include agent metadata block in description. Run local review loop, then request Copilot review for code/config PRs (skip Copilot for docs-only PRs — see § Local Review Loop).
 6. **Commit conventions:** Use `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer in all commits. Conventional commit format with task scope (e.g., `feat(cs11-64): description`).
-7. **Review loop reminder:** Reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments.
+7. **Review loop reminder:** For code/config PRs, reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments. Docs-only PRs skip Copilot review.
 8. **Failure handling:** If validation fails, fix and re-run (up to 3 attempts). If stuck, report failure details to the orchestrator and stop.
 9. **Merge conflicts:** Before pushing, rebase onto `origin/main`. Resolve conflicts in the worktree branch and re-run validation.
 
@@ -538,8 +538,9 @@ The orchestrator should maximize parallelism by running non-worktree tasks concu
 3. Run full validation before pushing: `npm run lint && npm test && npm run test:e2e`
 4. Push branch to origin
 5. Create PR: `gh pr create --base main --head {agent-id}/{task-id}-{description}`
-6. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-7. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
+6. Run local review loop (see § Local Review Loop) — fix issues until clean
+7. **Code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` | **Docs-only PRs:** Skip Copilot review
+8. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
 8. After CI passes and review approved, **squash-merge** via GitHub UI or `gh pr merge --squash`
 9. Main orchestrating agent pulls after each merge: `git pull`
 
