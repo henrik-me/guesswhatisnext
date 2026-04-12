@@ -694,7 +694,10 @@ else {
 #
 # After binding, update the GitHub repo settings:
 #   PROD_URL secret       → https://gwn.metzger.dk
-#   CANONICAL_HOST var     → gwn.metzger.dk (for production; staging keeps the Azure FQDN)
+#
+# Note: re-running this script recomputes PROD_URL from the Azure FQDN.
+# To preserve the custom domain, set PRODUCTION_CANONICAL_HOST=gwn.metzger.dk
+# in the environment before running, or restore PROD_URL manually afterward.
 # ────────────────────────────────────────────────────────────────────────────
 
 Write-Host ''

@@ -283,14 +283,15 @@ Azure Container Apps provisions a free managed TLS certificate when the hostname
 
 ### GitHub Settings
 
-After custom domain binding, update the GitHub repository secrets and variables to match:
+After custom domain binding, update the GitHub repository secret for the production URL:
 
 | Setting | Key | Value |
 |---------|-----|-------|
 | Secret | `PROD_URL` | `https://gwn.metzger.dk` |
-| Variable | `CANONICAL_HOST` | `gwn.metzger.dk` |
 
-The `CANONICAL_HOST` env var is used by the security middleware for HTTPS redirect and HSTS headers. The `PROD_URL` secret is used by deploy and health-monitor workflows.
+The production `CANONICAL_HOST` env var is derived from `PROD_URL` by the production deploy workflow — there is no separate repo variable for it. The repo-level `CANONICAL_HOST` variable controls **staging** only and should keep the staging Azure FQDN.
+
+> **Note:** Re-running `infra/deploy.sh` or `infra/deploy.ps1` will reset `PROD_URL` to the Azure FQDN unless you override it. To preserve the custom domain, set `PRODUCTION_CANONICAL_HOST=gwn.metzger.dk` in the environment before running the script, or manually restore `PROD_URL` afterward.
 
 ### Backward Compatibility
 
