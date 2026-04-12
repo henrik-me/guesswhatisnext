@@ -16,7 +16,7 @@
 | CS26-5 | Audit and scrub sensitive information | ✅ Done | Added credential comments clarifying dev-only defaults in docker-compose files and CI config. PR #145. |
 | CS26-6 | Configure fork PR security | ✅ Done | Selected actions only, read-only GITHUB_TOKEN default, fork PR approval required for outside collaborators. Configured via GitHub settings. |
 | CS26-7 | Update documentation for public repo | ✅ Done | Added MIT LICENSE, CONTRIBUTING.md, updated README with contributing/license sections. PR #145. |
-| CS26-8 | Handle WORKBOARD.md direct-push pattern | ✅ Done | Documented ruleset bypass approach in WORKBOARD.md — owner bypasses branch protection for coordination file updates. PR #145. |
+| CS26-8 | Handle WORKBOARD.md direct-push pattern | ✅ Done | Documented ruleset bypass approach in INSTRUCTIONS.md — owner bypasses branch protection for coordination file updates. PR #145. |
 | CS26-9 | Make repository public | ✅ Done | Repository visibility changed to public via Settings → Danger Zone. |
 | CS26-10 | Post-public verification | ✅ Done | All 6 checks passed: secrets hidden, environment protections active, branch protection enforced, fork PRs require approval, Actions safe for public. |
 | CS26-11 | Add Quick Reference Checklist to INSTRUCTIONS.md | ✅ Done | Added Quick Reference Checklist at top of INSTRUCTIONS.md with critical orchestrator rules. PR #145. |
