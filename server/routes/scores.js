@@ -176,6 +176,27 @@ router.get('/me', requireAuth, async (req, res, next) => {
       GROUP BY mode
     `, [req.user.id]);
 
+    // Multiplayer stats from match_players (scores table only has freeplay)
+    const mpStats = await db.get(`
+      SELECT COUNT(*) as games_played,
+             MAX(mp.score) as high_score,
+             ROUND(AVG(mp.score), 0) as avg_score,
+             0 as best_streak
+      FROM match_players mp
+      JOIN matches m ON mp.match_id = m.id
+      WHERE mp.user_id = ? AND m.status = 'finished'
+    `, [req.user.id]);
+
+    if (mpStats && mpStats.games_played > 0) {
+      stats.push({
+        mode: 'multiplayer',
+        games_played: mpStats.games_played,
+        high_score: mpStats.high_score,
+        avg_score: mpStats.avg_score,
+        best_streak: mpStats.best_streak,
+      });
+    }
+
     res.json({ scores, stats });
   } catch (err) {
     next(err);
