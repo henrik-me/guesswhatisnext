@@ -64,7 +64,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 
 **All implementation work runs as background task agents — the main session only orchestrates.** The orchestrating agent dispatches tasks to background agents in worktree slots, monitors progress via notifications, and merges approved PRs. It never directly edits code, runs tests, or creates PRs itself. The orchestrating agent actively relays background task progress to the user — status checks, milestone updates, and completion notifications rather than dispatching silently.
 
-**Current workflow:** Agent pushes branch → creates PR → CI + Copilot review → merge via GH UI (branch protection enforced since CS26).
+**Current workflow:** Agent pushes branch → creates PR → local review loop (GPT 5.4) → Copilot review (code/config PRs only; docs-only PRs skip) → merge via GH UI (branch protection enforced since CS26).
 **Direct pushes to main:** Only the repository owner (henrik-me) can bypass branch protection, and only for WORKBOARD.md coordination updates.
 
 **PR Review Comment Resolution:**
