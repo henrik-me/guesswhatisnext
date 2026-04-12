@@ -5,7 +5,9 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 - After every `git pull` → re-read this checklist; if INSTRUCTIONS.md changed, re-read fully
 - Never do implementation work in main checkout — dispatch to worktree sub-agents
-- Update WORKBOARD.md immediately on task claim/complete — commit AND push
+- Never modify files related to another agent's active task — check WORKBOARD.md first
+- Maximize parallelism — dispatch independent tasks simultaneously
+- Update WORKBOARD.md immediately on task claim/complete — commit AND push (use ISO datetime: `2026-04-12T18:27Z`)
 - Only modify your own rows in WORKBOARD.md Active Work
 - Check CS number conflicts before creating new clickstops
 - Commit clickstop plan file to main BEFORE starting implementation work
@@ -16,6 +18,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Commit after each meaningful step — don't batch unrelated changes
 - Record local review findings in PR description
 - Do not remove task from WORKBOARD.md until PR is merged and task is fully complete
+- When removing content from INSTRUCTIONS.md, ensure it lands in CONTEXT.md or README.md — no information loss
 
 ---
 
@@ -312,7 +315,7 @@ repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix
 - **Worktree tasks** (code changes, tests, PRs): bounded by worktree slots wt-1 through wt-4. Each needs a git worktree, a unique port, and `npm install`.
 - **Non-worktree tasks** (research, investigation, session queries, planning, analysis): not bounded by worktree slots. These run as non-worktree background agents without consuming a worktree slot. No port or npm install needed.
 
-The orchestrator should maximize parallelism by running non-worktree tasks concurrently with worktree tasks. There is no fixed limit on non-worktree background tasks.
+The orchestrator must maximize parallelism by running non-worktree tasks concurrently with worktree tasks. There is no fixed limit on non-worktree background tasks.
 
 **Agent setup:** Each worktree needs `npm install` and `$env:PORT = "300X"`. Database auto-creates at `data/game.db`. Each worktree gets its own independent database.
 
@@ -423,12 +426,16 @@ Unlike most project files, WORKBOARD.md is updated by orchestrating agents direc
 
 **Update frequency:** Orchestrators should update WORKBOARD.md often — at minimum on task start, task complete, and session start/end. Between those events, update whenever meaningful progress occurs (e.g., PR created, review round complete).
 
+**Timestamps:** Use ISO 8601 format with time in the "Started" column and "Last updated" header: `2026-04-12T18:27Z` (not just `2026-04-12`). Time precision matters when multiple agents claim tasks on the same day.
+
 **Task locking:** When a task appears in Active Work assigned to an agent ID, no other orchestrator may pick up that task. The assignment is a lock. If an orchestrator crashes or stops working:
 - The task remains assigned in WORKBOARD.md
 - When that orchestrator restarts, it reads WORKBOARD.md, finds its assigned tasks, and resumes work
 - There is no automated process for reassigning stalled tasks — a human must manually update WORKBOARD.md to release the lock if an orchestrator is permanently unavailable
 
 **Row ownership:** Each orchestrator may only modify its own rows in Active Work. When completing a task, remove only your own row — never edit or remove another agent's entries. When adding a task, append a new row without altering existing rows.
+
+**Task ownership extends to files:** Never modify, rename, or interact with files related to another agent's active task. Before making changes, check WORKBOARD.md Active Work to ensure no other agent owns that clickstop or file. If a merge conflict involves another agent's files, keep their content unchanged (additive merge).
 
 **Clickstop assignment:** An entire clickstop can be assigned to one orchestrator. When a clickstop is assigned, all tasks within it belong to that orchestrator. Other orchestrators must not pick up individual tasks from an assigned clickstop unless explicitly released.
 
