@@ -122,7 +122,7 @@ describe('N-Player Match Logic', () => {
       const p2ResultP = waitForMessage(p2Ws, 'roundResult');
       const p3ResultP = waitForMessage(p3Ws, 'roundResult');
 
-      hostWs.send(JSON.stringify({ type: 'answer', answerId: hostRound.puzzle.answer, timeMs: 2000 }));
+      hostWs.send(JSON.stringify({ type: 'answer', answerId: hostRound.puzzle.options[0], timeMs: 2000 }));
       p2Ws.send(JSON.stringify({ type: 'answer', answerId: p2Round.puzzle.options[1], timeMs: 3000 }));
       p3Ws.send(JSON.stringify({ type: 'answer', answerId: p3Round.puzzle.options[2], timeMs: 4000 }));
 
@@ -214,9 +214,9 @@ describe('N-Player Match Logic', () => {
     const p2Result0P = waitForMessage(p2Ws, 'roundResult');
     const p3Result0P = waitForMessage(p3Ws, 'roundResult');
 
-    hostWs.send(JSON.stringify({ type: 'answer', answerId: hostRound0.puzzle.answer, timeMs: 2000 }));
-    p2Ws.send(JSON.stringify({ type: 'answer', answerId: p2Round0.puzzle.answer, timeMs: 2000 }));
-    p3Ws.send(JSON.stringify({ type: 'answer', answerId: p3Round0.puzzle.answer, timeMs: 2000 }));
+    hostWs.send(JSON.stringify({ type: 'answer', answerId: hostRound0.puzzle.options[0], timeMs: 2000 }));
+    p2Ws.send(JSON.stringify({ type: 'answer', answerId: p2Round0.puzzle.options[0], timeMs: 2000 }));
+    p3Ws.send(JSON.stringify({ type: 'answer', answerId: p3Round0.puzzle.options[0], timeMs: 2000 }));
 
     await hostResult0P;
     await p2Result0P;
@@ -236,8 +236,8 @@ describe('N-Player Match Logic', () => {
     const hostResult1P = waitForMessage(hostWs, 'roundResult');
     const p2Result1P = waitForMessage(p2Ws, 'roundResult');
 
-    hostWs.send(JSON.stringify({ type: 'answer', answerId: hostRound1.puzzle.answer, timeMs: 2000 }));
-    p2Ws.send(JSON.stringify({ type: 'answer', answerId: p2Round1.puzzle.answer, timeMs: 2000 }));
+    hostWs.send(JSON.stringify({ type: 'answer', answerId: hostRound1.puzzle.options[0], timeMs: 2000 }));
+    p2Ws.send(JSON.stringify({ type: 'answer', answerId: p2Round1.puzzle.options[0], timeMs: 2000 }));
 
     await hostResult1P;
     await p2Result1P;

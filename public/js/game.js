@@ -45,7 +45,7 @@ function createState(puzzleQueue, mode) {
   };
 }
 
-/** Shuffle an array in place (Fisher-Yates). */
+/** Shuffle an array (Fisher-Yates). Returns a new array; does not mutate the input. */
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
