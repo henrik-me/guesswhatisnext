@@ -168,34 +168,38 @@ Note: `ci-cd.yml` has been removed from the tree.
 
 ### Test Inventory
 
-**Vitest (26 suites, 241 tests):**
+**Vitest (28 suites, 343 tests):**
 
 | Suite | Tests | Suite | Tests |
 |---|---|---|---|
-| achievements | 4 | mssql-adapter | 34 |
-| admin-endpoints | 10 | nplayer | 4 |
-| auth | 11 | opentelemetry | 7 |
+| achievements | 4 | mssql-adapter | 60 |
+| admin-endpoints | 10 | notifications | 14 |
+| auth | 11 | nplayer | 4 |
+| community-gallery | 14 | opentelemetry | 7 |
 | e2e-multiplayer | 10 | promotion-and-roles | 14 |
 | e2e-singleplayer | 4 | puzzles | 6 |
 | error-handler | 9 | reconnection | 4 |
-| feature-flags | 4 | rematch | 4 |
-| features | 4 | scores | 8 |
+| feature-flags | 5 | rematch | 4 |
+| features | 4 | scores | 10 |
 | health | 3 | security | 8 |
 | log-format | 4 | spectator | 10 |
 | logger | 21 | sqlite-adapter | 24 |
-| matches | 9 | submissions | 21 |
+| matches | 9 | submissions | 51 |
 | | | telemetry | 14 |
 | | | wal-cleanup | 5 |
 
-**Playwright E2E (6 specs, 21 tests):**
+**Playwright E2E (9 specs, 46 tests):**
 
 | Spec | Tests |
 |---|---|
 | auth | 5 |
+| community | 13 |
 | daily | 2 |
 | freeplay | 2 |
 | keyboard | 2 |
 | leaderboard | 1 |
+| moderation | 2 |
+| my-submissions | 10 |
 | telemetry | 9 |
 
 ### Server Architecture
