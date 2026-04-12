@@ -71,8 +71,8 @@ test.describe('Admin Moderation Improvements', () => {
     }, SYSTEM_KEY);
 
     await page.goto('/');
-    // Navigate to community screen (force-click: button may be hidden when flag is off)
-    await page.click('[data-action="show-community"]', { force: true });
+    // Navigate to community screen (dispatchEvent: button may be hidden via display:none)
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="show-moderation"]');
     await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });
@@ -115,7 +115,7 @@ test.describe('Admin Moderation Improvements', () => {
     }, SYSTEM_KEY);
 
     await page.goto('/');
-    await page.click('[data-action="show-community"]', { force: true });
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="show-moderation"]');
     await expect(page.locator('[data-screen="moderation"]')).toHaveClass(/active/, { timeout: 5000 });

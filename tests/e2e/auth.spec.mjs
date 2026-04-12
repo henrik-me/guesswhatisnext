@@ -148,8 +148,9 @@ test.describe('Authentication — Community', () => {
     await page.goto('/');
     await registerUser(page, username, 'testpass123');
 
-    // Community button is hidden when flag is off (cs32), force-click
-    await page.click('[data-action="show-community"]', { force: true });
+    // Community button is hidden via display:none when flag is off (cs32),
+    // dispatch click event directly
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
   });

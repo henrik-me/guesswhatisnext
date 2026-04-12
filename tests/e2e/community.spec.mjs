@@ -20,8 +20,9 @@ test.describe('Community Discovery & Onboarding', () => {
 
   test('community screen shows browse button, create puzzle and my submissions hidden by default', async ({ page }) => {
     await page.goto('/');
-    // Community button is hidden when flag is off (cs32), force-click it
-    await page.click('[data-action="show-community"]', { force: true });
+    // Community button is hidden via display:none when flag is off (cs32),
+    // dispatch click event directly since Playwright can't click hidden elements
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await expect(page.locator('[data-action="browse-community"]')).toBeVisible();
     // Create button is hidden when feature flag is off (default)
@@ -49,10 +50,10 @@ test.describe('Community Discovery & Onboarding', () => {
       localStorage.setItem('gwn_auth_username', u);
     }, { t: token, u: username });
 
-    // Navigate without feature flag — community button is hidden (cs32),
-    // so force-click to navigate to community screen
+    // Navigate without feature flag — community button is hidden via display:none (cs32),
+    // dispatch click event directly since Playwright can't click hidden elements
     await page.goto('/');
-    await page.click('[data-action="show-community"]', { force: true });
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
 
     // Browse should be visible regardless of flag

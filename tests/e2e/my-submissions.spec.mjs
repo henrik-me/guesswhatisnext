@@ -22,13 +22,13 @@ async function registerAndGoHome(page, username, password, url = '/') {
   await expect(page.locator('[data-screen="home"]')).toHaveClass(/active/);
 }
 
-/** Navigate to community screen. When flag is off, the home button is hidden (cs32),
- *  so we force-click it. */
+/** Navigate to community screen. When flag is off, the home button is hidden via
+ *  display:none (cs32), so we dispatch the click event directly. */
 async function goToCommunity(page, { flagOn = false } = {}) {
   if (flagOn) {
     await page.click('[data-action="show-community"]');
   } else {
-    await page.click('[data-action="show-community"]', { force: true });
+    await page.locator('[data-action="show-community"]').dispatchEvent('click');
   }
   await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
 }
