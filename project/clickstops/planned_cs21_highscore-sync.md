@@ -1,7 +1,7 @@
-# CS21 — High Score Synchronization
+# CS21 — Leaderboard Personal Bests & High Score Cleanup
 
-**Status:** ⬜ Planned
-**Goal:** Fix high-score display to sync from backend on login rather than relying solely on localStorage, and reposition the high-score display to be embedded with the auth info in the top header.
+**Status:** 🔄 Active
+**Goal:** Remove high score from the home screen and improve the leaderboard page with a "My Personal Bests" section showing the user's best freeplay and multiplayer scores, plus better current-user highlighting so players can quickly find themselves.
 
 ---
 
@@ -9,23 +9,23 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS21-1 | Sync high score from backend on login | ⬜ Pending | After successful login, fetch `/api/scores/me` and compute the overall maximum from the per-mode `high_score` values returned. Update localStorage `gwn_high_score` with this value. This ensures the displayed high score reflects the actual account data, not stale localStorage. |
-| CS21-2 | Move high-score display to top header | ⬜ Pending | Embed the high-score value alongside the auth info in the top bar (from CS20). Show it as a compact stat next to the username. Remove the current footer high-score display. |
-| CS21-3 | Handle cross-device score merging | ⬜ Pending | When a user logs in on a new device, take the MAX of localStorage high score and backend high score. Upload the localStorage score if it's higher (via existing score submission), then sync. |
-| CS21-4 | Add unit/integration tests for sync | ⬜ Pending | Test that login triggers score fetch and localStorage update. Test cross-device merge logic. Test that high-score display updates after login. |
+| CS21-1 | Remove high score from home screen | ⬜ Pending | Remove the `🏆 High Score: N` element from `public/index.html` home footer. Remove `bindText('high-score', ...)` calls from `app.js`. Keep `Storage.getHighScore()` for now (other code may reference it). |
+| CS21-2 | Add "My Personal Bests" section to leaderboard | ⬜ Pending | When logged in, show a section at the top of the leaderboard screen with: best freeplay score and best multiplayer score. Fetch from `/api/scores/me` (which already returns per-mode `high_score`). Show "Sign in to track your scores" when not logged in. |
+| CS21-3 | Improve current-user highlighting | ⬜ Pending | Make the current user's row in the leaderboard more visually distinct — bolder styling, maybe a "You" badge. Ensure it's immediately visible when the leaderboard loads. |
+| CS21-4 | Update tests | ⬜ Pending | Update E2E tests that reference the high score display. Add tests for personal bests section. |
 
 ---
 
 ## Design Decisions
 
-- **Sync direction:** Backend is the source of truth. On login, backend high score overwrites localStorage if higher. If localStorage is higher (scores submitted while offline or before account creation), those get submitted first via `submitPendingScores()`, then backend is re-fetched.
-- **Per-mode vs global:** The backend tracks per-mode high scores (`MAX(score)` grouped by mode). For the home screen display, show the overall maximum across all modes for simplicity.
-- **Dependency on CS20:** The top-bar repositioning depends on CS20's header being implemented first. CS21-2 can be done after CS20-1.
+- **High score removal:** The home screen becomes cleaner. Score info moves to where it belongs — the leaderboard.
+- **Personal bests source:** `/api/scores/me` already returns `stats` grouped by mode with `high_score`, `avg_score`, `best_streak`, `games_played`. No new API needed.
+- **Current user highlight:** Use `isCurrentUser` flag already returned by the leaderboard API. Add a "You" label/badge and stronger visual styling.
+- **Anonymous users:** Leaderboard is viewable without login (CS20 made it `optionalAuth`). Personal bests section shows a sign-in prompt instead.
 
-## Current State (from investigation)
+## Current State
 
-- `Storage.setHighScore()` in `public/js/storage.js` stores a single global value in localStorage key `gwn_high_score`.
-- Login handler in `public/js/app.js` calls `submitPendingScores()` but does NOT fetch or sync the backend high score.
-- `/api/scores/me` returns per-mode `high_score` as `MAX(score)` — data is available but not consumed on login.
-- High score is displayed in home screen footer below login controls (`index.html`).
-- Profile page shows separate "Best Score" stat from backend data, but this doesn't sync to the home screen display.
+- High score shown in home footer: `public/index.html` line ~47-49, read from localStorage
+- Leaderboard highlights current user with `current-user` CSS class (subtle)
+- `/api/scores/me` returns per-mode stats including `high_score` — data is available
+- `/api/scores/leaderboard` returns `isCurrentUser` flag per entry
