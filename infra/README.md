@@ -338,7 +338,7 @@ Navigate to **Settings → Secrets and variables → Actions → Variables** and
 |----------|-------------|
 | `STAGING_URL` | Staging application URL (e.g. `https://gwn-staging.<region>.azurecontainerapps.io`) |
 | `GHCR_USERNAME` | Username paired with `GHCR_PAT` |
-| `CANONICAL_HOST` | Hostname injected into runtime config (`gwn.metzger.dk` for production) |
+| `CANONICAL_HOST` | Staging hostname used by the staging deploy workflow |
 | `STAGING_AUTO_DEPLOY` | Auto-deploy gate (`false` by default unless intentionally enabled) |
 
 ### Environments
