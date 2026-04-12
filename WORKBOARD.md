@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-12T17:40Z
+> **Last updated:** 2026-04-12T17:45Z
 
 ## Orchestrators
 
@@ -18,7 +18,6 @@ Orchestrators update this file directly on main — no PR required.
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| CS26 | Public Repository Transition | Completion docs pending merge | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs26-done | — | 2026-04-12 |
 | CS20 | Authentication UX Overhaul | Auth header, multiplayer gating, leaderboard anon | yoga-gwn-c4 | wt-1 | yoga-gwn-c4/cs20-auth-ux-overhaul | — | 2026-04-12 |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
