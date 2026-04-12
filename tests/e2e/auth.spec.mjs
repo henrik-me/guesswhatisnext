@@ -75,7 +75,7 @@ test.describe('Authentication — Top Bar', () => {
     await page.goto('/');
     await registerUser(page, username, 'testpass123');
 
-    await page.click('.auth-bar-username');
+    await page.click('[data-action="show-profile"]');
     await expect(page.locator('[data-screen="profile"]')).toHaveClass(/active/);
   });
 });
@@ -111,7 +111,7 @@ test.describe('Authentication — Profile Logout', () => {
     await page.goto('/');
     await registerUser(page, username, 'testpass123');
 
-    await page.click('.auth-bar-username');
+    await page.click('[data-action="show-profile"]');
     await expect(page.locator('[data-screen="profile"]')).toHaveClass(/active/);
 
     // Logout button should exist on profile page

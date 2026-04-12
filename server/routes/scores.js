@@ -53,7 +53,7 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
-/** GET /api/scores/leaderboard?mode=freeplay&period=alltime|weekly|daily&limit=20 */
+/** GET /api/scores/leaderboard?mode=freeplay|daily&period=alltime|weekly|daily&limit=20 */
 router.get('/leaderboard', optionalAuth, async (req, res, next) => {
   try {
     const { mode = 'freeplay', period = 'all', limit = 20 } = req.query;
