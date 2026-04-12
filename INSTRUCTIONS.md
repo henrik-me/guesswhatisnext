@@ -8,6 +8,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Update WORKBOARD.md immediately on task claim/complete — commit AND push
 - Only modify your own rows in WORKBOARD.md Active Work
 - Check CS number conflicts before creating new clickstops
+- Commit clickstop plan file to main BEFORE starting implementation work
 - Deferred tasks → must create new `planned_` clickstop (never silently drop)
 - Sub-agent prompts must include full Sub-Agent Checklist verbatim
 - Run local review loop (GPT 5.4) before Copilot review — skip Copilot for docs-only PRs
@@ -413,7 +414,7 @@ Background agents **must** report progress to the orchestrating agent:
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
 ### Branch Strategy & Merge Model
-- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates committed directly on `main` by orchestrating agents (see § WORKBOARD.md — Live Coordination below).
+- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates and clickstop plan files committed directly on `main` by orchestrating agents. (CONTEXT.md summary rows may optionally be bundled with plan file commits.)
 - Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
@@ -425,7 +426,7 @@ The orchestrating agent **must actively relay progress to the user** — never d
   - Require CI status checks to pass (`lint`, `test`, `e2e`) — CI uses `paths-ignore` for docs-only PRs
 
   - No force pushes
-  - No direct commits (except WORKBOARD.md by orchestrating agents)
+  - No direct commits (except WORKBOARD.md and clickstop plan files by orchestrating agents)
 
 ### Agent Work Model
 
@@ -439,8 +440,8 @@ Allowed on main checkout:
 - Planning, decomposing, and delegating work to sub-agents
 
 NOT allowed on main checkout:
-- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates are committed and pushed directly from main
-- No `git push` from main (except WORKBOARD.md updates)
+- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates and clickstop plan files (optionally with CONTEXT.md summary rows) are committed and pushed directly from main
+- No `git push` from main (except WORKBOARD.md and clickstop plan file updates)
 - No merge conflict resolution on main, **except for conflicts confined to `WORKBOARD.md` and handled per the WORKBOARD.md conflict-handling guidance** — if `git pull` conflicts on anything else, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
 **Orchestrator Startup Checklist** (first actions in every new session):
@@ -451,7 +452,7 @@ NOT allowed on main checkout:
 5. Update WORKBOARD.md to register the session (update Orchestrators table), then commit and push immediately
 6. Once a task is claimed, prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 
-**Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, git operations on main (`git pull`, `git worktree add/remove`), updating WORKBOARD.md, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
+**Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, git operations on main (`git pull`, `git worktree add/remove`), updating WORKBOARD.md, creating and committing clickstop plan files, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
 
 **Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation. Additionally, re-read the Quick Reference Checklist at the top of this file after every `git pull`, regardless of whether the file changed.
 
@@ -463,12 +464,12 @@ NOT allowed on main checkout:
 **Sub-agents in worktrees** — handle all implementation work. Each sub-agent gets a worktree slot with a meaningful branch name (e.g., `yoga-gwn/cs0-lean-instructions`, `yoga-gwn/cs5-37-ws-reconnect`).
 
 Sub-agents are responsible for:
-- All file changes (code, docs, config) and all commits/pushes
+- All implementation file changes (code, docs, config) and all commits/pushes in worktrees
 - PR creation (`gh pr create`)
 - Copilot review loop (code/config PRs: reply to comments, resolve threads, re-request review; docs-only PRs: skip Copilot review)
 - Merge conflict resolution (rebase/merge `origin/main` into the feature branch)
 
-This keeps `main` clean and ensures every change flows through a PR.
+This keeps `main` clean and ensures implementation changes flow through PRs. (Clickstop plan files and WORKBOARD.md are the exceptions — those are committed directly on `main` by the orchestrator.)
 
 **Sub-Agent Briefing Requirements:**
 
@@ -553,6 +554,13 @@ The orchestrator should maximize parallelism by running non-worktree tasks concu
 #### Task IDs
 Format: `CS<clickstop#>-<task#>` (e.g., `CS11-64`, `CS14-82`). Used in branch names, commit messages, PR titles, and WORKBOARD.md.
 
+**CS number allocation:** Before assigning a new clickstop number, verify the number is not already taken by checking all three sources:
+1. **Existing clickstop files:** `ls project/clickstops/` — check all `planned_`, `active_`, and `done_` files for the highest CS number
+2. **WORKBOARD.md Active Work:** Another agent may have just claimed a CS number but not yet committed the plan file — check Active Work for any CS numbers in use
+3. **CONTEXT.md clickstop summary table:** Cross-reference the summary table for any CS numbers added by other agents
+
+Use the next number after the highest found across all three sources. If in doubt, use a higher number — gaps in CS numbering are harmless, collisions cause real problems.
+
 #### Task Statuses
 - ⬜ Pending — not started, may have unmet dependencies
 - 🔜 Ready — dependencies met, can be picked up
@@ -619,7 +627,7 @@ A clickstop may be marked complete with deferred tasks only if the deferred work
 WORKBOARD.md is the real-time coordination file for multi-agent work. It tracks who is working on what, right now.
 
 **Direct commit on main (no PR required):**
-Unlike other project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. **The push is critical** — a local-only commit provides zero coordination value to other agents. Always commit and push together (see the multi-line commit format with `Agent:` trailer in § Commit Convention for workboard updates below). This enables fast task assignment without PR review overhead. The workboard must be updated immediately when:
+Unlike most project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. **The push is critical** — a local-only commit provides zero coordination value to other agents. Always commit and push together (see the multi-line commit format with `Agent:` trailer in § Commit Convention for workboard updates below). This enables fast task assignment without PR review overhead. Clickstop plan files are the other direct-on-main exception (see § Clickstop File Lifecycle). The workboard must be updated immediately when:
 - An orchestrator claims a task (add to Active Work)
 - A task completes (remove from Active Work)
 - A task becomes blocked (keep in Active Work with a note indicating blocked status)
@@ -651,7 +659,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 **Conflict handling:** Since multiple orchestrators may update WORKBOARD.md concurrently, conflicts are possible. Orchestrators should `git pull` before updating. If a conflict occurs **only in `WORKBOARD.md`**, this is the one exception to the general "do not resolve merge conflicts in the main checkout" rule: resolve it by keeping both agents' entries (additive merge), then complete the workboard-only update. If the pull produces conflicts in any other file, abort the merge and follow the normal abort + worktree workflow instead.
 
-**Public repository note:** When branch protection is enabled with required reviews, the repository owner (henrik-me) uses a repository ruleset bypass to allow direct WORKBOARD.md pushes. This bypass is configured in Settings → Rules → Rulesets and applies only to the owner role. Non-owner orchestrating agents (if any) would need to use PR-based workboard updates instead.
+**Public repository note:** When branch protection is enabled with required reviews, the repository owner (henrik-me) uses a repository ruleset bypass to allow direct WORKBOARD.md and clickstop plan file pushes. This bypass is configured in Settings → Rules → Rulesets and applies only to the owner role. Non-owner orchestrating agents (if any) would need to use PR-based updates instead.
 
 #### CONTEXT.md — Project State Updates
 
@@ -666,7 +674,7 @@ CONTEXT.md tracks clickstop summaries and current project state. Updates to CONT
 - Codebase state section updates (new routes, test counts, workflows)
 - Blocker/known issue changes
 
-CONTEXT.md updates are typically bundled into the PR that completes the relevant task. Stand-alone CONTEXT.md updates (e.g., adding a new clickstop) go through their own PR.
+CONTEXT.md updates are typically bundled into the PR that completes the relevant task. Stand-alone CONTEXT.md updates (e.g., adding a new clickstop) go through their own PR. **Exception:** when committing a clickstop plan file directly to main, the CONTEXT.md summary row may be bundled in the same commit or deferred to the implementation PR.
 
 #### Clickstop File Lifecycle
 
@@ -682,7 +690,7 @@ Each clickstop gets a detail file in `project/clickstops/` with a status prefix:
 
 **Lifecycle transitions:**
 
-1. **New clickstop defined** → create `planned_{cs-id}_{kebab-name}.md` with task table and design notes. Add a summary row to the CONTEXT.md clickstop summary table linking to the file.
+1. **New clickstop defined** → create `planned_{cs-id}_{kebab-name}.md` with task table and design notes. **Commit and push the plan file to main before starting any implementation work.** The plan must exist on main before a sub-agent begins coding in a worktree. Add a summary row to the CONTEXT.md clickstop summary table linking to the file (can be bundled with the plan commit or the implementation PR).
 2. **First task starts** → rename file from `planned_` to `active_` (use `git mv`). Update the CONTEXT.md summary row status and link.
 3. **All tasks complete** → rename file from `active_` to `done_` (use `git mv`). Update the CONTEXT.md summary row. Fill in the completion checklist inside the file. Replace the CONTEXT.md section with a 2-4 line summary linking to the archive.
 
