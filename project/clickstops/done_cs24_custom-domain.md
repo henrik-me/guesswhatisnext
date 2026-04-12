@@ -26,14 +26,14 @@
 - **No code changes needed:** The app already uses `CANONICAL_HOST` for all host-dependent behavior (HTTPS redirect, CSP, WebSocket URL). Changing the env var is sufficient — no code modifications required in security middleware, `server/app.js`, or any route.
 - **Backward compatibility:** The old `.azurecontainerapps.io` URL may continue to work, but the existing security middleware does not perform canonical-host redirects for already-HTTPS requests.
 
-## Current State (from investigation)
+## Pre-Implementation State (from investigation)
 
 - Production runs on Azure Container Apps (`gwn-production` in `gwn-rg` resource group).
-- Current URL pattern: `https://gwn-production.<region>.azurecontainerapps.io`.
+- Original URL pattern: `https://gwn-production.<region>.azurecontainerapps.io`.
 - `CANONICAL_HOST` env var drives HTTPS redirect (`server/middleware/security.js:14-25`), CSP policy (`server/middleware/security.js:43-66`), and HSTS.
 - `PROD_URL` GitHub secret feeds `CANONICAL_HOST` during deploy (`.github/workflows/prod-deploy.yml:170-200`).
-- Deploy scripts (`infra/deploy.sh`, `infra/deploy.ps1`) create the container app and set `PROD_URL`/`CANONICAL_HOST` but have no custom domain config.
-- No existing DNS documentation in the repo.
+- Deploy scripts (`infra/deploy.sh`, `infra/deploy.ps1`) create the container app and set `PROD_URL`/`CANONICAL_HOST` — custom domain config added as part of CS24.
+- DNS documentation added to `infra/README.md` as part of CS24-5.
 - `trust proxy` is set in `server/app.js` — works correctly behind Azure's reverse proxy with custom domains.
 
 ## Prerequisites
