@@ -15,7 +15,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Report progress to user after dispatching agents — never go silent
 - Commit after each meaningful step — don't batch unrelated changes
 - Record local review findings in PR description
-- Do not remove task from WORKBOARD.md until completion docs PR is merged
+- Do not remove task from WORKBOARD.md until PR is merged and task is fully complete
 
 ---
 
@@ -578,7 +578,7 @@ gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THRE
 - ⚠️ Tasks that both modify `matchHandler.js` should be sequential
 - ❌ Never parallelize two tasks that both rewrite the same function
 
-For deployment environments, CI/CD pipeline, and rollback policy, see [CONTEXT.md](CONTEXT.md).
+For deployment environments, CI/CD pipeline, and rollback policy, see [CONTEXT.md](CONTEXT.md) and [README.md](README.md).
 
 **Database migrations must be backward-compatible** (additive only: new columns with defaults, new tables) to ensure rollback safety.
 
