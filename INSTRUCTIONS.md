@@ -2,6 +2,10 @@
 
 Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't change.
 
+- Claiming a clickstop → update WORKBOARD.md (commit+push), rename CS file to active_, update content, commit to main
+- Closing a clickstop → rename CS file to done_, update content with results, update CONTEXT.md, remove from WORKBOARD.md
+- Preferred model: Claude Opus 4.6 for sub-agents, Opus 4.6 (1M context) for orchestrators, GPT 5.4 for reviews
+- CS number conflicts → check done_, active_, AND planned_ files before picking a new number
 - After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 - After every `git pull` → re-read this checklist; if INSTRUCTIONS.md changed, re-read fully
 - Never do implementation work in main checkout — dispatch to worktree sub-agents
@@ -318,7 +322,7 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 14. Re-request review and repeat until clean (code PRs only)
 15. Report completion with PR number and summary
 
-**Model selection:** GPT models require more explicit procedural prompting for workflow steps (e.g., review loop polling). Always include the full Sub-Agent Checklist when dispatching GPT-based sub-agents. Claude models better internalize workflow instructions from high-level descriptions. See LEARNINGS.md for detailed model evaluation results and task-specific recommendations.
+**Model selection:** The preferred model for all sub-agent implementation work is `claude-opus-4.6` (Opus). Orchestrator agents should use `claude-opus-4.6-1m` (1M context variant) to maintain full session context across long orchestration sessions. `gpt-5.4` is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 
 ### Parallel Agent Workflow
 
@@ -509,15 +513,33 @@ Each clickstop gets a detail file in `project/clickstops/` with a status prefix:
 
 **File format:** Each file contains the clickstop title, status, goal, full task table (with CS-prefixed IDs), design decisions, and notes (parallelism, architecture details).
 
-**Lifecycle transitions:**
+**Claiming a clickstop (step-by-step):**
 
-1. **New clickstop defined** → create `planned_{cs-id}_{kebab-name}.md` with task table and design notes. **Commit and push the plan file to main before starting any implementation work.** The plan must exist on main before a sub-agent begins coding in a worktree. Add a summary row to the CONTEXT.md clickstop summary table linking to the file (can be bundled with the plan commit or the implementation PR).
-2. **First task starts** → rename file from `planned_` to `active_` (use `git mv`). Update the CONTEXT.md summary row status and link.
-3. **All tasks complete** → rename file from `active_` to `done_` (use `git mv`). Update the CONTEXT.md summary row. Fill in the completion checklist inside the file. Replace the CONTEXT.md section with a 2-4 line summary linking to the archive.
+1. Update WORKBOARD.md Active Work table — add your row with task ID, description, agent ID, worktree, branch. Commit and push immediately.
+2. Create or update the CS file in `project/clickstops/`:
+   - If the clickstop is new: create `planned_{cs-id}_{kebab-name}.md` with task table and design notes
+   - If work is starting immediately: rename from `planned_` to `active_` (`git mv`), update Status field to 🔄 In Progress
+3. Commit the CS file to main before dispatching any sub-agents (prevents untracked file conflicts on `git pull`)
+4. Prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
+
+**Closing a clickstop (step-by-step):**
+
+1. Rename CS file from `active_` (or `planned_`) to `done_` using `git mv`
+2. Update the CS file content:
+   - Status → ✅ Complete
+   - All tasks marked ✅ Done in the task table
+   - Add PR references (number + link) and merge dates
+   - Fill in the completion checklist
+3. Update CONTEXT.md summary table: set status to ✅ Complete, update task counts (e.g., 6/6), update archive link to point to the `done_` file
+4. Remove your row from WORKBOARD.md Active Work, commit and push immediately
+
+**Important:** Steps 1-3 of closing are typically done in the implementation PR (bundled with the last code change). Step 4 (workboard update) is done by the orchestrator on main after merging.
 
 CONTEXT.md always contains only a short summary (2-4 lines) per clickstop with a link to the detail file. Full task tables, design decisions, and architecture details live in the clickstop files.
 
 Legacy archives from before CS0 may omit the completion checklist.
+
+**CS number conflicts:** Before creating a new clickstop, check ALL existing files in `project/clickstops/` — including `done_`, `active_`, and `planned_` prefixes. Pick the next unused number. Multiple agents creating clickstops concurrently can cause number collisions if they only check one prefix.
 
 ### Local Review Loop (GPT 5.4)
 
