@@ -310,7 +310,7 @@ public/
   │  [Lint] + [Test] + [E2E]  (parallel)                        │
   └──────────────────────────────────────────────────────────────┘
 
-  Manual trigger (staging-deploy.yml — auto-deploy disabled in PR #41)
+  Push to main or manual workflow_dispatch (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY)
          │  (concurrency: cancel superseded)
          ▼
   ┌──────────────────────────────────────────────────────────────────────────────────┐
