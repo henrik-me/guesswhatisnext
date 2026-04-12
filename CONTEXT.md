@@ -40,7 +40,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS23 | Documentation Review | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
-| CS26 | Public Repository Transition | ⬜ Planned | 0/11 | [details](project/clickstops/planned_cs26_public-repo-transition.md) |
+| CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done_cs26_public-repo-transition.md) |
 
 ---
 
@@ -139,7 +139,7 @@ Configure `gwn.metzger.dk` as the production custom domain. DNS, Azure custom do
 
 ## Clickstop CS26 — Public Repository Transition
 
-Secure the repository (branch protection, environment protection, action pinning, CODEOWNERS enforcement) and make it public. Ensure only the owner can deploy, approve PRs, and modify CI/CD config. External contributors via fork PRs only. See [full details](project/clickstops/planned_cs26_public-repo-transition.md).
+Repository secured and made public. Branch protection, environment protection (staging + production), SHA-pinned actions, CODEOWNERS enforcement, fork PR security, MIT license, and CONTRIBUTING.md all configured. WORKBOARD.md bypass via ruleset. All 11 tasks complete — code changes in PR #145, settings via GitHub API. See [full details](project/clickstops/done_cs26_public-repo-transition.md).
 
 ---
 
