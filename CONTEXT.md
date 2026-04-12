@@ -38,7 +38,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS21 | High Score Synchronization | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs21_highscore-sync.md) |
 | CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/clickstops/done_cs22_answer-randomization.md) |
 | CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/clickstops/done_cs23_docs-review.md) |
-| CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
+| CS24 | Custom Domain (gwn.metzger.dk) | ✅ Complete | 5/5 | [details](project/clickstops/done_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done_cs26_public-repo-transition.md) |
 | CS27 | Feature Flag Gating | ✅ Complete | 4/4 | [details](project/clickstops/done_cs27_feature-flag-gating.md) |
@@ -138,7 +138,7 @@ E2E browser tests against Docker MSSQL stack. Deferred from CS19-4. See [full de
 
 ## Clickstop CS24 — Custom Domain (gwn.metzger.dk)
 
-Configure `gwn.metzger.dk` as the production custom domain. DNS, Azure custom domain binding, managed TLS certificate, and deploy variable updates. See [full details](project/clickstops/planned_cs24_custom-domain.md).
+Production custom domain `gwn.metzger.dk` configured with DNS (CNAME + TXT), Azure hostname binding, managed TLS certificate (auto-renewing), and deploy variable updates. All 5 tasks complete — verified via `https://gwn.metzger.dk/healthz` (200 OK). See [full details](project/clickstops/done_cs24_custom-domain.md).
 
 ---
 
