@@ -41,8 +41,10 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done_cs26_public-repo-transition.md) |
+| CS27 | Feature Flag Gating | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs27_feature-flag-gating.md) |
 | CS28 | Staging Deployment & Validation | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs28_staging-deployment.md) |
 | CS29 | Production Deployment & Verification | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs29_production-deployment.md) |
+| CS30 | Local Review Loop | ✅ Complete | 5/5 | [details](project/clickstops/done_cs30_local-review-loop.md) |
 
 ---
 
@@ -64,7 +66,7 @@ after removing the repo name from the clone folder (see INSTRUCTIONS.md § Paral
 
 **All implementation work runs as background task agents — the main session only orchestrates.** The orchestrating agent dispatches tasks to background agents in worktree slots, monitors progress via notifications, and merges approved PRs. It never directly edits code, runs tests, or creates PRs itself. The orchestrating agent actively relays background task progress to the user — status checks, milestone updates, and completion notifications rather than dispatching silently.
 
-**Current workflow:** Agent pushes branch → creates PR → CI + Copilot review → merge via GH UI (branch protection enforced since CS26).
+**Current workflow:** Agent pushes branch → creates PR → local review loop (GPT 5.4) → Copilot review (code/config PRs only; docs-only PRs skip) → merge via GH UI (branch protection enforced since CS26).
 **Direct pushes to main:** Only the repository owner (henrik-me) can bypass branch protection, for WORKBOARD.md coordination updates and clickstop plan file commits (see INSTRUCTIONS.md § Clickstop File Lifecycle).
 
 **PR Review Comment Resolution:**
@@ -142,6 +144,12 @@ Configure `gwn.metzger.dk` as the production custom domain. DNS, Azure custom do
 ## Clickstop CS26 — Public Repository Transition
 
 Repository secured and made public. Branch protection, environment protection (staging + production), SHA-pinned actions, CODEOWNERS enforcement, fork PR security, MIT license, and CONTRIBUTING.md all configured. WORKBOARD.md bypass via ruleset. All 11 tasks complete — code changes in PR #145, settings via GitHub API. See [full details](project/clickstops/done_cs26_public-repo-transition.md).
+
+---
+
+## Clickstop CS30 — Local Review Loop
+
+Add GPT 5.4 local review as a fast pre-review step (~60s vs 10+ min Copilot polling). Docs-only PRs skip Copilot review; code PRs use both. See [full details](project/clickstops/done_cs30_local-review-loop.md).
 
 ---
 

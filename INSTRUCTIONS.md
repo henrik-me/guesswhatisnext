@@ -11,7 +11,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Commit clickstop plan file to main BEFORE starting implementation work
 - Deferred tasks → must create new `planned_` clickstop (never silently drop)
 - Sub-agent prompts must include full Sub-Agent Checklist verbatim
-- Poll for Copilot review — never assume empty reviews = approved
+- Run local review loop (GPT 5.4) before Copilot review — skip Copilot for docs-only PRs
 - Report progress to user after dispatching agents — never go silent
 - Commit after each meaningful step — don't batch unrelated changes
 
@@ -399,7 +399,7 @@ Commit locally after every meaningful, working change — each commit should be 
 
 ### Agent Progress Reporting
 
-All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
+All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → local review loop → Copilot review (code/config PRs only). The orchestrating agent only intervenes to merge approved PRs.
 
 Background agents **must** report progress to the orchestrating agent:
 - **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
@@ -407,9 +407,9 @@ Background agents **must** report progress to the orchestrating agent:
 - **On validation pass:** "CS11-64: lint ✓ test ✓ e2e ✓ — creating PR"
 - **On validation fail:** "CS11-64: validation FAILED — \<error summary\>. Fixing..."
 - **On abort:** "CS11-64: BLOCKED — \<reason\>. Needs orchestrator intervention."
-- **On PR created:** "CS11-64: PR #\<N\> created, requesting Copilot review"
-- **On review loop:** "CS11-64: Copilot review round \<N\> — fixing \<count\> issues"
-- **On ready:** "CS11-64: PR #\<N\> ready for merge (Copilot approved, CI green)"
+- **On PR created:** "CS11-64: PR #\<N\> created, running local review"
+- **On review loop:** "CS11-64: local review clean — requesting Copilot review" (code/config PRs) or "CS11-64: local review clean — docs-only, skipping Copilot" (docs-only PRs)
+- **On ready:** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)"
 
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
@@ -466,7 +466,7 @@ NOT allowed on main checkout:
 Sub-agents are responsible for:
 - All implementation file changes (code, docs, config) and all commits/pushes in worktrees
 - PR creation (`gh pr create`)
-- Copilot review loop (reply to comments, resolve threads, re-request review)
+- Copilot review loop (code/config PRs: reply to comments, resolve threads, re-request review; docs-only PRs: skip Copilot review)
 - Merge conflict resolution (rebase/merge `origin/main` into the feature branch)
 
 This keeps `main` clean and ensures implementation changes flow through PRs. (Clickstop plan files and WORKBOARD.md are the exceptions — those are committed directly on `main` by the orchestrator.)
@@ -479,9 +479,9 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 2. **Task description:** Clear, complete description including task ID (e.g., CS11-64), acceptance criteria, affected files, and edge cases.
 3. **Worktree context:** Which slot (`wt-N`), branch name using `{agent-id}/{task-id}-{description}` format, and port number (`300N`).
 4. **Validation command:** `npm run lint && npm test && npm run test:e2e`
-5. **PR workflow:** Create PR with task ID in title (e.g., `cs11-64: description`), include agent metadata block in description, request Copilot review, complete full review loop.
+5. **PR workflow:** Create PR with task ID in title (e.g., `cs11-64: description`), include agent metadata block in description. Run local review loop, then request Copilot review for code/config PRs (skip Copilot for docs-only PRs — see § Local Review Loop).
 6. **Commit conventions:** Use `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer in all commits. Conventional commit format with task scope (e.g., `feat(cs11-64): description`).
-7. **Review loop reminder:** Reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments.
+7. **Review loop reminder:** For code/config PRs, reference the "Waiting for Copilot Review (CRITICAL)" section — sub-agents must poll for Copilot's review before concluding there are no comments. Docs-only PRs skip Copilot review.
 8. **Failure handling:** If validation fails, fix and re-run (up to 3 attempts). If stuck, report failure details to the orchestrator and stop.
 9. **Merge conflicts:** Before pushing, rebase onto `origin/main`. Resolve conflicts in the worktree branch and re-run validation.
 
@@ -491,15 +491,15 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 3. Run `npm install` in worktree
 4. Set `$env:PORT = "300N"` for the assigned slot
 5. Implement the task (commit after each meaningful step with `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer)
-6. Run full validation: `npm run lint && npm test && npm run test:e2e`
-   - If validation fails, fix the issue and re-run. Repeat until all checks pass. If stuck after 3 attempts, report the failure to the orchestrator with error details and stop.
-7. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
+6. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
+7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs)
 8. Push branch and create PR with task ID in title and agent metadata in description
-9. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-10. Wait for review (poll per "Waiting for Copilot Review" section — do NOT skip this)
-11. Address all review comments (reply + fix + resolve threads)
-12. Re-request review and repeat until clean
-13. Report completion with PR number and summary
+9. Run local review loop (see § Local Review Loop): launch `code-review` agent with `model=gpt-5.4`, fix issues, push fixes, repeat until clean
+10. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per § Waiting for Copilot Review
+11. **For docs-only PRs:** Skip Copilot review — local review is sufficient
+12. Address all review comments (reply + fix + resolve threads)
+13. Re-request review and repeat until clean (code PRs only)
+14. Report completion with PR number and summary
 
 **Model selection:** GPT models require more explicit procedural prompting for workflow steps (e.g., review loop polling). Always include the full Sub-Agent Checklist when dispatching GPT-based sub-agents. Claude models better internalize workflow instructions from high-level descriptions. See LEARNINGS.md for detailed model evaluation results and task-specific recommendations.
 
@@ -539,10 +539,11 @@ The orchestrator should maximize parallelism by running non-worktree tasks concu
 3. Run full validation before pushing: `npm run lint && npm test && npm run test:e2e`
 4. Push branch to origin
 5. Create PR: `gh pr create --base main --head {agent-id}/{task-id}-{description}`
-6. Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-7. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
-8. After CI passes and review approved, **squash-merge** via GitHub UI or `gh pr merge --squash`
-9. Main orchestrating agent pulls after each merge: `git pull`
+6. Run local review loop (see § Local Review Loop) — fix issues, push fixes, repeat until clean
+7. **Code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` | **Docs-only PRs:** Skip Copilot review
+8. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
+9. After CI passes and reviews are complete (Copilot approval for code/config PRs; local review clean for docs-only PRs), **squash-merge** via GitHub UI or `gh pr merge --squash`
+10. Main orchestrating agent pulls after each merge: `git pull`
 
 **Recycling slots:** `git worktree remove <path> --force` → `git branch -d old-branch` → `git worktree add -b new-branch <path> main`
 
@@ -697,8 +698,35 @@ CONTEXT.md always contains only a short summary (2-4 lines) per clickstop with a
 
 Legacy archives from before CS0 may omit the completion checklist.
 
+### Local Review Loop (GPT 5.4)
+
+Before requesting Copilot PR review, sub-agents **must** run a local review loop using the `code-review` agent with model `gpt-5.4`. This catches issues in ~60 seconds vs the 2-10 minute Copilot polling cycle.
+
+**Local review procedure:**
+1. After pushing changes and creating the PR, launch a local review:
+   ```
+   task agent_type=code-review model=gpt-5.4:
+     "Review changes on branch <branch-name> in <worktree-path>.
+      Run `git --no-pager diff main...HEAD` to see changes.
+      Focus on: bugs, security, correctness, broken links, factual accuracy.
+      Only flag issues that genuinely matter."
+   ```
+2. Address all issues found by the local review — commit fixes
+3. Re-run the local review until clean (no issues found)
+4. **Then** proceed to Copilot review or skip, based on PR type:
+
+**PR type determines Copilot review requirement:**
+
+| PR Type | Local Review | Copilot Review | Rationale |
+|---------|-------------|----------------|-----------|
+| **Code changes** (features, fixes, refactors) | ✅ Required | ✅ Required | Code needs both fast local + thorough Copilot review |
+| **Docs-only** (clickstop files, CONTEXT.md, README, INSTRUCTIONS.md) | ✅ Required | ⏭️ Skip | Local review is sufficient; Copilot review adds 10+ min overhead for no additional value |
+| **Config/CI changes** (workflows, Dockerfile, docker-compose) | ✅ Required | ✅ Required | Security-sensitive changes need Copilot review |
+
+**Docs-only PR definition:** A PR is docs-only if it modifies ONLY files with extensions `.md`, or files in `project/clickstops/`. If ANY non-docs file is changed, treat it as a code PR.
+
 **Copilot PR Review Policy:**
-- Every PR must be reviewed by Copilot before merging
+- Every code/config PR must be reviewed by Copilot before merging (docs-only PRs may skip — see Local Review Loop above)
 - Categorize comments as **Fix** (real bugs, security, correctness), **Skip** (cosmetic, by-design), or **Accept suggestion** (correct code improvement)
 - Fix valid issues, reply with rationale on each thread, resolve all threads
 - If Copilot re-reviews after fixes, repeat the cycle
