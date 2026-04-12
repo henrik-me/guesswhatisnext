@@ -629,7 +629,7 @@ function init() {
         } else if (isFeatureEnabled('submitPuzzle')) {
           showMySubmissions();
         } else {
-          showToast('Submissions are not enabled for your account yet');
+          showToast('Puzzle submissions are not enabled for your account yet');
         }
         break;
       case 'toggle-reviewer-notes': {
