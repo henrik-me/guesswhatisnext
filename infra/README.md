@@ -255,7 +255,7 @@ Two DNS records are required before binding the custom domain in Azure:
 | CNAME | `gwn` | `gwn-production.<env-id>.<region>.azurecontainerapps.io` |
 | TXT | `asuid.gwn` | Domain verification ID from Azure (`az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.customDomainVerificationId" -o tsv`) |
 
-> **Note:** Some DNS providers expect zone-relative hostnames (e.g. `gwn` in the `metzger.dk` zone), others expect FQDNs (`gwn.metzger.dk`). Use whichever format your provider requires.
+> **Note:** Some DNS providers expect zone-relative hostnames (for example, `gwn` and `asuid.gwn` in the `metzger.dk` zone), while others expect FQDNs (`gwn.metzger.dk` and `asuid.gwn.metzger.dk`). Use whichever format your provider requires for each record.
 
 ### Binding the Domain
 
@@ -297,7 +297,7 @@ The production `CANONICAL_HOST` env var is derived from `PROD_URL` by the produc
 
 ### Backward Compatibility
 
-The old Azure FQDN (`gwn-production.<env-id>.<region>.azurecontainerapps.io`) continues to work. The security middleware does not perform canonical-host redirects for already-HTTPS requests, so both URLs serve traffic.
+The old Azure FQDN (`gwn-production.<env-id>.<region>.azurecontainerapps.io`) continues to work for direct HTTPS access. The security middleware does not perform canonical-host redirects for already-HTTPS requests, so both HTTPS URLs serve traffic. However, HTTP requests to the old Azure FQDN will still redirect to `https://${CANONICAL_HOST}` (for production, `https://gwn.metzger.dk`), so test the legacy hostname with an explicit `https://` if you want to verify it directly.
 
 ## Troubleshooting
 

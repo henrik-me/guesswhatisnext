@@ -580,7 +580,7 @@ fi
 # ── Custom domain binding (one-time setup, not run on every deploy) ──────────
 # Production uses a custom domain: gwn.metzger.dk
 # Prerequisites:
-#   1. CNAME record: gwn.metzger.dk → <app-fqdn> (e.g. gwn-production.blackbay-4189fc2a.eastus.azurecontainerapps.io)
+#   1. CNAME record: gwn.metzger.dk → <app-fqdn> (e.g. gwn-production.<env-id>.<region>.azurecontainerapps.io)
 #   2. TXT record: asuid.gwn.metzger.dk → <domain verification ID from Azure>
 #
 # After DNS records are in place, run these commands once:
