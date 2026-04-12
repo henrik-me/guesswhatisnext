@@ -41,6 +41,8 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done_cs26_public-repo-transition.md) |
+| CS27 | Feature Flag Gating | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs27_feature-flag-gating.md) |
+| CS28 | Local Review Loop | 🔄 Active | 5/5 | [details](project/clickstops/planned_cs28_local-review-loop.md) |
 
 ---
 
@@ -140,6 +142,12 @@ Configure `gwn.metzger.dk` as the production custom domain. DNS, Azure custom do
 ## Clickstop CS26 — Public Repository Transition
 
 Repository secured and made public. Branch protection, environment protection (staging + production), SHA-pinned actions, CODEOWNERS enforcement, fork PR security, MIT license, and CONTRIBUTING.md all configured. WORKBOARD.md bypass via ruleset. All 11 tasks complete — code changes in PR #145, settings via GitHub API. See [full details](project/clickstops/done_cs26_public-repo-transition.md).
+
+---
+
+## Clickstop CS28 — Local Review Loop
+
+Add GPT 5.4 local review as a fast pre-review step (~60s vs 10+ min Copilot polling). Docs-only PRs skip Copilot review; code PRs use both. See [full details](project/clickstops/planned_cs28_local-review-loop.md).
 
 ---
 
