@@ -26,8 +26,9 @@ export async function playOneRound(page) {
 
 /**
  * Generate a unique IP to avoid rate-limit collisions across tests.
- * Each spec file gets a unique seed based on import time, and each call
- * within that file increments a counter for a unique fourth octet.
+ * Each worker process/module instance gets a unique seed when this helper
+ * module is loaded, and each call within that instance increments a counter
+ * for a unique fourth octet.
  */
 const ipSeed = ((Date.now() & 0xffff) ^ Math.floor(Math.random() * 0xffff)) >>> 0;
 const ipBaseSecondOctet = (ipSeed % 254) + 1;

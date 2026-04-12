@@ -53,7 +53,7 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
-/** GET /api/scores/leaderboard?mode=freeplay&period=all|weekly|daily&limit=20 */
+/** GET /api/scores/leaderboard?mode=freeplay&period=alltime|weekly|daily&limit=20 */
 router.get('/leaderboard', optionalAuth, async (req, res, next) => {
   try {
     const { mode = 'freeplay', period = 'all', limit = 20 } = req.query;
@@ -95,7 +95,7 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
   }
 });
 
-/** GET /api/scores/leaderboard/multiplayer?period=all|weekly|daily&limit=20 */
+/** GET /api/scores/leaderboard/multiplayer?period=alltime|weekly|daily&limit=20 */
 router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
   try {
     const { period = 'all', limit = 20 } = req.query;
