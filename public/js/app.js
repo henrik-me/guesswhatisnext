@@ -563,6 +563,15 @@ function init() {
     }
   });
 
+  // Auth form submit handler — Enter key triggers login/register
+  const authForm = document.getElementById('auth-form');
+  if (authForm) {
+    authForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      authAction(currentAuthMode);
+    });
+  }
+
   // Wire up button actions
   document.addEventListener('click', (e) => {
     // Handle notification item click → highlight submission
@@ -787,11 +796,11 @@ function init() {
       case 'show-auth-login':
         showScreen('auth');
         break;
-      case 'auth-submit':
-        authAction(currentAuthMode);
-        break;
       case 'auth-toggle-mode':
         setAuthMode(currentAuthMode === 'login' ? 'register' : 'login');
+        break;
+      case 'auth-submit':
+        // Handled by form submit event, but keep as fallback
         break;
       case 'logout':
         logout();
@@ -1324,14 +1333,15 @@ function updateHomeAuthDisplay() {
 
 /** Switch auth screen between login and register modes. */
 function setAuthMode(mode) {
-  currentAuthMode = mode;
+  const normalizedMode = mode === 'register' ? 'register' : 'login';
+  currentAuthMode = normalizedMode;
   const title = document.querySelector('[data-bind="auth-screen-title"]');
   const subtitle = document.querySelector('[data-bind="auth-screen-subtitle"]');
   const submitBtn = document.querySelector('[data-bind="auth-submit-btn"]');
   const togglePrompt = document.querySelector('[data-bind="auth-toggle-prompt"]');
   const toggleLink = document.querySelector('[data-bind="auth-toggle-link"]');
 
-  if (mode === 'register') {
+  if (normalizedMode === 'register') {
     if (title) title.textContent = 'Create Account';
     if (subtitle) subtitle.textContent = 'Register a new account for multiplayer';
     if (submitBtn) { submitBtn.textContent = 'Register'; submitBtn.setAttribute('aria-label', 'Create account'); }
