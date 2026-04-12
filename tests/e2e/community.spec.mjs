@@ -252,8 +252,8 @@ test.describe('Community Gallery', () => {
     await page.click('[data-action="browse-community"]');
     await expect(page.locator('[data-screen="community-gallery"]')).toHaveClass(/active/);
 
-    // Should show empty state or loading (empty state because no community puzzles in fresh DB)
-    await expect(page.locator('.gallery-empty, .gallery-grid .gallery-card')).toBeVisible({ timeout: 5000 });
+    // Should show empty state or gallery cards (DB may contain puzzles from prior tests in CI)
+    await expect(page.locator('.gallery-empty, .gallery-grid .gallery-card').first()).toBeVisible({ timeout: 5000 });
   });
 
   test('gallery has filter controls', async ({ page }) => {
