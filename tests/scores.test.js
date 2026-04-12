@@ -113,6 +113,24 @@ describe('GET /api/scores/leaderboard/multiplayer', () => {
   });
 });
 
+describe('GET /api/scores/leaderboard (unauthenticated)', () => {
+  test('returns leaderboard without auth', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard');
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.leaderboard)).toBe(true);
+  });
+
+  test('returns multiplayer leaderboard without auth', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard/multiplayer');
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.leaderboard)).toBe(true);
+  });
+});
+
 describe('GET /api/scores/me', () => {
   test('returns own scores and stats', async () => {
     const res = await getAgent()

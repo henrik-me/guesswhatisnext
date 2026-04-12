@@ -12,9 +12,9 @@ test.describe('Leaderboard', () => {
     const username = uniqueUser();
     const password = 'testpass123';
 
-    // Register
+    // Register via top bar
     await page.goto('/');
-    await page.click('[data-action="start-multiplayer"]');
+    await page.click('[data-action="show-auth-register"]');
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
     await page.fill('#auth-username', username);
     await page.fill('#auth-password', password);
