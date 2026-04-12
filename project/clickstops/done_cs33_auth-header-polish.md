@@ -1,6 +1,6 @@
 # CS33 — Auth Header Polish
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Complete
 **Goal:** Refine the auth header UX introduced in CS20 — streamline login/register flow, restore user icon, reduce visual footprint, and integrate into the logo line.
 
 ---
@@ -28,3 +28,9 @@
 ## Prerequisites
 
 - CS20 (Authentication UX Overhaul) — ✅ Complete (PR #146)
+
+## Completion
+
+- **PR:** #153
+- **Merged:** 2026-04-12
+- **Files changed:** 9
