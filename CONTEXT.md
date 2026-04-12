@@ -40,7 +40,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS23 | Documentation Review | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
-| CS26 | Public Repository Transition | ⬜ Planned | 0/10 | [details](project/clickstops/planned_cs26_public-repo-transition.md) |
+| CS26 | Public Repository Transition | ⬜ Planned | 0/11 | [details](project/clickstops/planned_cs26_public-repo-transition.md) |
 
 ---
 
