@@ -907,15 +907,15 @@ body::before {
 }
 
 @media (min-width: 768px) {
-  #screen-submit-puzzle {
+  #screen-submit-puzzle.active {
     display: flex;
     flex-wrap: wrap;
     gap: 1.5rem;
   }
 
-  #screen-submit-puzzle > .screen-header,
-  #screen-submit-puzzle > .onboarding-explainer,
-  #screen-submit-puzzle > .btn-back {
+  #screen-submit-puzzle.active > .screen-header,
+  #screen-submit-puzzle.active > .onboarding-explainer,
+  #screen-submit-puzzle.active > .btn-back {
     width: 100%;
   }
 

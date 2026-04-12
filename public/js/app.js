@@ -1244,6 +1244,7 @@ function updateHomeAuthDisplay() {
   const loggedOutBar = document.querySelector('[data-bind="auth-bar-logged-out"]');
   const loggedInBar = document.querySelector('[data-bind="auth-bar-logged-in"]');
   const usernameText = document.querySelector('[data-bind="auth-bar-username-text"]');
+  const communityBtn = document.querySelector('[data-action="show-community"]');
 
   if (isLoggedIn() && authUsername) {
     if (loggedOutBar) loggedOutBar.style.display = 'none';
@@ -1260,6 +1261,8 @@ function updateHomeAuthDisplay() {
   // CS20-3: Hide multiplayer button when not logged in
   const mpBtn = document.querySelector('[data-action="start-multiplayer"]');
   if (mpBtn) mpBtn.style.display = isLoggedIn() ? '' : 'none';
+  // Community Puzzles button hidden when submitPuzzle flag is off
+  if (communityBtn) communityBtn.style.display = isFeatureEnabled('submitPuzzle') ? '' : 'none';
 }
 
 /** Update community screen to reflect auth + feature flag state. */
