@@ -1002,7 +1002,7 @@ function renderPersonalBests(stats) {
     html += `<div class="personal-bests-stat">
       <span class="personal-bests-label">🎮 Free Play</span>
       <span class="personal-bests-value">${Number(freeplay.high_score).toLocaleString()}</span>
-      <span class="personal-bests-detail">${freeplay.games_played} games · ${Number(freeplay.avg_score).toLocaleString()} avg</span>
+      <span class="personal-bests-detail">${Number(freeplay.games_played)} games · ${Number(freeplay.avg_score).toLocaleString()} avg</span>
     </div>`;
   }
 
@@ -1010,7 +1010,7 @@ function renderPersonalBests(stats) {
     html += `<div class="personal-bests-stat">
       <span class="personal-bests-label">⚔️ Multiplayer</span>
       <span class="personal-bests-value">${Number(multiplayer.high_score).toLocaleString()}</span>
-      <span class="personal-bests-detail">${multiplayer.games_played} games · 🔥 ${multiplayer.best_streak} streak</span>
+      <span class="personal-bests-detail">${Number(multiplayer.games_played)} games · 🔥 ${Number(multiplayer.best_streak)} streak</span>
     </div>`;
   }
 
