@@ -799,9 +799,6 @@ function init() {
       case 'auth-toggle-mode':
         setAuthMode(currentAuthMode === 'login' ? 'register' : 'login');
         break;
-      case 'auth-submit':
-        // Handled by form submit event, but keep as fallback
-        break;
       case 'logout':
         logout();
         break;
