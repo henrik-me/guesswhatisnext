@@ -246,7 +246,7 @@ guesswhatisnext/
 │   │   ├── auth.js                 # Register, login, JWT tokens
 │   │   ├── features.js             # Feature flag status endpoint
 │   │   ├── matches.js              # Room create/join + match history
-│   │   ├── notifications.js       # Notifications API routes
+│   │   ├── notifications.js        # Notifications API routes
 │   │   ├── puzzles.js              # Puzzle API
 │   │   ├── scores.js               # Score submission + leaderboards
 │   │   ├── submissions.js          # User-submitted puzzles
