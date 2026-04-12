@@ -15,39 +15,39 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 
 | ID | Name | Status | Tasks | Archive |
 |----|------|--------|-------|---------|
-| CS1 | Client-Side Game | ✅ Complete | 10/10 | [details](project/done/done_cs1_client-side-game.md) |
-| CS2 | Backend & Multiplayer | ✅ Complete | 10/10 | [details](project/done/done_cs2_backend-multiplayer.md) |
-| CS3 | Security & Game Features | ✅ Complete | 10/10 | [details](project/done/done_cs3_security-game-features.md) |
-| CS4 | Infrastructure & Deployment | ✅ Complete | 3/3 | [details](project/done/done_cs4_infrastructure.md) |
-| CS5 | Multi-Player Expansion | ✅ Complete | 7/7 | [details](project/done/done_cs5_multiplayer-expansion.md) |
-| CS6 | Production Hardening | ✅ Complete | 3/3 | [details](project/done/done_cs6_production-hardening.md) |
-| CS7 | Quality & Testing | ✅ Complete | 2/2 | [details](project/done/done_cs7_quality-testing.md) |
-| CS8 | User Experience | ✅ Complete | 4/4 | [details](project/done/done_cs8_user-experience.md) |
-| CS9 | Content & Growth | ✅ Complete | 2/2 | [details](project/done/done_cs9_content-growth.md) |
-| CS10 | CI/CD Pipeline | ✅ Complete | 6/6 | [details](project/done/done_cs10_cicd-pipeline.md) |
-| CS11 | Database Migration | ✅ Complete | 18/18 | [details](project/done/done_cs11_database-migration.md) |
-| CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/done/done_cs12_test-infrastructure.md) |
-| CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/done/done_cs13_observability-logging.md) |
-| CS14 | Community Puzzle Submission UX | ✅ Complete | 8/8 | [details](project/done/done_cs14_community-puzzle-ux.md) |
-| CS15 | Dev Tooling & Log Assertions | ✅ Complete | 5/5 | [details](project/done/done_cs15_dev-tooling-log-assertions.md) |
-| CS16 | Docs Optimization & Cleanup | ✅ Complete | 4/4 | [details](project/done/done_cs16_docs-optimization.md) |
-| CS17 | Process Documentation Improvement | ✅ Complete | 4/8 | [details](project/done/done_cs17_process-docs-improvement.md) |
-| CS18 | Address MSSQL Issues in Production | ✅ Complete | 10/10 | [details](project/done/done_cs18_mssql-production-fixes.md) |
-| CS19 | Community Puzzle Navigation & Testing | ✅ Complete | 4/5 | [details](project/done/done_cs19_community-puzzle-navigation.md) |
-| CS20 | Authentication UX Overhaul | ✅ Complete | 6/6 | [details](project/done/done_cs20_auth-ux-overhaul.md) |
-| CS21 | Leaderboard Personal Bests | ✅ Complete | 4/4 | [details](project/done/done_cs21_leaderboard-personal-bests.md) |
-| CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/done/done_cs22_answer-randomization.md) |
-| CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/done/done_cs23_docs-review.md) |
-| CS24 | Custom Domain (gwn.metzger.dk) | ✅ Complete | 5/5 | [details](project/done/done_cs24_custom-domain.md) |
+| CS1 | Client-Side Game | ✅ Complete | 10/10 | [details](project/clickstops/done/done_cs1_client-side-game.md) |
+| CS2 | Backend & Multiplayer | ✅ Complete | 10/10 | [details](project/clickstops/done/done_cs2_backend-multiplayer.md) |
+| CS3 | Security & Game Features | ✅ Complete | 10/10 | [details](project/clickstops/done/done_cs3_security-game-features.md) |
+| CS4 | Infrastructure & Deployment | ✅ Complete | 3/3 | [details](project/clickstops/done/done_cs4_infrastructure.md) |
+| CS5 | Multi-Player Expansion | ✅ Complete | 7/7 | [details](project/clickstops/done/done_cs5_multiplayer-expansion.md) |
+| CS6 | Production Hardening | ✅ Complete | 3/3 | [details](project/clickstops/done/done_cs6_production-hardening.md) |
+| CS7 | Quality & Testing | ✅ Complete | 2/2 | [details](project/clickstops/done/done_cs7_quality-testing.md) |
+| CS8 | User Experience | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs8_user-experience.md) |
+| CS9 | Content & Growth | ✅ Complete | 2/2 | [details](project/clickstops/done/done_cs9_content-growth.md) |
+| CS10 | CI/CD Pipeline | ✅ Complete | 6/6 | [details](project/clickstops/done/done_cs10_cicd-pipeline.md) |
+| CS11 | Database Migration | ✅ Complete | 18/18 | [details](project/clickstops/done/done_cs11_database-migration.md) |
+| CS12 | Test Infrastructure | ✅ Complete | 3/3 | [details](project/clickstops/done/done_cs12_test-infrastructure.md) |
+| CS13 | Observability & Logging | ✅ Complete | 7/7 | [details](project/clickstops/done/done_cs13_observability-logging.md) |
+| CS14 | Community Puzzle Submission UX | ✅ Complete | 8/8 | [details](project/clickstops/done/done_cs14_community-puzzle-ux.md) |
+| CS15 | Dev Tooling & Log Assertions | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs15_dev-tooling-log-assertions.md) |
+| CS16 | Docs Optimization & Cleanup | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs16_docs-optimization.md) |
+| CS17 | Process Documentation Improvement | ✅ Complete | 4/8 | [details](project/clickstops/done/done_cs17_process-docs-improvement.md) |
+| CS18 | Address MSSQL Issues in Production | ✅ Complete | 10/10 | [details](project/clickstops/done/done_cs18_mssql-production-fixes.md) |
+| CS19 | Community Puzzle Navigation & Testing | ✅ Complete | 4/5 | [details](project/clickstops/done/done_cs19_community-puzzle-navigation.md) |
+| CS20 | Authentication UX Overhaul | ✅ Complete | 6/6 | [details](project/clickstops/done/done_cs20_auth-ux-overhaul.md) |
+| CS21 | Leaderboard Personal Bests | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs21_leaderboard-personal-bests.md) |
+| CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs22_answer-randomization.md) |
+| CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs23_docs-review.md) |
+| CS24 | Custom Domain (gwn.metzger.dk) | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs24_custom-domain.md) |
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
-| CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/done/done_cs26_public-repo-transition.md) |
-| CS27 | Feature Flag Gating | ✅ Complete | 4/4 | [details](project/done/done_cs27_feature-flag-gating.md) |
+| CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done/done_cs26_public-repo-transition.md) |
+| CS27 | Feature Flag Gating | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs27_feature-flag-gating.md) |
 | CS28 | Staging Deployment & Validation | 🔴 Blocked | 3/5 | [details](project/clickstops/planned_cs28_staging-deployment.md) |
 | CS29 | Production Deployment & Verification | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs29_production-deployment.md) |
 | CS34 | Fix Deprecated Node.js 20 Actions | ⬜ Planned | 0/3 | [details](project/clickstops/planned_cs34_fix-deprecated-actions.md) |
-| CS30 | Local Review Loop | ✅ Complete | 5/5 | [details](project/done/done_cs30_local-review-loop.md) |
-| CS31 | Instructions Optimization | ✅ Complete | 4/4 | [details](project/done/done_cs31_instructions-optimization.md) |
-| CS33 | Auth Header Polish | ✅ Complete | 5/5 | [details](project/done/done_cs33_auth-header-polish.md) |
+| CS30 | Local Review Loop | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs30_local-review-loop.md) |
+| CS31 | Instructions Optimization | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs31_instructions-optimization.md) |
+| CS33 | Auth Header Polish | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs33_auth-header-polish.md) |
 | CS35 | Clickstop File Cleanup | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs35_clickstop-cleanup.md) |
 
 ---
@@ -87,31 +87,31 @@ Every Copilot review comment thread must be replied to with a meaningful message
 
 ## Clickstop CS11 — Database Migration
 
-✅ Complete. Database abstraction layer (SQLite + Azure SQL) with repository pattern, versioned migrations, and config-driven backend selection. Azure Files cleanup, async route conversion, Azure SQL provisioning, and production deployment all done. Production running on Azure SQL (serverless free tier, centralus). See [archive](project/done/done_cs11_database-migration.md).
+✅ Complete. Database abstraction layer (SQLite + Azure SQL) with repository pattern, versioned migrations, and config-driven backend selection. Azure Files cleanup, async route conversion, Azure SQL provisioning, and production deployment all done. Production running on Azure SQL (serverless free tier, centralus). See [archive](project/clickstops/done/done_cs11_database-migration.md).
 
 ---
 
 ## Clickstop CS14 — Community Puzzle Submission UX
 
-✅ Complete. Puzzle submission discovery, authoring, moderation, and notifications. Feature-flagged via `submitPuzzle` (PR #91). All task PRs merged. Note: CS14-87 (image submissions) added client-side UI and server-side handling/sanitization code, but the `VALID_TYPES` gate in `server/routes/submissions.js` still excludes `image` — opening the gate is deferred to CS19. See [archive](project/done/done_cs14_community-puzzle-ux.md).
+✅ Complete. Puzzle submission discovery, authoring, moderation, and notifications. Feature-flagged via `submitPuzzle` (PR #91). All task PRs merged. Note: CS14-87 (image submissions) added client-side UI and server-side handling/sanitization code, but the `VALID_TYPES` gate in `server/routes/submissions.js` still excludes `image` — opening the gate is deferred to CS19. See [archive](project/clickstops/done/done_cs14_community-puzzle-ux.md).
 
 ---
 
 ## Clickstop CS15 — Dev Tooling & Log Assertions
 
-✅ Complete. Unified dev server script (`scripts/dev-server.js`), e2e log capture via Playwright, log assertion tests (`tests/e2e/global-teardown.mjs`), CI artifact upload, and production log format validation (`tests/log-format.test.js`). Merged in PRs #88, #93, #94. See [archive](project/done/done_cs15_dev-tooling-log-assertions.md).
+✅ Complete. Unified dev server script (`scripts/dev-server.js`), e2e log capture via Playwright, log assertion tests (`tests/e2e/global-teardown.mjs`), CI artifact upload, and production log format validation (`tests/log-format.test.js`). Merged in PRs #88, #93, #94. See [archive](project/clickstops/done/done_cs15_dev-tooling-log-assertions.md).
 
 ---
 
 ## Clickstop CS18 — Address MSSQL Issues in Production
 
-✅ Complete. Adapter-level SQL rewriting (LIMIT→OFFSET/FETCH, dates, RANDOM→NEWID, INSERT OR IGNORE, SCOPE_IDENTITY for lastId). Multiplayer leaderboard query rewritten for MSSQL compat (LEFT JOIN instead of aggregate subquery). Docker MSSQL validation stack with Caddy HTTPS. Deployed to production, verified. See [archive](project/done/done_cs18_mssql-production-fixes.md).
+✅ Complete. Adapter-level SQL rewriting (LIMIT→OFFSET/FETCH, dates, RANDOM→NEWID, INSERT OR IGNORE, SCOPE_IDENTITY for lastId). Multiplayer leaderboard query rewritten for MSSQL compat (LEFT JOIN instead of aggregate subquery). Docker MSSQL validation stack with Caddy HTTPS. Deployed to production, verified. See [archive](project/clickstops/done/done_cs18_mssql-production-fixes.md).
 
 ---
 
 ## Clickstop CS19 — Community Puzzle Navigation & Testing
 
-✅ Complete. Community puzzle submission moved to dedicated sub-page, feature-flag gating applied, E2E tests updated for new navigation, home screen cleaned up. CS19-4 (Docker MSSQL E2E) deferred to CS25. Merged in PR [#139](https://github.com/henrik-me/guesswhatisnext/pull/139). See [archive](project/done/done_cs19_community-puzzle-navigation.md).
+✅ Complete. Community puzzle submission moved to dedicated sub-page, feature-flag gating applied, E2E tests updated for new navigation, home screen cleaned up. CS19-4 (Docker MSSQL E2E) deferred to CS25. Merged in PR [#139](https://github.com/henrik-me/guesswhatisnext/pull/139). See [archive](project/clickstops/done/done_cs19_community-puzzle-navigation.md).
 
 ---
 
@@ -141,19 +141,19 @@ E2E browser tests against Docker MSSQL stack. Deferred from CS19-4. See [full de
 
 ## Clickstop CS24 — Custom Domain (gwn.metzger.dk)
 
-Production custom domain `gwn.metzger.dk` configured with DNS (CNAME + TXT), Azure hostname binding, managed TLS certificate (auto-renewing), and deploy variable updates. All 5 tasks complete — verified via `https://gwn.metzger.dk/healthz` (200 OK). See [full details](project/done/done_cs24_custom-domain.md).
+Production custom domain `gwn.metzger.dk` configured with DNS (CNAME + TXT), Azure hostname binding, managed TLS certificate (auto-renewing), and deploy variable updates. All 5 tasks complete — verified via `https://gwn.metzger.dk/healthz` (200 OK). See [full details](project/clickstops/done/done_cs24_custom-domain.md).
 
 ---
 
 ## Clickstop CS26 — Public Repository Transition
 
-Repository secured and made public. Branch protection, environment protection (staging + production), SHA-pinned actions, CODEOWNERS enforcement, fork PR security, MIT license, and CONTRIBUTING.md all configured. WORKBOARD.md bypass via ruleset. All 11 tasks complete — code changes in PR #145, settings via GitHub API. See [full details](project/done/done_cs26_public-repo-transition.md).
+Repository secured and made public. Branch protection, environment protection (staging + production), SHA-pinned actions, CODEOWNERS enforcement, fork PR security, MIT license, and CONTRIBUTING.md all configured. WORKBOARD.md bypass via ruleset. All 11 tasks complete — code changes in PR #145, settings via GitHub API. See [full details](project/clickstops/done/done_cs26_public-repo-transition.md).
 
 ---
 
 ## Clickstop CS30 — Local Review Loop
 
-Add GPT 5.4 local review as a fast pre-review step (~60s vs 10+ min Copilot polling). Docs-only PRs skip Copilot review; code PRs use both. See [full details](project/done/done_cs30_local-review-loop.md).
+Add GPT 5.4 local review as a fast pre-review step (~60s vs 10+ min Copilot polling). Docs-only PRs skip Copilot review; code PRs use both. See [full details](project/clickstops/done/done_cs30_local-review-loop.md).
 
 ---
 
