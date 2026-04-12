@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "3000:3000"
+      - "${HOST_PORT:-3000}:3000"
     environment:
       # Dev/test defaults only — not used in production. Production values are in GitHub Secrets.
       - NODE_ENV=development
