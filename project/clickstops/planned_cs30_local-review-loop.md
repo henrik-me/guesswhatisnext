@@ -1,4 +1,4 @@
-# CS28 — Local Review Loop
+# CS30 — Local Review Loop
 
 **Status:** 🔄 Active
 **Goal:** Add GPT 5.4 local review loop to the development process as a fast pre-review step. Docs-only PRs use local review only; code PRs use local review + Copilot review.
@@ -9,11 +9,11 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS28-1 | Add Local Review Loop section to INSTRUCTIONS.md | ⬜ Pending | New section before Copilot PR Review Policy. Defines procedure, PR type table, docs-only definition. |
-| CS28-2 | Update Sub-Agent Checklist | ⬜ Pending | Add local review step, make Copilot review conditional on PR type. |
-| CS28-3 | Update Quick Reference Checklist | ⬜ Pending | Replace Copilot review line with local review guidance. |
-| CS28-4 | Update Copilot PR Review Policy | ⬜ Pending | Note docs-only exemption in policy opening. |
-| CS28-5 | Validate new flow on this PR | ⬜ Pending | This PR itself uses the local review loop to validate the process works. |
+| CS30-1 | Add Local Review Loop section to INSTRUCTIONS.md | ⬜ Pending | New section before Copilot PR Review Policy. Defines procedure, PR type table, docs-only definition. |
+| CS30-2 | Update Sub-Agent Checklist | ⬜ Pending | Add local review step, make Copilot review conditional on PR type. |
+| CS30-3 | Update Quick Reference Checklist | ⬜ Pending | Replace Copilot review line with local review guidance. |
+| CS30-4 | Update Copilot PR Review Policy | ⬜ Pending | Note docs-only exemption in policy opening. |
+| CS30-5 | Validate new flow on this PR | ⬜ Pending | This PR itself uses the local review loop to validate the process works. |
 
 ---
 
