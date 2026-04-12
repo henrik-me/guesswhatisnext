@@ -964,15 +964,17 @@ async function fetchPersonalBests() {
   const container = document.querySelector('[data-bind="personal-bests"]');
   if (!container) return;
 
+  const signinHTML = '<div class="personal-bests-signin">🔑 Sign in to track your scores</div>';
+
   if (!isLoggedIn()) {
-    container.innerHTML = '<div class="personal-bests-signin">🔑 Sign in to track your scores</div>';
+    container.innerHTML = signinHTML;
     return;
   }
 
   try {
     const res = await apiFetch('/api/scores/me');
     if (res.status === 401) {
-      container.innerHTML = '<div class="personal-bests-signin">🔑 Sign in to track your scores</div>';
+      container.innerHTML = signinHTML;
       return;
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
