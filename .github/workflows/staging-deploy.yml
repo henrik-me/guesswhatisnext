@@ -199,6 +199,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests against ephemeral container
+        timeout-minutes: 15
         run: |
           MAX_ATTEMPTS=3
           ATTEMPT=1
@@ -216,7 +217,7 @@ jobs:
               exit 0
             fi
 
-            if echo "$OUTPUT" | grep -qiE '429|too many requests|rate limit'; then
+            if echo "$OUTPUT" | grep -qiE 'status[: ]+429|Error.*429|HTTP.*429|too many requests'; then
               if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
                 echo "Detected possible rate limiting. Waiting 65s for burst window to reset..."
                 sleep 65
