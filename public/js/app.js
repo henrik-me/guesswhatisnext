@@ -1099,13 +1099,14 @@ function renderLeaderboard(entries) {
     const rank = entry.rank ?? i + 1;
     const medal = medals[rank] || '';
     const rankClass = rank <= 3 ? ` rank-${rank}` : '';
-    const userClass = currentUser && entry.username === currentUser ? ' current-user' : '';
+    const isUser = entry.isCurrentUser || (currentUser && entry.username === currentUser);
+    const userClass = isUser ? ' current-user' : '';
     const name = escapeHTML(entry.username || 'Anonymous');
     const score = entry.score ?? 0;
 
     return `<div class="leaderboard-row${rankClass}${userClass}" role="listitem">
       ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
-      <span class="leaderboard-name">${name}${userClass ? ' <span class="you-badge">You</span>' : ''}</span>
+      <span class="leaderboard-name">${name}${isUser ? ' <span class="you-badge">You</span>' : ''}</span>
       <span class="leaderboard-score">${score.toLocaleString()}</span>
     </div>`;
   }).join('');
@@ -1127,12 +1128,13 @@ function renderMultiplayerLeaderboard(entries) {
     const rank = entry.rank ?? i + 1;
     const medal = medals[rank] || '';
     const rankClass = rank <= 3 ? ` rank-${rank}` : '';
-    const userClass = currentUser && entry.username === currentUser ? ' current-user' : '';
+    const isUser = entry.isCurrentUser || (currentUser && entry.username === currentUser);
+    const userClass = isUser ? ' current-user' : '';
     const name = escapeHTML(entry.username || 'Anonymous');
 
     return `<div class="leaderboard-row${rankClass}${userClass}" role="listitem">
       ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
-      <span class="leaderboard-name">${name}${userClass ? ' <span class="you-badge">You</span>' : ''}</span>
+      <span class="leaderboard-name">${name}${isUser ? ' <span class="you-badge">You</span>' : ''}</span>
       <span class="leaderboard-stats">
         <span class="leaderboard-wins">${entry.wins}W</span>
         <span class="leaderboard-winrate">${entry.winRate}%</span>
