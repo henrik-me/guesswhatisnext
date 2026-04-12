@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-12T16:45Z
+> **Last updated:** 2026-04-12T17:00Z
 
 ## Orchestrators
 
@@ -12,6 +12,7 @@ Orchestrators update this file directly on main — no PR required.
 | yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active |
 | yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active |
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active |
+| yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active |
 
 ## Active Work
 
