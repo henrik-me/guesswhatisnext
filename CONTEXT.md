@@ -310,8 +310,8 @@ public/
   │  [Lint] + [Test] + [E2E]  (parallel)                        │
   └──────────────────────────────────────────────────────────────┘
 
-  Push to main or manual workflow_dispatch (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY)
-         │  (concurrency: cancel superseded)
+  Push to main (non-docs paths) or manual workflow_dispatch
+         │  (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY; concurrency: cancel superseded)
          ▼
   ┌──────────────────────────────────────────────────────────────────────────────────┐
   │  Staging Pipeline                                                                │
