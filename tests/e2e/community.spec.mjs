@@ -6,6 +6,18 @@ function uniqueUser() {
   return `e2e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** Generate a unique IP to avoid rate-limit collisions across tests and spec files. */
+const ipSeed = ((Date.now() & 0xffff) ^ Math.floor(Math.random() * 0xffff)) >>> 0;
+const ipBaseSecondOctet = (ipSeed % 254) + 1;
+const ipBaseThirdOctet = Math.floor(ipSeed / 256) % 256;
+let ipCounter = 0;
+function uniqueIP() {
+  const offset = ipCounter++;
+  const thirdOctet = (ipBaseThirdOctet + Math.floor(offset / 254)) % 256;
+  const fourthOctet = (offset % 254) + 1;
+  return `10.${ipBaseSecondOctet}.${thirdOctet}.${fourthOctet}`;
+}
+
 test.describe('Community Discovery & Onboarding', () => {
   test('community puzzles button is visible on home screen', async ({ page }) => {
     await page.goto('/');
@@ -26,7 +38,7 @@ test.describe('Community Discovery & Onboarding', () => {
   test('logged-in user sees no Create or My Submissions when submitPuzzle flag is off', async ({ page, request }) => {
     const username = uniqueUser();
     const password = 'testpass123';
-    const ip = `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+    const ip = uniqueIP();
 
     // Register via API
     const res = await request.post('/api/auth/register', {
@@ -124,7 +136,7 @@ test.describe('Enhanced Puzzle Authoring Form', () => {
   test.beforeEach(async ({ page, request }) => {
     username = uniqueUser();
     // Register via API with a unique IP to avoid hitting the shared rate limiter
-    const ip = `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+    const ip = uniqueIP();
     const res = await request.post('/api/auth/register', {
       data: { username, password },
       headers: { 'X-Forwarded-For': ip },
@@ -274,7 +286,7 @@ test.describe('Community Gallery', () => {
   test('gallery renders cards when community puzzles exist', async ({ page, request }) => {
     const username = uniqueUser();
     const password = 'testpass123';
-    const ip = `10.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+    const ip = uniqueIP();
 
     // Register user
     const regRes = await request.post('/api/auth/register', {
