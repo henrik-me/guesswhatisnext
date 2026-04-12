@@ -219,7 +219,7 @@ Each worktree agent pushes its branch and merges to main remotely. See [INSTRUCT
 ```
 guesswhatisnext/
 ├── public/                         # Client (served as static files)
-│   ├── index.html                  # Game shell — 16 screens (SPA)
+│   ├── index.html                  # Game shell — SPA
 │   ├── css/style.css               # Styling, responsive, animations, themes
 │   ├── js/
 │   │   ├── app.js                  # Entry point, screen nav, auth, multiplayer UI
@@ -246,6 +246,7 @@ guesswhatisnext/
 │   │   ├── auth.js                 # Register, login, JWT tokens
 │   │   ├── features.js             # Feature flag status endpoint
 │   │   ├── matches.js              # Room create/join + match history
+│   │   ├── notifications.js       # Notifications API routes
 │   │   ├── puzzles.js              # Puzzle API
 │   │   ├── scores.js               # Score submission + leaderboards
 │   │   ├── submissions.js          # User-submitted puzzles
@@ -324,15 +325,15 @@ guesswhatisnext/
   │ Test     │
   └──────────┘
 
-  Manual trigger (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY repo variable)
+  Push to main or manual trigger (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY repo variable)
        │
   ┌────▼──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌───────────┐
   │ workflow_     │─▶│ Build &  │─▶│ Ephemeral │─▶│ ⏸️ Manual │─▶│ Deploy to │
-  │ dispatch      │  │ Push to  │  │ Staging   │  │ Approval │  │ Azure     │
-  │ (ff release/) │  │ GHCR     │  │ (in CI)   │  │          │  │ Staging   │
+  │ dispatch or   │  │ Push to  │  │ Staging   │  │ Approval │  │ Azure     │
+  │ push to main  │  │ GHCR     │  │ (in CI)   │  │          │  │ Staging   │
   └───────────────┘  └──────────┘  └───────────┘  └──────────┘  └───────────┘
 
-  Manual trigger (prod-deploy.yml — planned)
+  Manual trigger (prod-deploy.yml)
        │  (requires staging green)
   ┌────▼─────┐  ┌──────────┐
   │ Deploy   │─▶│ Verify   │─▶ ❌ fail → Auto-rollback + GitHub Issue
@@ -344,14 +345,15 @@ guesswhatisnext/
        │ on failure → GitHub Issue
 ```
 
-> **Note:** Push to `main` does **not** trigger deployment. All code reaches production
-> through the staging pipeline: manual workflow_dispatch → staging validation → manual prod deploy.
+> **Note:** Push to `main` does **not** deploy by default. Deployment runs when triggered
+> manually via `workflow_dispatch`, or automatically on push when `STAGING_AUTO_DEPLOY` is enabled.
+> All code reaches production through the staging pipeline: staging validation → manual prod deploy.
 
 | Environment | Cost | Trigger | Approval | Rollback |
 |---|---|---|---|---|
 | Local (SQLite) | Free | `npm start` / `docker compose up` | None | N/A |
 | Local (MSSQL) | Free | `npm run docker:mssql` | None | N/A |
-| Ephemeral staging | $0 (GitHub Actions) | Manual workflow_dispatch | Automatic | N/A (ephemeral) |
+| Ephemeral staging | $0 (GitHub Actions) | Manual `workflow_dispatch`, or `push` to `main` when `STAGING_AUTO_DEPLOY` is enabled | Automatic | N/A (ephemeral) |
 | Azure staging | $0 (scale-to-zero) | After ephemeral validation | Manual | Redeploy previous SHA tag |
 | Production | $0+ (pay-per-use, Azure SQL) | Manual trigger (staging must be green) | Manual | Auto-rollback to previous SHA tag |
 

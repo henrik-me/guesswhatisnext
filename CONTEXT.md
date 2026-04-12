@@ -219,6 +219,7 @@ server/
 │   ├── auth.js           # /api/auth (register, login, me)
 │   ├── scores.js         # /api/scores (submit, leaderboard, multiplayer-lb, me)
 │   ├── matches.js        # /api/matches (create, join, history, get)
+│   ├── notifications.js # /api/notifications (list, mark-read)
 │   ├── puzzles.js        # /api/puzzles (list)
 │   ├── achievements.js   # /api/achievements (list, me)
 │   ├── features.js       # /api/features (list)
