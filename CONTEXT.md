@@ -35,7 +35,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS18 | Address MSSQL Issues in Production | ✅ Complete | 10/10 | [details](project/clickstops/done_cs18_mssql-production-fixes.md) |
 | CS19 | Community Puzzle Navigation & Testing | ✅ Complete | 4/5 | [details](project/clickstops/done_cs19_community-puzzle-navigation.md) |
 | CS20 | Authentication UX Overhaul | ⬜ Planned | 0/6 | [details](project/clickstops/planned_cs20_auth-ux-overhaul.md) |
-| CS21 | High Score Synchronization | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs21_highscore-sync.md) |
+| CS21 | Leaderboard Personal Bests | ✅ Complete | 4/4 | [details](project/clickstops/done_cs21_leaderboard-personal-bests.md) |
 | CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/clickstops/done_cs22_answer-randomization.md) |
 | CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/clickstops/done_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ✅ Complete | 5/5 | [details](project/clickstops/done_cs24_custom-domain.md) |
