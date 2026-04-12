@@ -34,7 +34,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS17 | Process Documentation Improvement | ✅ Complete | 4/8 | [details](project/clickstops/done_cs17_process-docs-improvement.md) |
 | CS18 | Address MSSQL Issues in Production | ✅ Complete | 10/10 | [details](project/clickstops/done_cs18_mssql-production-fixes.md) |
 | CS19 | Community Puzzle Navigation & Testing | ✅ Complete | 4/5 | [details](project/clickstops/done_cs19_community-puzzle-navigation.md) |
-| CS20 | Authentication UX Overhaul | ⬜ Planned | 0/6 | [details](project/clickstops/planned_cs20_auth-ux-overhaul.md) |
+| CS20 | Authentication UX Overhaul | ✅ Complete | 6/6 | [details](project/clickstops/done_cs20_auth-ux-overhaul.md) |
 | CS21 | Leaderboard Personal Bests | ✅ Complete | 4/4 | [details](project/clickstops/done_cs21_leaderboard-personal-bests.md) |
 | CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/clickstops/done_cs22_answer-randomization.md) |
 | CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/clickstops/done_cs23_docs-review.md) |
@@ -46,6 +46,9 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS29 | Production Deployment & Verification | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs29_production-deployment.md) |
 | CS34 | Fix Deprecated Node.js 20 Actions | ⬜ Planned | 0/3 | [details](project/clickstops/planned_cs34_fix-deprecated-actions.md) |
 | CS30 | Local Review Loop | ✅ Complete | 5/5 | [details](project/clickstops/done_cs30_local-review-loop.md) |
+| CS31 | Instructions Optimization | ✅ Complete | 4/4 | [details](project/clickstops/done_cs31_instructions-optimization.md) |
+| CS33 | Auth Header Polish | ✅ Complete | 5/5 | [details](project/clickstops/done_cs33_auth-header-polish.md) |
+| CS35 | Clickstop File Cleanup | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs35_clickstop-cleanup.md) |
 
 ---
 
