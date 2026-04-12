@@ -325,7 +325,7 @@ guesswhatisnext/
   │ Test     │
   └──────────┘
 
-  Push to main or manual trigger (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY repo variable)
+  Push to main (non-docs paths) or manual trigger (staging-deploy.yml — gated by STAGING_AUTO_DEPLOY repo variable)
        │
   ┌────▼──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌───────────┐
   │ workflow_     │─▶│ Build &  │─▶│ Ephemeral │─▶│ ⏸️ Manual │─▶│ Deploy to │
