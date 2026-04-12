@@ -158,7 +158,7 @@ Add GPT 5.4 local review as a fast pre-review step (~60s vs 10+ min Copilot poll
 
 - **Azure Files storage cleanup**: ✅ Done (PR #49). Azure storage resources (`gwn-storage-staging`, `gwn-storage-production`) still exist in Azure and should be deleted manually.
 - **Staging auto-deploy disabled**: Must manually trigger `workflow_dispatch` after merging to main. Re-enable once stable.
-- **Production deployed**: ✅ Running on Azure SQL (serverless free tier). FQDN responds, all migrations applied, 504 puzzles seeded.
+- **Production deployed**: ✅ Running on Azure SQL (serverless free tier) at [gwn.metzger.dk](https://gwn.metzger.dk). All migrations applied, 504 puzzles seeded.
 - **Azure SQL free tier limit**: 1 free DB per subscription. Production gets the free DB; staging uses ephemeral local SQLite.
 
 ---

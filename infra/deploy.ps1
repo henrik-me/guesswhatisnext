@@ -674,6 +674,33 @@ else {
     Write-Info 'Skipping health checks (-SkipHealthCheck)'
 }
 
+# ── Custom domain binding (one-time setup, not run on every deploy) ──────────
+# Production uses a custom domain: gwn.metzger.dk
+# Prerequisites:
+#   1. CNAME record: gwn.metzger.dk → <app-fqdn> (e.g. gwn-production.<env-id>.<region>.azurecontainerapps.io)
+#   2. TXT record: asuid.gwn.metzger.dk → <domain verification ID from Azure>
+#
+# After DNS records are in place, run these commands once:
+#   az containerapp hostname add `
+#     --name $ProductionAppName --resource-group $ResourceGroup `
+#     --hostname gwn.metzger.dk
+#   az containerapp hostname bind `
+#     --name $ProductionAppName --resource-group $ResourceGroup `
+#     --hostname gwn.metzger.dk --environment $Environment `
+#     --validation-method CNAME
+#
+# Azure will provision a free managed TLS certificate automatically.
+# The certificate renews automatically — no manual rotation needed.
+#
+# After binding, update the GitHub repo settings:
+#   PROD_URL secret       → https://gwn.metzger.dk
+#
+# Note: re-running this script recomputes PROD_URL from the Azure FQDN
+# and may overwrite the PROD_URL GitHub secret with that Azure hostname.
+# If production should keep using the custom domain, restore PROD_URL
+# manually to https://gwn.metzger.dk after running the script.
+# ────────────────────────────────────────────────────────────────────────────
+
 Write-Host ''
 Write-Host '=== Setup Complete ===' -ForegroundColor Green
 if ($StagingUrl) {

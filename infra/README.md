@@ -242,6 +242,63 @@ With Container Apps consumption plan (pay-per-use):
 - **Staging** (0 min replicas): ~$0 when idle
 - **Production** (1 min replica): ~$15-30/month at low traffic
 
+## Custom Domain
+
+Production uses a custom domain: **gwn.metzger.dk**
+
+### DNS Records
+
+Two DNS records are required before binding the custom domain in Azure:
+
+| Type | Host (zone-relative) | Value |
+|------|------|-------|
+| CNAME | `gwn` | `gwn-production.<env-id>.<region>.azurecontainerapps.io` |
+| TXT | `asuid.gwn` | Domain verification ID from Azure (`az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.customDomainVerificationId" -o tsv`) |
+
+> **Note:** Some DNS providers expect zone-relative hostnames (for example, `gwn` and `asuid.gwn` in the `metzger.dk` zone), while others expect FQDNs (`gwn.metzger.dk` and `asuid.gwn.metzger.dk`). Use whichever format your provider requires for each record.
+
+### Binding the Domain
+
+After DNS records are in place, bind the custom domain and provision a managed TLS certificate:
+
+```bash
+# Add the custom hostname
+az containerapp hostname add \
+  --name gwn-production --resource-group gwn-rg \
+  --hostname gwn.metzger.dk
+
+# Bind and provision managed certificate
+az containerapp hostname bind \
+  --name gwn-production --resource-group gwn-rg \
+  --hostname gwn.metzger.dk --environment gwn-env \
+  --validation-method CNAME
+```
+
+This is a **one-time setup** — the commands are not part of the regular deploy pipeline. The deploy scripts (`deploy.sh` / `deploy.ps1`) include these commands as commented-out reference.
+
+### Managed TLS Certificate
+
+Azure Container Apps provisions a free managed TLS certificate when the hostname is bound. The certificate:
+- Is issued automatically after DNS validation succeeds
+- Renews automatically — no manual rotation needed
+- Covers only the bound hostname (`gwn.metzger.dk`)
+
+### GitHub Settings
+
+After custom domain binding, update the GitHub repository secret for the production URL:
+
+| Setting | Key | Value |
+|---------|-----|-------|
+| Secret | `PROD_URL` | `https://gwn.metzger.dk` |
+
+The production `CANONICAL_HOST` env var is derived from `PROD_URL` by the production deploy workflow — there is no separate repo variable for it. The repo-level `CANONICAL_HOST` variable controls **staging** only and should keep the staging Azure FQDN.
+
+> **Note:** Re-running `infra/deploy.sh` or `infra/deploy.ps1` will reset the GitHub `PROD_URL` secret to the Azure FQDN. Setting `PRODUCTION_CANONICAL_HOST=gwn.metzger.dk` before running the script affects only the production container app's `CANONICAL_HOST`; it does **not** preserve the `PROD_URL` secret. After the script finishes, manually restore `PROD_URL` to `https://gwn.metzger.dk` if you want GitHub Actions to keep using the custom domain.
+
+### Backward Compatibility
+
+The old Azure FQDN (`gwn-production.<env-id>.<region>.azurecontainerapps.io`) continues to work for direct HTTPS access. The security middleware does not perform canonical-host redirects for already-HTTPS requests, so both HTTPS URLs serve traffic. However, HTTP requests to the old Azure FQDN will still redirect to `https://${CANONICAL_HOST}` (for production, `https://gwn.metzger.dk`), so test the legacy hostname with an explicit `https://` if you want to verify it directly.
+
 ## Troubleshooting
 
 ```bash
@@ -273,7 +330,7 @@ Navigate to **Settings → Secrets and variables → Actions → Secrets** and v
 | `JWT_SECRET` | Secret key used for signing JWT authentication tokens |
 | `SYSTEM_API_KEY` | API key for health-check and admin endpoints |
 | `GHCR_PAT` | GitHub token with package-read access for Azure Container Apps pulls |
-| `PROD_URL` | Production application URL (e.g. `https://gwn-production.<region>.azurecontainerapps.io`) |
+| `PROD_URL` | Production application URL (e.g. `https://gwn.metzger.dk`) |
 
 ### Required Variables
 

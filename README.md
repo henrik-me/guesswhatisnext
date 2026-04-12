@@ -1,5 +1,7 @@
 # Guess What's Next
 
+🎮 **Live at [gwn.metzger.dk](https://gwn.metzger.dk)**
+
 A browser-based puzzle game where you're shown a sequence of items — emoji, text, or images — that follow a pattern, and you must guess what comes next!
 
 Features single-player (free play + daily challenge), global leaderboards, and real-time multiplayer (2–10 players).
