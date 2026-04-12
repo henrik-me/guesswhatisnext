@@ -70,7 +70,7 @@ test.describe('Admin Moderation Improvements', () => {
       };
     }, SYSTEM_KEY);
 
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     // Navigate to community screen, then click moderation
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
@@ -114,7 +114,7 @@ test.describe('Admin Moderation Improvements', () => {
       };
     }, SYSTEM_KEY);
 
-    await page.goto('/');
+    await page.goto('/?ff_submit_puzzle=true');
     await page.click('[data-action="show-community"]');
     await expect(page.locator('[data-screen="community"]')).toHaveClass(/active/);
     await page.click('[data-action="show-moderation"]');
