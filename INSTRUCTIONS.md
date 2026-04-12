@@ -398,7 +398,7 @@ Commit locally after every meaningful, working change — each commit should be 
 
 ### Agent Progress Reporting
 
-All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → Copilot review loop. The orchestrating agent only intervenes to merge approved PRs.
+All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → local review loop → Copilot review (code/config PRs only). The orchestrating agent only intervenes to merge approved PRs.
 
 Background agents **must** report progress to the orchestrating agent:
 - **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
@@ -406,9 +406,9 @@ Background agents **must** report progress to the orchestrating agent:
 - **On validation pass:** "CS11-64: lint ✓ test ✓ e2e ✓ — creating PR"
 - **On validation fail:** "CS11-64: validation FAILED — \<error summary\>. Fixing..."
 - **On abort:** "CS11-64: BLOCKED — \<reason\>. Needs orchestrator intervention."
-- **On PR created:** "CS11-64: PR #\<N\> created, requesting Copilot review"
-- **On review loop:** "CS11-64: Copilot review round \<N\> — fixing \<count\> issues"
-- **On ready:** "CS11-64: PR #\<N\> ready for merge (Copilot approved, CI green)"
+- **On PR created:** "CS11-64: PR #\<N\> created, running local review"
+- **On review loop:** "CS11-64: local review clean — requesting Copilot review" (code/config PRs) or "CS11-64: local review clean — docs-only, skipping Copilot" (docs-only PRs)
+- **On ready:** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)"
 
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
@@ -465,7 +465,7 @@ NOT allowed on main checkout:
 Sub-agents are responsible for:
 - All file changes (code, docs, config) and all commits/pushes
 - PR creation (`gh pr create`)
-- Copilot review loop (reply to comments, resolve threads, re-request review)
+- Copilot review loop (code/config PRs: reply to comments, resolve threads, re-request review; docs-only PRs: skip Copilot review)
 - Merge conflict resolution (rebase/merge `origin/main` into the feature branch)
 
 This keeps `main` clean and ensures every change flows through a PR.

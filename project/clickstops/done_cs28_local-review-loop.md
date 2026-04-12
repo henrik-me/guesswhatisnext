@@ -1,6 +1,6 @@
 # CS28 — Local Review Loop
 
-**Status:** 🔄 Active
+**Status:** ✅ Complete
 **Goal:** Add GPT 5.4 local review loop to the development process as a fast pre-review step. Docs-only PRs use local review only; code PRs use local review + Copilot review.
 
 ---
