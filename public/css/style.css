@@ -105,9 +105,11 @@ body::before {
   gap: 0.4rem;
 }
 
-.btn-auth-bar {
+.btn.btn-auth-bar {
   font-size: 0.7rem;
   padding: 0.2rem 0.6rem;
+  width: auto;
+  max-width: none;
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
@@ -116,19 +118,19 @@ body::before {
   transition: all 0.2s;
 }
 
-.btn-auth-bar:hover {
+.btn.btn-auth-bar:hover {
   background: var(--color-surface-hover);
   border-color: var(--color-primary);
 }
 
-.btn-auth-bar-logout {
+.btn.btn-auth-bar.btn-auth-bar-logout {
   background: var(--color-surface);
   color: var(--color-text-muted);
   font-size: 0.65rem;
   padding: 0.15rem 0.5rem;
 }
 
-.btn-auth-bar-logout:hover {
+.btn.btn-auth-bar.btn-auth-bar-logout:hover {
   background: var(--color-danger, #e74c3c);
   color: #fff;
   border-color: var(--color-danger, #e74c3c);
