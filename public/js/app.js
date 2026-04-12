@@ -1098,7 +1098,7 @@ function renderLeaderboard(entries) {
     const rank = entry.rank ?? i + 1;
     const medal = medals[rank] || '';
     const rankClass = rank <= 3 ? ` rank-${rank}` : '';
-    const isUser = entry.isCurrentUser || (authUsername && entry.username === authUsername);
+    const isUser = entry.isCurrentUser || (isLoggedIn() && authUsername && entry.username === authUsername);
     const userClass = isUser ? ' current-user' : '';
     const name = escapeHTML(entry.username || 'Anonymous');
     const score = entry.score ?? 0;
@@ -1126,7 +1126,7 @@ function renderMultiplayerLeaderboard(entries) {
     const rank = entry.rank ?? i + 1;
     const medal = medals[rank] || '';
     const rankClass = rank <= 3 ? ` rank-${rank}` : '';
-    const isUser = entry.isCurrentUser || (authUsername && entry.username === authUsername);
+    const isUser = entry.isCurrentUser || (isLoggedIn() && authUsername && entry.username === authUsername);
     const userClass = isUser ? ' current-user' : '';
     const name = escapeHTML(entry.username || 'Anonymous');
 
