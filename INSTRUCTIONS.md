@@ -414,7 +414,7 @@ Background agents **must** report progress to the orchestrating agent:
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
 ### Branch Strategy & Merge Model
-- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates and clickstop plan files (with associated CONTEXT.md summary rows) committed directly on `main` by orchestrating agents.
+- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates and clickstop plan files committed directly on `main` by orchestrating agents. (CONTEXT.md summary rows may optionally be bundled with plan file commits.)
 - Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
@@ -440,7 +440,7 @@ Allowed on main checkout:
 - Planning, decomposing, and delegating work to sub-agents
 
 NOT allowed on main checkout:
-- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates and clickstop plan files (with CONTEXT.md summary rows) are committed and pushed directly from main
+- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates and clickstop plan files (optionally with CONTEXT.md summary rows) are committed and pushed directly from main
 - No `git push` from main (except WORKBOARD.md and clickstop plan file updates)
 - No merge conflict resolution on main, **except for conflicts confined to `WORKBOARD.md` and handled per the WORKBOARD.md conflict-handling guidance** — if `git pull` conflicts on anything else, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
@@ -553,7 +553,7 @@ The orchestrator should maximize parallelism by running non-worktree tasks concu
 #### Task IDs
 Format: `CS<clickstop#>-<task#>` (e.g., `CS11-64`, `CS14-82`). Used in branch names, commit messages, PR titles, and WORKBOARD.md.
 
-**CS number allocation:** Before assigning a new clickstop number, verify the number is not already taken by checking BOTH:
+**CS number allocation:** Before assigning a new clickstop number, verify the number is not already taken by checking all three sources:
 1. **Existing clickstop files:** `ls project/clickstops/` — check all `planned_`, `active_`, and `done_` files for the highest CS number
 2. **WORKBOARD.md Active Work:** Another agent may have just claimed a CS number but not yet committed the plan file — check Active Work for any CS numbers in use
 3. **CONTEXT.md clickstop summary table:** Cross-reference the summary table for any CS numbers added by other agents
@@ -673,7 +673,7 @@ CONTEXT.md tracks clickstop summaries and current project state. Updates to CONT
 - Codebase state section updates (new routes, test counts, workflows)
 - Blocker/known issue changes
 
-CONTEXT.md updates are typically bundled into the PR that completes the relevant task. Stand-alone CONTEXT.md updates (e.g., adding a new clickstop) go through their own PR.
+CONTEXT.md updates are typically bundled into the PR that completes the relevant task. Stand-alone CONTEXT.md updates (e.g., adding a new clickstop) go through their own PR. **Exception:** when committing a clickstop plan file directly to main, the CONTEXT.md summary row may be bundled in the same commit or deferred to the implementation PR.
 
 #### Clickstop File Lifecycle
 
