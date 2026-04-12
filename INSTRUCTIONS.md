@@ -493,7 +493,7 @@ When the orchestrator launches a sub-agent, the prompt **MUST** include all of t
 6. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
 7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs)
 8. Push branch and create PR with task ID in title and agent metadata in description
-9. Run local review loop (see § Local Review Loop): launch `code-review` agent with `model=gpt-5.4`, fix issues, repeat until clean
+9. Run local review loop (see § Local Review Loop): launch `code-review` agent with `model=gpt-5.4`, fix issues, push fixes, repeat until clean
 10. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per § Waiting for Copilot Review
 11. **For docs-only PRs:** Skip Copilot review — local review is sufficient
 12. Address all review comments (reply + fix + resolve threads)
@@ -538,11 +538,11 @@ The orchestrator should maximize parallelism by running non-worktree tasks concu
 3. Run full validation before pushing: `npm run lint && npm test && npm run test:e2e`
 4. Push branch to origin
 5. Create PR: `gh pr create --base main --head {agent-id}/{task-id}-{description}`
-6. Run local review loop (see § Local Review Loop) — fix issues until clean
+6. Run local review loop (see § Local Review Loop) — fix issues, push fixes, repeat until clean
 7. **Code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` | **Docs-only PRs:** Skip Copilot review
 8. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
-8. After CI passes and review approved, **squash-merge** via GitHub UI or `gh pr merge --squash`
-9. Main orchestrating agent pulls after each merge: `git pull`
+9. After CI passes and reviews are complete (Copilot approval for code/config PRs; local review clean for docs-only PRs), **squash-merge** via GitHub UI or `gh pr merge --squash`
+10. Main orchestrating agent pulls after each merge: `git pull`
 
 **Recycling slots:** `git worktree remove <path> --force` → `git branch -d old-branch` → `git worktree add -b new-branch <path> main`
 
