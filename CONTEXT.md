@@ -42,7 +42,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done/done_cs26_public-repo-transition.md) |
 | CS27 | Feature Flag Gating | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs27_feature-flag-gating.md) |
-| CS28 | Staging Deployment & Validation | 🔴 Blocked | 3/5 | [details](project/clickstops/planned_cs28_staging-deployment.md) |
+| CS28 | Staging Deployment & Validation | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs28_staging-deployment.md) |
 | CS29 | Production Deployment & Verification | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs29_production-deployment.md) |
 | CS34 | Fix Deprecated Node.js 20 Actions | ⬜ Planned | 0/3 | [details](project/clickstops/planned_cs34_fix-deprecated-actions.md) |
 | CS30 | Local Review Loop | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs30_local-review-loop.md) |
