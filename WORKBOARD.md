@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-13T00:37Z
+> **Last updated:** 2026-04-13T00:41Z
 
 ## Orchestrators
 
@@ -18,5 +18,6 @@ Orchestrators update this file directly on main — no PR required.
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
+| CS29 | Production Deployment | Deploy staging-validated image e60b04d to production | yoga-gwn-c2 | — | — | — | 2026-04-13 |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
