@@ -43,13 +43,14 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done/done_cs26_public-repo-transition.md) |
 | CS27 | Feature Flag Gating | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs27_feature-flag-gating.md) |
 | CS28 | Staging Deployment & Validation | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs28_staging-deployment.md) |
-| CS29 | Production Deployment & Verification | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs29_production-deployment.md) |
+| CS29 | Production Deployment & Verification | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs29_production-deployment.md) |
 | CS34 | Fix Deprecated Node.js 20 Actions | ⬜ Planned | 0/3 | [details](project/clickstops/planned_cs34_fix-deprecated-actions.md) |
 | CS30 | Local Review Loop | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs30_local-review-loop.md) |
 | CS31 | Instructions Optimization | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs31_instructions-optimization.md) |
 | CS33 | Auth Header Polish | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs33_auth-header-polish.md) |
 | CS35 | Clickstop File Cleanup | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs35_clickstop-cleanup.md) |
 | CS36 | Instructions Lifecycle Clarity | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs36_instructions-lifecycle.md) |
+| CS37 | Health Monitor Investigation | ⬜ Planned | 0/3 | [details](project/clickstops/planned_cs37_health-monitor-investigation.md) |
 
 ---
 
