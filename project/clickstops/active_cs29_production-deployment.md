@@ -1,9 +1,9 @@
 # Clickstop CS29: Production Deployment & Verification
 
-**Status:** ⬜ Planned
+**Status:** 🔄 In Progress
 **Goal:** Deploy the staging-validated image to Azure production environment and verify it works correctly.
 
-**Depends on:** [CS28 — Staging Deployment & Validation](planned_CS28_staging-deployment.md)
+**Depends on:** [CS28 — Staging Deployment & Validation](done/done_cs28_staging-deployment.md) ✅
 
 ## Tasks
 
