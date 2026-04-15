@@ -18,7 +18,7 @@
 | CS25-0b | Add HOST_PORT support | ⬜ Pending | Port parameterization for multi-agent isolation. |
 | CS25-0c | Add DB readiness wait | ⬜ Pending | Wait for `/api/health` with `database.status=ok`, not just `/healthz`. |
 | CS25-0d | Add convenience npm scripts | ⬜ Pending | `dev:mssql`, `dev:mssql:down`, `test:e2e:mssql`. |
-| CS25-0e | Pin MSSQL image version | ⬜ Pending | Pin to specific CU tag (e.g., `2022-CU16-ubuntu-22.04`) instead of `:2022-latest`. Push pinned image to GHCR as `ghcr.io/henrik-me/mssql-server:<tag>` for fast CI pulls and Docker Hub rate-limit avoidance. Document version update process. |
+| CS25-0e | Pin & mirror MSSQL image to GHCR | ⬜ Pending | Pin to specific CU tag (e.g., `2022-CU16-ubuntu-22.04`) instead of `:2022-latest`. Push pinned image to `ghcr.io/henrik-me/mssql-server:<tag>` for fast CI pulls and Docker Hub rate-limit avoidance. Also mirror OTLP collector image. Document version update process. |
 | CS25-0f | Verify Docker Compose v2 requirement | ⬜ Pending | Compose file uses `services:` without `version:` key (Compose v2+ format). Add version check to npm scripts (`docker compose version`), document minimum requirement in INSTRUCTIONS.md. |
 
 ### Phase 1: Run Existing E2E Suite Against MSSQL
@@ -28,6 +28,7 @@
 | CS25-1a | Create MSSQL Playwright config | ⬜ Pending | `BASE_URL=https://localhost` (Caddy), `SYSTEM_API_KEY=test-system-api-key`, `ignoreHTTPSErrors=true`. |
 | CS25-1b | Run full E2E suite against MSSQL | ⬜ Pending | Run all 68 tests, identify and fix MSSQL-specific failures. |
 | CS25-1c | Document MSSQL E2E results | ⬜ Pending | Record pass/fail and any MSSQL-specific fixes. |
+| CS25-1d | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Once E2E passes against MSSQL locally, update `staging-deploy.yml`: add MSSQL (from GHCR mirror) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. |
 
 ### Phase 2: HTTPS / Security Header E2E Tests
 
@@ -67,13 +68,11 @@
 | CS25-5c | E2E tests with real server delays | ⬜ Pending | Progressive-loading tests against real delay middleware (not client-side mocks). |
 | CS25-5d | Toggle documentation | ⬜ Pending | Document cold start on/off via compose profiles. |
 
-### Phase 6: CI Integration
+### Phase 6: CI Integration (Optional)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-6a | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Add MSSQL (from GHCR mirror) and OTLP collector as service containers in `staging-deploy.yml` ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. |
-| CS25-6b | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage. May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
-| CS25-6c | Push MSSQL image to GHCR | ⬜ Pending | One-time push of pinned MSSQL image to `ghcr.io/henrik-me/mssql-server:<tag>`. Avoids 1.5GB Docker Hub pull + rate limits on every staging deploy. Document the update process for when MSSQL version is bumped. |
+| CS25-6a | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage (CS25-1d). May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
 
 ### Phase 7: Documentation
 
@@ -96,7 +95,7 @@
 - **OTLP exporter fallback:** `server/telemetry.js` gains a ~10 line conditional: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set and `APPLICATIONINSIGHTS_CONNECTION_STRING` is absent, use `@opentelemetry/exporter-trace-otlp-http`. Production path (Azure Monitor) is unaffected.
 - **No secure-cookie tests:** Auth uses localStorage + Authorization headers, not cookies.
 - **Cold start toggle:** Compose profiles, not hot-reload. Stop and restart with different profile.
-- **CI model:** MSSQL + OTLP collector run as service containers in staging deploy (every deploy validates MSSQL compatibility + trace pipeline). MSSQL image mirrored to GHCR for fast pulls. Separate MSSQL E2E workflow is optional/manual for deeper testing. PR CI skips MSSQL/OTel (unit tests sufficient).
+- **CI model:** Staging deploy runs MSSQL + OTLP as service containers on every deploy (CS25-1d), using GHCR-mirrored images (CS25-0e). This is the primary CI validation path. Separate MSSQL E2E workflow is optional for deeper testing (cold start, Caddy HTTPS). PR CI skips MSSQL/OTel (unit tests sufficient).
 - **Version pinning:** MSSQL image pinned to specific CU tag (not `:latest`). OTel packages pinned to compatible versions and updated together. Docker Compose v2 minimum requirement verified in scripts.
 - **Log capture monitoring:** Total per-test log capture overhead measured and reported. Warn at >60s, alert/fail at >120s to catch regressions early.
 
@@ -105,10 +104,10 @@
 ## Dependencies
 
 ```
-Phase 0 (stabilize stack)
+Phase 0 (stabilize stack + GHCR mirrors)
    │
    ▼
-Phase 1 (run existing E2E on MSSQL)
+Phase 1 (run existing E2E on MSSQL + update staging deploy)
    │
    ├──→ Phase 2 (HTTPS / security headers)
    ├──→ Phase 3 (per-test log capture)
@@ -118,7 +117,7 @@ Phase 1 (run existing E2E on MSSQL)
             ▼
       Phases 2-5 all complete
             │
-            ├──→ Phase 6 (CI integration)
+            ├──→ Phase 6 (optional: separate CI workflow)
             └──→ Phase 7 (documentation)
 ```
 
