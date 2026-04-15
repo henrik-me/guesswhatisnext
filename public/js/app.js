@@ -2803,9 +2803,12 @@ async function fetchProfile() {
         }),
       ]);
 
-      // If any returned 401, the user is not logged in
+      // If any returned 401 (mapped to null), the user is not logged in
+      const results = [meResult, scoresResult, achievementsResult, historyResult];
+      const anyAuth401 = results.some(r => r.status === 'fulfilled' && r.value === null);
+      if (anyAuth401) return null;
+
       const meData = meResult.status === 'fulfilled' ? meResult.value : null;
-      if (meData === null && meResult.status === 'fulfilled') return null;
 
       // If all requests rejected (e.g. all aborted on timeout), rethrow to show Retry button
       const allRejected = [meResult, scoresResult, achievementsResult, historyResult]

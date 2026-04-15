@@ -1,7 +1,7 @@
 /**
  * Progressive Loader — wraps async operations with timed message escalation.
  * Shows friendly escalating messages while DB cold starts resolve,
- * then shows a Retry button on timeout for user-initiated retry.
+ * then shows a Retry button on failure for user-initiated retry.
  */
 
 const DEFAULTS = {

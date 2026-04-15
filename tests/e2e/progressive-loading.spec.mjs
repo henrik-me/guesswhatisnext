@@ -82,14 +82,14 @@ test.describe('Progressive Loading', () => {
 
     await page.goto('/');
 
-    // Intercept leaderboard API with a delay longer than the 15s timeout
+    // Intercept leaderboard API with a delay just over the 15s timeout
     await page.route(/\/api\/scores\/leaderboard/, async (route) => {
-      await new Promise(resolve => setTimeout(resolve, 20000));
-      await route.fulfill({
+      await new Promise(resolve => setTimeout(resolve, 16000));
+      try { await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ leaderboard: [] }),
-      });
+      }); } catch { /* request aborted or context closed */ }
     });
 
     await page.click('[data-action="show-leaderboard"]');
@@ -114,13 +114,13 @@ test.describe('Progressive Loading', () => {
     await page.route(/\/api\/scores\/leaderboard/, async (route) => {
       requestCount++;
       if (requestCount === 1) {
-        // First request: delay long enough to trigger timeout
-        await new Promise(resolve => setTimeout(resolve, 20000));
-        await route.fulfill({
+        // First request: delay just over timeout to trigger Retry button
+        await new Promise(resolve => setTimeout(resolve, 16000));
+        try { await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ leaderboard: [] }),
-        });
+        }); } catch { /* request aborted */ }
       } else {
         // Subsequent requests: respond immediately
         await route.fulfill({
