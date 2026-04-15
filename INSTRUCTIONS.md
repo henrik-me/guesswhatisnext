@@ -156,7 +156,7 @@ Project name format: `gwn-<suffix>-wt<N>` (e.g., `gwn-c4-wt1`). Default port (no
 
 **Cold start simulation:** Test the ProgressiveLoader UX with simulated delays:
 ```powershell
-$env:GWN_DB_DELAY_PATTERN = "45000,15000,0"  # cycling: cold → warm → instant → repeat
+$env:GWN_DB_DELAY_PATTERN = "45000,15000,0,0,0,0"  # cycling: cold → warm → instant → repeat
 # or
 $env:GWN_DB_DELAY_MS = "20000"               # fixed 20s delay
 ```
