@@ -81,6 +81,7 @@
 | CS25-7a | Update CS25 clickstop file | ⬜ Pending | Final status, PR references, completion checklist. |
 | CS25-7b | Update CONTEXT.md | ⬜ Pending | Task counts, known issues. |
 | CS25-7c | Update INSTRUCTIONS.md | ⬜ Pending | MSSQL local dev instructions, `dev:mssql` scripts. |
+| CS25-7d | Update README.md | ⬜ Pending | Container setup for local dev (MSSQL + Caddy + OTLP) and CI integration (staging deploy service containers). |
 
 ---
 
