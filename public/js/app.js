@@ -2807,6 +2807,11 @@ async function fetchProfile() {
       const meData = meResult.status === 'fulfilled' ? meResult.value : null;
       if (meData === null && meResult.status === 'fulfilled') return null;
 
+      // If all requests rejected (e.g. all aborted on timeout), rethrow to show Retry button
+      const allRejected = [meResult, scoresResult, achievementsResult, historyResult]
+        .every(r => r.status === 'rejected');
+      if (allRejected) throw meResult.reason || new Error('All profile requests failed');
+
       return {
         meData: meData || { user: {} },
         scoresData: scoresResult.status === 'fulfilled' && scoresResult.value ? scoresResult.value : { stats: [] },

@@ -102,6 +102,7 @@ export const MESSAGE_SETS = {
  * Score sync queue — saves scores to localStorage and syncs in the background.
  */
 const SYNC_QUEUE_KEY = 'gwn_score_sync_queue';
+const SYNC_BACKOFF = [1000, 3000, 9000];
 
 /**
  * Queue a score for background sync to the server.
@@ -191,7 +192,7 @@ export async function syncQueuedScores(apiFetchFn, callbacks = {}) {
       } catch {
         // Network error — backoff and retry
       }
-      await sleep(DEFAULTS.backoff[Math.min(attempt, DEFAULTS.backoff.length - 1)]);
+      await sleep(SYNC_BACKOFF[Math.min(attempt, SYNC_BACKOFF.length - 1)]);
     }
 
     if (success) {
