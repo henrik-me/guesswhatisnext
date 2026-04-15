@@ -15,6 +15,8 @@
 | CS38-6 | Local-first score submission | ⬜ Pending | CS38-2 | Save score to localStorage immediately after game. Background sync to server with retry. Show "Score saved ✓" → "Syncing..." → "Synced ✓" indicator. |
 | CS38-7 | Add CSS for progressive loading states | ⬜ Pending | CS38-1 | Subtle animation for message transitions. Retry button styling. |
 | CS38-8 | Tests | ⬜ Pending | CS38-1 through CS38-7 | E2E tests for loading states. Unit tests for ProgressiveLoader and retry logic. |
+| CS38-9 | Delay simulation middleware | ⬜ Pending | — | Server middleware that injects artificial delay (0-45s) on `/api/*` when `GWN_DB_DELAY_MS` env var is set. Gated by `NODE_ENV !== 'production'`. For container-based manual and E2E testing of cold start UX. |
+| CS38-10 | Container manual testing | ⬜ Pending | CS38-9, CS38-8 | Build container with delay middleware, run E2E tests with simulated delay, leave container running for user manual testing. |
 
 ## Design Decisions
 
