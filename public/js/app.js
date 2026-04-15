@@ -308,8 +308,8 @@ const ui = {
       }).catch(() => {
         // Direct submit failed — queue for background retry on next session
         const scorePayload = buildScorePayload(summary);
-        queueScoreForSync(scorePayload);
-        showSyncIndicator('Will sync later');
+        const queued = queueScoreForSync(scorePayload);
+        showSyncIndicator(queued ? 'Will sync later' : 'Score could not be saved');
       });
     } else {
       queuePendingScore(summary);

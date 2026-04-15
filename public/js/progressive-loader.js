@@ -99,6 +99,7 @@ const SYNC_QUEUE_KEY = 'gwn_score_sync_queue';
 /**
  * Queue a score for background sync to the server.
  * @param {Object} scoreData - the score payload
+ * @returns {boolean} true if queued successfully, false if storage unavailable
  */
 export function queueScoreForSync(scoreData) {
   try {
@@ -107,8 +108,10 @@ export function queueScoreForSync(scoreData) {
     // Cap at 20 entries to prevent unbounded growth
     while (queue.length > 20) queue.shift();
     localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+    return true;
   } catch {
     // Storage unavailable — score will only be submitted via direct POST
+    return false;
   }
 }
 
