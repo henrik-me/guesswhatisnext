@@ -26,6 +26,7 @@ const telemetryRoutes = require('./routes/telemetry');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
+const { createDelayMiddleware } = require('./middleware/delay');
 
 const pkg = require('../package.json');
 
@@ -92,6 +93,10 @@ function createServer() {
   // Security middleware — HTTPS redirect (production only) and headers
   app.use(httpsRedirect);
   app.use(securityHeaders);
+
+  // Delay simulation middleware — for cold start UX testing (dev/test only)
+  const delayMiddleware = createDelayMiddleware();
+  if (delayMiddleware) app.use(delayMiddleware);
 
   // Request logging (before body parsers for consistent access logs)
   const staticExtensions = new Set(['.css', '.js', '.map', '.ico', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.woff2', '.ttf']);
