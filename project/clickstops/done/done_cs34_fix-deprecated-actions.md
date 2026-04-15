@@ -1,6 +1,6 @@
 # Clickstop CS34: Fix Deprecated Node.js 20 Actions Warnings
 
-**Status:** 🔄 In Progress (Phase 1: low-risk drop-in replacements)
+**Status:** ✅ Complete
 **Goal:** Eliminate Node.js 20 deprecation warnings from GitHub Actions workflow runs. All actions should use Node.js 20+ compatible versions with no warnings.
 
 ## Audit Results (CS34-1 ✅)
@@ -26,8 +26,8 @@
 | # | Task | Status | Depends On | Notes |
 |---|---|---|---|---|
 | CS34-1 | Audit all workflow action versions | ✅ Done | — | See audit results above |
-| CS34-2 | Update actions to latest versions | ⬜ Pending | CS39 (CI E2E fix) | Avoid conflicts with CS39 modifying same workflow files. Update all SHA pins with verified tags. |
-| CS34-3 | Validate workflows run clean | ⬜ Pending | CS34-2 | Trigger workflows and confirm zero deprecation warnings in logs. |
+| CS34-2 | Update actions to latest versions | ✅ Done | CS39 (CI E2E fix) | PR #179 (Phase 1), PR #180 (Phase 2), PR #181 (Phase 3) |
+| CS34-3 | Validate workflows run clean | ✅ Done | CS34-2 | Staging deploy runs verified zero warnings across all jobs |
 
 ## Risk Assessment
 
@@ -57,3 +57,21 @@
 **Phase 2 (verify):** Update `actions/setup-node` — verify caching still works.
 
 **Phase 3 (credential migration):** Update `azure/login` and `azure/cli` together — requires new GitHub secrets and testing. Should coordinate with repo admin for secret creation.
+
+## Results
+
+All 7 deprecated GitHub Actions updated to Node.js 24-compatible versions across 5 workflow files:
+
+| Action | Old | New | Phase | PR |
+|--------|-----|-----|-------|----|
+| `actions/checkout` | v4 | v5 | 1 | #179 |
+| `actions/upload-artifact` | v4 | v5 | 1 | #179 |
+| `docker/login-action` | v3 | v4 | 1 | #179 |
+| `docker/build-push-action` | v5 | v7 | 1 | #179 |
+| `actions/setup-node` | v4 | v5 | 2 | #180 |
+| `azure/login` | v2 | v3 | 3 | #181 |
+| `azure/cli` | v2 | v3 | 3 | #181 |
+
+**Validation:** Three staging deployments confirmed zero Node.js 20 deprecation warnings across all workflow jobs. The `azure/login` v3 `creds` parameter worked as a drop-in replacement — no credential migration was needed (contrary to initial risk assessment).
+
+**Note:** The initial risk assessment rated `azure/login` v3 as 🔴 High Risk, but testing showed v3 still supports the `creds` JSON format. The actual risk was Low.
