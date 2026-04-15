@@ -298,19 +298,17 @@ const ui = {
 
     // Submit score to server if logged in, otherwise queue for later
     if (authToken) {
-      // Local-first: queue for background sync, then attempt direct submission
-      const scorePayload = buildScorePayload(summary);
-      queueScoreForSync(scorePayload);
+      // Local-first: show success immediately, submit in background
       showSyncIndicator('Score saved ✓');
       submitScore(summary).then(data => {
         if (data && data.newAchievements && data.newAchievements.length > 0) {
           showAchievementToasts(data.newAchievements);
         }
-        // Direct submit succeeded — remove from sync queue
-        dequeueLatestSyncedScore();
         showSyncIndicator('Synced ✓');
       }).catch(() => {
-        // Direct submit failed — score is already in the sync queue for retry
+        // Direct submit failed — queue for background retry on next session
+        const scorePayload = buildScorePayload(summary);
+        queueScoreForSync(scorePayload);
         showSyncIndicator('Will sync later');
       });
     } else {
@@ -1076,6 +1074,7 @@ async function fetchLeaderboard(period) {
     },
     container,
     MESSAGE_SETS.leaderboard,
+    { onRetry: () => fetchLeaderboard(period) },
   );
 
   if (data) {
@@ -1124,22 +1123,6 @@ function buildScorePayload(summary) {
     bestStreak: summary.bestStreak || 0,
     fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
   };
-}
-
-/** Remove the most recently queued sync score (after successful direct submit). */
-function dequeueLatestSyncedScore() {
-  try {
-    const key = 'gwn_score_sync_queue';
-    const queue = JSON.parse(localStorage.getItem(key) || '[]');
-    if (Array.isArray(queue) && queue.length > 0) {
-      queue.pop(); // remove the last entry (just queued)
-      if (queue.length > 0) {
-        localStorage.setItem(key, JSON.stringify(queue));
-      } else {
-        localStorage.removeItem(key);
-      }
-    }
-  } catch { /* ignore */ }
 }
 
 /** Show a subtle sync status indicator. */
@@ -1252,6 +1235,7 @@ async function fetchAchievements() {
     },
     container,
     MESSAGE_SETS.achievements,
+    { onRetry: () => fetchAchievements() },
   );
 
   if (data) {
@@ -2701,6 +2685,7 @@ async function fetchProfile() {
     },
     container,
     MESSAGE_SETS.profile,
+    { onRetry: () => fetchProfile() },
   );
 
   if (results) {
@@ -3474,7 +3459,9 @@ async function loadGallery(append = false) {
       return;
     }
   } else {
-    data = await progressiveLoad(fetchData, grid, MESSAGE_SETS.community);
+    data = await progressiveLoad(fetchData, grid, MESSAGE_SETS.community, {
+      onRetry: () => loadGallery(false),
+    });
   }
 
   if (!data) {

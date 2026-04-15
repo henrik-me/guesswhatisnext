@@ -20,7 +20,7 @@ const DEFAULTS = {
  */
 export async function progressiveLoad(fetchFn, containerEl, messageSet, options = {}) {
   const opts = { ...DEFAULTS, ...options };
-  const { maxRetries, backoff, timeout } = opts;
+  const { maxRetries, backoff, timeout, onRetry } = opts;
   let attempt = 0;
 
   // Show the first message immediately
@@ -52,10 +52,9 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
       attempt++;
       if (attempt > maxRetries) {
         // All retries exhausted — show retry button
-        showRetryButton(containerEl, () => {
-          // Re-invoke the whole progressiveLoad on manual retry
-          progressiveLoad(fetchFn, containerEl, messageSet, options);
-        });
+        // If caller provided onRetry, use it to re-run the entire screen flow
+        const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
+        showRetryButton(containerEl, retryHandler);
         return null;
       }
 
