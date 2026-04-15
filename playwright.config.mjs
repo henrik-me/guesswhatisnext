@@ -50,9 +50,13 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        launchOptions: {
-          args: ['--disable-gpu', '--disable-software-rasterizer'],
-        },
+        ...(process.env.CI
+          ? {
+              launchOptions: {
+                args: ['--disable-gpu', '--disable-software-rasterizer'],
+              },
+            }
+          : {}),
       },
     },
   ],
