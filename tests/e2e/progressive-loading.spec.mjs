@@ -13,7 +13,7 @@ test.describe('Progressive Loading', () => {
     // The leaderboard container should eventually show content (rows, empty, or retry)
     const container = page.locator('[data-bind="leaderboard-table"]');
     await expect(
-      container.locator('.leaderboard-row').or(container.locator('.leaderboard-empty')).or(container.locator('.progressive-retry-btn'))
+      container.locator('.leaderboard-row').first().or(container.locator('.leaderboard-empty')).or(container.locator('.progressive-retry-btn'))
     ).toBeVisible({ timeout: 15000 });
   });
 
