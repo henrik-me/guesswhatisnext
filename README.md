@@ -439,6 +439,35 @@ All modes except `dev` capture logs to `telemetry.log` by default. Use `--no-log
 node scripts/dev-server.js --no-log-file
 ```
 
+### Testing Cold Start UX
+
+The delay simulation middleware lets you test how the app handles Azure SQL cold starts locally.
+
+**Fixed delay (all API calls delayed equally):**
+```bash
+GWN_DB_DELAY_MS=20000 docker compose up
+```
+
+**Cycling pattern (simulates cold start → warm-up → warm → restart):**
+```bash
+GWN_DB_DELAY_PATTERN=45000,15000,0 docker compose up
+```
+
+| Request | Delay | Simulates |
+|---------|-------|-----------|
+| 1st | 45s | Cold start (retry button appears) |
+| 2nd | 15s | Warming up (progressive messages) |
+| 3rd | 0s | Warm (instant response) |
+| 4th | 45s | Cold restart (cycle repeats) |
+
+**With Docker Compose port isolation:**
+```bash
+HOST_PORT=3005 GWN_DB_DELAY_PATTERN=45000,15000,0 docker compose -p gwn-delay-test up -d
+# Open http://localhost:3005
+```
+
+> **Note:** Delay is disabled in production and staging environments. Health endpoints (`/api/health`, `/healthz`) are never delayed.
+
 ---
 
 ## Contributing

@@ -154,6 +154,13 @@ Project name format: `gwn-<suffix>-wt<N>` (e.g., `gwn-c4-wt1`). Default port (no
 
 **Note:** Container E2E tests use the same `SYSTEM_API_KEY` value as playwright.config.mjs (`test-system-api-key`). If adding a new docker-compose file, ensure it uses the same key.
 
+**Cold start simulation:** Test the ProgressiveLoader UX with simulated delays:
+```powershell
+$env:GWN_DB_DELAY_PATTERN = "45000,15000,0"  # cycling: cold → warm → instant → repeat
+# or
+$env:GWN_DB_DELAY_MS = "20000"               # fixed 20s delay
+```
+
 ---
 
 ## 4. Logging Conventions
