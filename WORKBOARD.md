@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-15T15:57Z
+> **Last updated:** 2026-04-15T16:12Z
 
 ## Orchestrators
 
@@ -18,7 +18,6 @@ Orchestrators update this file directly on main — no PR required.
 
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
-| — | — | Staging deployment + INSTRUCTIONS.md workboard policy update | yoga-gwn | wt-1 | — | — | 2026-04-15T15:18Z |
 | CS34-2 | CS34 | Update deprecated GH Actions to latest (Phase 1: low-risk) | yoga-gwn-c2 | wt-1 | yoga-gwn-c2/cs34-2-update-actions | — | 2026-04-15T15:57Z |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
