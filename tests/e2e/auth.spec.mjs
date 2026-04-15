@@ -157,3 +157,5 @@ test.describe('Authentication — Community', () => {
   });
 });
 
+
+// CS39 validation: confirm Chromium crash fix
