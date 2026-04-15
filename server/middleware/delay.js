@@ -19,7 +19,10 @@ function createDelayMiddleware() {
 
   return (req, res, next) => {
     if (req.path.startsWith('/api/') && req.path !== '/api/health' && req.path !== '/healthz') {
-      setTimeout(next, cappedDelay);
+      const timer = setTimeout(() => {
+        if (!res.writableEnded) next();
+      }, cappedDelay);
+      res.on('close', () => clearTimeout(timer));
     } else {
       next();
     }
