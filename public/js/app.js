@@ -1546,8 +1546,85 @@ async function submitPendingScores() {
   }
 }
 
+/** Progressive messages shown on the submit button during slow auth requests. */
+const AUTH_PROGRESSIVE_MESSAGES = {
+  login: [
+    { delay: 0, text: 'Signing in\u2026' },
+    { delay: 4000, text: 'Still working on it\u2026' },
+    { delay: 9000, text: 'The server is waking up \u2615' },
+    { delay: 16000, text: 'Almost there \u2014 warming up the database \ud83d\ude34' },
+    { delay: 25000, text: 'Hang tight \u2014 first login of the day takes a moment! \ud83c\udfb2' },
+  ],
+  register: [
+    { delay: 0, text: 'Creating your account\u2026' },
+    { delay: 4000, text: 'Setting things up\u2026' },
+    { delay: 9000, text: 'The server is stretching after a nap \u2615' },
+    { delay: 16000, text: 'Almost ready \u2014 just warming up! \ud83d\ude34' },
+    { delay: 25000, text: 'First user of the day \u2014 the database is waking up for you! \ud83c\udfb2' },
+  ],
+};
+
+let authSubmitting = false;
+let authProgressiveTimers = [];
+
+/** Disable all auth form interactive elements and start progressive messages. */
+function lockAuthForm(action) {
+  const authScreen = document.getElementById('screen-auth');
+  if (authScreen) authScreen.classList.add('auth-submitting');
+
+  const submitBtn = document.querySelector('[data-bind="auth-submit-btn"]');
+  const usernameInput = document.getElementById('auth-username');
+  const passwordInput = document.getElementById('auth-password');
+  const toggleLink = document.querySelector('[data-action="auth-toggle-mode"]');
+  const backBtn = authScreen?.querySelector('[data-action="go-home"]');
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (usernameInput) usernameInput.disabled = true;
+  if (passwordInput) passwordInput.disabled = true;
+  if (toggleLink) toggleLink.disabled = true;
+  if (backBtn) backBtn.disabled = true;
+
+  // Start progressive button text escalation
+  const messages = AUTH_PROGRESSIVE_MESSAGES[action] || AUTH_PROGRESSIVE_MESSAGES.login;
+  for (const { delay, text } of messages) {
+    const timerId = setTimeout(() => {
+      if (submitBtn) submitBtn.textContent = text;
+    }, delay);
+    authProgressiveTimers.push(timerId);
+  }
+}
+
+/** Re-enable all auth form interactive elements and restore button text. */
+function unlockAuthForm(action) {
+  const authScreen = document.getElementById('screen-auth');
+  if (authScreen) authScreen.classList.remove('auth-submitting');
+
+  // Clear progressive message timers
+  for (const id of authProgressiveTimers) clearTimeout(id);
+  authProgressiveTimers = [];
+
+  const submitBtn = document.querySelector('[data-bind="auth-submit-btn"]');
+  const usernameInput = document.getElementById('auth-username');
+  const passwordInput = document.getElementById('auth-password');
+  const toggleLink = document.querySelector('[data-action="auth-toggle-mode"]');
+  const backBtn = authScreen?.querySelector('[data-action="go-home"]');
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = action === 'register' ? 'Register' : 'Login';
+  }
+  if (usernameInput) usernameInput.disabled = false;
+  if (passwordInput) passwordInput.disabled = false;
+  if (toggleLink) toggleLink.disabled = false;
+  if (backBtn) backBtn.disabled = false;
+
+  authSubmitting = false;
+}
+
 /** Perform login or register. */
 async function authAction(action) {
+  if (authSubmitting) return;
+
   const usernameInput = document.getElementById('auth-username');
   const passwordInput = document.getElementById('auth-password');
   const username = usernameInput.value.trim();
@@ -1560,6 +1637,9 @@ async function authAction(action) {
     return;
   }
 
+  authSubmitting = true;
+  lockAuthForm(action);
+
   const endpoint = action === 'login' ? '/api/auth/login' : '/api/auth/register';
 
   try {
@@ -1571,6 +1651,7 @@ async function authAction(action) {
     const data = await res.json();
 
     if (!res.ok) {
+      unlockAuthForm(action);
       bindText('auth-error', data.error || 'Something went wrong');
       return;
     }
@@ -1586,6 +1667,7 @@ async function authAction(action) {
     usernameInput.value = '';
     passwordInput.value = '';
     bindText('auth-error', '');
+    unlockAuthForm(action);
 
     await refreshFeatureFlags();
     submitPendingScores();
@@ -1611,6 +1693,7 @@ async function authAction(action) {
       showScreen('multiplayer');
     }
   } catch {
+    unlockAuthForm(action);
     bindText('auth-error', 'Network error — is the server running?');
   }
 }
