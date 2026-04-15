@@ -321,24 +321,34 @@ describe('Delay middleware', () => {
     const { createDelayMiddleware } = freshRequire();
     const mw = createDelayMiddleware();
 
-    // Simulate 3 parallel API calls within same page load (all within 2s)
-    const nexts = [];
-    for (let i = 0; i < 3; i++) {
-      const next = vi.fn();
-      const { req, res } = mockReqRes('/api/scores');
-      mw(req, res, next);
-      nexts.push(next);
-      // Small gap between parallel requests (100ms)
-      vi.advanceTimersByTime(100);
+    const spy = vi.spyOn(global, 'setTimeout');
+
+    try {
+      // Simulate 3 parallel API calls within same page load (all within 2s)
+      const nexts = [];
+      for (let i = 0; i < 3; i++) {
+        const next = vi.fn();
+        const { req, res } = mockReqRes('/api/scores');
+        mw(req, res, next);
+        expect(spy).toHaveBeenLastCalledWith(expect.any(Function), 5000);
+        nexts.push(next);
+        // Small gap between parallel requests (100ms)
+        vi.advanceTimersByTime(100);
+      }
+
+      // All 3 should still be pending after the shorter 1000ms step would have fired
+      nexts.forEach((n) => expect(n).not.toHaveBeenCalled());
+      vi.advanceTimersByTime(700);
+      nexts.forEach((n) => expect(n).not.toHaveBeenCalled());
+
+      // The loop advanced 300ms and the check above advanced another 700ms,
+      // so advance the remaining time for all 5000ms timers to fire
+      // (last timer started at T=200, fires at T=5200).
+      vi.advanceTimersByTime(4300);
+      nexts.forEach((n) => expect(n).toHaveBeenCalledTimes(1));
+    } finally {
+      spy.mockRestore();
     }
-
-    // All 3 should be waiting on the same 5000ms delay (step 0)
-    nexts.forEach((n) => expect(n).not.toHaveBeenCalled());
-
-    // The loop already advanced 3×100ms = 300ms; advance remaining time
-    // so all 5000ms timers fire
-    vi.advanceTimersByTime(5000);
-    nexts.forEach((n) => expect(n).toHaveBeenCalledTimes(1));
   });
 
   test('requests after 2s+ gap advance to next pattern step', () => {
