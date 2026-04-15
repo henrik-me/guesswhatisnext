@@ -242,7 +242,7 @@ describe('Delay middleware', () => {
     // Wait 3s to simulate new navigation (T=4000 + 3000 = T=7000)
     vi.advanceTimersByTime(3000);
 
-    // Request 3 at T=7000 (3s gap > 2s): wraps to step 0 → 3000ms
+    // Request 3 at T=7000 (4s gap since request 2 at T=3000): wraps to step 0 → 3000ms
     const next3 = vi.fn();
     const r3 = mockReqRes('/api/scores');
     mw(r3.req, r3.res, next3);
