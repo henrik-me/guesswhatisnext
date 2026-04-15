@@ -1,6 +1,6 @@
 # Clickstop CS34: Fix Deprecated Node.js 20 Actions Warnings
 
-**Status:** ⬜ Planned (audit complete, implementation blocked on CS39)
+**Status:** 🔄 In Progress (Phase 1: low-risk drop-in replacements)
 **Goal:** Eliminate Node.js 20 deprecation warnings from GitHub Actions workflow runs. All actions should use Node.js 20+ compatible versions with no warnings.
 
 ## Audit Results (CS34-1 ✅)
