@@ -1,6 +1,11 @@
 services:
   mssql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    # Pin to specific CU tag for reproducible builds. Update process:
+    # 1. Check latest CU at https://learn.microsoft.com/en-us/sql/linux/sql-server-linux-release-notes-2022
+    # 2. Update tag below
+    # 3. Test locally: docker compose -f docker-compose.mssql.yml up --build
+    # 4. Optional GHCR mirror: docker tag mcr.microsoft.com/mssql/server:<tag> ghcr.io/henrik-me/mssql-server:<tag> && docker push
+    image: mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04
     environment:
       ACCEPT_EULA: "Y"
       # Local MSSQL validation default only — not a real secret. Override via MSSQL_SA_PASSWORD env var.
@@ -18,7 +23,7 @@ services:
       NODE_ENV: production
       # Local MSSQL validation defaults only — not real secrets. Production uses Azure-managed secrets.
       JWT_SECRET: gwn-docker-mssql-validation
-      SYSTEM_API_KEY: gwn-docker-mssql-validation
+      SYSTEM_API_KEY: test-system-api-key
       CANONICAL_HOST: "localhost"
       DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=${MSSQL_SA_PASSWORD:-GwnTest1!};Encrypt=false;TrustServerCertificate=true"
       PORT: "3000"
@@ -33,8 +38,8 @@ services:
   caddy:
     image: caddy:2-alpine
     ports:
-      - "443:443"
-      - "3001:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTP_PORT:-3001}:80"
     volumes:
       - ./infra/Caddyfile.local:/etc/caddy/Caddyfile:ro
     depends_on:
