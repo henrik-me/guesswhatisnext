@@ -1,16 +1,17 @@
 /**
- * Progressive Loader — wraps async operations with timed message escalation and auto-retry.
- * Shows friendly escalating messages while DB cold starts resolve, then auto-retries on failure.
+ * Progressive Loader — wraps async operations with timed message escalation.
+ * Shows friendly escalating messages while DB cold starts resolve,
+ * then shows a Retry button on failure for user-initiated retry.
  */
 
 const DEFAULTS = {
-  maxRetries: 3,
-  backoff: [1000, 3000, 9000],
-  timeout: 30000,
+  maxRetries: 0,
+  backoff: [1000],
+  timeout: 15000,
 };
 
 /**
- * Run an async fetch with timed message escalation and auto-retry.
+ * Run an async fetch with timed message escalation and user-initiated retry.
  *
  * @param {Function} fetchFn - async function that receives an AbortSignal and returns data
  * @param {HTMLElement} containerEl - element to show messages in
@@ -61,7 +62,9 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
 
       // Wait with backoff before next attempt
       const delay = backoff[Math.min(attempt - 1, backoff.length - 1)];
-      setMessage(containerEl, `Retrying... (attempt ${attempt + 1})`);
+      if (containerEl && messageSet.length > 0) {
+        setMessage(containerEl, messageSet[0].msg);
+      }
       await sleep(delay);
     }
   }
@@ -69,26 +72,29 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
   return null;
 }
 
-/** Message sets for each screen. */
+/** Message sets for each screen — escalate over 15s before timeout. */
 export const MESSAGE_SETS = {
   leaderboard: [
     { after: 0, msg: 'Fetching the rankings...' },
-    { after: 5000, msg: 'Tallying up everyone\'s scores...' },
-    { after: 12000, msg: 'The leaderboard keeper is on a coffee break ☕' },
-    { after: 20000, msg: 'Almost there — the database was napping 😴' },
+    { after: 3000, msg: 'Tallying up everyone\'s scores...' },
+    { after: 6000, msg: 'The leaderboard keeper is on a coffee break ☕' },
+    { after: 10000, msg: 'Waking up the database — hang tight 😴' },
   ],
   profile: [
     { after: 0, msg: 'Loading your profile...' },
-    { after: 5000, msg: 'Gathering your stats...' },
-    { after: 12000, msg: 'Your profile data is warming up ☕' },
+    { after: 3000, msg: 'Gathering your stats...' },
+    { after: 6000, msg: 'Polishing your achievements ✨' },
+    { after: 10000, msg: 'Waking up the database — hang tight 😴' },
   ],
   achievements: [
     { after: 0, msg: 'Checking your trophy case...' },
-    { after: 5000, msg: 'Polishing your badges... ✨' },
+    { after: 3000, msg: 'Polishing your badges... ✨' },
+    { after: 10000, msg: 'Waking up the database — hang tight 😴' },
   ],
   community: [
     { after: 0, msg: 'Loading community puzzles...' },
-    { after: 5000, msg: 'Gathering submissions...' },
+    { after: 3000, msg: 'Gathering submissions...' },
+    { after: 10000, msg: 'Waking up the database — hang tight 😴' },
   ],
 };
 
@@ -96,6 +102,7 @@ export const MESSAGE_SETS = {
  * Score sync queue — saves scores to localStorage and syncs in the background.
  */
 const SYNC_QUEUE_KEY = 'gwn_score_sync_queue';
+const SYNC_BACKOFF = [1000, 3000, 9000];
 
 /**
  * Queue a score for background sync to the server.
@@ -185,7 +192,7 @@ export async function syncQueuedScores(apiFetchFn, callbacks = {}) {
       } catch {
         // Network error — backoff and retry
       }
-      await sleep(DEFAULTS.backoff[Math.min(attempt, DEFAULTS.backoff.length - 1)]);
+      await sleep(SYNC_BACKOFF[Math.min(attempt, SYNC_BACKOFF.length - 1)]);
     }
 
     if (success) {
