@@ -191,7 +191,7 @@ describe('Delay middleware', () => {
 
   // --- Pattern mode tests ---
 
-  test('pattern mode cycles through values', () => {
+  test('pattern advances after 2s+ gap between requests (new navigation)', () => {
     vi.useFakeTimers();
     delete process.env.GWN_DB_DELAY_MS;
     process.env.GWN_DB_DELAY_PATTERN = '5000,2000';
@@ -200,7 +200,7 @@ describe('Delay middleware', () => {
     const mw = createDelayMiddleware();
     expect(mw).not.toBeNull();
 
-    // Request 1: 5000ms delay
+    // Request 1 at T=0: step 0 → 5000ms delay
     const next1 = vi.fn();
     const r1 = mockReqRes('/api/scores');
     mw(r1.req, r1.res, next1);
@@ -208,7 +208,7 @@ describe('Delay middleware', () => {
     vi.advanceTimersByTime(5000);
     expect(next1).toHaveBeenCalledTimes(1);
 
-    // Request 2: 2000ms delay
+    // Request 2 at T=5000 (5s gap > 2s): advances to step 1 → 2000ms delay
     const next2 = vi.fn();
     const r2 = mockReqRes('/api/scores');
     mw(r2.req, r2.res, next2);
@@ -225,21 +225,24 @@ describe('Delay middleware', () => {
     const { createDelayMiddleware } = freshRequire();
     const mw = createDelayMiddleware();
 
-    // Request 1: 3000ms (index 0)
+    // Request 1 at T=0: step 0 → 3000ms
     const next1 = vi.fn();
     const r1 = mockReqRes('/api/scores');
     mw(r1.req, r1.res, next1);
     vi.advanceTimersByTime(3000);
     expect(next1).toHaveBeenCalledTimes(1);
 
-    // Request 2: 1000ms (index 1)
+    // Request 2 at T=3000 (3s gap > 2s): advance to step 1 → 1000ms
     const next2 = vi.fn();
     const r2 = mockReqRes('/api/scores');
     mw(r2.req, r2.res, next2);
     vi.advanceTimersByTime(1000);
     expect(next2).toHaveBeenCalledTimes(1);
 
-    // Request 3: wraps to 3000ms (index 0 again)
+    // Wait 3s to simulate new navigation (T=4000 + 3000 = T=7000)
+    vi.advanceTimersByTime(3000);
+
+    // Request 3 at T=7000 (4s gap since request 2 at T=3000): wraps to step 0 → 3000ms
     const next3 = vi.fn();
     const r3 = mockReqRes('/api/scores');
     mw(r3.req, r3.res, next3);
@@ -295,7 +298,7 @@ describe('Delay middleware', () => {
     const { createDelayMiddleware } = freshRequire();
     const mw = createDelayMiddleware();
 
-    // Request 1: 3000ms delay
+    // Request 1 at T=0: step 0 → 3000ms delay
     const next1 = vi.fn();
     const r1 = mockReqRes('/api/scores');
     mw(r1.req, r1.res, next1);
@@ -303,7 +306,140 @@ describe('Delay middleware', () => {
     vi.advanceTimersByTime(3000);
     expect(next1).toHaveBeenCalledTimes(1);
 
-    // Request 2: 0ms — next() called immediately
+    // Request 2 at T=3000 (3s gap > 2s): advances to step 1 → 0ms, next() immediate
+    const next2 = vi.fn();
+    const r2 = mockReqRes('/api/scores');
+    mw(r2.req, r2.res, next2);
+    expect(next2).toHaveBeenCalledTimes(1);
+  });
+
+  test('parallel requests within 2s burst all get the same delay step', () => {
+    vi.useFakeTimers();
+    delete process.env.GWN_DB_DELAY_MS;
+    process.env.GWN_DB_DELAY_PATTERN = '5000,1000';
+    process.env.NODE_ENV = 'test';
+    const { createDelayMiddleware } = freshRequire();
+    const mw = createDelayMiddleware();
+
+    const spy = vi.spyOn(global, 'setTimeout');
+
+    try {
+      // Simulate 3 parallel API calls within same page load (all within 2s)
+      const nexts = [];
+      for (let i = 0; i < 3; i++) {
+        const next = vi.fn();
+        const { req, res } = mockReqRes('/api/scores');
+        mw(req, res, next);
+        expect(spy).toHaveBeenLastCalledWith(expect.any(Function), 5000);
+        nexts.push(next);
+        // Small gap between parallel requests (100ms)
+        vi.advanceTimersByTime(100);
+      }
+
+      // All 3 should still be pending after the shorter 1000ms step would have fired
+      nexts.forEach((n) => expect(n).not.toHaveBeenCalled());
+      vi.advanceTimersByTime(700);
+      nexts.forEach((n) => expect(n).not.toHaveBeenCalled());
+
+      // The loop advanced 300ms and the check above advanced another 700ms,
+      // so advance the remaining time for all 5000ms timers to fire
+      // (last timer started at T=200, fires at T=5200).
+      vi.advanceTimersByTime(4300);
+      nexts.forEach((n) => expect(n).toHaveBeenCalledTimes(1));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('requests after 2s+ gap advance to next pattern step', () => {
+    vi.useFakeTimers();
+    delete process.env.GWN_DB_DELAY_MS;
+    process.env.GWN_DB_DELAY_PATTERN = '5000,2000,500';
+    process.env.NODE_ENV = 'test';
+    const { createDelayMiddleware } = freshRequire();
+    const mw = createDelayMiddleware();
+
+    // Navigation 1: step 0 → 5000ms
+    const next1 = vi.fn();
+    const { req: req1, res: res1 } = mockReqRes('/api/scores');
+    mw(req1, res1, next1);
+    vi.advanceTimersByTime(5000);
+    expect(next1).toHaveBeenCalledTimes(1);
+
+    // Navigation 2 (5s gap > 2s): step 1 → 2000ms
+    const spy = vi.spyOn(global, 'setTimeout');
+    try {
+      const next2 = vi.fn();
+      const { req, res } = mockReqRes('/api/puzzles');
+      mw(req, res, next2);
+      expect(spy).toHaveBeenLastCalledWith(expect.any(Function), 2000);
+      vi.advanceTimersByTime(2000);
+      expect(next2).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+
+    // Navigation 3 (3s gap >= 2s): step 2 → 500ms
+    vi.advanceTimersByTime(1000); // extra gap to ensure > 2s total
+    const spy2 = vi.spyOn(global, 'setTimeout');
+    try {
+      const next3 = vi.fn();
+      const { req, res } = mockReqRes('/api/scores');
+      mw(req, res, next3);
+      expect(spy2).toHaveBeenLastCalledWith(expect.any(Function), 500);
+    } finally {
+      spy2.mockRestore();
+    }
+  });
+
+  test('exact 2000ms gap advances to next step (boundary)', () => {
+    vi.useFakeTimers();
+    delete process.env.GWN_DB_DELAY_MS;
+    // Use 0ms first step so request 1 is instant — gap measured from T=0
+    process.env.GWN_DB_DELAY_PATTERN = '0,1000';
+    process.env.NODE_ENV = 'test';
+    const { createDelayMiddleware } = freshRequire();
+    const mw = createDelayMiddleware();
+
+    // Request 1 at T=0: step 0 → 0ms (instant)
+    const next1 = vi.fn();
+    const r1 = mockReqRes('/api/scores');
+    mw(r1.req, r1.res, next1);
+    expect(next1).toHaveBeenCalledTimes(1);
+
+    // Advance exactly 2000ms — gap from T=0 to T=2000 is exactly 2000ms
+    vi.advanceTimersByTime(2000);
+
+    // Request 2 at T=2000: gap = 2000ms >= 2000 → advances to step 1 → 1000ms
+    const spy = vi.spyOn(global, 'setTimeout');
+    try {
+      const next2 = vi.fn();
+      const r2 = mockReqRes('/api/scores');
+      mw(r2.req, r2.res, next2);
+      expect(spy).toHaveBeenLastCalledWith(expect.any(Function), 1000);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('1999ms gap does NOT advance step (just below boundary)', () => {
+    vi.useFakeTimers();
+    delete process.env.GWN_DB_DELAY_MS;
+    process.env.GWN_DB_DELAY_PATTERN = '0,1000';
+    process.env.NODE_ENV = 'test';
+    const { createDelayMiddleware } = freshRequire();
+    const mw = createDelayMiddleware();
+
+    // Request 1 at T=0: step 0 → 0ms (instant)
+    const next1 = vi.fn();
+    const r1 = mockReqRes('/api/scores');
+    mw(r1.req, r1.res, next1);
+    expect(next1).toHaveBeenCalledTimes(1);
+
+    // Advance only 1999ms — just below the 2000ms threshold
+    vi.advanceTimersByTime(1999);
+
+    // Request 2 at T=1999: gap = 1999ms < 2000 → stays at step 0 → 0ms (instant)
     const next2 = vi.fn();
     const r2 = mockReqRes('/api/scores');
     mw(r2.req, r2.res, next2);

@@ -450,19 +450,21 @@ GWN_DB_DELAY_MS=20000 docker compose up
 
 **Cycling pattern (simulates cold start → warm-up → warm → restart):**
 ```bash
-GWN_DB_DELAY_PATTERN=45000,15000,0 docker compose up
+GWN_DB_DELAY_PATTERN=45000,15000,0,0,0,0 docker compose up
 ```
 
-| Request | Delay | Simulates |
-|---------|-------|-----------|
-| 1st | 45s | Cold start (retry button appears) |
-| 2nd | 15s | Warming up (progressive messages) |
-| 3rd | 0s | Warm (instant response) |
-| 4th | 45s | Cold restart (cycle repeats) |
+The pattern advances when there's a gap of 2 seconds or more between requests (i.e., a new page navigation). Parallel API calls within the same page load all get the same delay.
+
+| Navigation | Delay | Simulates |
+|------------|-------|-----------|
+| 1st page load | 45s | Cold start (retry button appears) |
+| 2nd page load | 15s | Warming up (progressive messages) |
+| 3rd–6th page loads | 0s | Warm (instant response) |
+| 7th page load | 45s | Cold restart (cycle repeats) |
 
 **With Docker Compose port isolation:**
 ```bash
-HOST_PORT=3005 GWN_DB_DELAY_PATTERN=45000,15000,0 docker compose -p gwn-delay-test up -d
+HOST_PORT=3005 GWN_DB_DELAY_PATTERN=45000,15000,0,0,0,0 docker compose -p gwn-delay-test up -d
 # Open http://localhost:3005
 ```
 
