@@ -10,7 +10,7 @@
 
 ## Tasks
 
-### Phase 0: Stabilize MSSQL Docker Stack
+### Phase 0: Stabilize MSSQL Docker Stack (🖥️ Local)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
@@ -21,16 +21,15 @@
 | CS25-0e | Pin & mirror MSSQL image to GHCR | ⬜ Pending | Pin to specific CU tag (e.g., `2022-CU16-ubuntu-22.04`) instead of `:2022-latest`. Push pinned image to `ghcr.io/henrik-me/mssql-server:<tag>` for fast CI pulls and Docker Hub rate-limit avoidance. Also mirror OTLP collector image. Document version update process. |
 | CS25-0f | Verify Docker Compose v2 requirement | ⬜ Pending | Compose file uses `services:` without `version:` key (Compose v2+ format). Add version check to npm scripts (`docker compose version`), document minimum requirement in INSTRUCTIONS.md. |
 
-### Phase 1: Run Existing E2E Suite Against MSSQL
+### Phase 1: Run Existing E2E Suite Against MSSQL (🖥️ Local)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
 | CS25-1a | Create MSSQL Playwright config | ⬜ Pending | `BASE_URL=https://localhost` (Caddy), `SYSTEM_API_KEY=test-system-api-key`, `ignoreHTTPSErrors=true`. |
 | CS25-1b | Run full E2E suite against MSSQL | ⬜ Pending | Run all 68 tests, identify and fix MSSQL-specific failures. |
 | CS25-1c | Document MSSQL E2E results | ⬜ Pending | Record pass/fail and any MSSQL-specific fixes. |
-| CS25-1d | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Once E2E passes against MSSQL locally, update `staging-deploy.yml`: add MSSQL (from GHCR mirror) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. |
 
-### Phase 2: HTTPS / Security Header E2E Tests
+### Phase 2: HTTPS / Security Header E2E Tests (🖥️ Local)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
@@ -39,7 +38,7 @@
 | CS25-2c | CSP header test | ⬜ Pending | Verify `Content-Security-Policy` with expected directives. |
 | CS25-2d | Security headers test | ⬜ Pending | X-Content-Type-Options, X-Frame-Options, Referrer-Policy. |
 
-### Phase 3: Per-Test Server Log Capture
+### Phase 3: Per-Test Server Log Capture (🖥️ Local)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
@@ -49,7 +48,7 @@
 | CS25-3d | Full E2E log summary | ⬜ Pending | Post-run `docker compose logs app` to `test-results/` + aggregate classifier. |
 | CS25-3e | Log capture overhead monitoring | ⬜ Pending | Measure total log capture time across all tests. Warn in CI output if >60s, fail/alert if >120s. Include the measurement in test artifacts so regressions are visible. |
 
-### Phase 4: OTel Trace Verification
+### Phase 4: OTel Trace Verification (🖥️ Local)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
@@ -59,7 +58,7 @@
 | CS25-4d | E2E trace assertions | ⬜ Pending | Verify spans exist, attributes correct, trace_ids correlate with logs. |
 | CS25-4e | Integrate OTel into test:e2e:mssql | ⬜ Pending | Start collector, run tests, assert traces, include in artifacts. |
 
-### Phase 5: Cold Start UX Testing with Real Delays
+### Phase 5: Cold Start UX Testing with Real Delays (🖥️ Local)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
@@ -68,13 +67,14 @@
 | CS25-5c | E2E tests with real server delays | ⬜ Pending | Progressive-loading tests against real delay middleware (not client-side mocks). |
 | CS25-5d | Toggle documentation | ⬜ Pending | Document cold start on/off via compose profiles. |
 
-### Phase 6: CI Integration (Optional)
+### Phase 6: CI Integration (☁️ GitHub)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-6a | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage (CS25-1d). May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
+| CS25-6a | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Update `staging-deploy.yml`: add MSSQL (from GHCR mirror) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. Only after all local phases (0-5) are proven. |
+| CS25-6b | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage (CS25-6a). May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
 
-### Phase 7: Documentation
+### Phase 7: Documentation (📝 Docs)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
@@ -104,21 +104,29 @@
 ## Dependencies
 
 ```
+🖥️ LOCAL VALIDATION
+───────────────────
 Phase 0 (stabilize stack + GHCR mirrors)
    │
    ▼
-Phase 1 (run existing E2E on MSSQL + update staging deploy)
+Phase 1 (run existing E2E on MSSQL)
    │
    ├──→ Phase 2 (HTTPS / security headers)
    ├──→ Phase 3 (per-test log capture)
    ├──→ Phase 4 (OTel trace verification)
    └──→ Phase 5 (cold start UX)
+
+☁️ GITHUB CI (after all local phases proven)
+─────────────────────────────────────────────
+      Phases 0-5 all complete
             │
-            ▼
-      Phases 2-5 all complete
+            └──→ Phase 6 (staging deploy + optional separate workflow)
+
+📝 DOCS
+───────
+      Phase 6 complete
             │
-            ├──→ Phase 6 (optional: separate CI workflow)
             └──→ Phase 7 (documentation)
 ```
 
-Phases 2, 3, 4, 5 can run in parallel after Phase 1.
+Phases 2, 3, 4, 5 can run in parallel after Phase 1. Phase 6 only begins after all local work is validated.
