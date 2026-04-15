@@ -8,7 +8,6 @@ const DELAY_MODULE = path.resolve(__dirname, '..', 'server', 'middleware', 'dela
 
 function freshRequire() {
   delete require.cache[DELAY_MODULE];
-  // Also clear logger cache so require('../logger') doesn't fail with stale state
   const serverDir = path.resolve(__dirname, '..', 'server');
   for (const key of Object.keys(require.cache)) {
     if (key.startsWith(serverDir)) delete require.cache[key];
@@ -26,10 +25,23 @@ function mockReqRes(reqPath) {
 }
 
 describe('Delay middleware', () => {
-  const originalEnv = { ...process.env };
+  const originalDbDelayMs = process.env.GWN_DB_DELAY_MS;
+  const originalNodeEnv = process.env.NODE_ENV;
 
   afterEach(() => {
-    process.env = { ...originalEnv };
+    vi.useRealTimers();
+
+    if (originalDbDelayMs === undefined) {
+      delete process.env.GWN_DB_DELAY_MS;
+    } else {
+      process.env.GWN_DB_DELAY_MS = originalDbDelayMs;
+    }
+
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
   });
 
   test('returns null when GWN_DB_DELAY_MS is not set', () => {
@@ -53,57 +65,75 @@ describe('Delay middleware', () => {
     expect(createDelayMiddleware()).toBeNull();
   });
 
-  test('delays /api/ routes by configured amount', async () => {
-    process.env.GWN_DB_DELAY_MS = '100';
+  test('delays /api/ routes by configured amount', () => {
+    vi.useFakeTimers();
+    process.env.GWN_DB_DELAY_MS = '5000';
     process.env.NODE_ENV = 'test';
     const { createDelayMiddleware } = freshRequire();
     const mw = createDelayMiddleware();
     expect(mw).not.toBeNull();
 
     const { req, res } = mockReqRes('/api/scores');
-    const start = Date.now();
-    await new Promise((resolve) => mw(req, res, resolve));
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeGreaterThanOrEqual(80);
+    const next = vi.fn();
+    mw(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(5000);
+    expect(next).toHaveBeenCalledTimes(1);
   });
 
-  test('does NOT delay /api/health', async () => {
+  test('does NOT delay /api/health', () => {
     process.env.GWN_DB_DELAY_MS = '500';
     process.env.NODE_ENV = 'test';
     const { createDelayMiddleware } = freshRequire();
     const mw = createDelayMiddleware();
 
     const { req, res } = mockReqRes('/api/health');
-    const start = Date.now();
-    await new Promise((resolve) => mw(req, res, resolve));
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(50);
+    const next = vi.fn();
+    const spy = vi.spyOn(global, 'setTimeout');
+    try {
+      mw(req, res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
-  test('does NOT delay /api/admin/* routes', async () => {
+  test('does NOT delay /api/admin/* routes', () => {
     process.env.GWN_DB_DELAY_MS = '500';
     process.env.NODE_ENV = 'test';
     const { createDelayMiddleware } = freshRequire();
     const mw = createDelayMiddleware();
 
     const { req, res } = mockReqRes('/api/admin/drain');
-    const start = Date.now();
-    await new Promise((resolve) => mw(req, res, resolve));
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(50);
+    const next = vi.fn();
+    const spy = vi.spyOn(global, 'setTimeout');
+    try {
+      mw(req, res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
-  test('does NOT delay non-api routes', async () => {
+  test('does NOT delay non-api routes', () => {
     process.env.GWN_DB_DELAY_MS = '500';
     process.env.NODE_ENV = 'test';
     const { createDelayMiddleware } = freshRequire();
     const mw = createDelayMiddleware();
 
     const { req, res } = mockReqRes('/');
-    const start = Date.now();
-    await new Promise((resolve) => mw(req, res, resolve));
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(50);
+    const next = vi.fn();
+    const spy = vi.spyOn(global, 'setTimeout');
+    try {
+      mw(req, res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('delay is capped at 45000ms', () => {
@@ -113,21 +143,32 @@ describe('Delay middleware', () => {
     const mw = createDelayMiddleware();
     expect(mw).not.toBeNull();
 
-    // Verify the cap by checking that the middleware was created (not null)
-    // and that a short request completes in bounded time — we verify the actual
-    // cap value by inspecting the setTimeout argument via a spy.
-    const origSetTimeout = global.setTimeout;
-    let capturedDelay;
-    global.setTimeout = (fn, ms) => {
-      capturedDelay = ms;
-      return origSetTimeout(fn, 0); // resolve immediately for test speed
-    };
+    const spy = vi.spyOn(global, 'setTimeout');
     try {
       const { req, res } = mockReqRes('/api/scores');
       mw(req, res, () => {});
-      expect(capturedDelay).toBe(45000);
+      expect(spy).toHaveBeenCalledWith(expect.any(Function), 45000);
     } finally {
-      global.setTimeout = origSetTimeout;
+      spy.mockRestore();
     }
+  });
+
+  test('cancels delay when client disconnects', () => {
+    vi.useFakeTimers();
+    process.env.GWN_DB_DELAY_MS = '5000';
+    process.env.NODE_ENV = 'test';
+    const { createDelayMiddleware } = freshRequire();
+    const mw = createDelayMiddleware();
+
+    const { req, res, listeners } = mockReqRes('/api/scores');
+    const next = vi.fn();
+    mw(req, res, next);
+
+    // Simulate client disconnect before timer fires
+    expect(listeners.close).toBeDefined();
+    listeners.close();
+
+    vi.advanceTimersByTime(5000);
+    expect(next).not.toHaveBeenCalled();
   });
 });
