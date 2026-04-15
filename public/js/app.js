@@ -7,6 +7,7 @@ import { Game, shuffle } from './game.js';
 import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
+import { progressiveLoad, MESSAGE_SETS, queueScoreForSync, syncQueuedScores } from './progressive-loader.js';
 
 // Client-side error reporting (IIFE keeps internals private)
 (function initErrorReporting() {
@@ -297,11 +298,21 @@ const ui = {
 
     // Submit score to server if logged in, otherwise queue for later
     if (authToken) {
+      // Local-first: queue for background sync, then attempt direct submission
+      const scorePayload = buildScorePayload(summary);
+      queueScoreForSync(scorePayload);
+      showSyncIndicator('Score saved ✓');
       submitScore(summary).then(data => {
         if (data && data.newAchievements && data.newAchievements.length > 0) {
           showAchievementToasts(data.newAchievements);
         }
-      }).catch(() => {});
+        // Direct submit succeeded — remove from sync queue
+        dequeueLatestSyncedScore();
+        showSyncIndicator('Synced ✓');
+      }).catch(() => {
+        // Direct submit failed — score is already in the sync queue for retry
+        showSyncIndicator('Will sync later');
+      });
     } else {
       queuePendingScore(summary);
       showToast('Log in to save your score to the leaderboard');
@@ -513,6 +524,13 @@ function init() {
       }
     }).catch(() => {
       // Network error — keep token, will validate on next API call
+    });
+
+    // On page load, retry any queued scores from previous sessions
+    syncQueuedScores(apiFetch, {
+      onSyncing: () => showSyncIndicator('Syncing scores...'),
+      onSynced: () => showSyncIndicator('Scores synced ✓'),
+      onFailed: () => showSyncIndicator('Some scores pending sync'),
     });
   }
 
@@ -1045,23 +1063,27 @@ function setActiveLeaderboardTab(period) {
 /** Fetch leaderboard data from the backend API and render it. */
 async function fetchLeaderboard(period) {
   const container = document.querySelector('[data-bind="leaderboard-table"]');
-  container.innerHTML = '<div class="leaderboard-loading">Loading</div>';
 
-  try {
-    const url = leaderboardMode === 'multiplayer'
-      ? `/api/scores/leaderboard/multiplayer?period=${period}`
-      : `/api/scores/leaderboard?mode=freeplay&period=${period}`;
-    const res = await apiFetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+  const url = leaderboardMode === 'multiplayer'
+    ? `/api/scores/leaderboard/multiplayer?period=${period}`
+    : `/api/scores/leaderboard?mode=freeplay&period=${period}`;
+
+  const data = await progressiveLoad(
+    async (signal) => {
+      const res = await apiFetch(url, { signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    container,
+    MESSAGE_SETS.leaderboard,
+  );
+
+  if (data) {
     if (leaderboardMode === 'multiplayer') {
       renderMultiplayerLeaderboard(data.leaderboard);
     } else {
       renderLeaderboard(data.leaderboard);
     }
-  } catch {
-    container.innerHTML =
-      '<div class="leaderboard-error">Leaderboard unavailable — start the server to see rankings</div>';
   }
 }
 
@@ -1087,6 +1109,55 @@ async function submitScore(summary) {
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`Score submit failed: ${res.status}`);
   return res.json();
+}
+
+/** Build a score payload from game summary for the sync queue. */
+function buildScorePayload(summary) {
+  const fastestAnswerMs = (summary.results || [])
+    .filter(r => r.correct)
+    .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
+  return {
+    score: summary.score,
+    mode: summary.mode || 'freeplay',
+    correctCount: summary.correctCount || 0,
+    totalRounds: summary.totalRounds || 0,
+    bestStreak: summary.bestStreak || 0,
+    fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
+  };
+}
+
+/** Remove the most recently queued sync score (after successful direct submit). */
+function dequeueLatestSyncedScore() {
+  try {
+    const key = 'gwn_score_sync_queue';
+    const queue = JSON.parse(localStorage.getItem(key) || '[]');
+    if (Array.isArray(queue) && queue.length > 0) {
+      queue.pop(); // remove the last entry (just queued)
+      if (queue.length > 0) {
+        localStorage.setItem(key, JSON.stringify(queue));
+      } else {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+/** Show a subtle sync status indicator. */
+function showSyncIndicator(message) {
+  let indicator = document.querySelector('.sync-indicator');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.className = 'sync-indicator';
+    indicator.setAttribute('role', 'status');
+    indicator.setAttribute('aria-live', 'polite');
+    document.body.appendChild(indicator);
+  }
+  indicator.textContent = message;
+  indicator.classList.add('visible');
+  clearTimeout(indicator._hideTimer);
+  indicator._hideTimer = setTimeout(() => {
+    indicator.classList.remove('visible');
+  }, 3000);
 }
 
 /** Render leaderboard rows from API data. */
@@ -1171,16 +1242,20 @@ function ordinal(n) {
 async function fetchAchievements() {
   const container = document.querySelector('[data-bind="achievements-grid"]');
   if (!container) return;
-  container.innerHTML = '<div class="achievements-loading">Loading achievements...</div>';
 
-  try {
-    const res = await apiFetch('/api/achievements');
-    if (res.status === 401) return;
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+  const data = await progressiveLoad(
+    async (signal) => {
+      const res = await apiFetch('/api/achievements', { signal });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    container,
+    MESSAGE_SETS.achievements,
+  );
+
+  if (data) {
     renderAchievements(data.achievements);
-  } catch {
-    container.innerHTML = '<div class="achievements-loading">Could not load achievements</div>';
   }
 }
 
@@ -1523,6 +1598,12 @@ async function authAction(action) {
 
     await refreshFeatureFlags();
     submitPendingScores();
+    // Retry any scores queued during previous sessions (background sync)
+    syncQueuedScores(apiFetch, {
+      onSyncing: () => showSyncIndicator('Syncing scores...'),
+      onSynced: () => showSyncIndicator('Scores synced ✓'),
+      onFailed: () => showSyncIndicator('Some scores pending sync'),
+    });
 
     if (authReturnScreen) {
       const returnTo = authReturnScreen;
@@ -2594,31 +2675,36 @@ function onRematchStart(msg) {
 async function fetchProfile() {
   const container = document.querySelector('[data-bind="profile-content"]');
   if (!container) return;
-  container.innerHTML = '<div class="profile-loading">Loading profile...</div>';
 
-  try {
-    const [meRes, scoresRes, achievementsRes, historyRes] = await Promise.all([
-      apiFetch('/api/auth/me'),
-      apiFetch('/api/scores/me'),
-      apiFetch('/api/achievements'),
-      apiFetch('/api/matches/history'),
-    ]);
+  const results = await progressiveLoad(
+    async (signal) => {
+      const [meRes, scoresRes, achievementsRes, historyRes] = await Promise.all([
+        apiFetch('/api/auth/me', { signal }),
+        apiFetch('/api/scores/me', { signal }),
+        apiFetch('/api/achievements', { signal }),
+        apiFetch('/api/matches/history', { signal }),
+      ]);
 
-    if (meRes.status === 401 || scoresRes.status === 401 ||
-        achievementsRes.status === 401 || historyRes.status === 401) return;
+      if (meRes.status === 401 || scoresRes.status === 401 ||
+          achievementsRes.status === 401 || historyRes.status === 401) return null;
 
-    if (!meRes.ok) throw new Error(`me: ${meRes.status}`);
-    if (!scoresRes.ok) throw new Error(`scores: ${scoresRes.status}`);
-    if (!achievementsRes.ok) throw new Error(`achievements: ${achievementsRes.status}`);
-    if (!historyRes.ok) throw new Error(`history: ${historyRes.status}`);
+      if (!meRes.ok) throw new Error(`me: ${meRes.status}`);
+      if (!scoresRes.ok) throw new Error(`scores: ${scoresRes.status}`);
+      if (!achievementsRes.ok) throw new Error(`achievements: ${achievementsRes.status}`);
+      if (!historyRes.ok) throw new Error(`history: ${historyRes.status}`);
 
-    const [meData, scoresData, achievementsData, historyData] = await Promise.all([
-      meRes.json(), scoresRes.json(), achievementsRes.json(), historyRes.json(),
-    ]);
+      const [meData, scoresData, achievementsData, historyData] = await Promise.all([
+        meRes.json(), scoresRes.json(), achievementsRes.json(), historyRes.json(),
+      ]);
 
-    renderProfile(meData, scoresData, achievementsData, historyData);
-  } catch {
-    container.innerHTML = '<div class="profile-loading">Could not load profile</div>';
+      return { meData, scoresData, achievementsData, historyData };
+    },
+    container,
+    MESSAGE_SETS.profile,
+  );
+
+  if (results) {
+    renderProfile(results.meData, results.scoresData, results.achievementsData, results.historyData);
   }
 }
 
@@ -3352,67 +3438,87 @@ async function loadGallery(append = false) {
   if (!grid) return;
 
   if (!append) {
-    grid.innerHTML = '<p class="gallery-loading" role="listitem">Loading community puzzles…</p>';
     galleryPuzzles = [];
     galleryPage = 1;
   }
 
-  try {
+  if (append) {
+    // For paginated loads, use simple loading indicator
+    const loadingP = document.createElement('p');
+    loadingP.className = 'gallery-loading';
+    loadingP.setAttribute('role', 'listitem');
+    loadingP.textContent = 'Loading more...';
+    grid.appendChild(loadingP);
+  }
+
+  const fetchData = async (signal) => {
     const params = new URLSearchParams({ page: galleryPage, limit: 20 });
     if (galleryCategory) params.set('category', galleryCategory);
     if (galleryDifficulty && galleryDifficulty !== 'all') params.set('difficulty', galleryDifficulty);
 
-    const res = await fetch(`/api/puzzles/community?${params}`);
+    const res = await fetch(`/api/puzzles/community?${params}`, { signal });
     const data = await res.json();
-    if (!res.ok) {
-      grid.innerHTML = `<p class="gallery-empty" role="listitem">${escapeHTML(data.error || 'Failed to load puzzles')}</p>`;
-      if (paginationEl) paginationEl.style.display = 'none';
-      return;
-    }
+    if (!res.ok) throw new Error(data.error || 'Failed to load puzzles');
+    return data;
+  };
 
-    const puzzles = data.puzzles || [];
-    galleryTotalPages = data.pagination?.pages || 0;
-
-    if (append) {
-      galleryPuzzles = galleryPuzzles.concat(puzzles);
-    } else {
-      galleryPuzzles = puzzles;
-    }
-
-    if (galleryPuzzles.length === 0) {
-      grid.innerHTML = `
-        <div class="gallery-empty" role="listitem">
-          <div class="gallery-empty-icon" aria-hidden="true">🌍</div>
-          <p class="gallery-empty-text">No community puzzles yet — be the first to create one!</p>
-        </div>`;
-      if (paginationEl) paginationEl.style.display = 'none';
-      return;
-    }
-
-    if (!append) {
-      grid.innerHTML = '';
-    } else {
+  let data;
+  if (append) {
+    // Appended pages don't get progressive messages — just a simple fetch
+    try {
+      data = await fetchData();
+    } catch {
       const loadingEl = grid.querySelector('.gallery-loading');
       if (loadingEl) loadingEl.remove();
+      if (paginationEl) paginationEl.style.display = 'none';
+      return;
     }
+  } else {
+    data = await progressiveLoad(fetchData, grid, MESSAGE_SETS.community);
+  }
 
-    const fragment = document.createDocumentFragment();
-    const newPuzzles = append ? puzzles : galleryPuzzles;
-    newPuzzles.forEach(p => {
-      const temp = document.createElement('div');
-      temp.innerHTML = renderGalleryCard(p);
-      fragment.appendChild(temp.firstElementChild);
-    });
-    grid.appendChild(fragment);
-
-    if (paginationEl) {
-      paginationEl.style.display = galleryPage < galleryTotalPages ? '' : 'none';
-    }
-  } catch {
-    if (!append) {
-      grid.innerHTML = '<p class="gallery-empty" role="listitem">Network error — please try again.</p>';
-    }
+  if (!data) {
     if (paginationEl) paginationEl.style.display = 'none';
+    return;
+  }
+
+  const puzzles = data.puzzles || [];
+  galleryTotalPages = data.pagination?.pages || 0;
+
+  if (append) {
+    galleryPuzzles = galleryPuzzles.concat(puzzles);
+  } else {
+    galleryPuzzles = puzzles;
+  }
+
+  if (galleryPuzzles.length === 0) {
+    grid.innerHTML = `
+      <div class="gallery-empty" role="listitem">
+        <div class="gallery-empty-icon" aria-hidden="true">🌍</div>
+        <p class="gallery-empty-text">No community puzzles yet — be the first to create one!</p>
+      </div>`;
+    if (paginationEl) paginationEl.style.display = 'none';
+    return;
+  }
+
+  if (!append) {
+    grid.innerHTML = '';
+  } else {
+    const loadingEl = grid.querySelector('.gallery-loading');
+    if (loadingEl) loadingEl.remove();
+  }
+
+  const fragment = document.createDocumentFragment();
+  const newPuzzles = append ? puzzles : galleryPuzzles;
+  newPuzzles.forEach(p => {
+    const temp = document.createElement('div');
+    temp.innerHTML = renderGalleryCard(p);
+    fragment.appendChild(temp.firstElementChild);
+  });
+  grid.appendChild(fragment);
+
+  if (paginationEl) {
+    paginationEl.style.display = galleryPage < galleryTotalPages ? '' : 'none';
   }
 }
 
