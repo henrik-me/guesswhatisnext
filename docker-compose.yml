@@ -9,5 +9,6 @@ services:
       - JWT_SECRET=gwn-dev-secret-change-in-production
       - SYSTEM_API_KEY=test-system-api-key
       - PORT=3000
+      - GWN_DB_DELAY_PATTERN=${GWN_DB_DELAY_PATTERN:-}
       - GWN_DB_DELAY_MS=${GWN_DB_DELAY_MS:-}
     restart: unless-stopped
