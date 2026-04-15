@@ -38,7 +38,7 @@ export default defineConfig({
   expect: { timeout: 10000 },
   fullyParallel: false,
   workers: 1,
-  retries: externalBaseURL ? 2 : 0,
+  retries: externalBaseURL ? 2 : (process.env.CI ? 2 : 0),
   reporter: 'list',
   use: {
     baseURL: externalBaseURL || 'http://localhost:3011',
