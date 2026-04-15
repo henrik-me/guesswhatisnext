@@ -38,7 +38,7 @@ export default defineConfig({
   expect: { timeout: 10000 },
   fullyParallel: false,
   workers: 1,
-  retries: externalBaseURL ? 2 : 0,
+  retries: externalBaseURL ? 2 : (process.env.CI ? 2 : 0),
   reporter: 'list',
   use: {
     baseURL: externalBaseURL || 'http://localhost:3011',
@@ -48,16 +48,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        ...(process.env.CI
-          ? {
-              launchOptions: {
-                args: ['--disable-gpu', '--disable-software-rasterizer'],
-              },
-            }
-          : {}),
-      },
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
   webServer: externalBaseURL
