@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-15T23:09Z
+> **Last updated:** 2026-04-15T23:40Z
 
 ## Orchestrators
 
@@ -19,6 +19,5 @@ Orchestrators update this file directly on main — no PR required.
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS25 | CS25 — MSSQL E2E Testing | Planning: MSSQL local dev, HTTPS, telemetry, cold start, E2E coverage | yoga-gwn | — | — | — | 2026-04-15T18:24Z |
-| CS34 | CS34 | Phase 3: azure/login + azure/cli v2→v3 | yoga-gwn-c2 | wt-1 | yoga-gwn-c2/cs34-phase3-azure-actions | — | 2026-04-15T15:57Z |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
