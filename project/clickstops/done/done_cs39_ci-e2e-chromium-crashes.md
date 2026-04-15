@@ -1,7 +1,7 @@
 # CS39 — CI E2E Chromium Crashes
 
 **Status:** ✅ Complete
-**Goal:** Investigate and mitigate Chromium SEGFAULT crashes that cause E2E test failures in GitHub Actions CI. Tests pass 100% locally but 2–3 tests consistently crash in CI with Chromium process SIGSEGV.
+**Goal:** Investigate and mitigate Chromium SEGFAULT crashes that cause E2E test failures in GitHub Actions CI. Tests pass 100% locally but multiple tests crash in CI with Chromium process SIGSEGV.
 **PRs:** #165, #166
 
 ---
