@@ -4,10 +4,13 @@
  * Delay middleware — simulates DB cold start by adding artificial delay to API routes.
  *
  * Supports two modes:
- *   1. GWN_DB_DELAY_PATTERN — comma-separated list of delays that cycle per request (takes precedence)
+ *   1. GWN_DB_DELAY_PATTERN — comma-separated list of delays that cycle per navigation
+ *      (e.g., "45000,15000,0,0,0,0"). The pattern advances when there's a 2s+ gap between
+ *      requests (i.e., a new page navigation). Parallel requests within a burst all get
+ *      the same delay, simulating real DB cold start behavior.
  *   2. GWN_DB_DELAY_MS — single fixed delay (backward compat)
  *
- * Each value is capped at 45000ms. Values <= 0 are skipped (no delay for that step).
+ * Each value is capped at 45000ms. Values <= 0 mean no delay for that step.
  * Only active when NODE_ENV is not 'production' or 'staging'.
  *
  * Excluded paths (no delay applied):
@@ -17,8 +20,8 @@
  *   - All non-/api/ routes (static assets, SPA fallback, /healthz)
  *
  * Usage:
- *   GWN_DB_DELAY_PATTERN=45000,15000,0 npm start   # cycling pattern
- *   GWN_DB_DELAY_MS=15000 npm start                 # fixed delay
+ *   GWN_DB_DELAY_PATTERN=45000,15000,0,0,0,0 npm start   # cycling pattern
+ *   GWN_DB_DELAY_MS=15000 npm start                       # fixed delay
  */
 function parsePattern(raw) {
   if (!raw || !raw.trim()) return null;
@@ -45,10 +48,12 @@ function createDelayMiddleware() {
   if (pattern.length === 1) {
     logger.info({ delayMs: pattern[0] }, 'API delay simulation active');
   } else {
-    logger.info({ pattern }, 'API delay pattern active: [%s] (cycling)', pattern.join(', '));
+    logger.info({ pattern }, 'API delay pattern active: [%s] (cycling per navigation)', pattern.join(', '));
   }
 
-  let counter = 0;
+  let stepIndex = 0;
+  let lastRequestTime = 0;
+  const NAV_GAP_MS = 2000; // 2s gap = new navigation = advance step
 
   return (req, res, next) => {
     const p = req.path;
@@ -61,9 +66,14 @@ function createDelayMiddleware() {
       return;
     }
 
-    const stepIndex = counter % pattern.length;
+    const now = Date.now();
+    // Advance pattern step only on new navigation (2s+ gap since last request)
+    if (lastRequestTime > 0 && (now - lastRequestTime) > NAV_GAP_MS) {
+      stepIndex = (stepIndex + 1) % pattern.length;
+    }
+    lastRequestTime = now;
+
     const delay = pattern[stepIndex];
-    counter++;
 
     if (delay <= 0) {
       logger.debug({ path: p, step: stepIndex + 1, steps: pattern.length, delayMs: 0 },
