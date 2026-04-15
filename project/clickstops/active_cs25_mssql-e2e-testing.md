@@ -1,6 +1,6 @@
 # CS25 — MSSQL E2E Testing
 
-**Status:** ⬜ Planned
+**Status:** 🔄 In Progress
 **Goal:** Create E2E tests that run against the Docker MSSQL stack to validate application flows work end-to-end with the MSSQL backend.
 
 **Deferred from:** [CS19 — Community Puzzle Navigation & Testing](done_cs19_community-puzzle-navigation.md) (task CS19-4)
