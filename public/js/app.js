@@ -2779,30 +2779,44 @@ async function fetchProfile() {
 
   const results = await progressiveLoad(
     async (signal) => {
-      const [meRes, scoresRes, achievementsRes, historyRes] = await Promise.all([
-        apiFetch('/api/auth/me', { signal }),
-        apiFetch('/api/scores/me', { signal }),
-        apiFetch('/api/achievements', { signal }),
-        apiFetch('/api/matches/history', { signal }),
+      // Fetch all four endpoints independently — partial success is OK
+      const [meResult, scoresResult, achievementsResult, historyResult] = await Promise.allSettled([
+        apiFetch('/api/auth/me', { signal }).then(async (res) => {
+          if (res.status === 401) return null;
+          if (!res.ok) throw new Error(`me: ${res.status}`);
+          return res.json();
+        }),
+        apiFetch('/api/scores/me', { signal }).then(async (res) => {
+          if (res.status === 401) return null;
+          if (!res.ok) throw new Error(`scores: ${res.status}`);
+          return res.json();
+        }),
+        apiFetch('/api/achievements', { signal }).then(async (res) => {
+          if (res.status === 401) return null;
+          if (!res.ok) throw new Error(`achievements: ${res.status}`);
+          return res.json();
+        }),
+        apiFetch('/api/matches/history', { signal }).then(async (res) => {
+          if (res.status === 401) return null;
+          if (!res.ok) throw new Error(`history: ${res.status}`);
+          return res.json();
+        }),
       ]);
 
-      if (meRes.status === 401 || scoresRes.status === 401 ||
-          achievementsRes.status === 401 || historyRes.status === 401) return null;
+      // If any returned 401, the user is not logged in
+      const meData = meResult.status === 'fulfilled' ? meResult.value : null;
+      if (meData === null && meResult.status === 'fulfilled') return null;
 
-      if (!meRes.ok) throw new Error(`me: ${meRes.status}`);
-      if (!scoresRes.ok) throw new Error(`scores: ${scoresRes.status}`);
-      if (!achievementsRes.ok) throw new Error(`achievements: ${achievementsRes.status}`);
-      if (!historyRes.ok) throw new Error(`history: ${historyRes.status}`);
-
-      const [meData, scoresData, achievementsData, historyData] = await Promise.all([
-        meRes.json(), scoresRes.json(), achievementsRes.json(), historyRes.json(),
-      ]);
-
-      return { meData, scoresData, achievementsData, historyData };
+      return {
+        meData: meData || { user: {} },
+        scoresData: scoresResult.status === 'fulfilled' && scoresResult.value ? scoresResult.value : { stats: [] },
+        achievementsData: achievementsResult.status === 'fulfilled' && achievementsResult.value ? achievementsResult.value : { achievements: [] },
+        historyData: historyResult.status === 'fulfilled' && historyResult.value ? historyResult.value : { history: [] },
+      };
     },
     container,
     MESSAGE_SETS.profile,
-    { onRetry: () => fetchProfile() },
+    { maxRetries: 0, onRetry: () => fetchProfile() },
   );
 
   if (results) {

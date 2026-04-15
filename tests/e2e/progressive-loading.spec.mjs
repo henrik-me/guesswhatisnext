@@ -73,5 +73,78 @@ test.describe('Progressive Loading', () => {
       container.locator('.achievement-card').first().or(container.locator('.achievements-loading'))
     ).toBeVisible({ timeout: 15000 });
   });
+
+  test('retry button appears after timeout on slow response', async ({ browser }) => {
+    const context = await browser.newContext({
+      serviceWorkers: 'block',
+    });
+    const page = await context.newPage();
+
+    await page.goto('/');
+
+    // Intercept leaderboard API with a delay longer than the 15s timeout
+    await page.route(/\/api\/scores\/leaderboard/, async (route) => {
+      await new Promise(resolve => setTimeout(resolve, 20000));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ leaderboard: [] }),
+      });
+    });
+
+    await page.click('[data-action="show-leaderboard"]');
+    await expect(page.locator('[data-screen="leaderboard"]')).toHaveClass(/active/);
+
+    // Retry button should appear after the 15s timeout (no auto-retries)
+    const container = page.locator('[data-bind="leaderboard-table"]');
+    await expect(container.locator('.progressive-retry-btn')).toBeVisible({ timeout: 20000 });
+
+    await context.close();
+  });
+
+  test('retry button works — clicking it loads data on second attempt', async ({ browser }) => {
+    const context = await browser.newContext({
+      serviceWorkers: 'block',
+    });
+    const page = await context.newPage();
+
+    await page.goto('/');
+
+    let requestCount = 0;
+    await page.route(/\/api\/scores\/leaderboard/, async (route) => {
+      requestCount++;
+      if (requestCount === 1) {
+        // First request: delay long enough to trigger timeout
+        await new Promise(resolve => setTimeout(resolve, 20000));
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ leaderboard: [] }),
+        });
+      } else {
+        // Subsequent requests: respond immediately
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ leaderboard: [] }),
+        });
+      }
+    });
+
+    await page.click('[data-action="show-leaderboard"]');
+    await expect(page.locator('[data-screen="leaderboard"]')).toHaveClass(/active/);
+
+    // Wait for retry button to appear
+    const container = page.locator('[data-bind="leaderboard-table"]');
+    await expect(container.locator('.progressive-retry-btn')).toBeVisible({ timeout: 20000 });
+
+    // Click retry — data should load on second attempt
+    await container.locator('.progressive-retry-btn').click();
+
+    // The leaderboard empty state should appear (fast response on retry)
+    await expect(container.locator('.leaderboard-empty')).toBeVisible({ timeout: 10000 });
+
+    await context.close();
+  });
 });
 

@@ -46,7 +46,28 @@ describe('progressiveLoad', () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
-  it('retries on failure with backoff', async () => {
+  it('returns null and shows retry button with default maxRetries: 0', async () => {
+    const { progressiveLoad } = await loadModule();
+    const fetchFn = vi.fn().mockRejectedValue(new Error('fail'));
+    const retryBtn = { addEventListener: vi.fn() };
+    const container = {
+      innerHTML: '',
+      querySelector: vi.fn().mockReturnValue(retryBtn),
+    };
+
+    const promise = progressiveLoad(fetchFn, container, [], {
+      timeout: 5000,
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = await promise;
+    expect(result).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(1); // only initial attempt, no retries
+    expect(container.innerHTML).toContain('progressive-retry-btn');
+  });
+
+  it('retries on failure with backoff when maxRetries > 0', async () => {
     const { progressiveLoad, MESSAGE_SETS } = await loadModule();
     let callCount = 0;
     const fetchFn = vi.fn().mockImplementation(() => {
