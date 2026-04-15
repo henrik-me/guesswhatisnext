@@ -287,12 +287,16 @@ test.describe('Authentication — Cold Start Progressive Feedback', () => {
       });
     });
 
-    // Rapidly click submit twice — second click uses force since button is now disabled
-    await page.click('[data-action="auth-submit"]');
-    await page.click('[data-action="auth-submit"]', { force: true });
+    // Dispatch submit twice directly on the form so the authSubmitting guard is exercised
+    await page.evaluate(() => {
+      const form = document.querySelector('#auth-form');
+      if (!(form instanceof HTMLFormElement)) throw new Error('Expected #auth-form');
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
 
     // Only one request should have been sent
-    expect(requestCount).toBe(1);
+    await expect.poll(() => requestCount).toBe(1);
 
     // Resolve the login and wait for navigation
     resolveLogin();

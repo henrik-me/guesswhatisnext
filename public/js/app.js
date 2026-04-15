@@ -1624,15 +1624,15 @@ function unlockAuthForm(action) {
   const backBtn = authScreen?.querySelector('[data-action="go-home"]');
   const statusEl = document.querySelector('[data-bind="auth-status"]');
 
-  if (submitBtn) {
-    submitBtn.disabled = false;
-    submitBtn.textContent = action === 'register' ? 'Register' : 'Login';
-  }
+  if (submitBtn) submitBtn.disabled = false;
   if (usernameInput) usernameInput.disabled = false;
   if (passwordInput) passwordInput.disabled = false;
   if (toggleLink) toggleLink.disabled = false;
   if (backBtn) backBtn.disabled = false;
   if (statusEl) statusEl.textContent = '';
+
+  // Restore button text + aria-label via setAuthMode (avoids duplicating labels)
+  setAuthMode(action);
 
   authSubmitting = false;
 }
