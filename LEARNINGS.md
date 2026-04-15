@@ -240,6 +240,8 @@ Each migration has `down()` but it's never auto-called. If a migration breaks pr
 
 ## Auto-Pause UX Strategy
 
+**Status: ✅ Implemented** (CS38, PRs #163, #164, #167). ProgressiveLoader module with timed message escalation, auto-retry with backoff, local-first score submission, auth form progressive feedback, and delay simulation middleware for testing.
+
 ### Auto-Pause Latency — Graceful UI Strategy
 
 Azure SQL serverless auto-pauses after ~1 hour of inactivity. Cold-start resume takes 10-30 seconds. **No keep-alive pings** — accept the latency and make it delightful.
