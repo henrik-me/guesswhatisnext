@@ -12,10 +12,11 @@ const DEFAULTS = {
 /**
  * Run an async fetch with timed message escalation and auto-retry.
  *
- * @param {Function} fetchFn - async function that returns data
+ * @param {Function} fetchFn - async function that receives an AbortSignal and returns data
  * @param {HTMLElement} containerEl - element to show messages in
  * @param {Array<{after: number, msg: string}>} messageSet - escalating messages
- * @param {Object} [options] - {maxRetries, backoff, timeout}
+ * @param {Object} [options] - {maxRetries, backoff, timeout, onRetry}
+ * @param {Function} [options.onRetry] - callback for retry button; if omitted, retries progressiveLoad directly
  * @returns {Promise<any>} the fetch result, or null on final failure
  */
 export async function progressiveLoad(fetchFn, containerEl, messageSet, options = {}) {
@@ -224,15 +225,13 @@ function showRetryButton(el, onRetry) {
 }
 
 function startMessageEscalation(el, messageSet, timers) {
-  if (!el || !messageSet || messageSet.length === 0) return () => {};
+  if (!el || !messageSet || messageSet.length === 0) return;
 
   for (const { after, msg } of messageSet) {
     if (after === 0) continue; // first message already shown
     const id = setTimeout(() => setMessage(el, msg), after);
     timers.push(id);
   }
-
-  return () => clearTimers(timers);
 }
 
 function clearTimers(timers) {

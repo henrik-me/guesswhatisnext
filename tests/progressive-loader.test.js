@@ -215,3 +215,111 @@ describe('Score sync queue', () => {
     expect(getQueuedScores()).toHaveLength(0);
   });
 });
+
+describe('syncQueuedScores', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does nothing when queue is empty', async () => {
+    const { syncQueuedScores } = await loadModule();
+    const apiFetchFn = vi.fn();
+    const onSyncing = vi.fn();
+
+    const promise = syncQueuedScores(apiFetchFn, { onSyncing });
+    await vi.advanceTimersByTimeAsync(100);
+    await promise;
+
+    expect(apiFetchFn).not.toHaveBeenCalled();
+    expect(onSyncing).not.toHaveBeenCalled();
+  });
+
+  it('syncs queued scores and dequeues on success', async () => {
+    const { queueScoreForSync, getQueuedScores, syncQueuedScores } = await loadModule();
+    queueScoreForSync({ score: 100, mode: 'freeplay' });
+    queueScoreForSync({ score: 200, mode: 'freeplay' });
+
+    const apiFetchFn = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const onSynced = vi.fn();
+
+    const promise = syncQueuedScores(apiFetchFn, { onSynced });
+    await vi.advanceTimersByTimeAsync(100);
+    await promise;
+
+    expect(apiFetchFn).toHaveBeenCalledTimes(2);
+    expect(onSynced).toHaveBeenCalledWith(2);
+    expect(getQueuedScores()).toHaveLength(0);
+  });
+
+  it('stops on 401 without dequeuing', async () => {
+    const { queueScoreForSync, getQueuedScores, syncQueuedScores } = await loadModule();
+    queueScoreForSync({ score: 100, mode: 'freeplay' });
+    queueScoreForSync({ score: 200, mode: 'freeplay' });
+
+    const apiFetchFn = vi.fn().mockResolvedValue({ ok: false, status: 401 });
+    const onFailed = vi.fn();
+
+    const promise = syncQueuedScores(apiFetchFn, { onFailed });
+    await vi.advanceTimersByTimeAsync(100);
+    await promise;
+
+    expect(apiFetchFn).toHaveBeenCalledTimes(1);
+    expect(onFailed).toHaveBeenCalled();
+    expect(getQueuedScores()).toHaveLength(2);
+  });
+
+  it('retries on network failure then leaves queue intact', async () => {
+    const { queueScoreForSync, getQueuedScores, syncQueuedScores } = await loadModule();
+    queueScoreForSync({ score: 100, mode: 'freeplay' });
+
+    // All 3 attempts fail with network error
+    const apiFetchFn = vi.fn().mockRejectedValue(new Error('network error'));
+    const onFailed = vi.fn();
+
+    const promise = syncQueuedScores(apiFetchFn, { onFailed });
+    // Advance through all 3 retry backoff periods
+    for (let i = 0; i < 15; i++) {
+      await vi.advanceTimersByTimeAsync(10000);
+    }
+    await promise;
+
+    expect(apiFetchFn).toHaveBeenCalledTimes(3);
+    expect(onFailed).toHaveBeenCalled();
+    expect(getQueuedScores()).toHaveLength(1);
+  });
+
+  it('treats 409 as successful sync', async () => {
+    const { queueScoreForSync, getQueuedScores, syncQueuedScores } = await loadModule();
+    queueScoreForSync({ score: 100, mode: 'freeplay' });
+
+    const apiFetchFn = vi.fn().mockResolvedValue({ ok: false, status: 409 });
+    const onSynced = vi.fn();
+
+    const promise = syncQueuedScores(apiFetchFn, { onSynced });
+    await vi.advanceTimersByTimeAsync(100);
+    await promise;
+
+    expect(onSynced).toHaveBeenCalledWith(1);
+    expect(getQueuedScores()).toHaveLength(0);
+  });
+
+  it('strips queuedAt from payload before submitting', async () => {
+    const { queueScoreForSync, syncQueuedScores } = await loadModule();
+    queueScoreForSync({ score: 100, mode: 'freeplay' });
+
+    const apiFetchFn = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+
+    const promise = syncQueuedScores(apiFetchFn, {});
+    await vi.advanceTimersByTimeAsync(100);
+    await promise;
+
+    const body = JSON.parse(apiFetchFn.mock.calls[0][1].body);
+    expect(body.queuedAt).toBeUndefined();
+    expect(body.score).toBe(100);
+  });
+});

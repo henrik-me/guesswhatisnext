@@ -525,17 +525,17 @@ function init() {
             updateHomeAuthDisplay();
             if (currentScreen === 'community') updateCommunityAuthDisplay();
           }
+        }).then(() => {
+          // Token confirmed valid — sync any queued scores
+          syncQueuedScores(apiFetch, {
+            onSyncing: () => showSyncIndicator('Syncing scores...'),
+            onSynced: () => showSyncIndicator('Scores synced ✓'),
+            onFailed: () => showSyncIndicator('Some scores pending sync'),
+          });
         });
       }
     }).catch(() => {
       // Network error — keep token, will validate on next API call
-    });
-
-    // On page load, retry any queued scores from previous sessions
-    syncQueuedScores(apiFetch, {
-      onSyncing: () => showSyncIndicator('Syncing scores...'),
-      onSynced: () => showSyncIndicator('Scores synced ✓'),
-      onFailed: () => showSyncIndicator('Some scores pending sync'),
     });
   }
 
