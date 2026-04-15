@@ -202,14 +202,16 @@ describe('Delay middleware', () => {
 
     // Request 1: 5000ms delay
     const next1 = vi.fn();
-    mw(mockReqRes('/api/scores').req, mockReqRes('/api/scores').res, next1);
+    const r1 = mockReqRes('/api/scores');
+    mw(r1.req, r1.res, next1);
     expect(next1).not.toHaveBeenCalled();
     vi.advanceTimersByTime(5000);
     expect(next1).toHaveBeenCalledTimes(1);
 
     // Request 2: 2000ms delay
     const next2 = vi.fn();
-    mw(mockReqRes('/api/scores').req, mockReqRes('/api/scores').res, next2);
+    const r2 = mockReqRes('/api/scores');
+    mw(r2.req, r2.res, next2);
     expect(next2).not.toHaveBeenCalled();
     vi.advanceTimersByTime(2000);
     expect(next2).toHaveBeenCalledTimes(1);
@@ -225,19 +227,22 @@ describe('Delay middleware', () => {
 
     // Request 1: 3000ms (index 0)
     const next1 = vi.fn();
-    mw(mockReqRes('/api/scores').req, mockReqRes('/api/scores').res, next1);
+    const r1 = mockReqRes('/api/scores');
+    mw(r1.req, r1.res, next1);
     vi.advanceTimersByTime(3000);
     expect(next1).toHaveBeenCalledTimes(1);
 
     // Request 2: 1000ms (index 1)
     const next2 = vi.fn();
-    mw(mockReqRes('/api/scores').req, mockReqRes('/api/scores').res, next2);
+    const r2 = mockReqRes('/api/scores');
+    mw(r2.req, r2.res, next2);
     vi.advanceTimersByTime(1000);
     expect(next2).toHaveBeenCalledTimes(1);
 
     // Request 3: wraps to 3000ms (index 0 again)
     const next3 = vi.fn();
-    mw(mockReqRes('/api/scores').req, mockReqRes('/api/scores').res, next3);
+    const r3 = mockReqRes('/api/scores');
+    mw(r3.req, r3.res, next3);
     expect(next3).not.toHaveBeenCalled();
     vi.advanceTimersByTime(3000);
     expect(next3).toHaveBeenCalledTimes(1);
@@ -274,7 +279,8 @@ describe('Delay middleware', () => {
     // Multiple requests all get 4000ms
     for (let i = 0; i < 3; i++) {
       const next = vi.fn();
-      mw(mockReqRes('/api/scores').req, mockReqRes('/api/scores').res, next);
+      const { req, res } = mockReqRes('/api/scores');
+      mw(req, res, next);
       expect(next).not.toHaveBeenCalled();
       vi.advanceTimersByTime(4000);
       expect(next).toHaveBeenCalledTimes(1);
@@ -291,14 +297,16 @@ describe('Delay middleware', () => {
 
     // Request 1: 3000ms delay
     const next1 = vi.fn();
-    mw(mockReqRes('/api/scores').req, mockReqRes('/api/scores').res, next1);
+    const r1 = mockReqRes('/api/scores');
+    mw(r1.req, r1.res, next1);
     expect(next1).not.toHaveBeenCalled();
     vi.advanceTimersByTime(3000);
     expect(next1).toHaveBeenCalledTimes(1);
 
     // Request 2: 0ms — next() called immediately
     const next2 = vi.fn();
-    mw(mockReqRes('/api/scores').req, mockReqRes('/api/scores').res, next2);
+    const r2 = mockReqRes('/api/scores');
+    mw(r2.req, r2.res, next2);
     expect(next2).toHaveBeenCalledTimes(1);
   });
 
