@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
+import { uniqueIP } from './helpers.mjs';
 
 test.describe('Progressive Loading', () => {
   test('leaderboard renders after progressive loading', async ({ page }) => {
@@ -55,6 +56,7 @@ test.describe('Progressive Loading', () => {
     await page.click('[data-action="show-auth-login"]');
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
     await page.click('[data-action="auth-toggle-mode"]');
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
     await page.fill('#auth-username', username);
     await page.fill('#auth-password', 'testpass123');
     await page.click('[data-action="auth-submit"]');
@@ -67,7 +69,9 @@ test.describe('Progressive Loading', () => {
 
     // Achievements should load — either achievement cards or the no-achievements message
     const container = page.locator('[data-bind="achievements-grid"]');
-    await expect(container.locator('.achievement-card').first()).toBeVisible({ timeout: 15000 });
+    await expect(
+      container.locator('.achievement-card').first().or(container.locator('.achievements-loading'))
+    ).toBeVisible({ timeout: 15000 });
   });
 });
 

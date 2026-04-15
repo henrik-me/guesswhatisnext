@@ -301,6 +301,13 @@ const ui = {
       // Local-first: show success immediately, submit in background
       showSyncIndicator('Score saved ✓');
       submitScore(summary).then(data => {
+        if (data === null) {
+          // 401 — token expired; queue for retry and prompt sign-in
+          const scorePayload = buildScorePayload(summary);
+          const queued = queueScoreForSync(scorePayload);
+          showSyncIndicator(queued ? 'Sign in to sync' : 'Score could not be saved');
+          return;
+        }
         if (data && data.newAchievements && data.newAchievements.length > 0) {
           showAchievementToasts(data.newAchievements);
         }
