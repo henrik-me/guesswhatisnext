@@ -2,8 +2,14 @@
 
 /**
  * Delay middleware — simulates DB cold start by adding artificial delay to API routes.
- * Controlled by GWN_DB_DELAY_MS env var (milliseconds, 0-45000).
+ * Controlled by GWN_DB_DELAY_MS env var (any positive integer in milliseconds, capped at 45000ms).
  * Only active when NODE_ENV is not 'production' or 'staging'.
+ *
+ * Excluded paths (no delay applied):
+ *   - /api/health   (system health check)
+ *   - /api/admin/*  (admin endpoints)
+ *   - /api/telemetry/* (telemetry ingestion)
+ *   - All non-/api/ routes (static assets, SPA fallback, /healthz)
  *
  * Usage: GWN_DB_DELAY_MS=15000 npm start
  */
@@ -21,7 +27,7 @@ function createDelayMiddleware() {
   return (req, res, next) => {
     const p = req.path;
     const shouldDelay = p.startsWith('/api/') &&
-      p !== '/api/health' && p !== '/healthz' &&
+      p !== '/api/health' &&
       !p.startsWith('/api/admin/') && !p.startsWith('/api/telemetry/');
 
     if (shouldDelay) {
