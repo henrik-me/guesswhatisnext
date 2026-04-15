@@ -1,7 +1,7 @@
 # CS39 — CI E2E Chromium Crashes
 
 **Status:** ✅ Complete
-**Goal:** Investigate and fix Chromium SEGFAULT crashes that cause E2E test failures in GitHub Actions CI. Tests pass 100% locally but 2–3 tests consistently crash in CI with Chromium process SIGSEGV.
+**Goal:** Investigate and mitigate Chromium SEGFAULT crashes that cause E2E test failures in GitHub Actions CI. Tests pass 100% locally but 2–3 tests consistently crash in CI with Chromium process SIGSEGV.
 **PRs:** #165, #166
 
 ---
@@ -48,7 +48,7 @@ Chromium headless shell 147 on ubuntu-latest has a GPU-related crash in SharedIm
 ### Fix applied
 
 1. **Playwright 1.59.1** — updated from 1.58.2 (newer Chromium, better stability)
-2. **Per-test CI retries (2)** — `retries: process.env.CI ? 2 : 0` in `playwright.config.mjs`
+2. **Per-test CI retries (2)** — `retries: externalBaseURL ? 2 : (process.env.CI ? 2 : 0)` in `playwright.config.mjs`
 3. **GPU flags reverted** — `--disable-gpu`/`--disable-software-rasterizer` didn't fix crash and reduced test fidelity
 
 ### Validation results
