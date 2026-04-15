@@ -335,7 +335,8 @@ describe('Delay middleware', () => {
     // All 3 should be waiting on the same 5000ms delay (step 0)
     nexts.forEach((n) => expect(n).not.toHaveBeenCalled());
 
-    // After 5000ms from first request, all should have fired
+    // The loop already advanced 3×100ms = 300ms; advance remaining time
+    // so all 5000ms timers fire
     vi.advanceTimersByTime(5000);
     nexts.forEach((n) => expect(n).toHaveBeenCalledTimes(1));
   });

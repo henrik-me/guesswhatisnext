@@ -6,7 +6,7 @@
  * Supports two modes:
  *   1. GWN_DB_DELAY_PATTERN — comma-separated list of delays that cycle per navigation
  *      (e.g., "45000,15000,0,0,0,0"). The pattern advances when there's a 2s+ gap between
- *      requests (i.e., a new page navigation). Parallel requests within a burst all get
+ *      requests (treated as a new page navigation). Parallel requests within a burst all get
  *      the same delay, simulating real DB cold start behavior.
  *   2. GWN_DB_DELAY_MS — single fixed delay (backward compat)
  *
