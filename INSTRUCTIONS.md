@@ -7,6 +7,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Preferred model: Claude Opus 4.6 for sub-agents, Opus 4.6 (1M context) for orchestrators, GPT 5.4 for reviews
 - CS number conflicts → check done_, active_, AND planned_ files before picking a new number
 - After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
+- Session start → `git pull` before reading project files
 - After every `git pull` → re-read this checklist; if INSTRUCTIONS.md changed, re-read fully
 - Never do implementation work in main checkout — dispatch to worktree sub-agents
 - Never modify files related to another agent's active task — check WORKBOARD.md first
@@ -24,6 +25,8 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Record local review findings in PR description
 - Do not remove task from WORKBOARD.md until PR is merged and task is fully complete
 - When removing content from INSTRUCTIONS.md, ensure it lands in CONTEXT.md or README.md — no information loss
+- Never skip any part of the process without asking the user first — no self-decided shortcuts
+- The process applies to all changes regardless of size — there is no "too small for a PR" threshold
 
 ---
 
@@ -287,14 +290,17 @@ NOT allowed on main checkout:
 - No merge conflict resolution on main, **except for conflicts confined to `WORKBOARD.md` and handled per the WORKBOARD.md conflict-handling guidance** — if `git pull` conflicts on anything else, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
 **Orchestrator Startup Checklist** (first actions in every new session):
-1. Read INSTRUCTIONS.md in the repository root
-2. Read WORKBOARD.md for current active work and task assignments
-3. Read CONTEXT.md for project state and available clickstops
-4. Determine agent ID from hostname + repo suffix (see § Agent Identification)
-5. Update WORKBOARD.md to register the session (update Orchestrators table), then commit and push immediately
-6. Once a task is claimed, prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
+1. Run `git pull` to ensure the latest changes from all agents
+2. Read INSTRUCTIONS.md in the repository root
+3. Read WORKBOARD.md for current active work and task assignments
+4. Read CONTEXT.md for project state and available clickstops
+5. Determine agent ID from hostname + repo suffix (see § Agent Identification)
+6. Update WORKBOARD.md to register the session (update Orchestrators table), then commit and push immediately
+7. Once a task is claimed, prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 
 **Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, git operations on main (`git pull`, `git worktree add/remove`), updating WORKBOARD.md, creating and committing clickstop plan files, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
+
+**No-shortcut policy:** Agents must never skip any part of the defined workflow (worktree, PR, review loop, workboard updates) without explicit user approval. The process applies equally to all changes regardless of perceived size or complexity — there is no "too small" threshold. If an agent believes a shortcut is warranted, it must ask the user before proceeding.
 
 **Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation. Additionally, re-read the Quick Reference Checklist at the top of this file after every `git pull`, regardless of whether the file changed.
 
