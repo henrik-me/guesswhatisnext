@@ -1592,11 +1592,16 @@ function lockAuthForm(action) {
   // Start progressive button text escalation
   const messages = AUTH_PROGRESSIVE_MESSAGES[action] || AUTH_PROGRESSIVE_MESSAGES.login;
   for (const { delay, text } of messages) {
-    const timerId = setTimeout(() => {
+    if (delay === 0) {
       if (submitBtn) submitBtn.textContent = text;
       if (statusEl) statusEl.textContent = text;
-    }, delay);
-    authProgressiveTimers.push(timerId);
+    } else {
+      const timerId = setTimeout(() => {
+        if (submitBtn) submitBtn.textContent = text;
+        if (statusEl) statusEl.textContent = text;
+      }, delay);
+      authProgressiveTimers.push(timerId);
+    }
   }
 }
 

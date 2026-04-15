@@ -168,7 +168,7 @@ test.describe('Authentication — Cold Start Progressive Feedback', () => {
     await page.fill('#auth-username', 'slowuser');
     await page.fill('#auth-password', 'testpass123');
 
-    // Intercept login request and delay it by 6 seconds
+    // Intercept login request and hold it until resolved later in the test
     let resolveLogin;
     const loginPromise = new Promise((r) => { resolveLogin = r; });
     await page.route('**/api/auth/login', async (route) => {
@@ -195,9 +195,8 @@ test.describe('Authentication — Cold Start Progressive Feedback', () => {
     // Auth screen should have submitting class
     await expect(page.locator('#screen-auth')).toHaveClass(/auth-submitting/);
 
-    // Wait for the second message at 4s
-    await page.waitForTimeout(4200);
-    await expect(submitBtn).toContainText('Still working on it');
+    // Wait for the second message to appear
+    await expect(submitBtn).toContainText('Still working on it', { timeout: 5000 });
 
     // Resolve the login request
     resolveLogin();
@@ -276,8 +275,11 @@ test.describe('Authentication — Cold Start Progressive Feedback', () => {
     await page.fill('#auth-password', 'testpass123');
 
     let requestCount = 0;
+    let resolveLogin;
+    const loginPromise = new Promise((r) => { resolveLogin = r; });
     await page.route('**/api/auth/login', async (route) => {
       requestCount++;
+      await loginPromise;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -285,14 +287,16 @@ test.describe('Authentication — Cold Start Progressive Feedback', () => {
       });
     });
 
-    // Rapidly click submit twice
+    // Rapidly click submit twice — second click uses force since button is now disabled
     await page.click('[data-action="auth-submit"]');
-    await page.click('[data-action="auth-submit"]');
+    await page.click('[data-action="auth-submit"]', { force: true });
 
-    // Wait for navigation to complete
-    await page.waitForTimeout(1000);
-
+    // Only one request should have been sent
     expect(requestCount).toBe(1);
+
+    // Resolve the login and wait for navigation
+    resolveLogin();
+    await expect(page.locator('#screen-auth')).not.toHaveClass(/auth-submitting/, { timeout: 5000 });
   });
 });
 
