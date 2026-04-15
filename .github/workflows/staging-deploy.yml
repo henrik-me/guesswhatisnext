@@ -279,12 +279,12 @@ jobs:
       IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
     steps:
       - name: Log in to Azure
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Configure GHCR registry credentials
-        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
             az containerapp registry set \
@@ -295,7 +295,7 @@ jobs:
               --password ${{ secrets.GHCR_PAT }}
 
       - name: Ensure multiple revision mode
-        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
             az containerapp revision set-mode \
@@ -305,7 +305,7 @@ jobs:
 
       - name: Deploy new revision (0% traffic)
         id: deploy
-        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
             # Derive CANONICAL_HOST from STAGING_URL if not explicitly set
@@ -407,7 +407,7 @@ jobs:
           STAGING_URL: ${{ vars.STAGING_URL }}
 
       - name: Switch traffic to new revision
-        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
@@ -417,7 +417,7 @@ jobs:
               --revision-weight "$NEW_REV=100"
 
       - name: Deactivate old revisions
-        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
@@ -435,7 +435,7 @@ jobs:
             sleep 15
 
       - name: Verify staging deployment
-        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
             NEW_REV="${{ steps.deploy.outputs.new-revision }}"
@@ -484,7 +484,7 @@ jobs:
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''
-        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
             CURRENT_REV="${{ steps.deploy.outputs.current-revision }}"
@@ -543,7 +543,7 @@ jobs:
             fi
 
       - name: Tag deployment
-        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
             REVISION=$(az containerapp show --name gwn-staging --resource-group gwn-rg --query "properties.latestRevisionName" -o tsv)
