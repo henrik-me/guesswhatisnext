@@ -453,7 +453,7 @@ GWN_DB_DELAY_MS=20000 docker compose up
 GWN_DB_DELAY_PATTERN=45000,15000,0,0,0,0 docker compose up
 ```
 
-The pattern advances when there's a 2+ second gap between requests (i.e., a new page navigation). Parallel API calls within the same page load all get the same delay.
+The pattern advances when there's a gap of 2 seconds or more between requests (i.e., a new page navigation). Parallel API calls within the same page load all get the same delay.
 
 | Navigation | Delay | Simulates |
 |------------|-------|-----------|

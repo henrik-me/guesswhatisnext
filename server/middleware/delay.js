@@ -52,7 +52,7 @@ function createDelayMiddleware() {
   }
 
   let stepIndex = 0;
-  let lastRequestTime = 0;
+  let lastRequestTime = null;
   const NAV_GAP_MS = 2000; // 2s gap = new navigation = advance step
 
   return (req, res, next) => {
@@ -68,7 +68,7 @@ function createDelayMiddleware() {
 
     const now = Date.now();
     // Advance pattern step only on new navigation (2s+ gap since last request)
-    if (lastRequestTime > 0 && (now - lastRequestTime) >= NAV_GAP_MS) {
+    if (lastRequestTime != null && (now - lastRequestTime) >= NAV_GAP_MS) {
       stepIndex = (stepIndex + 1) % pattern.length;
     }
     lastRequestTime = now;
