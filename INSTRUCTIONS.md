@@ -25,6 +25,8 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Record local review findings in PR description
 - Do not remove task from WORKBOARD.md until PR is merged and task is fully complete
 - When removing content from INSTRUCTIONS.md, ensure it lands in CONTEXT.md or README.md — no information loss
+- Never skip any part of the process without asking the user first — no self-decided shortcuts
+- The process applies to all changes regardless of size — there is no "too small for a PR" threshold
 
 ---
 
@@ -298,7 +300,9 @@ NOT allowed on main checkout:
 
 **Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, git operations on main (`git pull`, `git worktree add/remove`), updating WORKBOARD.md, creating and committing clickstop plan files, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
 
-**Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation. Additionally, re-read the Quick Reference Checklist at the top of this file after every `git pull`, regardless of whether the file changed.
+**No-shortcut policy:** Agents must never skip any part of the defined workflow (worktree, PR, review loop, workboard updates) without explicit user approval. The process applies equally to all changes regardless of perceived size or complexity — there is no "too small" threshold. If an agent believes a shortcut is warranted, it must ask the user before proceeding.
+
+**Stale instructions guard:**After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation. Additionally, re-read the Quick Reference Checklist at the top of this file after every `git pull`, regardless of whether the file changed.
 
 **Copilot CLI commands (reference):** The user has access to CLI commands that the orchestrator should be aware of:
 - `/rename <name>` — rename the current session (orchestrator should prompt for this after claiming a task)
