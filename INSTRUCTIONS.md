@@ -11,6 +11,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Never do implementation work in main checkout — dispatch to worktree sub-agents
 - Never modify files related to another agent's active task — check WORKBOARD.md first
 - Maximize parallelism — dispatch independent tasks simultaneously
+- Update WORKBOARD.md Active Work when starting ANY work, not just clickstop tasks — use "—" for Task ID/Clickstop on non-CS work
 - Update WORKBOARD.md immediately on task claim/complete — commit AND push (use ISO datetime: `2026-04-12T18:27Z`)
 - Only modify your own rows in WORKBOARD.md Active Work
 - Check CS number conflicts before creating new clickstops
@@ -457,6 +458,7 @@ WORKBOARD.md is the real-time coordination file for multi-agent work. It tracks 
 **Direct commit on main (no PR required):**
 Unlike most project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. **The push is critical** — a local-only commit provides zero coordination value to other agents. Always commit and push together (see the multi-line commit format with `Agent:` trailer in § Commit Convention for workboard updates below). This enables fast task assignment without PR review overhead. Clickstop plan files are the other direct-on-main exception (see § Clickstop File Lifecycle). The workboard must be updated immediately when:
 - An orchestrator claims a task (add to Active Work)
+- An orchestrator starts any work — including non-clickstop tasks (ad-hoc requests, deployments, investigations). Use empty Task ID and Clickstop columns ("—") for non-CS work.
 - A task completes (remove from Active Work)
 - A task becomes blocked (keep in Active Work with a note indicating blocked status)
 - An orchestrator starts or stops a session (update Orchestrators table)
