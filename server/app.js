@@ -26,6 +26,7 @@ const telemetryRoutes = require('./routes/telemetry');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
+const { createDelayMiddleware } = require('./middleware/delay');
 
 const pkg = require('../package.json');
 
@@ -147,6 +148,12 @@ function createServer() {
       },
     },
   }));
+
+  // Delay simulation middleware — for cold start UX testing (dev/test only).
+  // Mounted after request logging so logged response times reflect the artificial delay.
+  const delayMiddleware = createDelayMiddleware();
+  if (delayMiddleware) app.use(delayMiddleware);
+
   const defaultJsonParser = express.json();
   const largeJsonParser = express.json({ limit: '8mb' });
   app.use((req, res, next) => {

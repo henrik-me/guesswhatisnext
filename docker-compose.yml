@@ -9,4 +9,5 @@ services:
       - JWT_SECRET=gwn-dev-secret-change-in-production
       - SYSTEM_API_KEY=test-system-api-key
       - PORT=3000
+      # GWN_DB_DELAY_MS=15000  # Uncomment to simulate DB cold start delay
     restart: unless-stopped
