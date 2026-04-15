@@ -29,8 +29,31 @@
 | CS34-2 | Update actions to latest versions | ⬜ Pending | CS39 (CI E2E fix) | Avoid conflicts with CS39 modifying same workflow files. Update all SHA pins with verified tags. |
 | CS34-3 | Validate workflows run clean | ⬜ Pending | CS34-2 | Trigger workflows and confirm zero deprecation warnings in logs. |
 
-## Notes
+## Risk Assessment
 
-- All actions are SHA-pinned per project convention (with `# vN` comments).
-- CS39 (yoga-gwn-c3) is currently modifying workflow files — wait for merge before implementing CS34-2.
-- Ensure updated SHAs are verified against the action repo tags.
+### ✅ Low Risk (drop-in replacement)
+| Action | Current → Latest | Risk | Notes |
+|--------|-----------------|------|-------|
+| `actions/checkout` | v4 → v5 | Low | Node.js 24 runtime. No workflow changes needed for GitHub-hosted runners. |
+| `actions/upload-artifact` | v4 → v5 | Low | API-compatible, drop-in. |
+| `docker/login-action` | v3 → v4 | Low | No breaking changes. |
+| `docker/build-push-action` | v5 → v7 | Low | API-compatible. |
+
+### ⚠️ Medium Risk (verify before merging)
+| Action | Current → Latest | Risk | Notes |
+|--------|-----------------|------|-------|
+| `actions/setup-node` | v4 → v5 | Medium | Caching no longer auto-enabled by default — but we already specify `cache: npm` explicitly (ci.yml:28), so **should be safe**. Other workflow files don't use setup-node caching. Verify no regressions. |
+| `azure/cli` | v2 → v3 | Medium | `azcliversion` input removed (we don't use it ✅). `failOnStdErr` removed (we don't use it ✅). Always uses latest CLI (we're fine with this). Our usage pattern is simple `inlineScript:` blocks — **should be compatible**. However, relies on `azure/login` auth context which changes in v3 (see below). |
+
+### 🔴 High Risk (breaking change — requires credential migration)
+| Action | Current → Latest | Risk | Notes |
+|--------|-----------------|------|-------|
+| `azure/login` | v2 → v3 | **High** | **Deprecates `creds: ${{ secrets.AZURE_CREDENTIALS }}` JSON format.** Requires switching to individual secrets: `client-id`, `tenant-id`, `client-secret`. Used in 4 places across 3 files (staging-deploy, prod-deploy, health-monitor). Requires: (1) extract client-id/tenant-id/client-secret from AZURE_CREDENTIALS JSON, (2) create 3 new GitHub secrets, (3) update all workflow files. Alternatively, v3 may still support `creds` for backward compat — needs testing. |
+
+### Implementation Strategy
+
+**Phase 1 (safe, no conflicts with CS39):** Update `actions/checkout`, `actions/upload-artifact`, `docker/login-action`, `docker/build-push-action` — all drop-in replacements.
+
+**Phase 2 (verify):** Update `actions/setup-node` — verify caching still works.
+
+**Phase 3 (credential migration):** Update `azure/login` and `azure/cli` together — requires new GitHub secrets and testing. Should coordinate with repo admin for secret creation.
