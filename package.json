@@ -19,7 +19,7 @@
     "docker:mssql:down": "docker compose -f docker-compose.mssql.yml down",
     "dev:mssql": "node scripts/check-compose-v2.js && docker compose -f docker-compose.mssql.yml up -d --build",
     "dev:mssql:down": "docker compose -f docker-compose.mssql.yml down",
-    "test:e2e:mssql": "echo \"[CS25-1a] MSSQL E2E: npm run dev:mssql, then bash scripts/wait-for-healthy.sh, then BASE_URL=https://localhost npx playwright test, then npm run dev:mssql:down\"",
+    "test:e2e:mssql": "echo \"[CS25-1a] MSSQL E2E not yet implemented. Manual steps: npm run dev:mssql && bash scripts/wait-for-healthy.sh https://localhost:$HTTPS_PORT && BASE_URL=https://localhost:$HTTPS_PORT npx playwright test && npm run dev:mssql:down\" && exit 1",
     "test:all": "vitest run && playwright test",
     "lint": "eslint . --max-warnings 50",
     "dev:full": "node scripts/dev-server.js",
