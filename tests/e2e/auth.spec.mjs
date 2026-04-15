@@ -1,3 +1,4 @@
+// CS39: CI stability test run
 // @ts-check
 import { test, expect } from '@playwright/test';
 import { uniqueIP } from './helpers.mjs';
@@ -156,3 +157,4 @@ test.describe('Authentication — Community', () => {
     await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
   });
 });
+
