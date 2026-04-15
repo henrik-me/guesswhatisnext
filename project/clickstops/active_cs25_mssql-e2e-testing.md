@@ -18,6 +18,8 @@
 | CS25-0b | Add HOST_PORT support | ⬜ Pending | Port parameterization for multi-agent isolation. |
 | CS25-0c | Add DB readiness wait | ⬜ Pending | Wait for `/api/health` with `database.status=ok`, not just `/healthz`. |
 | CS25-0d | Add convenience npm scripts | ⬜ Pending | `dev:mssql`, `dev:mssql:down`, `test:e2e:mssql`. |
+| CS25-0e | Pin MSSQL image version | ⬜ Pending | Pin to specific CU tag (e.g., `2022-CU16-ubuntu-22.04`) instead of `:2022-latest`. Push pinned image to GHCR as `ghcr.io/henrik-me/mssql-server:<tag>` for fast CI pulls and Docker Hub rate-limit avoidance. Document version update process. |
+| CS25-0f | Verify Docker Compose v2 requirement | ⬜ Pending | Compose file uses `services:` without `version:` key (Compose v2+ format). Add version check to npm scripts (`docker compose version`), document minimum requirement in INSTRUCTIONS.md. |
 
 ### Phase 1: Run Existing E2E Suite Against MSSQL
 
@@ -44,6 +46,7 @@
 | CS25-3b | ERROR/FATAL flagging per test | ⬜ Pending | Parse pino level 50/60, annotate test on server errors. |
 | CS25-3c | Log format assertions | ⬜ Pending | Verify container logs are structured JSON with expected fields. |
 | CS25-3d | Full E2E log summary | ⬜ Pending | Post-run `docker compose logs app` to `test-results/` + aggregate classifier. |
+| CS25-3e | Log capture overhead monitoring | ⬜ Pending | Measure total log capture time across all tests. Warn in CI output if >60s, fail/alert if >120s. Include the measurement in test artifacts so regressions are visible. |
 
 ### Phase 4: OTel Trace Verification
 
@@ -51,7 +54,7 @@
 |----|------|--------|-------|
 | CS25-4a | OTLP exporter fallback in telemetry.js | ⬜ Pending | ~10 line change: use `@opentelemetry/exporter-trace-otlp-http` when `OTEL_EXPORTER_OTLP_ENDPOINT` set and no Azure conn string. |
 | CS25-4b | Add OTLP collector to compose stack | ⬜ Pending | `otel/opentelemetry-collector` (~50MB) with file exporter on shared volume. |
-| CS25-4c | Add exporter-trace-otlp-http dependency | ⬜ Pending | Optional dep for local/CI trace verification. |
+| CS25-4c | Add exporter-trace-otlp-http dependency | ⬜ Pending | Optional dep for local/CI trace verification. Pin to version compatible with existing `@opentelemetry/sdk-node@0.214.0`. Add note in INSTRUCTIONS.md that OTel packages must be updated together. |
 | CS25-4d | E2E trace assertions | ⬜ Pending | Verify spans exist, attributes correct, trace_ids correlate with logs. |
 | CS25-4e | Integrate OTel into test:e2e:mssql | ⬜ Pending | Start collector, run tests, assert traces, include in artifacts. |
 
@@ -68,10 +71,9 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-6a | Evaluate CI approach | ⬜ Pending | Service containers vs docker-compose-in-CI. |
-| CS25-6b | Add CI workflow/job | ⬜ Pending | MSSQL E2E in CI (likely manual/weekly due to SQL Server startup cost). |
-| CS25-6c | Add OTLP collector to staging deploy | ⬜ Pending | Service container in `staging-deploy.yml` smoke tests. Validate trace pipeline on every staging deploy. |
-| CS25-6d | Cache MSSQL image | ⬜ Pending | Avoid 1.5GB cold pull per CI run. |
+| CS25-6a | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Add MSSQL (from GHCR mirror) and OTLP collector as service containers in `staging-deploy.yml` ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. |
+| CS25-6b | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage. May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
+| CS25-6c | Push MSSQL image to GHCR | ⬜ Pending | One-time push of pinned MSSQL image to `ghcr.io/henrik-me/mssql-server:<tag>`. Avoids 1.5GB Docker Hub pull + rate limits on every staging deploy. Document the update process for when MSSQL version is bumped. |
 
 ### Phase 7: Documentation
 
@@ -94,7 +96,9 @@
 - **OTLP exporter fallback:** `server/telemetry.js` gains a ~10 line conditional: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set and `APPLICATIONINSIGHTS_CONNECTION_STRING` is absent, use `@opentelemetry/exporter-trace-otlp-http`. Production path (Azure Monitor) is unaffected.
 - **No secure-cookie tests:** Auth uses localStorage + Authorization headers, not cookies.
 - **Cold start toggle:** Compose profiles, not hot-reload. Stop and restart with different profile.
-- **CI model:** MSSQL E2E as manual/weekly workflow (SQL Server is slow to start). OTLP collector in staging deploy adds negligible overhead.
+- **CI model:** MSSQL + OTLP collector run as service containers in staging deploy (every deploy validates MSSQL compatibility + trace pipeline). MSSQL image mirrored to GHCR for fast pulls. Separate MSSQL E2E workflow is optional/manual for deeper testing. PR CI skips MSSQL/OTel (unit tests sufficient).
+- **Version pinning:** MSSQL image pinned to specific CU tag (not `:latest`). OTel packages pinned to compatible versions and updated together. Docker Compose v2 minimum requirement verified in scripts.
+- **Log capture monitoring:** Total per-test log capture overhead measured and reported. Warn at >60s, alert/fail at >120s to catch regressions early.
 
 ---
 
