@@ -1546,8 +1546,101 @@ async function submitPendingScores() {
   }
 }
 
+/** Progressive messages shown on the submit button during slow auth requests. */
+const AUTH_PROGRESSIVE_MESSAGES = {
+  login: [
+    { delay: 0, text: 'Signing in\u2026' },
+    { delay: 4000, text: 'Still working on it\u2026' },
+    { delay: 9000, text: 'The server is waking up \u2615' },
+    { delay: 16000, text: 'Almost there \u2014 warming up the database \ud83d\ude34' },
+    { delay: 25000, text: 'Hang tight \u2014 first login of the day takes a moment! \ud83c\udfb2' },
+  ],
+  register: [
+    { delay: 0, text: 'Creating your account\u2026' },
+    { delay: 4000, text: 'Setting things up\u2026' },
+    { delay: 9000, text: 'The server is stretching after a nap \u2615' },
+    { delay: 16000, text: 'Almost ready \u2014 just warming up! \ud83d\ude34' },
+    { delay: 25000, text: 'First user of the day \u2014 the database is waking up for you! \ud83c\udfb2' },
+  ],
+};
+
+const AUTH_TIMEOUT_MS = 45000;
+let authSubmitting = false;
+let authProgressiveTimers = [];
+
+/** Disable all auth form interactive elements and start progressive messages. */
+function lockAuthForm(action) {
+  const authScreen = document.getElementById('screen-auth');
+  if (authScreen) {
+    authScreen.classList.add('auth-submitting');
+    authScreen.setAttribute('aria-busy', 'true');
+  }
+
+  const submitBtn = document.querySelector('[data-bind="auth-submit-btn"]');
+  const usernameInput = document.getElementById('auth-username');
+  const passwordInput = document.getElementById('auth-password');
+  const toggleLink = document.querySelector('[data-action="auth-toggle-mode"]');
+  const backBtn = authScreen?.querySelector('[data-action="go-home"]');
+  const statusEl = document.querySelector('[data-bind="auth-status"]');
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (usernameInput) usernameInput.disabled = true;
+  if (passwordInput) passwordInput.disabled = true;
+  if (toggleLink) toggleLink.disabled = true;
+  if (backBtn) backBtn.disabled = true;
+
+  // Start progressive button text escalation
+  const messages = AUTH_PROGRESSIVE_MESSAGES[action] || AUTH_PROGRESSIVE_MESSAGES.login;
+  for (const { delay, text } of messages) {
+    if (delay === 0) {
+      if (submitBtn) submitBtn.textContent = text;
+      if (statusEl) statusEl.textContent = text;
+    } else {
+      const timerId = setTimeout(() => {
+        if (submitBtn) submitBtn.textContent = text;
+        if (statusEl) statusEl.textContent = text;
+      }, delay);
+      authProgressiveTimers.push(timerId);
+    }
+  }
+}
+
+/** Re-enable all auth form interactive elements and restore button text. */
+function unlockAuthForm(action) {
+  const authScreen = document.getElementById('screen-auth');
+  if (authScreen) {
+    authScreen.classList.remove('auth-submitting');
+    authScreen.removeAttribute('aria-busy');
+  }
+
+  // Clear progressive message timers
+  for (const id of authProgressiveTimers) clearTimeout(id);
+  authProgressiveTimers = [];
+
+  const submitBtn = document.querySelector('[data-bind="auth-submit-btn"]');
+  const usernameInput = document.getElementById('auth-username');
+  const passwordInput = document.getElementById('auth-password');
+  const toggleLink = document.querySelector('[data-action="auth-toggle-mode"]');
+  const backBtn = authScreen?.querySelector('[data-action="go-home"]');
+  const statusEl = document.querySelector('[data-bind="auth-status"]');
+
+  if (submitBtn) submitBtn.disabled = false;
+  if (usernameInput) usernameInput.disabled = false;
+  if (passwordInput) passwordInput.disabled = false;
+  if (toggleLink) toggleLink.disabled = false;
+  if (backBtn) backBtn.disabled = false;
+  if (statusEl) statusEl.textContent = '';
+
+  // Restore button text + aria-label via setAuthMode (avoids duplicating labels)
+  setAuthMode(action);
+
+  authSubmitting = false;
+}
+
 /** Perform login or register. */
 async function authAction(action) {
+  if (authSubmitting) return;
+
   const usernameInput = document.getElementById('auth-username');
   const passwordInput = document.getElementById('auth-password');
   const username = usernameInput.value.trim();
@@ -1560,17 +1653,24 @@ async function authAction(action) {
     return;
   }
 
+  authSubmitting = true;
+  lockAuthForm(action);
+
   const endpoint = action === 'login' ? '/api/auth/login' : '/api/auth/register';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
 
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
+      signal: controller.signal,
     });
     const data = await res.json();
 
     if (!res.ok) {
+      unlockAuthForm(action);
       bindText('auth-error', data.error || 'Something went wrong');
       return;
     }
@@ -1582,7 +1682,7 @@ async function authAction(action) {
     localStorage.setItem('gwn_auth_username', authUsername);
     localStorage.setItem('gwn_auth_role', authRole);
 
-    // Clear form
+    // Clear form fields but keep form locked until navigation completes
     usernameInput.value = '';
     passwordInput.value = '';
     bindText('auth-error', '');
@@ -1595,6 +1695,9 @@ async function authAction(action) {
       onSynced: () => showSyncIndicator('Scores synced ✓'),
       onFailed: () => showSyncIndicator('Some scores pending sync'),
     });
+
+    // Unlock form only after post-login work completes
+    unlockAuthForm(action);
 
     if (authReturnScreen) {
       const returnTo = authReturnScreen;
@@ -1610,8 +1713,15 @@ async function authAction(action) {
     } else {
       showScreen('multiplayer');
     }
-  } catch {
-    bindText('auth-error', 'Network error — is the server running?');
+  } catch (err) {
+    unlockAuthForm(action);
+    if (err && err.name === 'AbortError') {
+      bindText('auth-error', 'Request timed out — please try again');
+    } else {
+      bindText('auth-error', 'Network error — is the server running?');
+    }
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

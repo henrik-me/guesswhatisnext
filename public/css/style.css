@@ -45,6 +45,18 @@
   padding: 0;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body {
   font-family: var(--font-main);
   background-color: var(--color-bg);
@@ -2217,6 +2229,46 @@ body::before {
 
 .auth-toggle-link:hover {
   color: var(--color-primary-hover);
+}
+
+/* Auth submitting state — disable & progressive feedback */
+@keyframes auth-spinner {
+  to { transform: rotate(360deg); }
+}
+
+.auth-submitting .auth-input,
+.auth-submitting .auth-toggle-link,
+.auth-submitting .btn-back {
+  pointer-events: none;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-submitting .btn-primary {
+  pointer-events: none;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.auth-submitting .btn-primary::after {
+  content: '';
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-left: 0.5em;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: auth-spinner 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-submitting .btn-primary::after {
+    animation: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    border-top-color: white;
+  }
 }
 
 /* ===========================
