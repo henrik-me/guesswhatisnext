@@ -209,10 +209,11 @@ test.describe('Authentication — Cold Start Progressive Feedback', () => {
     await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
     await page.goto('/');
 
+    const regUsername = uniqueUser();
     await page.click('[data-action="show-auth-login"]');
     await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
     await page.click('[data-action="auth-toggle-mode"]');
-    await page.fill('#auth-username', uniqueUser());
+    await page.fill('#auth-username', regUsername);
     await page.fill('#auth-password', 'testpass123');
 
     let resolveRegister;
@@ -222,7 +223,7 @@ test.describe('Authentication — Cold Start Progressive Feedback', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ token: 'fake-token', user: { username: 'reguser', role: 'user' } }),
+        body: JSON.stringify({ token: 'fake-token', user: { username: regUsername, role: 'user' } }),
       });
     });
 

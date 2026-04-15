@@ -1682,11 +1682,10 @@ async function authAction(action) {
     localStorage.setItem('gwn_auth_username', authUsername);
     localStorage.setItem('gwn_auth_role', authRole);
 
-    // Clear form
+    // Clear form fields but keep form locked until navigation completes
     usernameInput.value = '';
     passwordInput.value = '';
     bindText('auth-error', '');
-    unlockAuthForm(action);
 
     await refreshFeatureFlags();
     submitPendingScores();
@@ -1696,6 +1695,9 @@ async function authAction(action) {
       onSynced: () => showSyncIndicator('Scores synced ✓'),
       onFailed: () => showSyncIndicator('Some scores pending sync'),
     });
+
+    // Unlock form only after post-login work completes
+    unlockAuthForm(action);
 
     if (authReturnScreen) {
       const returnTo = authReturnScreen;
