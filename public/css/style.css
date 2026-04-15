@@ -3900,3 +3900,85 @@ body::before {
 .mod-badge-system { background: rgba(108, 92, 231, 0.2); color: var(--color-primary); }
 .mod-badge-admin { background: rgba(255, 165, 0, 0.2); color: #ffa500; }
 .mod-badge-user { background: rgba(0, 206, 201, 0.2); color: var(--color-secondary); }
+
+/* ===========================
+   Progressive Loading States
+   =========================== */
+.progressive-message {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+  animation: progressiveFadeIn 0.3s ease-in;
+}
+
+.progressive-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.progressive-failed p {
+  margin: 0;
+}
+
+.progressive-retry-btn {
+  display: inline-block;
+  padding: 0.6rem 1.5rem;
+  background-color: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.progressive-retry-btn:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.progressive-retry-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@keyframes progressiveFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Sync indicator for score submission */
+.sync-indicator {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.sync-indicator.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressive-message {
+    animation: none;
+  }
+  .sync-indicator {
+    transition: none;
+  }
+}
