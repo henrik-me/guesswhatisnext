@@ -1564,19 +1564,24 @@ const AUTH_PROGRESSIVE_MESSAGES = {
   ],
 };
 
+const AUTH_TIMEOUT_MS = 45000;
 let authSubmitting = false;
 let authProgressiveTimers = [];
 
 /** Disable all auth form interactive elements and start progressive messages. */
 function lockAuthForm(action) {
   const authScreen = document.getElementById('screen-auth');
-  if (authScreen) authScreen.classList.add('auth-submitting');
+  if (authScreen) {
+    authScreen.classList.add('auth-submitting');
+    authScreen.setAttribute('aria-busy', 'true');
+  }
 
   const submitBtn = document.querySelector('[data-bind="auth-submit-btn"]');
   const usernameInput = document.getElementById('auth-username');
   const passwordInput = document.getElementById('auth-password');
   const toggleLink = document.querySelector('[data-action="auth-toggle-mode"]');
   const backBtn = authScreen?.querySelector('[data-action="go-home"]');
+  const statusEl = document.querySelector('[data-bind="auth-status"]');
 
   if (submitBtn) submitBtn.disabled = true;
   if (usernameInput) usernameInput.disabled = true;
@@ -1589,6 +1594,7 @@ function lockAuthForm(action) {
   for (const { delay, text } of messages) {
     const timerId = setTimeout(() => {
       if (submitBtn) submitBtn.textContent = text;
+      if (statusEl) statusEl.textContent = text;
     }, delay);
     authProgressiveTimers.push(timerId);
   }
@@ -1597,7 +1603,10 @@ function lockAuthForm(action) {
 /** Re-enable all auth form interactive elements and restore button text. */
 function unlockAuthForm(action) {
   const authScreen = document.getElementById('screen-auth');
-  if (authScreen) authScreen.classList.remove('auth-submitting');
+  if (authScreen) {
+    authScreen.classList.remove('auth-submitting');
+    authScreen.removeAttribute('aria-busy');
+  }
 
   // Clear progressive message timers
   for (const id of authProgressiveTimers) clearTimeout(id);
@@ -1608,6 +1617,7 @@ function unlockAuthForm(action) {
   const passwordInput = document.getElementById('auth-password');
   const toggleLink = document.querySelector('[data-action="auth-toggle-mode"]');
   const backBtn = authScreen?.querySelector('[data-action="go-home"]');
+  const statusEl = document.querySelector('[data-bind="auth-status"]');
 
   if (submitBtn) {
     submitBtn.disabled = false;
@@ -1617,6 +1627,7 @@ function unlockAuthForm(action) {
   if (passwordInput) passwordInput.disabled = false;
   if (toggleLink) toggleLink.disabled = false;
   if (backBtn) backBtn.disabled = false;
+  if (statusEl) statusEl.textContent = '';
 
   authSubmitting = false;
 }
@@ -1641,12 +1652,15 @@ async function authAction(action) {
   lockAuthForm(action);
 
   const endpoint = action === 'login' ? '/api/auth/login' : '/api/auth/register';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
 
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
+      signal: controller.signal,
     });
     const data = await res.json();
 
@@ -1692,9 +1706,15 @@ async function authAction(action) {
     } else {
       showScreen('multiplayer');
     }
-  } catch {
+  } catch (err) {
     unlockAuthForm(action);
-    bindText('auth-error', 'Network error — is the server running?');
+    if (err && err.name === 'AbortError') {
+      bindText('auth-error', 'Request timed out — please try again');
+    } else {
+      bindText('auth-error', 'Network error — is the server running?');
+    }
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
