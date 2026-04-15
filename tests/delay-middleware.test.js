@@ -137,6 +137,7 @@ describe('Delay middleware', () => {
   });
 
   test('delay is capped at 45000ms', () => {
+    vi.useFakeTimers();
     process.env.GWN_DB_DELAY_MS = '99999';
     process.env.NODE_ENV = 'test';
     const { createDelayMiddleware } = freshRequire();
