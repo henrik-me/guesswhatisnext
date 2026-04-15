@@ -395,22 +395,22 @@ describe('Delay middleware', () => {
   test('exact 2000ms gap advances to next step (boundary)', () => {
     vi.useFakeTimers();
     delete process.env.GWN_DB_DELAY_MS;
-    process.env.GWN_DB_DELAY_PATTERN = '3000,1000';
+    // Use 0ms first step so request 1 is instant — gap measured from T=0
+    process.env.GWN_DB_DELAY_PATTERN = '0,1000';
     process.env.NODE_ENV = 'test';
     const { createDelayMiddleware } = freshRequire();
     const mw = createDelayMiddleware();
 
-    // Request 1 at T=0: step 0 → 3000ms
+    // Request 1 at T=0: step 0 → 0ms (instant)
     const next1 = vi.fn();
     const r1 = mockReqRes('/api/scores');
     mw(r1.req, r1.res, next1);
-    vi.advanceTimersByTime(3000);
     expect(next1).toHaveBeenCalledTimes(1);
 
-    // Exactly 2000ms gap: should advance (>= 2000)
+    // Advance exactly 2000ms — gap from T=0 to T=2000 is exactly 2000ms
     vi.advanceTimersByTime(2000);
 
-    // Request 2 at T=5000 (exactly 2000ms after last request at T=3000)
+    // Request 2 at T=2000: gap = 2000ms >= 2000 → advances to step 1 → 1000ms
     const spy = vi.spyOn(global, 'setTimeout');
     try {
       const next2 = vi.fn();
@@ -420,6 +420,30 @@ describe('Delay middleware', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  test('1999ms gap does NOT advance step (just below boundary)', () => {
+    vi.useFakeTimers();
+    delete process.env.GWN_DB_DELAY_MS;
+    process.env.GWN_DB_DELAY_PATTERN = '0,1000';
+    process.env.NODE_ENV = 'test';
+    const { createDelayMiddleware } = freshRequire();
+    const mw = createDelayMiddleware();
+
+    // Request 1 at T=0: step 0 → 0ms (instant)
+    const next1 = vi.fn();
+    const r1 = mockReqRes('/api/scores');
+    mw(r1.req, r1.res, next1);
+    expect(next1).toHaveBeenCalledTimes(1);
+
+    // Advance only 1999ms — just below the 2000ms threshold
+    vi.advanceTimersByTime(1999);
+
+    // Request 2 at T=1999: gap = 1999ms < 2000 → stays at step 0 → 0ms (instant)
+    const next2 = vi.fn();
+    const r2 = mockReqRes('/api/scores');
+    mw(r2.req, r2.res, next2);
+    expect(next2).toHaveBeenCalledTimes(1);
   });
 
   test('returns null for empty or invalid pattern', () => {
