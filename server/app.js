@@ -94,10 +94,6 @@ function createServer() {
   app.use(httpsRedirect);
   app.use(securityHeaders);
 
-  // Delay simulation middleware — for cold start UX testing (dev/test only)
-  const delayMiddleware = createDelayMiddleware();
-  if (delayMiddleware) app.use(delayMiddleware);
-
   // Request logging (before body parsers for consistent access logs)
   const staticExtensions = new Set(['.css', '.js', '.map', '.ico', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.woff', '.woff2', '.ttf']);
 
@@ -152,6 +148,12 @@ function createServer() {
       },
     },
   }));
+
+  // Delay simulation middleware — for cold start UX testing (dev/test only).
+  // Mounted after request logging so logged response times reflect the artificial delay.
+  const delayMiddleware = createDelayMiddleware();
+  if (delayMiddleware) app.use(delayMiddleware);
+
   const defaultJsonParser = express.json();
   const largeJsonParser = express.json({ limit: '8mb' });
   app.use((req, res, next) => {
