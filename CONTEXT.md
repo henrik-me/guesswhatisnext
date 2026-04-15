@@ -51,7 +51,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS35 | Clickstop File Cleanup | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs35_clickstop-cleanup.md) |
 | CS36 | Instructions Lifecycle Clarity | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs36_instructions-lifecycle.md) |
 | CS37 | Health Monitor Investigation | ⬜ Planned | 0/3 | [details](project/clickstops/planned_cs37_health-monitor-investigation.md) |
-| CS38 | DB Cold Start UX | 🔄 Active | 0/8 | [details](project/clickstops/active_cs38_db-cold-start-ux.md) |
+| CS38 | DB Cold Start UX | ✅ Complete | 11/11 | [details](project/clickstops/done/done_cs38_db-cold-start-ux.md) |
 | CS39 | CI E2E Chromium Crashes | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs39_ci-e2e-chromium-crashes.md) |
 
 ---
