@@ -156,3 +156,4 @@ test.describe('Authentication — Community', () => {
     await expect(page.locator('[data-bind="community-create-btn"]')).toBeHidden();
   });
 });
+

@@ -48,7 +48,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(process.env.CI
+          ? {
+              launchOptions: {
+                args: ['--disable-gpu', '--disable-software-rasterizer'],
+              },
+            }
+          : {}),
+      },
     },
   ],
   webServer: externalBaseURL
