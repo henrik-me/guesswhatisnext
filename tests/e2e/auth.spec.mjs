@@ -1,4 +1,3 @@
-// CS39: CI stability test run
 // @ts-check
 import { test, expect } from '@playwright/test';
 import { uniqueIP } from './helpers.mjs';
