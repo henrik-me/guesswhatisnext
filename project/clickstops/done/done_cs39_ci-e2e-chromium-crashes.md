@@ -65,7 +65,7 @@ Chromium headless shell 147 on ubuntu-latest has a GPU-related crash in SharedIm
 - [x] README updated — N/A (CI infrastructure, no user-facing changes)
 - [x] INSTRUCTIONS.md updated — N/A (no architectural/workflow changes)
 - [x] CONTEXT.md updated with final state
-- [x] Tests added/updated — per-test CI retries configured in playwright.config.mjs
+- [x] Tests added/updated — N/A (test config updated: per-test CI retries in playwright.config.mjs)
 - [x] Performance/load test evaluation — N/A
 - [x] Data structure changes documented — N/A
 - [x] Staging deployed and verified — N/A (CI-only change)
