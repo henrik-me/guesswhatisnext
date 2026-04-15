@@ -157,3 +157,142 @@ test.describe('Authentication — Community', () => {
   });
 });
 
+test.describe('Authentication — Cold Start Progressive Feedback', () => {
+  test('submit button shows progressive messages during slow login', async ({ page }) => {
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
+    await page.goto('/');
+
+    // Navigate to auth screen and fill form
+    await page.click('[data-action="show-auth-login"]');
+    await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
+    await page.fill('#auth-username', 'slowuser');
+    await page.fill('#auth-password', 'testpass123');
+
+    // Intercept login request and delay it by 6 seconds
+    let resolveLogin;
+    const loginPromise = new Promise((r) => { resolveLogin = r; });
+    await page.route('**/api/auth/login', async (route) => {
+      await loginPromise;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ token: 'fake-token', user: { username: 'slowuser', role: 'user' } }),
+      });
+    });
+
+    // Click submit
+    await page.click('[data-action="auth-submit"]');
+
+    // Immediately: button should say "Signing in…"
+    const submitBtn = page.locator('[data-bind="auth-submit-btn"]');
+    await expect(submitBtn).toContainText('Signing in');
+
+    // Button and inputs should be disabled
+    await expect(submitBtn).toBeDisabled();
+    await expect(page.locator('#auth-username')).toBeDisabled();
+    await expect(page.locator('#auth-password')).toBeDisabled();
+
+    // Auth screen should have submitting class
+    await expect(page.locator('#screen-auth')).toHaveClass(/auth-submitting/);
+
+    // Wait for the second message at 4s
+    await page.waitForTimeout(4200);
+    await expect(submitBtn).toContainText('Still working on it');
+
+    // Resolve the login request
+    resolveLogin();
+
+    // After success, button text should be restored and elements re-enabled
+    await expect(page.locator('#screen-auth')).not.toHaveClass(/auth-submitting/, { timeout: 5000 });
+  });
+
+  test('submit button shows register messages during slow registration', async ({ page }) => {
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
+    await page.goto('/');
+
+    await page.click('[data-action="show-auth-login"]');
+    await expect(page.locator('[data-screen="auth"]')).toHaveClass(/active/);
+    await page.click('[data-action="auth-toggle-mode"]');
+    await page.fill('#auth-username', uniqueUser());
+    await page.fill('#auth-password', 'testpass123');
+
+    let resolveRegister;
+    const registerPromise = new Promise((r) => { resolveRegister = r; });
+    await page.route('**/api/auth/register', async (route) => {
+      await registerPromise;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ token: 'fake-token', user: { username: 'reguser', role: 'user' } }),
+      });
+    });
+
+    await page.click('[data-action="auth-submit"]');
+
+    const submitBtn = page.locator('[data-bind="auth-submit-btn"]');
+    await expect(submitBtn).toContainText('Creating your account');
+    await expect(submitBtn).toBeDisabled();
+
+    // Resolve
+    resolveRegister();
+    await expect(page.locator('#screen-auth')).not.toHaveClass(/auth-submitting/, { timeout: 5000 });
+  });
+
+  test('form re-enables on auth error', async ({ page }) => {
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
+    await page.goto('/');
+
+    await page.click('[data-action="show-auth-login"]');
+    await page.fill('#auth-username', 'baduser');
+    await page.fill('#auth-password', 'badpass');
+
+    await page.route('**/api/auth/login', async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Invalid credentials' }),
+      });
+    });
+
+    await page.click('[data-action="auth-submit"]');
+
+    // After error, form should be re-enabled
+    const submitBtn = page.locator('[data-bind="auth-submit-btn"]');
+    await expect(submitBtn).toBeEnabled({ timeout: 5000 });
+    await expect(page.locator('#auth-username')).toBeEnabled();
+    await expect(page.locator('#auth-password')).toBeEnabled();
+    await expect(page.locator('#screen-auth')).not.toHaveClass(/auth-submitting/);
+
+    // Error message should be shown
+    await expect(page.locator('[data-bind="auth-error"]')).toContainText('Invalid credentials');
+  });
+
+  test('double-click on submit does not send duplicate requests', async ({ page }) => {
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': uniqueIP() });
+    await page.goto('/');
+
+    await page.click('[data-action="show-auth-login"]');
+    await page.fill('#auth-username', 'dbluser');
+    await page.fill('#auth-password', 'testpass123');
+
+    let requestCount = 0;
+    await page.route('**/api/auth/login', async (route) => {
+      requestCount++;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ token: 'fake-token', user: { username: 'dbluser', role: 'user' } }),
+      });
+    });
+
+    // Rapidly click submit twice
+    await page.click('[data-action="auth-submit"]');
+    await page.click('[data-action="auth-submit"]');
+
+    // Wait for navigation to complete
+    await page.waitForTimeout(1000);
+
+    expect(requestCount).toBe(1);
+  });
+});
+
