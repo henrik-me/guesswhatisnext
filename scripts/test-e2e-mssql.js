@@ -3,6 +3,7 @@
 // Cross-platform (Windows + Unix). Used by `npm run test:e2e:mssql`.
 
 const { execSync, spawnSync } = require('child_process');
+const fs = require('fs');
 const https = require('https');
 const path = require('path');
 
@@ -167,6 +168,9 @@ async function main() {
   }
 
   // ── Step 5: OTel trace verification ──────────────────────────────────
+  const artifactsDir = path.join(ROOT, 'test-results');
+  fs.mkdirSync(artifactsDir, { recursive: true });
+
   let traceExitCode = 0;
   try {
     const { verify } = require('./verify-traces');

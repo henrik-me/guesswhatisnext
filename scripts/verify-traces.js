@@ -14,7 +14,11 @@ const COMPOSE_FILE = 'docker-compose.mssql.yml';
 const ARTIFACTS_DIR = path.join(ROOT, 'test-results');
 
 function exec(cmd) {
-  return execSync(cmd, { cwd: ROOT, encoding: 'utf-8' });
+  return execSync(cmd, {
+    cwd: ROOT,
+    encoding: 'utf-8',
+    maxBuffer: 50 * 1024 * 1024,
+  });
 }
 
 function readCollectorTraces() {

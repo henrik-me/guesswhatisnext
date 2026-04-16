@@ -64,8 +64,6 @@ services:
     volumes:
       - ./infra/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
       - otel-data:/data
-    ports:
-      - "4318:4318"
 
 volumes:
   otel-data:

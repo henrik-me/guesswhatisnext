@@ -41,13 +41,24 @@ function createTelemetryBootstrap(options = {}) {
     AzureMonitorTraceExporter = connectionString
       ? require('@azure/monitor-opentelemetry-exporter').AzureMonitorTraceExporter
       : undefined,
-    OTLPTraceExporter = (!connectionString && otlpEndpoint)
-      ? require('@opentelemetry/exporter-trace-otlp-http').OTLPTraceExporter
-      : undefined,
+    OTLPTraceExporter: providedOTLPTraceExporter,
     logInfo = console.log,
     logError = console.error,
     processRef = process,
   } = options;
+
+  let OTLPTraceExporter = providedOTLPTraceExporter;
+  if (otlpEndpoint && !connectionString && !OTLPTraceExporter) {
+    try {
+      ({ OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http'));
+    } catch (err) {
+      logError(
+        'OpenTelemetry disabled: OTLP exporter module "@opentelemetry/exporter-trace-otlp-http" could not be loaded',
+        err,
+      );
+      return { enabled: false };
+    }
+  }
 
   const instrumentations = buildInstrumentations(getNodeAutoInstrumentations);
 
