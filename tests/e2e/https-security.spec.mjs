@@ -1,10 +1,12 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
 
-// These tests require the MSSQL + Caddy HTTPS stack (external server mode).
-// They are skipped automatically when BASE_URL is not set.
+// These tests require the MSSQL + Caddy HTTPS stack (production-mode app behind
+// Caddy reverse proxy with auto-TLS). They are skipped unless BASE_URL points to
+// the local Caddy instance (https://localhost), which is set by test:e2e:mssql.
 const BASE_URL = process.env.BASE_URL;
-const describeOrSkip = BASE_URL ? test.describe : test.describe.skip;
+const isCaddyStack = BASE_URL && BASE_URL.startsWith('https://localhost');
+const describeOrSkip = isCaddyStack ? test.describe : test.describe.skip;
 
 describeOrSkip('HTTPS & Security Headers', () => {
   // HTTP port where Caddy listens for plain HTTP (default 3001 in docker-compose)
@@ -27,7 +29,8 @@ describeOrSkip('HTTPS & Security Headers', () => {
 
         const location = response.headers()['location'];
         expect(location).toBeTruthy();
-        expect(location).toMatch(/^https:\/\//);
+        // Caddy should redirect to the HTTPS version on localhost
+        expect(location).toMatch(/^https:\/\/localhost/);
       } finally {
         await context.dispose();
       }
