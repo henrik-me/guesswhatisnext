@@ -46,13 +46,8 @@ describe('server/telemetry.js', () => {
     const bootstrap = createTelemetryBootstrap({
       connectionString: '  InstrumentationKey=test-key  ',
       NodeSDK: class FakeNodeSdk {
-        start() {
-          return Promise.resolve();
-        }
-
-        shutdown() {
-          return Promise.resolve();
-        }
+        start() { /* void, like real SDK */ }
+        shutdown() { return Promise.resolve(); }
       },
       getNodeAutoInstrumentations: () => [],
       AzureMonitorTraceExporter: class FakeExporter {},
@@ -89,9 +84,7 @@ describe('server/telemetry.js', () => {
         sdkConfig = config;
       }
 
-      start() {
-        return Promise.resolve();
-      }
+      start() { /* void, like real SDK */ }
 
       shutdown() {
         return Promise.resolve();
@@ -143,7 +136,7 @@ describe('server/telemetry.js', () => {
 
     class FakeNodeSdk {
       start() {
-        return Promise.reject(new Error('boom'));
+        throw new Error('boom');
       }
 
       shutdown() {
@@ -189,7 +182,7 @@ describe('server/telemetry.js', () => {
     const bootstrap = createTelemetryBootstrap({
       otlpEndpoint: 'http://localhost:4318',
       NodeSDK: class FakeNodeSdk {
-        start() { return Promise.resolve(); }
+        start() { /* void */ }
         shutdown() { return Promise.resolve(); }
       },
       getNodeAutoInstrumentations: () => [
@@ -218,7 +211,7 @@ describe('server/telemetry.js', () => {
       connectionString: 'InstrumentationKey=test-key',
       otlpEndpoint: 'http://localhost:4318',
       NodeSDK: class FakeNodeSdk {
-        start() { return Promise.resolve(); }
+        start() { /* void */ }
         shutdown() { return Promise.resolve(); }
       },
       getNodeAutoInstrumentations: () => [],

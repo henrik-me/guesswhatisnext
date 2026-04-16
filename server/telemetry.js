@@ -69,18 +69,21 @@ function createTelemetryBootstrap(options = {}) {
   });
 
   let shutdownPromise;
-  const startPromise = sdk.start()
-    .then(() => {
-      // console.log is intentional: this module must load before server/logger.js
-      // (it instruments Node HTTP before Express loads), so Pino is not available yet.
-      // server/config.js is the only other module allowed to use console (see §4 Logging).
-      logInfo(startupMessage);
-      return true;
-    })
-    .catch((err) => {
-      logError('OpenTelemetry failed to start', err);
-      return false;
-    });
+
+  // NodeSDK.start() is synchronous (returns void) in sdk-node ≥0.200.
+  // Wrap in try/catch and produce our own Promise for consumers.
+  let startPromise;
+  try {
+    sdk.start();
+    // console.log is intentional: this module must load before server/logger.js
+    // (it instruments Node HTTP before Express loads), so Pino is not available yet.
+    // server/config.js is the only other module allowed to use console (see §4 Logging).
+    logInfo(startupMessage);
+    startPromise = Promise.resolve(true);
+  } catch (err) {
+    logError('OpenTelemetry failed to start', err);
+    startPromise = Promise.resolve(false);
+  }
 
   const shutdown = () => {
     if (!shutdownPromise) {
