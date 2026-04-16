@@ -58,6 +58,7 @@
     "vitest": "^4.1.2"
   },
   "optionalDependencies": {
+    "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
     "artillery": "^2.0.30"
   },
   "engines": {
