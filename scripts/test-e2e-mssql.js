@@ -118,6 +118,85 @@ function waitForHealthy(baseUrl, timeoutSec = 120) {
   });
 }
 
+/**
+ * Classify a log line as 'error', 'warn', or null.
+ * Handles pino JSON (numeric level) format.
+ */
+function classifyLogLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed || !trimmed.startsWith('{')) return null;
+  try {
+    const obj = JSON.parse(trimmed);
+    if (typeof obj.level === 'number') {
+      if (obj.level >= 50) return 'error'; // 50=ERROR, 60=FATAL
+      if (obj.level === 40) return 'warn';
+    }
+  } catch {
+    // Not JSON — check text patterns
+    if (/\b(ERROR|FATAL)\b/.test(trimmed)) return 'error';
+    if (/\bWARN\b/.test(trimmed)) return 'warn';
+  }
+  return null;
+}
+
+/**
+ * Capture full container logs, save to test-results/, and report summary.
+ * Returns true if the log capture overhead exceeds the failure threshold.
+ */
+function captureFullLogSummary() {
+  console.log('\n=== Full E2E Log Summary ===');
+
+  let logs;
+  try {
+    logs = execSync(
+      `docker compose -f ${COMPOSE_FILE} logs app --no-log-prefix`,
+      { encoding: 'utf8', timeout: 30000 }
+    );
+  } catch (err) {
+    console.warn(`Failed to capture container logs: ${err.message}`);
+    return false;
+  }
+
+  // Save to test-results/container-server.log
+  const artifactDir = path.join(ROOT, 'test-results');
+  const artifactPath = path.join(artifactDir, 'container-server.log');
+  try {
+    fs.mkdirSync(artifactDir, { recursive: true });
+    fs.writeFileSync(artifactPath, logs, 'utf8');
+    console.log(`Container logs saved to: ${artifactPath}`);
+  } catch (err) {
+    console.warn(`Failed to save container logs: ${err.message}`);
+  }
+
+  // Classify log lines
+  const lines = logs.split('\n');
+  let errors = 0;
+  let warnings = 0;
+  let total = 0;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    total++;
+    const cls = classifyLogLine(line);
+    if (cls === 'error') errors++;
+    else if (cls === 'warn') warnings++;
+  }
+
+  console.log(`Total log lines: ${total}`);
+  console.log(`  ERROR/FATAL: ${errors}`);
+  console.log(`  WARN: ${warnings}`);
+  console.log(`  INFO/DEBUG: ${total - errors - warnings}`);
+
+  if (errors > 0) {
+    console.error(`\n⚠️  Container emitted ${errors} ERROR/FATAL entries during E2E run`);
+    console.error(`See: ${artifactPath}`);
+  } else {
+    console.log('\n✅ Container log clean: 0 errors');
+  }
+
+  return false;
+}
+
 async function main() {
   // ── Step 1: Check Docker Compose v2 ──────────────────────────────────
   if (!run('Checking Docker Compose v2', 'node scripts/check-compose-v2.js')) {
@@ -191,12 +270,20 @@ async function main() {
   // ── Step 6: Collect trace artifacts ──────────────────────────────────
   run('Collecting trace output', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector cat /data/traces.json > test-results/otel-traces-raw.json`, { allowFailure: true });
 
-  // ── Step 7: Teardown ─────────────────────────────────────────────────
+  // ── Step 7: Full E2E log summary ─────────────────────────────────────
+  let logSummaryFailed = false;
+  try {
+    logSummaryFailed = captureFullLogSummary();
+  } catch (err) {
+    console.warn(`\n⚠️  Log summary failed: ${err.message}`);
+  }
+
+  // ── Step 8: Teardown ─────────────────────────────────────────────────
   tornDown = true;
   teardown();
 
-  // Fail if either E2E tests or trace verification failed
-  const exitCode = testExitCode || traceExitCode;
+  // Fail if E2E tests, trace verification, or log summary failed
+  const exitCode = testExitCode || traceExitCode || (logSummaryFailed ? 1 : 0);
   process.exit(exitCode);
 }
 
