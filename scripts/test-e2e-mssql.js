@@ -238,6 +238,7 @@ async function main() {
       ...process.env,
       BASE_URL,
       SYSTEM_API_KEY,
+      CONTAINER_LOGS: 'true',
     },
     shell: true,
   });

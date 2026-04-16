@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
-const isContainerMode = !!process.env.BASE_URL;
+const isContainerMode = !!process.env.CONTAINER_LOGS;
 
 /** File path for persisting cumulative log capture time across workers. */
 const OVERHEAD_FILE = path.join('test-results', '.log-capture-overhead-ms');
@@ -69,7 +69,7 @@ function parsePinoLevel(line) {
 
 /**
  * Capture docker compose logs since the given ISO timestamp.
- * Returns the raw log output as a string.
+ * Returns { logs, error } — error is set when capture fails.
  */
 function captureDockerLogs(sinceTimestamp) {
   try {
@@ -77,9 +77,9 @@ function captureDockerLogs(sinceTimestamp) {
       `docker compose -f ${COMPOSE_FILE} logs --since ${sinceTimestamp} app --no-log-prefix`,
       { encoding: 'utf8', timeout: 30000 }
     );
-    return output;
+    return { logs: output, error: null };
   } catch (err) {
-    return `[docker-logs fixture] Failed to capture logs: ${err.message}`;
+    return { logs: '', error: err.message };
   }
 }
 
@@ -102,7 +102,7 @@ export const test = base.extend({
 
     // afterEach: capture logs generated during this test
     const captureStart = Date.now();
-    const logs = captureDockerLogs(startTime);
+    const { logs, error: captureError } = captureDockerLogs(startTime);
     const captureElapsed = Date.now() - captureStart;
     cumulativeLogCaptureMs += captureElapsed;
 
@@ -110,6 +110,14 @@ export const test = base.extend({
     persistOverhead();
     // Reset in-process counter after persisting to avoid double-counting
     cumulativeLogCaptureMs = 0;
+
+    // Surface log capture failures as annotations
+    if (captureError) {
+      testInfo.annotations.push({
+        type: 'log-capture-error',
+        description: `Docker log capture failed: ${captureError}`,
+      });
+    }
 
     // Attach logs to test report
     if (logs.trim()) {

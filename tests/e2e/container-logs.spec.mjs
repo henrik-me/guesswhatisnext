@@ -8,10 +8,10 @@ import { test, expect } from './fixtures/docker-logs.mjs';
 import { execSync } from 'child_process';
 
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
-const isContainerMode = !!process.env.BASE_URL;
+const isContainerMode = !!process.env.CONTAINER_LOGS;
 
 // Skip the entire file when not running in container mode
-test.skip(!isContainerMode, 'Container log format tests require BASE_URL (container mode)');
+test.skip(!isContainerMode, 'Container log format tests require CONTAINER_LOGS=true (MSSQL docker mode)');
 
 test.describe('Container Log Format', () => {
   test('server logs are structured JSON with expected pino fields', async ({ request }) => {
