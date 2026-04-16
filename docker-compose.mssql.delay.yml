@@ -17,7 +17,7 @@
 #     npm run dev:mssql:down
 #
 #   Run cold start E2E tests:
-#     GWN_COLDSTART_TEST=true BASE_URL=https://localhost SYSTEM_API_KEY=test-system-api-key npx playwright test tests/e2e/coldstart-real.spec.mjs
+#     GWN_COLDSTART_TEST=true BASE_URL=https://localhost npx playwright test tests/e2e/coldstart-real.spec.mjs
 #
 # Default pattern: 45s (first nav), 16s (second), then instant (×4).
 # This simulates a real DB cold start → warm-up → cached sequence.
