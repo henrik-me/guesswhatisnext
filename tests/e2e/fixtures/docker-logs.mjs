@@ -10,12 +10,48 @@
  */
 import { test as base, expect } from '@playwright/test';
 import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
 const isContainerMode = !!process.env.BASE_URL;
 
-/** Cumulative log capture time in milliseconds, shared across all tests. */
+/** File path for persisting cumulative log capture time across workers. */
+const OVERHEAD_FILE = path.join('test-results', '.log-capture-overhead-ms');
+
+/** Cumulative log capture time in milliseconds (in-process tracker). */
 let cumulativeLogCaptureMs = 0;
+
+/**
+ * Persist cumulative log capture time to a file so the global teardown
+ * (which runs in a separate process) can read it.
+ */
+function persistOverhead() {
+  try {
+    fs.mkdirSync('test-results', { recursive: true });
+    // Read existing value (from prior worker runs) and add current
+    let existing = 0;
+    try {
+      existing = parseInt(fs.readFileSync(OVERHEAD_FILE, 'utf8'), 10) || 0;
+    } catch {
+      // File doesn't exist yet
+    }
+    fs.writeFileSync(OVERHEAD_FILE, String(existing + cumulativeLogCaptureMs), 'utf8');
+  } catch {
+    // Best-effort
+  }
+}
+
+/**
+ * Read the persisted cumulative log capture time from the overhead file.
+ */
+export function readPersistedOverheadMs() {
+  try {
+    return parseInt(fs.readFileSync(OVERHEAD_FILE, 'utf8'), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * Parse a log line as pino JSON and return the numeric level, or null.
@@ -48,20 +84,6 @@ function captureDockerLogs(sinceTimestamp) {
 }
 
 /**
- * Get the cumulative log capture time in milliseconds.
- */
-export function getCumulativeLogCaptureMs() {
-  return cumulativeLogCaptureMs;
-}
-
-/**
- * Reset the cumulative log capture time (for testing purposes).
- */
-export function resetCumulativeLogCaptureMs() {
-  cumulativeLogCaptureMs = 0;
-}
-
-/**
  * Extended Playwright test fixture with per-test Docker log capture.
  */
 export const test = base.extend({
@@ -83,6 +105,11 @@ export const test = base.extend({
     const logs = captureDockerLogs(startTime);
     const captureElapsed = Date.now() - captureStart;
     cumulativeLogCaptureMs += captureElapsed;
+
+    // Persist overhead to file for global teardown
+    persistOverhead();
+    // Reset in-process counter after persisting to avoid double-counting
+    cumulativeLogCaptureMs = 0;
 
     // Attach logs to test report
     if (logs.trim()) {

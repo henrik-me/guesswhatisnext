@@ -21,8 +21,12 @@ test.describe('Container Log Format', () => {
     });
     expect(healthRes.ok()).toBeTruthy();
 
-    const puzzlesRes = await request.get('/api/puzzles');
-    expect(puzzlesRes.ok()).toBeTruthy();
+    // Use public community endpoint (no auth required) and healthz
+    const communityRes = await request.get('/api/puzzles/community');
+    expect(communityRes.ok()).toBeTruthy();
+
+    const healthzRes = await request.get('/healthz');
+    expect(healthzRes.ok()).toBeTruthy();
 
     // Brief pause to let logs flush
     await new Promise(resolve => setTimeout(resolve, 1500));
