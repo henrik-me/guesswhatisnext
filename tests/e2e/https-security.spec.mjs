@@ -5,7 +5,15 @@ import { test, expect } from '@playwright/test';
 // Caddy reverse proxy with auto-TLS). They are skipped unless BASE_URL points to
 // the local Caddy instance (https://localhost), which is set by test:e2e:mssql.
 const BASE_URL = process.env.BASE_URL;
-const isCaddyStack = BASE_URL && BASE_URL.startsWith('https://localhost');
+const isCaddyStack = (() => {
+  if (!BASE_URL) return false;
+  try {
+    const url = new URL(BASE_URL);
+    return url.protocol === 'https:' && url.hostname === 'localhost';
+  } catch {
+    return false;
+  }
+})();
 const describeOrSkip = isCaddyStack ? test.describe : test.describe.skip;
 
 describeOrSkip('HTTPS & Security Headers', () => {
@@ -13,13 +21,14 @@ describeOrSkip('HTTPS & Security Headers', () => {
   const HTTP_PORT = process.env.HTTP_PORT || '3001';
   const httpUrl = `http://localhost:${HTTP_PORT}`;
 
+  /** Create a request context that accepts self-signed certs. */
+  async function httpsContext(playwright, opts = {}) {
+    return playwright.request.newContext({ ignoreHTTPSErrors: true, ...opts });
+  }
+
   test.describe('CS25-2a: Caddy HTTP→HTTPS redirect', () => {
     test('redirects HTTP to HTTPS with 308 or 301', async ({ playwright }) => {
-      // Use a standalone request context so we can disable auto-redirect following
-      const context = await playwright.request.newContext({
-        ignoreHTTPSErrors: true,
-        maxRedirects: 0,
-      });
+      const context = await httpsContext(playwright, { maxRedirects: 0 });
 
       try {
         const response = await context.get(httpUrl);
@@ -39,9 +48,7 @@ describeOrSkip('HTTPS & Security Headers', () => {
 
   test.describe('CS25-2b: HSTS header', () => {
     test('includes Strict-Transport-Security with max-age > 0', async ({ playwright }) => {
-      const context = await playwright.request.newContext({
-        ignoreHTTPSErrors: true,
-      });
+      const context = await httpsContext(playwright);
 
       try {
         const response = await context.get(BASE_URL);
@@ -60,9 +67,7 @@ describeOrSkip('HTTPS & Security Headers', () => {
 
   test.describe('CS25-2c: CSP header', () => {
     test('includes Content-Security-Policy with expected directives', async ({ playwright }) => {
-      const context = await playwright.request.newContext({
-        ignoreHTTPSErrors: true,
-      });
+      const context = await httpsContext(playwright);
 
       try {
         const response = await context.get(BASE_URL);
@@ -82,9 +87,7 @@ describeOrSkip('HTTPS & Security Headers', () => {
 
   test.describe('CS25-2d: Other security headers', () => {
     test('includes X-Content-Type-Options: nosniff', async ({ playwright }) => {
-      const context = await playwright.request.newContext({
-        ignoreHTTPSErrors: true,
-      });
+      const context = await httpsContext(playwright);
 
       try {
         const response = await context.get(BASE_URL);
@@ -95,9 +98,7 @@ describeOrSkip('HTTPS & Security Headers', () => {
     });
 
     test('includes X-Frame-Options', async ({ playwright }) => {
-      const context = await playwright.request.newContext({
-        ignoreHTTPSErrors: true,
-      });
+      const context = await httpsContext(playwright);
 
       try {
         const response = await context.get(BASE_URL);
@@ -110,9 +111,7 @@ describeOrSkip('HTTPS & Security Headers', () => {
     });
 
     test('includes Referrer-Policy', async ({ playwright }) => {
-      const context = await playwright.request.newContext({
-        ignoreHTTPSErrors: true,
-      });
+      const context = await httpsContext(playwright);
 
       try {
         const response = await context.get(BASE_URL);
