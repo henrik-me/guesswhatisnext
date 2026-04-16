@@ -6,12 +6,13 @@ const { execSync } = require('child_process');
 
 try {
   const version = execSync('docker compose version --short', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-  const major = parseInt(version.replace(/^v/, '').split('.')[0], 10);
+  const normalizedVersion = version.replace(/^v/, '');
+  const major = parseInt(normalizedVersion.split('.')[0], 10);
   if (major < 2) {
-    console.error(`Docker Compose v2+ required (found v${version})`);
+    console.error(`Docker Compose v2+ required (found ${version})`);
     process.exit(1);
   }
-  console.log(`Docker Compose v${version} ✓`);
+  console.log(`Docker Compose ${version} ✓`);
 } catch {
   console.error('Docker Compose v2+ required. Install: https://docs.docker.com/compose/install/');
   console.error('  "docker compose" command not found — the legacy "docker-compose" (v1) is not supported.');
