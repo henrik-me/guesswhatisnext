@@ -32,13 +32,16 @@ function parseOverrideValue(value) {
   return null;
 }
 
+const OVERRIDE_ALLOWED = (config.NODE_ENV !== 'production' && config.NODE_ENV !== 'staging')
+  || config.FEATURE_FLAG_ALLOW_OVERRIDE === 'true';
+
 const FEATURE_FLAGS = Object.freeze({
   submitPuzzle: Object.freeze({
     key: 'submitPuzzle',
     defaultEnabled: false,
     rolloutPercentage: clampRolloutPercentage(config.FEATURE_SUBMIT_PUZZLE_PERCENTAGE),
     users: parseUserList(config.FEATURE_SUBMIT_PUZZLE_USERS),
-    allowOverride: config.NODE_ENV !== 'production' && config.NODE_ENV !== 'staging',
+    allowOverride: OVERRIDE_ALLOWED,
     overrideQueryParam: 'ff_submit_puzzle',
     overrideHeader: 'x-gwn-feature-submit-puzzle',
   }),

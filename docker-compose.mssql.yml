@@ -25,7 +25,10 @@ services:
       JWT_SECRET: gwn-docker-mssql-validation
       SYSTEM_API_KEY: test-system-api-key
       CANONICAL_HOST: "localhost"
-      FEATURE_SUBMIT_PUZZLE_PERCENTAGE: "100"
+      # Allow feature flag query param overrides (e.g. ?ff_submit_puzzle=true)
+      # so E2E tests can control flags per-test, matching SQLite E2E behavior.
+      # Temporary workaround — CS40 tracks the proper solution.
+      FEATURE_FLAG_ALLOW_OVERRIDE: "true"
       DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=${MSSQL_SA_PASSWORD:-GwnTest1!};Encrypt=false;TrustServerCertificate=true"
       PORT: "3000"
     volumes:
