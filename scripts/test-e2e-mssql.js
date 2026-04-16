@@ -37,7 +37,8 @@ function run(label, cmd, opts = {}) {
 function teardown() {
   console.log('\n=== Tearing down MSSQL stack ===');
   try {
-    execSync(`docker compose -f ${COMPOSE_FILE} down`, {
+    // -v removes named volumes (otel-data) to avoid stale trace data on next run
+    execSync(`docker compose -f ${COMPOSE_FILE} down -v`, {
       cwd: ROOT,
       stdio: 'inherit',
     });
@@ -143,6 +144,9 @@ async function main() {
     teardown();
     process.exit(1);
   }
+
+  // ── Step 3b: Clear stale OTel traces ─────────────────────────────────
+  run('Clearing stale traces', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector sh -c "rm -f /data/traces.json"`, { allowFailure: true });
 
   // ── Step 4: Run Playwright tests ─────────────────────────────────────
   console.log('\n=== Running Playwright E2E tests ===');
