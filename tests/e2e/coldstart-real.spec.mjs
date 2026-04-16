@@ -15,11 +15,13 @@
  *   bash scripts/wait-for-healthy.sh https://localhost
  *
  * Run:
- *   GWN_COLDSTART_TEST=true BASE_URL=https://localhost SYSTEM_API_KEY=test-system-api-key \
+ *   GWN_COLDSTART_TEST=true BASE_URL=https://localhost \
  *     npx playwright test tests/e2e/coldstart-real.spec.mjs
  *
- * These tests are SLOW by design (45s+ waits) and are skipped unless both
- * BASE_URL and GWN_COLDSTART_TEST=true are set.
+ * These tests are SLOW by design: they exercise real delayed responses, but the
+ * client-side ProgressiveLoader times out after ~15s, so each slow step typically
+ * waits about 15–25s rather than the full 45s server delay. They are skipped
+ * unless both BASE_URL and GWN_COLDSTART_TEST=true are set.
  */
 import { test, expect } from '@playwright/test';
 
@@ -32,18 +34,18 @@ test.skip(!isEnabled, 'Cold start tests require BASE_URL and GWN_COLDSTART_TEST=
 test.describe.configure({ mode: 'serial', retries: 0, timeout: 120000 });
 
 test.describe('Cold Start — Real Server Delays', () => {
-  // NOTE: The app fires /api/features on page load. The delay middleware treats
-  // requests within a 2s window as the same "navigation burst" (same pattern step).
-  // Since Playwright clicks the leaderboard button within milliseconds of page load,
-  // both /api/features and /api/scores/leaderboard share the same step. Between tests,
-  // the >2s gap from context teardown/creation advances the pattern to the next step.
+  // NOTE: The app fires /api/features on DOMContentLoaded. The delay middleware
+  // treats requests within a 2s window as the same "navigation burst" (same pattern
+  // step). We use waitUntil: 'domcontentloaded' so the page.goto resolves as soon as
+  // /api/features is dispatched, and the leaderboard click fires within the same burst.
+  // Between tests, the >2s gap from context teardown/creation advances the pattern.
 
   // Test 1 — Pattern step 0 (45s delay): progressive message + retry button
   test('progressive message and retry on first navigation (45s delay)', async ({ browser }) => {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     const page = await context.newPage();
 
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     // Navigate to leaderboard — first API call hits the 45s delay step
     await page.click('[data-action="show-leaderboard"]');
@@ -68,14 +70,14 @@ test.describe('Cold Start — Real Server Delays', () => {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     const page = await context.newPage();
 
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     await page.click('[data-action="show-leaderboard"]');
     await expect(page.locator('[data-screen="leaderboard"]')).toHaveClass(/active/);
 
     const container = page.locator('[data-bind="leaderboard-table"]');
 
-    // Step 1 (16s) is above the 15s ProgressiveLoader timeout — retry button should appear.
+    // Step 1 (16s)is above the 15s ProgressiveLoader timeout — retry button should appear.
     await expect(container.locator('.progressive-retry-btn')).toBeVisible({ timeout: 25000 });
 
     // By the time retry is visible, the gap since the delayed request is already >2s,
@@ -98,7 +100,7 @@ test.describe('Cold Start — Real Server Delays', () => {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     const page = await context.newPage();
 
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     await page.click('[data-action="show-leaderboard"]');
     await expect(page.locator('[data-screen="leaderboard"]')).toHaveClass(/active/);
