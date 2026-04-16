@@ -166,11 +166,30 @@ async function main() {
     console.error(`\n✗ E2E tests failed (exit ${testExitCode})`);
   }
 
-  // ── Step 5: Teardown ─────────────────────────────────────────────────
+  // ── Step 5: OTel trace verification ──────────────────────────────────
+  let traceExitCode = 0;
+  try {
+    const { verify } = require('./verify-traces');
+    const tracePassed = verify();
+    if (!tracePassed) {
+      console.error('✗ OTel trace verification failed');
+      traceExitCode = 1;
+    }
+  } catch (err) {
+    console.error('✗ OTel trace verification error:', err.message);
+    traceExitCode = 1;
+  }
+
+  // ── Step 6: Collect trace artifacts ──────────────────────────────────
+  run('Collecting trace output', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector cat /data/traces.json > test-results/otel-traces-raw.json`, { allowFailure: true });
+
+  // ── Step 7: Teardown ─────────────────────────────────────────────────
   tornDown = true;
   teardown();
 
-  process.exit(testExitCode);
+  // Fail if either E2E tests or trace verification failed
+  const exitCode = testExitCode || traceExitCode;
+  process.exit(exitCode);
 }
 
 main();
