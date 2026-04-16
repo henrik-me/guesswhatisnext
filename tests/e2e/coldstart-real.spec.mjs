@@ -8,7 +8,7 @@
  *
  * IMPORTANT: The delay pattern is server-side state shared across ALL tests.
  * Tests run serially and each consumes pattern steps. The tests are ordered so
- * that step 0 (45s) is consumed first, step 1 (15s) second, etc.
+ * that step 0 (45s) is consumed first, step 1 (16s) second, etc.
  *
  * Prerequisites:
  *   npm run dev:mssql:coldstart
@@ -28,8 +28,9 @@ const isEnabled = process.env.BASE_URL && process.env.GWN_COLDSTART_TEST === 'tr
 // Skip the entire file when not in cold start mode
 test.skip(!isEnabled, 'Cold start tests require BASE_URL and GWN_COLDSTART_TEST=true');
 
-// These tests are inherently slow — generous timeouts for real server delays
-test.describe.configure({ timeout: 120000 });
+// These tests are inherently slow and rely on shared server-side delay state,
+// so enforce serial execution with generous timeouts for real server delays.
+test.describe.configure({ mode: 'serial', timeout: 120000 });
 
 test.describe('Cold Start — Real Server Delays', () => {
   // Test 1 — Pattern step 0 (45s delay): progressive message + retry button
@@ -72,9 +73,8 @@ test.describe('Cold Start — Real Server Delays', () => {
     // Step 1 (16s) is above the 15s ProgressiveLoader timeout — retry button should appear.
     await expect(container.locator('.progressive-retry-btn')).toBeVisible({ timeout: 25000 });
 
-    // Wait >2s so the delay middleware advances to step 2 (0ms)
-    await page.waitForTimeout(3000);
-
+    // By the time retry is visible, the gap since the delayed request is already >2s,
+    // so the delay middleware will advance to step 2 (0ms) without any extra wait.
     // Click retry — step 2 has 0ms delay, so data should load immediately
     await container.locator('.progressive-retry-btn').click();
 
@@ -95,21 +95,17 @@ test.describe('Cold Start — Real Server Delays', () => {
 
     await page.goto('/');
 
-    const startTime = Date.now();
     await page.click('[data-action="show-leaderboard"]');
     await expect(page.locator('[data-screen="leaderboard"]')).toHaveClass(/active/);
 
     const container = page.locator('[data-bind="leaderboard-table"]');
 
-    // With 0ms delay, data should load within a few seconds (no timeout, no retry)
+    // With 0ms delay, data should load within 10s and should not require retry UI
     await expect(
       container.locator('.leaderboard-row').first()
         .or(container.locator('.leaderboard-empty'))
-    ).toBeVisible({ timeout: 15000 });
-
-    const elapsed = Date.now() - startTime;
-    // 0ms server delay — leaderboard should render well under 10s
-    expect(elapsed).toBeLessThan(10000);
+    ).toBeVisible({ timeout: 10000 });
+    await expect(container.locator('.progressive-retry-btn')).toBeHidden();
 
     await context.close();
   });

@@ -31,5 +31,5 @@ services:
       GWN_DB_DELAY_PATTERN: "${GWN_DB_DELAY_PATTERN:-45000,16000,0,0,0,0}"
       GWN_DB_DELAY_MS: "${GWN_DB_DELAY_MS:-}"
       FEATURE_FLAG_ALLOW_OVERRIDE: "true"
-      JWT_SECRET: "test-delay-secret"
+      JWT_SECRET: "gwn-docker-mssql-validation"
       SYSTEM_API_KEY: "test-system-api-key"
