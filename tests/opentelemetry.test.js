@@ -16,7 +16,7 @@ function clearServerCache() {
 }
 
 describe('server/telemetry.js', () => {
-  const savedEnvKeys = ['APPLICATIONINSIGHTS_CONNECTION_STRING', 'NODE_ENV'];
+  const savedEnvKeys = ['APPLICATIONINSIGHTS_CONNECTION_STRING', 'NODE_ENV', 'OTEL_EXPORTER_OTLP_ENDPOINT'];
   const savedEnv = {};
 
   beforeEach(() => {
@@ -36,6 +36,7 @@ describe('server/telemetry.js', () => {
 
   test('exports a disabled bootstrap when connection string is absent', () => {
     delete process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
     const { telemetry } = require('../server/telemetry');
     expect(telemetry).toEqual({ enabled: false });
   });
@@ -172,6 +173,65 @@ describe('server/telemetry.js', () => {
     expect(errorLogs[0][0]).toBe('OpenTelemetry failed to start');
     expect(errorLogs[1][0]).toBe('OpenTelemetry shutdown error');
     expect(errorLogs[2][0]).toBe('OpenTelemetry shutdown error');
+  });
+
+  test('uses OTLPTraceExporter when otlpEndpoint is set and no connection string', async () => {
+    const infoLogs = [];
+    let receivedConfig;
+
+    class FakeOTLPExporter {
+      constructor(config) {
+        receivedConfig = config;
+      }
+    }
+
+    const { createTelemetryBootstrap } = require('../server/telemetry');
+    const bootstrap = createTelemetryBootstrap({
+      otlpEndpoint: 'http://localhost:4318',
+      NodeSDK: class FakeNodeSdk {
+        start() { return Promise.resolve(); }
+        shutdown() { return Promise.resolve(); }
+      },
+      getNodeAutoInstrumentations: () => [
+        { instrumentationName: '@opentelemetry/instrumentation-http' },
+        { instrumentationName: '@opentelemetry/instrumentation-express' },
+      ],
+      OTLPTraceExporter: FakeOTLPExporter,
+      processRef: { once() {} },
+      logInfo(msg) { infoLogs.push(msg); },
+      logError() {},
+    });
+
+    expect(bootstrap.enabled).toBe(true);
+    await bootstrap.startPromise;
+    expect(receivedConfig.url).toBe('http://localhost:4318/v1/traces');
+    expect(infoLogs[0]).toContain('OTLP');
+    expect(infoLogs[0]).toContain('http://localhost:4318');
+  });
+
+  test('prefers Azure Monitor when both connection string and OTLP endpoint are set', async () => {
+    let usedAzure = false;
+    let usedOtlp = false;
+
+    const { createTelemetryBootstrap } = require('../server/telemetry');
+    const bootstrap = createTelemetryBootstrap({
+      connectionString: 'InstrumentationKey=test-key',
+      otlpEndpoint: 'http://localhost:4318',
+      NodeSDK: class FakeNodeSdk {
+        start() { return Promise.resolve(); }
+        shutdown() { return Promise.resolve(); }
+      },
+      getNodeAutoInstrumentations: () => [],
+      AzureMonitorTraceExporter: class FakeAzure { constructor() { usedAzure = true; } },
+      OTLPTraceExporter: class FakeOtlp { constructor() { usedOtlp = true; } },
+      processRef: { once() {} },
+      logInfo() {},
+      logError() {},
+    });
+
+    expect(bootstrap.enabled).toBe(true);
+    expect(usedAzure).toBe(true);
+    expect(usedOtlp).toBe(false);
   });
 });
 
