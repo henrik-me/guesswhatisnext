@@ -4,7 +4,7 @@
  * Only runs when BASE_URL is set (i.e., against Docker containers).
  * Verifies server logs are structured JSON with expected pino fields.
  */
-import { test, expect } from '../fixtures/docker-logs.mjs';
+import { test, expect } from './fixtures/docker-logs.mjs';
 import { execSync } from 'child_process';
 
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
@@ -36,7 +36,7 @@ test.describe('Container Log Format', () => {
         { encoding: 'utf8', timeout: 15000 }
       );
     } catch (err) {
-      throw new Error(`Failed to capture container logs: ${err.message}`);
+      throw new Error(`Failed to capture container logs: ${err.message}`, { cause: err });
     }
 
     const lines = logs.split('\n').filter(line => line.trim());
@@ -84,7 +84,7 @@ test.describe('Container Log Format', () => {
         { encoding: 'utf8', timeout: 15000 }
       );
     } catch (err) {
-      throw new Error(`Failed to capture container logs: ${err.message}`);
+      throw new Error(`Failed to capture container logs: ${err.message}`, { cause: err });
     }
 
     const lines = logs.split('\n').filter(line => line.trim());
