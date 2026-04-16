@@ -6,9 +6,12 @@
  */
 import { test, expect } from './fixtures/docker-logs.mjs';
 import { execSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
 const isContainerMode = process.env.CONTAINER_LOGS === 'true';
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // Skip the entire file when not running in container mode
 test.skip(!isContainerMode, 'Container log format tests require CONTAINER_LOGS=true (MSSQL docker mode)');
@@ -37,7 +40,7 @@ test.describe('Container Log Format', () => {
     try {
       logs = execSync(
         `docker compose -f ${COMPOSE_FILE} logs --since ${sinceTimestamp} app --no-log-prefix`,
-        { encoding: 'utf8', timeout: 15000 }
+        { encoding: 'utf8', timeout: 15000, cwd: REPO_ROOT }
       );
     } catch (err) {
       throw new Error(`Failed to capture container logs: ${err.message}`, { cause: err });
@@ -85,7 +88,7 @@ test.describe('Container Log Format', () => {
     try {
       logs = execSync(
         `docker compose -f ${COMPOSE_FILE} logs --since ${sinceTimestamp} app --no-log-prefix`,
-        { encoding: 'utf8', timeout: 15000 }
+        { encoding: 'utf8', timeout: 15000, cwd: REPO_ROOT }
       );
     } catch (err) {
       throw new Error(`Failed to capture container logs: ${err.message}`, { cause: err });

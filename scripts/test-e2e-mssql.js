@@ -236,6 +236,13 @@ async function main() {
   console.log('\n=== Running Playwright E2E tests ===');
   console.log(`> BASE_URL=${BASE_URL} npx playwright test\n`);
 
+  // Clean up stale overhead file from any prior interrupted run
+  try {
+    fs.unlinkSync(path.join(ROOT, 'test-results', '.log-capture-overhead-ms'));
+  } catch {
+    // File doesn't exist — expected on first run
+  }
+
   const testResult = spawnSync('npx', ['playwright', 'test'], {
     cwd: ROOT,
     stdio: 'inherit',

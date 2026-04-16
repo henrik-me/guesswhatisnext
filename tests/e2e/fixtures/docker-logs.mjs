@@ -12,9 +12,13 @@ import { test as base, expect } from '@playwright/test';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
 const isContainerMode = process.env.CONTAINER_LOGS === 'true';
+
+/** Repo root — 3 levels up from tests/e2e/fixtures/ */
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 /** File path for persisting cumulative log capture time across workers. */
 const OVERHEAD_FILE = path.join('test-results', '.log-capture-overhead-ms');
@@ -88,7 +92,7 @@ function captureDockerLogs(sinceTimestamp) {
   try {
     const output = execSync(
       `docker compose -f ${COMPOSE_FILE} logs --since ${sinceTimestamp} app --no-log-prefix`,
-      { encoding: 'utf8', timeout: 30000 }
+      { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT }
     );
     return { logs: output, error: null };
   } catch (err) {
