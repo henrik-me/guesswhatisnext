@@ -4,7 +4,7 @@
  *
  * These tests run against the MSSQL Docker stack with the delay overlay enabled
  * (docker-compose.mssql.delay.yml). The delay middleware injects real latency into
- * API responses, cycling through a pattern (default: 45s, 15s, 0, 0, 0, 0).
+ * API responses, cycling through a pattern (default: 45s, 16s, 0, 0, 0, 0).
  *
  * IMPORTANT: The delay pattern is server-side state shared across ALL tests.
  * Tests run serially and each consumes pattern steps. The tests are ordered so
@@ -56,8 +56,8 @@ test.describe('Cold Start — Real Server Delays', () => {
     await context.close();
   });
 
-  // Test 2 — Pattern step 1 (15s delay): retry button works, clicking retries the fetch
-  // After test 1 consumed step 0, this test gets step 1 (15s — at the timeout boundary).
+  // Test 2 — Pattern step 1 (16s delay): retry button works, clicking retries the fetch
+  // After test 1 consumed step 0, this test gets step 1 (16s — above the 15s timeout).
   test('retry button works — clicking retry re-fetches data', async ({ browser }) => {
     const context = await browser.newContext({ serviceWorkers: 'block' });
     const page = await context.newPage();
@@ -69,8 +69,7 @@ test.describe('Cold Start — Real Server Delays', () => {
 
     const container = page.locator('[data-bind="leaderboard-table"]');
 
-    // Step 1 (15s) is right at the 15s ProgressiveLoader timeout boundary.
-    // The retry button should appear (15s delay ≥ 15s timeout).
+    // Step 1 (16s) is above the 15s ProgressiveLoader timeout — retry button should appear.
     await expect(container.locator('.progressive-retry-btn')).toBeVisible({ timeout: 25000 });
 
     // Wait >2s so the delay middleware advances to step 2 (0ms)

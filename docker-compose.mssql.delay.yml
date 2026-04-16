@@ -10,7 +10,8 @@
 #     npm run dev:mssql:coldstart
 #
 #   Customize delay pattern:
-#     GWN_DB_DELAY_PATTERN=60000,30000,0,0 npm run dev:mssql:coldstart
+#     GWN_DB_DELAY_PATTERN=45000,30000,0,0 npm run dev:mssql:coldstart
+#     Note: each delay step is capped at 45000ms by server/middleware/delay.js.
 #
 #   Stop (same teardown as normal MSSQL stack):
 #     npm run dev:mssql:down
@@ -18,14 +19,16 @@
 #   Run cold start E2E tests:
 #     GWN_COLDSTART_TEST=true BASE_URL=https://localhost SYSTEM_API_KEY=test-system-api-key npx playwright test tests/e2e/coldstart-real.spec.mjs
 #
-# Default pattern: 45s (first nav), 15s (second), then instant (×4).
+# Default pattern: 45s (first nav), 16s (second), then instant (×4).
 # This simulates a real DB cold start → warm-up → cached sequence.
+# The second step (16s) is set slightly above the 15s ProgressiveLoader
+# timeout to reliably exercise the retry button in E2E tests.
 
 services:
   app:
     environment:
       NODE_ENV: development
-      GWN_DB_DELAY_PATTERN: "${GWN_DB_DELAY_PATTERN:-45000,15000,0,0,0,0}"
+      GWN_DB_DELAY_PATTERN: "${GWN_DB_DELAY_PATTERN:-45000,16000,0,0,0,0}"
       GWN_DB_DELAY_MS: "${GWN_DB_DELAY_MS:-}"
       FEATURE_FLAG_ALLOW_OVERRIDE: "true"
       JWT_SECRET: "test-delay-secret"
