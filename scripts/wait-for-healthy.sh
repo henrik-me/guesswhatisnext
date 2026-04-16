@@ -8,7 +8,7 @@
 # The script polls /api/health every 2 seconds, timing out after 120 seconds.
 # Uses SYSTEM_API_KEY env var if set; otherwise defaults to test-system-api-key.
 # Works with both HTTP and HTTPS (--insecure for self-signed certs).
-# Exit 0 on success, exit 1 on timeout.
+# Exit 0 on success; exit 1 on timeout or immediate 401/403 auth failures.
 
 set -euo pipefail
 
