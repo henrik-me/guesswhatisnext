@@ -34,12 +34,17 @@ services:
       TRUST_PROXY: "2"
       DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=${MSSQL_SA_PASSWORD:-GwnTest1!};Encrypt=false;TrustServerCertificate=true"
       PORT: "3000"
+      # OTLP exporter — sends traces to the local collector (no Azure conn string
+      # so telemetry.js uses the OTLP HTTP fallback path)
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
     volumes:
       - ./scripts/docker-mssql-entrypoint.sh:/app/docker-mssql-entrypoint.sh:ro
     entrypoint: ["sh", "/app/docker-mssql-entrypoint.sh"]
     depends_on:
       mssql:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     restart: unless-stopped
 
   caddy:
@@ -52,3 +57,15 @@ services:
     depends_on:
       - app
     restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.100.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infra/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+      - otel-data:/data
+    ports:
+      - "4318:4318"
+
+volumes:
+  otel-data:
