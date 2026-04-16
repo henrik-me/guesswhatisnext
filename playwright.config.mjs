@@ -66,5 +66,7 @@ export default defineConfig({
         },
         timeout: 15000,
       },
-  globalTeardown: externalBaseURL ? undefined : './tests/e2e/global-teardown.mjs',
+  globalTeardown: process.env.CONTAINER_LOGS === 'true'
+    ? './tests/e2e/container-global-teardown.mjs'
+    : (externalBaseURL ? undefined : './tests/e2e/global-teardown.mjs'),
 });

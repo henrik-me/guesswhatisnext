@@ -118,6 +118,90 @@ function waitForHealthy(baseUrl, timeoutSec = 120) {
   });
 }
 
+/**
+ * Classify a log line as 'error', 'warn', or null.
+ * Handles pino JSON (numeric level) format.
+ */
+function classifyLogLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  // Try JSON parse for pino structured logs
+  if (trimmed.startsWith('{')) {
+    try {
+      const obj = JSON.parse(trimmed);
+      if (typeof obj.level === 'number') {
+        if (obj.level >= 50) return 'error'; // 50=ERROR, 60=FATAL
+        if (obj.level === 40) return 'warn';
+        return null;
+      }
+    } catch {
+      // Not valid JSON; fall through to text matching
+    }
+  }
+
+  // Text-based matching for non-JSON lines
+  if (/\b(ERROR|FATAL)\b/.test(trimmed)) return 'error';
+  if (/\bWARN\b/.test(trimmed)) return 'warn';
+  return null;
+}
+
+/**
+ * Capture full container logs, save to test-results/, and report summary.
+ * Best-effort — failures are logged but don't affect the exit code.
+ */
+function captureFullLogSummary() {
+  console.log('\n=== Full E2E Log Summary ===');
+
+  let logs;
+  try {
+    logs = execSync(
+      `docker compose -f ${COMPOSE_FILE} logs app --no-log-prefix`,
+      { encoding: 'utf8', timeout: 30000, cwd: ROOT }
+    );
+  } catch (err) {
+    console.warn(`Failed to capture container logs: ${err.message}`);
+    return;
+  }
+
+  // Save to test-results/container-server.log
+  const artifactDir = path.join(ROOT, 'test-results');
+  const artifactPath = path.join(artifactDir, 'container-server.log');
+  try {
+    fs.mkdirSync(artifactDir, { recursive: true });
+    fs.writeFileSync(artifactPath, logs, 'utf8');
+    console.log(`Container logs saved to: ${artifactPath}`);
+  } catch (err) {
+    console.warn(`Failed to save container logs: ${err.message}`);
+  }
+
+  // Classify log lines
+  const lines = logs.split('\n');
+  let errors = 0;
+  let warnings = 0;
+  let total = 0;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    total++;
+    const cls = classifyLogLine(line);
+    if (cls === 'error') errors++;
+    else if (cls === 'warn') warnings++;
+  }
+
+  console.log(`Total log lines: ${total}`);
+  console.log(`  ERROR/FATAL: ${errors}`);
+  console.log(`  WARN: ${warnings}`);
+  console.log(`  INFO/DEBUG: ${total - errors - warnings}`);
+
+  if (errors > 0) {
+    console.error(`\n⚠️  Container emitted ${errors} ERROR/FATAL entries during E2E run`);
+    console.error(`See: ${artifactPath}`);
+  } else {
+    console.log('\n✅ Container log clean: 0 errors');
+  }
+}
+
 async function main() {
   // ── Step 1: Check Docker Compose v2 ──────────────────────────────────
   if (!run('Checking Docker Compose v2', 'node scripts/check-compose-v2.js')) {
@@ -152,6 +236,13 @@ async function main() {
   console.log('\n=== Running Playwright E2E tests ===');
   console.log(`> BASE_URL=${BASE_URL} npx playwright test\n`);
 
+  // Clean up stale overhead file from any prior interrupted run
+  try {
+    fs.unlinkSync(path.join(ROOT, 'test-results', '.log-capture-overhead-ms'));
+  } catch {
+    // File doesn't exist — expected on first run
+  }
+
   const testResult = spawnSync('npx', ['playwright', 'test'], {
     cwd: ROOT,
     stdio: 'inherit',
@@ -159,6 +250,7 @@ async function main() {
       ...process.env,
       BASE_URL,
       SYSTEM_API_KEY,
+      CONTAINER_LOGS: 'true',
     },
     shell: true,
   });
@@ -191,11 +283,18 @@ async function main() {
   // ── Step 6: Collect trace artifacts ──────────────────────────────────
   run('Collecting trace output', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector cat /data/traces.json > test-results/otel-traces-raw.json`, { allowFailure: true });
 
-  // ── Step 7: Teardown ─────────────────────────────────────────────────
+  // ── Step 7: Full E2E log summary (best-effort) ──────────────────────
+  try {
+    captureFullLogSummary();
+  } catch (err) {
+    console.warn(`\n⚠️  Log summary failed: ${err.message}`);
+  }
+
+  // ── Step 8: Teardown ─────────────────────────────────────────────────
   tornDown = true;
   teardown();
 
-  // Fail if either E2E tests or trace verification failed
+  // Fail if E2E tests or trace verification failed (log summary is best-effort)
   const exitCode = testExitCode || traceExitCode;
   process.exit(exitCode);
 }
