@@ -25,10 +25,6 @@ let cumulativeLogCaptureMs = 0;
 /**
  * Persist cumulative log capture time to a file so the global teardown
  * (which runs in a separate process) can read it.
- */
-/**
- * Persist cumulative log capture time to a file so the global teardown
- * (which runs in a separate process) can read it.
  * Returns true on success, false on failure.
  */
 function persistOverhead() {
@@ -56,6 +52,17 @@ export function readPersistedOverheadMs() {
     return parseInt(fs.readFileSync(OVERHEAD_FILE, 'utf8'), 10) || 0;
   } catch {
     return 0;
+  }
+}
+
+/**
+ * Remove the overhead file to prevent stale accumulation across runs.
+ */
+export function cleanupOverheadFile() {
+  try {
+    fs.unlinkSync(OVERHEAD_FILE);
+  } catch {
+    // File doesn't exist or already removed
   }
 }
 

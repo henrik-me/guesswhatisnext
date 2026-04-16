@@ -2,7 +2,7 @@
  * Global teardown for container (MSSQL) E2E runs.
  * Reports cumulative per-test log capture overhead and enforces thresholds.
  */
-import { readPersistedOverheadMs } from './fixtures/docker-logs.mjs';
+import { readPersistedOverheadMs, cleanupOverheadFile } from './fixtures/docker-logs.mjs';
 import fs from 'fs';
 import path from 'path';
 
@@ -12,6 +12,9 @@ const FAIL_THRESHOLD_MS = 120000; // 120 seconds
 export default function containerGlobalTeardown() {
   const totalMs = readPersistedOverheadMs();
   const totalSec = (totalMs / 1000).toFixed(1);
+
+  // Clean up the overhead file to prevent stale accumulation across runs
+  cleanupOverheadFile();
 
   console.log('\n=== Log Capture Overhead ===');
   console.log(`Total per-test log capture time: ${totalSec}s (${totalMs}ms)`);
