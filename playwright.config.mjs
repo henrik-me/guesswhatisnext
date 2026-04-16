@@ -66,5 +66,7 @@ export default defineConfig({
         },
         timeout: 15000,
       },
-  globalTeardown: externalBaseURL ? undefined : './tests/e2e/global-teardown.mjs',
+  globalTeardown: externalBaseURL
+    ? './tests/e2e/container-global-teardown.mjs'
+    : './tests/e2e/global-teardown.mjs',
 });
