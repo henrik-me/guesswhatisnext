@@ -124,24 +124,31 @@ function waitForHealthy(baseUrl, timeoutSec = 120) {
  */
 function classifyLogLine(line) {
   const trimmed = line.trim();
-  if (!trimmed || !trimmed.startsWith('{')) return null;
-  try {
-    const obj = JSON.parse(trimmed);
-    if (typeof obj.level === 'number') {
-      if (obj.level >= 50) return 'error'; // 50=ERROR, 60=FATAL
-      if (obj.level === 40) return 'warn';
+  if (!trimmed) return null;
+
+  // Try JSON parse for pino structured logs
+  if (trimmed.startsWith('{')) {
+    try {
+      const obj = JSON.parse(trimmed);
+      if (typeof obj.level === 'number') {
+        if (obj.level >= 50) return 'error'; // 50=ERROR, 60=FATAL
+        if (obj.level === 40) return 'warn';
+        return null;
+      }
+    } catch {
+      // Not valid JSON; fall through to text matching
     }
-  } catch {
-    // Not JSON — check text patterns
-    if (/\b(ERROR|FATAL)\b/.test(trimmed)) return 'error';
-    if (/\bWARN\b/.test(trimmed)) return 'warn';
   }
+
+  // Text-based matching for non-JSON lines
+  if (/\b(ERROR|FATAL)\b/.test(trimmed)) return 'error';
+  if (/\bWARN\b/.test(trimmed)) return 'warn';
   return null;
 }
 
 /**
  * Capture full container logs, save to test-results/, and report summary.
- * Returns true if the log capture overhead exceeds the failure threshold.
+ * Best-effort — failures are logged but don't affect the exit code.
  */
 function captureFullLogSummary() {
   console.log('\n=== Full E2E Log Summary ===');
@@ -193,8 +200,6 @@ function captureFullLogSummary() {
   } else {
     console.log('\n✅ Container log clean: 0 errors');
   }
-
-  return false;
 }
 
 async function main() {
@@ -271,10 +276,9 @@ async function main() {
   // ── Step 6: Collect trace artifacts ──────────────────────────────────
   run('Collecting trace output', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector cat /data/traces.json > test-results/otel-traces-raw.json`, { allowFailure: true });
 
-  // ── Step 7: Full E2E log summary ─────────────────────────────────────
-  let logSummaryFailed = false;
+  // ── Step 7: Full E2E log summary (best-effort) ──────────────────────
   try {
-    logSummaryFailed = captureFullLogSummary();
+    captureFullLogSummary();
   } catch (err) {
     console.warn(`\n⚠️  Log summary failed: ${err.message}`);
   }
@@ -283,8 +287,8 @@ async function main() {
   tornDown = true;
   teardown();
 
-  // Fail if E2E tests, trace verification, or log summary failed
-  const exitCode = testExitCode || traceExitCode || (logSummaryFailed ? 1 : 0);
+  // Fail if E2E tests or trace verification failed (log summary is best-effort)
+  const exitCode = testExitCode || traceExitCode;
   process.exit(exitCode);
 }
 

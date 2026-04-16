@@ -4,7 +4,7 @@
  *
  * Usage: import { test, expect } from './fixtures/docker-logs.mjs';
  *
- * Only activates when BASE_URL is set (container/external mode).
+ * Only activates when CONTAINER_LOGS=true is set (MSSQL docker mode).
  * Captures docker compose logs generated during each test and attaches
  * them to the Playwright HTML report. Flags ERROR/FATAL pino entries.
  */

@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Container log format assertions.
- * Only runs when BASE_URL is set (i.e., against Docker containers).
+ * Only runs when CONTAINER_LOGS=true is set (i.e., against Docker containers).
  * Verifies server logs are structured JSON with expected pino fields.
  */
 import { test, expect } from './fixtures/docker-logs.mjs';
