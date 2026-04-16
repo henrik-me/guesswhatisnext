@@ -3,6 +3,7 @@
 // Cross-platform (Windows + Unix). Used by `npm run test:e2e:mssql`.
 
 const { execSync, spawnSync } = require('child_process');
+const fs = require('fs');
 const https = require('https');
 const path = require('path');
 
@@ -36,7 +37,8 @@ function run(label, cmd, opts = {}) {
 function teardown() {
   console.log('\n=== Tearing down MSSQL stack ===');
   try {
-    execSync(`docker compose -f ${COMPOSE_FILE} down`, {
+    // -v removes named volumes (otel-data) to avoid stale trace data on next run
+    execSync(`docker compose -f ${COMPOSE_FILE} down -v`, {
       cwd: ROOT,
       stdio: 'inherit',
     });
@@ -143,6 +145,9 @@ async function main() {
     process.exit(1);
   }
 
+  // ── Step 3b: Clear stale OTel traces ─────────────────────────────────
+  run('Clearing stale traces', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector sh -c "rm -f /data/traces.json"`, { allowFailure: true });
+
   // ── Step 4: Run Playwright tests ─────────────────────────────────────
   console.log('\n=== Running Playwright E2E tests ===');
   console.log(`> BASE_URL=${BASE_URL} npx playwright test\n`);
@@ -166,11 +171,33 @@ async function main() {
     console.error(`\n✗ E2E tests failed (exit ${testExitCode})`);
   }
 
-  // ── Step 5: Teardown ─────────────────────────────────────────────────
+  // ── Step 5: OTel trace verification ──────────────────────────────────
+  const artifactsDir = path.join(ROOT, 'test-results');
+  fs.mkdirSync(artifactsDir, { recursive: true });
+
+  let traceExitCode = 0;
+  try {
+    const { verify } = require('./verify-traces');
+    const tracePassed = verify();
+    if (!tracePassed) {
+      console.error('✗ OTel trace verification failed');
+      traceExitCode = 1;
+    }
+  } catch (err) {
+    console.error('✗ OTel trace verification error:', err.message);
+    traceExitCode = 1;
+  }
+
+  // ── Step 6: Collect trace artifacts ──────────────────────────────────
+  run('Collecting trace output', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector cat /data/traces.json > test-results/otel-traces-raw.json`, { allowFailure: true });
+
+  // ── Step 7: Teardown ─────────────────────────────────────────────────
   tornDown = true;
   teardown();
 
-  process.exit(testExitCode);
+  // Fail if either E2E tests or trace verification failed
+  const exitCode = testExitCode || traceExitCode;
+  process.exit(exitCode);
 }
 
 main();
