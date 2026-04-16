@@ -32,6 +32,12 @@ test.skip(!isEnabled, 'Cold start tests require BASE_URL and GWN_COLDSTART_TEST=
 test.describe.configure({ mode: 'serial', retries: 0, timeout: 120000 });
 
 test.describe('Cold Start — Real Server Delays', () => {
+  // NOTE: The app fires /api/features on page load. The delay middleware treats
+  // requests within a 2s window as the same "navigation burst" (same pattern step).
+  // Since Playwright clicks the leaderboard button within milliseconds of page load,
+  // both /api/features and /api/scores/leaderboard share the same step. Between tests,
+  // the >2s gap from context teardown/creation advances the pattern to the next step.
+
   // Test 1 — Pattern step 0 (45s delay): progressive message + retry button
   test('progressive message and retry on first navigation (45s delay)', async ({ browser }) => {
     const context = await browser.newContext({ serviceWorkers: 'block' });
