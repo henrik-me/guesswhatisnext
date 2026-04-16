@@ -23,15 +23,15 @@ describeOrSkip('HTTPS & Security Headers', () => {
 
   /** Create a request context that accepts self-signed certs. */
   async function httpsContext(playwright, opts = {}) {
-    return playwright.request.newContext({ ignoreHTTPSErrors: true, ...opts });
+    return playwright.request.newContext({ ...opts, ignoreHTTPSErrors: true });
   }
 
   test.describe('CS25-2a: Caddy HTTP→HTTPS redirect', () => {
     test('redirects HTTP to HTTPS with 308 or 301', async ({ playwright }) => {
-      const context = await httpsContext(playwright, { maxRedirects: 0 });
+      const context = await httpsContext(playwright);
 
       try {
-        const response = await context.get(httpUrl);
+        const response = await context.get(httpUrl, { maxRedirects: 0 });
         const status = response.status();
 
         expect([301, 308]).toContain(status);
@@ -39,7 +39,9 @@ describeOrSkip('HTTPS & Security Headers', () => {
         const location = response.headers()['location'];
         expect(location).toBeTruthy();
         // Caddy should redirect to the HTTPS version on localhost
-        expect(location).toMatch(/^https:\/\/localhost/);
+        const redirectUrl = new URL(location);
+        expect(redirectUrl.protocol).toBe('https:');
+        expect(redirectUrl.hostname).toBe('localhost');
       } finally {
         await context.dispose();
       }
