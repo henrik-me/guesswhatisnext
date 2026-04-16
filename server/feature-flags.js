@@ -35,6 +35,16 @@ function parseOverrideValue(value) {
 const OVERRIDE_ALLOWED = (config.NODE_ENV !== 'production' && config.NODE_ENV !== 'staging')
   || config.FEATURE_FLAG_ALLOW_OVERRIDE === 'true';
 
+if (OVERRIDE_ALLOWED && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
+  // console.warn used here — logger may not be initialized yet during module load
+  console.warn(
+    '⚠️  FEATURE_FLAG_ALLOW_OVERRIDE is enabled in %s mode.\n' +
+    '   Clients can toggle feature flags via query params (?ff_*=true/false).\n' +
+    '   This should only be used for local Docker E2E testing, never in real production.',
+    config.NODE_ENV
+  );
+}
+
 const FEATURE_FLAGS = Object.freeze({
   submitPuzzle: Object.freeze({
     key: 'submitPuzzle',

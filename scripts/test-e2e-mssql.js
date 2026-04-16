@@ -45,6 +45,18 @@ function teardown() {
   }
 }
 
+// Ensure teardown runs on interrupt/termination
+let tornDown = false;
+function safeTeardown(signal) {
+  if (tornDown) return;
+  tornDown = true;
+  console.log(`\nReceived ${signal} — cleaning up...`);
+  teardown();
+  process.exit(1);
+}
+process.on('SIGINT', () => safeTeardown('SIGINT'));
+process.on('SIGTERM', () => safeTeardown('SIGTERM'));
+
 /**
  * Wait for /api/health to report database.status=ok.
  * Pure Node.js — no Bash/curl dependency.
@@ -155,6 +167,7 @@ async function main() {
   }
 
   // ── Step 5: Teardown ─────────────────────────────────────────────────
+  tornDown = true;
   teardown();
 
   process.exit(testExitCode);
