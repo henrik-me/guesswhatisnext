@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
-const isContainerMode = !!process.env.CONTAINER_LOGS;
+const isContainerMode = process.env.CONTAINER_LOGS === 'true';
 
 /** File path for persisting cumulative log capture time across workers. */
 const OVERHEAD_FILE = path.join('test-results', '.log-capture-overhead-ms');
@@ -25,6 +25,11 @@ let cumulativeLogCaptureMs = 0;
 /**
  * Persist cumulative log capture time to a file so the global teardown
  * (which runs in a separate process) can read it.
+ */
+/**
+ * Persist cumulative log capture time to a file so the global teardown
+ * (which runs in a separate process) can read it.
+ * Returns true on success, false on failure.
  */
 function persistOverhead() {
   try {
@@ -37,8 +42,9 @@ function persistOverhead() {
       // File doesn't exist yet
     }
     fs.writeFileSync(OVERHEAD_FILE, String(existing + cumulativeLogCaptureMs), 'utf8');
+    return true;
   } catch {
-    // Best-effort
+    return false;
   }
 }
 
@@ -107,9 +113,10 @@ export const test = base.extend({
     cumulativeLogCaptureMs += captureElapsed;
 
     // Persist overhead to file for global teardown
-    persistOverhead();
-    // Reset in-process counter after persisting to avoid double-counting
-    cumulativeLogCaptureMs = 0;
+    // Only reset counter if persist succeeds to avoid losing accumulated time
+    if (persistOverhead()) {
+      cumulativeLogCaptureMs = 0;
+    }
 
     // Surface log capture failures as annotations
     if (captureError) {
@@ -143,8 +150,8 @@ export const test = base.extend({
         description: 'Server emitted ERROR/FATAL during this test',
       });
 
-      // Optionally fail the test if FAIL_ON_SERVER_ERROR=true
-      if (process.env.FAIL_ON_SERVER_ERROR === 'true') {
+      // Optionally fail the test if FAIL_ON_SERVER_ERROR=true and test hasn't already failed
+      if (process.env.FAIL_ON_SERVER_ERROR === 'true' && testInfo.status === 'passed') {
         throw new Error(
           `Server emitted ${serverErrors.length} ERROR/FATAL log entries during this test:\n` +
           serverErrors.slice(0, 5).join('\n') +

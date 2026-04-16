@@ -157,11 +157,11 @@ function captureFullLogSummary() {
   try {
     logs = execSync(
       `docker compose -f ${COMPOSE_FILE} logs app --no-log-prefix`,
-      { encoding: 'utf8', timeout: 30000 }
+      { encoding: 'utf8', timeout: 30000, cwd: ROOT }
     );
   } catch (err) {
     console.warn(`Failed to capture container logs: ${err.message}`);
-    return false;
+    return;
   }
 
   // Save to test-results/container-server.log

@@ -8,7 +8,7 @@ import { test, expect } from './fixtures/docker-logs.mjs';
 import { execSync } from 'child_process';
 
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
-const isContainerMode = !!process.env.CONTAINER_LOGS;
+const isContainerMode = process.env.CONTAINER_LOGS === 'true';
 
 // Skip the entire file when not running in container mode
 test.skip(!isContainerMode, 'Container log format tests require CONTAINER_LOGS=true (MSSQL docker mode)');
