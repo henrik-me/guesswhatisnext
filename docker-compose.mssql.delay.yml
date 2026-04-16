@@ -1,0 +1,35 @@
+# Cold Start Delay Overlay for MSSQL Docker Stack
+#
+# This overlay enables the delay middleware for cold start UX testing.
+# The main docker-compose.mssql.yml uses NODE_ENV=production, which disables
+# the delay middleware. This overlay switches to NODE_ENV=development so
+# the GWN_DB_DELAY_PATTERN env var is honored by server/middleware/delay.js.
+#
+# Usage:
+#   Start cold start mode:
+#     npm run dev:mssql:coldstart
+#
+#   Customize delay pattern:
+#     GWN_DB_DELAY_PATTERN=45000,30000,0,0 npm run dev:mssql:coldstart
+#     Note: each delay step is capped at 45000ms by server/middleware/delay.js.
+#
+#   Stop (same teardown as normal MSSQL stack):
+#     npm run dev:mssql:down
+#
+#   Run cold start E2E tests:
+#     GWN_COLDSTART_TEST=true BASE_URL=https://localhost npx playwright test tests/e2e/coldstart-real.spec.mjs
+#
+# Default pattern: 45s (first nav), 16s (second), then instant (×4).
+# This simulates a real DB cold start → warm-up → cached sequence.
+# The second step (16s) is set slightly above the 15s ProgressiveLoader
+# timeout to reliably exercise the retry button in E2E tests.
+
+services:
+  app:
+    environment:
+      NODE_ENV: development
+      GWN_DB_DELAY_PATTERN: "${GWN_DB_DELAY_PATTERN:-45000,16000,0,0,0,0}"
+      GWN_DB_DELAY_MS: "${GWN_DB_DELAY_MS:-}"
+      FEATURE_FLAG_ALLOW_OVERRIDE: "true"
+      JWT_SECRET: "gwn-docker-mssql-validation"
+      SYSTEM_API_KEY: "test-system-api-key"
