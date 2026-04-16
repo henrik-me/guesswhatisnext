@@ -3,5 +3,10 @@
 # Accept the browser warning once, then HTTPS works seamlessly.
 
 localhost {
-	reverse_proxy app:3000
+	reverse_proxy app:3000 {
+		# Trust Docker network clients so X-Forwarded-For headers from
+		# Playwright tests are preserved (appended to, not overwritten).
+		# This allows per-test rate-limit isolation via unique IPs.
+		trusted_proxies private_ranges
+	}
 }

@@ -25,6 +25,12 @@ const config = {
   APPLICATIONINSIGHTS_CONNECTION_STRING: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING || '',
   FEATURE_SUBMIT_PUZZLE_PERCENTAGE: process.env.FEATURE_SUBMIT_PUZZLE_PERCENTAGE || '0',
   FEATURE_SUBMIT_PUZZLE_USERS: process.env.FEATURE_SUBMIT_PUZZLE_USERS || '',
+  FEATURE_FLAG_ALLOW_OVERRIDE: process.env.FEATURE_FLAG_ALLOW_OVERRIDE || '',
+  TRUST_PROXY: (() => {
+    const trustProxy = parseInt(process.env.TRUST_PROXY, 10);
+    if (Number.isNaN(trustProxy)) return 1;
+    return Math.max(0, trustProxy);
+  })(),
   LOG_LEVEL: (() => {
     const VALID_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'];
     const raw = (process.env.LOG_LEVEL || '').trim().toLowerCase();
