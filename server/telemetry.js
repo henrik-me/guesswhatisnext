@@ -29,7 +29,8 @@ function buildInstrumentations(getNodeAutoInstrumentations) {
 
 function createTelemetryBootstrap(options = {}) {
   const connectionString = getConnectionString(options.connectionString);
-  const otlpEndpoint = options.otlpEndpoint ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  const rawEndpoint = options.otlpEndpoint ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  const otlpEndpoint = rawEndpoint ? rawEndpoint.trim().replace(/\/+$/, '') : undefined;
 
   if (!connectionString && !otlpEndpoint) {
     return { enabled: false };

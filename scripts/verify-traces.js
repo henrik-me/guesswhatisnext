@@ -43,7 +43,8 @@ function extractSpans(traceObjects) {
       const resource = rs.resource || {};
       const resourceAttrs = {};
       for (const attr of (resource.attributes || [])) {
-        resourceAttrs[attr.key] = attr.value?.stringValue || attr.value?.intValue || attr.value;
+        const val = attr.value;
+        resourceAttrs[attr.key] = val?.stringValue ?? val?.intValue ?? val?.boolValue ?? val?.doubleValue ?? val;
       }
 
       const scopeSpans = rs.scopeSpans || [];
@@ -51,7 +52,8 @@ function extractSpans(traceObjects) {
         for (const span of (ss.spans || [])) {
           const spanAttrs = {};
           for (const attr of (span.attributes || [])) {
-            spanAttrs[attr.key] = attr.value?.stringValue || attr.value?.intValue || attr.value;
+            const val = attr.value;
+            spanAttrs[attr.key] = val?.stringValue ?? val?.intValue ?? val?.boolValue ?? val?.doubleValue ?? val;
           }
           spans.push({
             traceId: span.traceId,
