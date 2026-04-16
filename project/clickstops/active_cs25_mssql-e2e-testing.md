@@ -18,7 +18,7 @@
 | CS25-0b | Add HOST_PORT support | ⬜ Pending | Port parameterization for multi-agent isolation. |
 | CS25-0c | Add DB readiness wait | ⬜ Pending | Wait for `/api/health` with `database.status=ok`, not just `/healthz`. |
 | CS25-0d | Add convenience npm scripts | ⬜ Pending | `dev:mssql`, `dev:mssql:down`, `test:e2e:mssql`. |
-| CS25-0e | Pin & mirror MSSQL image to GHCR | ⬜ Pending | Pin to specific CU tag (e.g., `2022-CU16-ubuntu-22.04`) instead of `:2022-latest`. Push pinned image to `ghcr.io/henrik-me/mssql-server:<tag>` for fast CI pulls and Docker Hub rate-limit avoidance. Also mirror OTLP collector image. Document version update process. |
+| CS25-0e | Pin MSSQL image version | ⬜ Pending | Pin to specific CU tag (e.g., `2022-CU17-ubuntu-22.04`) instead of `:2022-latest`. Document version update process. GHCR mirror push is in Phase 6 (CS25-6b). |
 | CS25-0f | Verify Docker Compose v2 requirement | ⬜ Pending | Compose file uses `services:` without `version:` key (Compose v2+ format). Add version check to npm scripts (`docker compose version`), document minimum requirement in INSTRUCTIONS.md. |
 
 ### Phase 1: Run Existing E2E Suite Against MSSQL (🖥️ Local)
@@ -71,8 +71,9 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-6a | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Update `staging-deploy.yml`: add MSSQL (from GHCR mirror) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. Only after all local phases (0-5) are proven. |
-| CS25-6b | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage (CS25-6a). May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
+| CS25-6a | Push MSSQL + OTLP images to GHCR | ⬜ Pending | One-time push of pinned MSSQL image to `ghcr.io/henrik-me/mssql-server:<tag>` and OTLP collector image. Avoids 1.5GB Docker Hub pull + rate limits on every staging deploy. Document the update process for version bumps. |
+| CS25-6b | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Update `staging-deploy.yml`: add MSSQL (from GHCR mirror) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. Only after all local phases (0-5) are proven. |
+| CS25-6c | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage (CS25-6b). May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
 
 ### Phase 7: Documentation (📝 Docs)
 
@@ -96,7 +97,7 @@
 - **OTLP exporter fallback:** `server/telemetry.js` gains a ~10 line conditional: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set and `APPLICATIONINSIGHTS_CONNECTION_STRING` is absent, use `@opentelemetry/exporter-trace-otlp-http`. Production path (Azure Monitor) is unaffected.
 - **No secure-cookie tests:** Auth uses localStorage + Authorization headers, not cookies.
 - **Cold start toggle:** Compose profiles, not hot-reload. Stop and restart with different profile.
-- **CI model:** Staging deploy runs MSSQL + OTLP as service containers on every deploy (CS25-6a), using GHCR-mirrored images (CS25-0e). This is the primary CI validation path. Separate MSSQL E2E workflow is optional for deeper testing (cold start, Caddy HTTPS). PR CI skips MSSQL/OTel (unit tests sufficient).
+- **CI model:** Staging deploy runs MSSQL + OTLP as service containers on every deploy (CS25-6b), using GHCR-mirrored images (CS25-6a). This is the primary CI validation path. Separate MSSQL E2E workflow is optional for deeper testing (cold start, Caddy HTTPS). PR CI skips MSSQL/OTel (unit tests sufficient).
 - **Version pinning:** MSSQL image pinned to specific CU tag (not `:latest`). OTel packages pinned to compatible versions and updated together. Docker Compose v2 minimum requirement verified in scripts.
 - **Log capture monitoring:** Total per-test log capture overhead measured and reported. Warn at >60s, alert/fail at >120s to catch regressions early.
 
