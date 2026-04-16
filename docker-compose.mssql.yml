@@ -29,6 +29,9 @@ services:
       # so E2E tests can control flags per-test, matching SQLite E2E behavior.
       # Temporary workaround — CS40 tracks the proper solution.
       FEATURE_FLAG_ALLOW_OVERRIDE: "true"
+      # Trust 2 proxy hops: browser→Caddy (sets XFF) → Express (socket).
+      # Default is 1 (Azure has a single proxy). Docker Caddy adds one more.
+      TRUST_PROXY: "2"
       DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=${MSSQL_SA_PASSWORD:-GwnTest1!};Encrypt=false;TrustServerCertificate=true"
       PORT: "3000"
     volumes:

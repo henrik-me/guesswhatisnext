@@ -82,7 +82,7 @@ function createServer() {
   const app = express();
   const server = http.createServer(app);
 
-  app.set('trust proxy', 1);
+  app.set('trust proxy', config.TRUST_PROXY);
 
   // DB state tracking for orchestrated deploys
   let dbInitialized = false;
