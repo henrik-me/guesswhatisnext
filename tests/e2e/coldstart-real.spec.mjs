@@ -28,9 +28,8 @@ const isEnabled = process.env.BASE_URL && process.env.GWN_COLDSTART_TEST === 'tr
 // Skip the entire file when not in cold start mode
 test.skip(!isEnabled, 'Cold start tests require BASE_URL and GWN_COLDSTART_TEST=true');
 
-// These tests are inherently slow and rely on shared server-side delay state,
-// so enforce serial execution with generous timeouts for real server delays.
-test.describe.configure({ mode: 'serial', timeout: 120000 });
+// Retries must be disabled because any retry would consume the wrong delay-pattern step.
+test.describe.configure({ mode: 'serial', retries: 0, timeout: 120000 });
 
 test.describe('Cold Start — Real Server Delays', () => {
   // Test 1 — Pattern step 0 (45s delay): progressive message + retry button
