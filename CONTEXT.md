@@ -39,7 +39,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs22_answer-randomization.md) |
 | CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs24_custom-domain.md) |
-| CS25 | MSSQL E2E Testing | ⬜ Planned | 0/4 | [details](project/clickstops/planned_cs25_mssql-e2e-testing.md) |
+| CS25 | MSSQL E2E Testing | 🔄 Active | 27/34 | [details](project/clickstops/active_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done/done_cs26_public-repo-transition.md) |
 | CS27 | Feature Flag Gating | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs27_feature-flag-gating.md) |
 | CS28 | Staging Deployment & Validation | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs28_staging-deployment.md) |
@@ -140,7 +140,7 @@ Fix bias where 75% of puzzles have correct answer as first option. Add Fisher-Ya
 
 ## Clickstop CS25 — MSSQL E2E Testing
 
-E2E browser tests against Docker MSSQL stack. Deferred from CS19-4. See [full details](project/clickstops/planned_cs25_mssql-e2e-testing.md).
+MSSQL Docker stack stabilized (Phase 0), full E2E suite validated against MSSQL (Phase 1), HTTPS/security header tests added (Phase 2), per-test server log capture with error flagging (Phase 3), OTel trace verification with OTLP collector (Phase 4), cold start UX testing with real server delays (Phase 5). Phases 0-5 complete in PRs #183-#188. Phase 6 (CI integration / GHCR push) and Phase 7 (documentation) remain. See [full details](project/clickstops/active_cs25_mssql-e2e-testing.md).
 
 ---
 
@@ -187,38 +187,44 @@ Note: `ci-cd.yml` has been removed from the tree.
 
 ### Test Inventory
 
-**Vitest (28 suites, 343 tests):**
+**Vitest (31 suites, 397 tests):**
 
 | Suite | Tests | Suite | Tests |
 |---|---|---|---|
 | achievements | 4 | mssql-adapter | 60 |
 | admin-endpoints | 10 | notifications | 14 |
 | auth | 11 | nplayer | 4 |
-| community-gallery | 14 | opentelemetry | 7 |
+| community-gallery | 14 | opentelemetry | 9 |
+| delay-middleware | 21 | progressive-loader | 21 |
 | e2e-multiplayer | 10 | promotion-and-roles | 14 |
 | e2e-singleplayer | 4 | puzzles | 6 |
 | error-handler | 9 | reconnection | 4 |
 | feature-flags | 5 | rematch | 4 |
-| features | 4 | scores | 10 |
+| features | 4 | scores | 12 |
 | health | 3 | security | 8 |
-| log-format | 4 | spectator | 10 |
-| logger | 21 | sqlite-adapter | 24 |
-| matches | 9 | submissions | 51 |
+| log-format | 4 | shuffle | 8 |
+| logger | 21 | spectator | 10 |
+| matches | 9 | sqlite-adapter | 24 |
+| | | submissions | 51 |
 | | | telemetry | 14 |
 | | | wal-cleanup | 5 |
 
-**Playwright E2E (9 specs, 46 tests):**
+**Playwright E2E (13 specs, 79 tests):**
 
 | Spec | Tests |
 |---|---|
-| auth | 5 |
-| community | 13 |
+| auth | 17 |
+| coldstart-real | 3 |
+| community | 15 |
+| container-logs | 2 |
 | daily | 2 |
 | freeplay | 2 |
+| https-security | 6 |
 | keyboard | 2 |
-| leaderboard | 1 |
+| leaderboard | 3 |
 | moderation | 2 |
-| my-submissions | 10 |
+| my-submissions | 11 |
+| progressive-loading | 5 |
 | telemetry | 9 |
 
 ### Server Architecture
@@ -303,8 +309,18 @@ public/
 |---|---|
 | `scripts/dev-server.js` | Unified dev server with HTTPS + log capture |
 | `scripts/dev-https.js` | HTTPS monkey-patch for local dev |
+| `scripts/check-compose-v2.js` | Docker Compose v2 version check (used by `dev:mssql` scripts) |
+| `scripts/test-e2e-mssql.js` | MSSQL E2E test runner (health wait, Playwright, teardown) |
 | `scripts/health-check.ps1` | Windows health check script |
 | `scripts/health-check.sh` | Unix health check script |
+
+### Docker Compose Files
+
+| File | Purpose |
+|---|---|
+| `docker-compose.yml` | Local container dev (SQLite, default) |
+| `docker-compose.mssql.yml` | MSSQL stack: SQL Server 2022 + Caddy HTTPS + OTLP collector |
+| `docker-compose.mssql.delay.yml` | Cold start overlay: enables delay middleware for cold start UX testing |
 
 ### GitHub Configuration
 
