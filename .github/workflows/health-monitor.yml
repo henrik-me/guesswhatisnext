@@ -22,7 +22,6 @@ jobs:
   azure-check:
     name: Azure Infrastructure Check
     runs-on: ubuntu-latest
-    environment: production
     outputs:
       app-exists: ${{ steps.check.outputs['app-exists'] }}
       provisioning-state: ${{ steps.check.outputs['provisioning-state'] }}
