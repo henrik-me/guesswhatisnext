@@ -61,6 +61,9 @@ jobs:
     services:
       mssql:
         image: ghcr.io/henrik-me/mssql-server:2022-CU17-ubuntu-22.04
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         env:
           ACCEPT_EULA: "Y"
           MSSQL_SA_PASSWORD: ${{ env.MSSQL_SA_PASSWORD }}
@@ -73,8 +76,6 @@ jobs:
 
       otel-collector:
         image: otel/opentelemetry-collector:0.100.0
-        ports:
-          - 4318:4318
 
       app:
         image: ghcr.io/henrik-me/guesswhatisnext:${{ needs.build-and-push.outputs.image-tag }}
@@ -113,10 +114,30 @@ jobs:
           echo "Triggering app DB initialization via /api/admin/init-db..."
           # Drain first to cancel any background self-init retry that may
           # still be scheduled, preventing concurrent initializeDatabase() calls.
-          curl -sf --connect-timeout 5 --max-time 35 \
-            -X POST "http://localhost:3000/api/admin/drain" \
-            -H "X-API-Key: ephemeral-smoke-test-key" \
-            -H "X-Forwarded-Proto: https" || true
+          # Retry until the app is reachable and acknowledges the drain request.
+          for i in $(seq 1 10); do
+            set +e
+            DRAIN_HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 35 \
+              -X POST "http://localhost:3000/api/admin/drain" \
+              -H "X-API-Key: ephemeral-smoke-test-key" \
+              -H "X-Forwarded-Proto: https")
+            DRAIN_CURL_EXIT=$?
+            set -e
+            echo "Drain attempt $i: status=$DRAIN_HTTP_STATUS (curl exit=$DRAIN_CURL_EXIT)"
+            if [ "$DRAIN_HTTP_STATUS" = "200" ]; then
+              echo "Background self-init drained successfully."
+              break
+            fi
+            if [ "$DRAIN_CURL_EXIT" -ne 7 ]; then
+              echo "::error::Drain failed with non-connection error (curl exit=$DRAIN_CURL_EXIT, HTTP=$DRAIN_HTTP_STATUS)"
+              exit 1
+            fi
+            sleep 3
+          done
+          if [ "$DRAIN_HTTP_STATUS" != "200" ]; then
+            echo "::error::Failed to drain background self-init after 10 attempts"
+            exit 1
+          fi
           sleep 2
 
           # Now trigger fresh initialization against the newly created DB.
