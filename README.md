@@ -152,11 +152,17 @@ docker compose up --build
 
 **MSSQL (production-like validation):**
 
-Runs the full stack against SQL Server 2022 with HTTPS via Caddy reverse proxy — mirrors the production Azure SQL environment:
+Runs the full stack against SQL Server 2022 with HTTPS via Caddy reverse proxy, OTLP trace collector, and per-test log capture — mirrors the production Azure SQL environment:
 ```bash
-# Start MSSQL + app + HTTPS proxy
-npm run docker:mssql
+# Start MSSQL + app + HTTPS proxy + OTLP collector
+npm run dev:mssql
 # → https://localhost (accept self-signed cert warning once)
+
+# Run E2E tests against the MSSQL stack (waits for health, runs Playwright)
+npm run test:e2e:mssql
+
+# Enable cold start simulation (delay overlay)
+npm run dev:mssql:coldstart
 
 # View pretty-printed live logs
 npm run docker:mssql:logs
@@ -168,10 +174,20 @@ docker compose -f docker-compose.mssql.yml logs app --no-log-prefix | npx pino-p
 docker compose -f docker-compose.mssql.yml logs app --no-log-prefix > app-logs.json
 
 # Stop everything
-npm run docker:mssql:down
+npm run dev:mssql:down
 ```
 
+The MSSQL stack includes:
+- **SQL Server 2022** (CU17, pinned to specific image tag for reproducibility)
+- **Caddy HTTPS proxy** with auto-generated TLS certificates
+- **OTLP collector** (`otel/opentelemetry-collector:0.100.0`) for local trace verification
+- **Per-test log capture** — server logs attached to Playwright HTML report with ERROR/FATAL flagging
+
+> **Note:** First-time MSSQL image pull is ~1.5GB — allow several minutes on slow connections. Requires Docker Compose v2+ (verified automatically).
+
 The Docker MSSQL stack produces **production-identical structured JSON logs** (Pino) — every HTTP request, WebSocket event, migration, auth event, and error is captured with the same schema as production.
+
+**CI integration (planned):** Staging deploys will validate against MSSQL using images pulled directly from MCR (mcr.microsoft.com) as service containers — no GHCR mirror needed since MCR has no rate limits.
 
 ### Testing
 
@@ -213,7 +229,7 @@ git worktree list    # see which branch is in which slot
 
 Each worktree agent pushes its branch and creates a PR. The orchestrating agent merges approved PRs. See [INSTRUCTIONS.md](INSTRUCTIONS.md) for full workflow details.
 
-**Current workflow:** Push branch → create PR → Copilot review → squash-merge to main.
+**Current workflow:** Push branch → create PR → local review loop (GPT 5.4) → Copilot review (code/config PRs only; docs-only PRs skip) → squash-merge to main.
 
 ### Architecture
 
@@ -268,7 +284,8 @@ guesswhatisnext/
 ├── data/                           # SQLite database (local dev, git-ignored)
 ├── Dockerfile                      # Production container image
 ├── docker-compose.yml              # Local container dev (SQLite)
-├── docker-compose.mssql.yml        # MSSQL validation stack (SQL Server + HTTPS)
+├── docker-compose.mssql.yml        # MSSQL validation stack (SQL Server + HTTPS + OTLP)
+├── docker-compose.mssql.delay.yml  # Cold start overlay (delay middleware for MSSQL stack)
 ├── .github/workflows/              # CI, deploy, load-test, and health-monitor workflows
 ├── scripts/                        # Local health-check scripts (sh + ps1)
 ├── infra/                          # Azure deployment (deploy.sh + README)
@@ -354,7 +371,8 @@ guesswhatisnext/
 | Environment | Cost | Trigger | Approval | Rollback |
 |---|---|---|---|---|
 | Local (SQLite) | Free | `npm start` / `docker compose up` | None | N/A |
-| Local (MSSQL) | Free | `npm run docker:mssql` | None | N/A |
+| Local (MSSQL) | Free | `npm run dev:mssql` | None | N/A |
+| Local (MSSQL cold start) | Free | `npm run dev:mssql:coldstart` | None | N/A |
 | Ephemeral staging | $0 (GitHub Actions) | Manual `workflow_dispatch`, or `push` to `main` when `STAGING_AUTO_DEPLOY` is enabled | Automatic | N/A (ephemeral) |
 | Azure staging | $0 (scale-to-zero) | After ephemeral validation | Manual | Redeploy previous SHA tag |
 | Production | $0+ (pay-per-use, Azure SQL) | Manual trigger (staging must be green) | Manual | Auto-rollback to previous SHA tag |
@@ -416,11 +434,15 @@ Connect to `ws://localhost:3000/ws?token=JWT_TOKEN` for real-time multiplayer.
 | `npm run dev` | Start with auto-reload (--watch) |
 | `npm run dev:full` | HTTPS + log capture (recommended for testing) |
 | `npm run dev:log` | HTTP + log capture (plain HTTP with logging) |
+| `npm run dev:mssql` | Start MSSQL stack (SQL Server + app + HTTPS + OTLP) |
+| `npm run dev:mssql:coldstart` | MSSQL stack with cold start delay simulation |
+| `npm run dev:mssql:down` | Stop MSSQL Docker stack and remove containers |
 | `npm test` | Run unit + integration tests (vitest) |
 | `npm run test:e2e` | Run E2E browser tests (Playwright) |
+| `npm run test:e2e:mssql` | Run E2E tests against MSSQL stack (health wait + Playwright) |
 | `npm run test:mssql` | Run tests against local MSSQL container |
 | `npm run lint` | Run ESLint (0 warnings target) |
-| `npm run docker:mssql` | Start full MSSQL stack (SQL Server + app + HTTPS) |
+| `npm run docker:mssql` | Start full MSSQL stack (alias, prefer `dev:mssql`) |
 | `npm run docker:mssql:logs` | Pretty-printed live log tail from MSSQL stack |
 | `npm run docker:mssql:down` | Stop MSSQL Docker stack |
 
@@ -442,6 +464,23 @@ node scripts/dev-server.js --no-log-file
 ### Testing Cold Start UX
 
 The delay simulation middleware lets you test how the app handles Azure SQL cold starts locally.
+
+**Using the MSSQL cold start overlay (recommended):**
+```bash
+# Start MSSQL stack with delay middleware enabled
+npm run dev:mssql:coldstart
+
+# Default pattern: 45s → 16s → 0s ×4 → repeat
+# Custom pattern:
+GWN_DB_DELAY_PATTERN=45000,30000,0,0 npm run dev:mssql:coldstart
+
+# Tear down (same as normal MSSQL stack)
+npm run dev:mssql:down
+```
+
+The `dev:mssql:coldstart` script uses `docker-compose.mssql.delay.yml` as a compose overlay that switches to `NODE_ENV=development` (enabling the delay middleware) while keeping the full MSSQL + Caddy HTTPS + OTLP stack.
+
+**Using the SQLite stack with delays:**
 
 **Fixed delay (all API calls delayed equally):**
 ```bash
