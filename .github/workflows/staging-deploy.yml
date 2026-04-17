@@ -57,16 +57,15 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+      MSSQL_SA_PASSWORD: "GwnTest1!"
     services:
       mssql:
-        image: mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04
-        ports:
-          - 1433:1433
+        image: ghcr.io/henrik-me/mssql-server:2022-CU17-ubuntu-22.04
         env:
           ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: "GwnTest1!"
+          MSSQL_SA_PASSWORD: ${{ env.MSSQL_SA_PASSWORD }}
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'GwnTest1!' -C -Q 'SELECT 1'"
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${{ env.MSSQL_SA_PASSWORD }}' -C -Q 'SELECT 1'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -90,7 +89,7 @@ jobs:
           JWT_SECRET: ephemeral-smoke-test-secret
           SYSTEM_API_KEY: ephemeral-smoke-test-key
           CANONICAL_HOST: localhost:3000
-          DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=GwnTest1!;Encrypt=false;TrustServerCertificate=true"
+          DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=${{ env.MSSQL_SA_PASSWORD }};Encrypt=false;TrustServerCertificate=true"
           OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
           FEATURE_FLAG_ALLOW_OVERRIDE: "true"
           TRUST_PROXY: "2"
@@ -104,15 +103,8 @@ jobs:
       - name: Create MSSQL database
         run: |
           echo "Creating gwn database in MSSQL..."
-          # Service containers are accessible via localhost when ports are mapped.
-          # MSSQL health check already passed, so sqlcmd is available via docker exec.
-          MSSQL_CONTAINER=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04" -q)
-          if [ -z "$MSSQL_CONTAINER" ]; then
-            echo "::error::MSSQL container not found"
-            exit 1
-          fi
-          docker exec "$MSSQL_CONTAINER" /opt/mssql-tools18/bin/sqlcmd \
-            -S localhost -U sa -P 'GwnTest1!' -C \
+          docker exec ${{ job.services.mssql.id }} /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P '${{ env.MSSQL_SA_PASSWORD }}' -C \
             -Q "IF DB_ID('gwn') IS NULL CREATE DATABASE [gwn]"
           echo "Database gwn created (or already exists)."
 
@@ -128,15 +120,23 @@ jobs:
           sleep 2
 
           # Now trigger fresh initialization against the newly created DB.
+          # Only retry on connection failures (exit 7) to prevent concurrent init.
           for i in $(seq 1 10); do
-            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
+            set +e
+            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 180 \
               -X POST "http://localhost:3000/api/admin/init-db" \
               -H "X-API-Key: ephemeral-smoke-test-key" \
               -H "X-Forwarded-Proto: https")
-            echo "Init-db attempt $i: status=$HTTP_STATUS"
+            CURL_EXIT=$?
+            set -e
+            echo "Init-db attempt $i: status=$HTTP_STATUS (curl exit=$CURL_EXIT)"
             if [ "$HTTP_STATUS" = "200" ]; then
               echo "Database initialization triggered successfully."
               break
+            fi
+            if [ "$CURL_EXIT" -ne 7 ]; then
+              echo "::error::Init-db failed with non-connection error (curl exit=$CURL_EXIT, HTTP=$HTTP_STATUS)"
+              exit 1
             fi
             sleep 3
           done
