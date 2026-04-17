@@ -59,7 +59,10 @@ services:
     restart: unless-stopped
 
   otel-collector:
-    image: otel/opentelemetry-collector:0.100.0
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    # Run as root so the file exporter can write to the named volume.
+    # This is a local dev/test stack only — production uses Azure Monitor.
+    user: "0:0"
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./infra/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
