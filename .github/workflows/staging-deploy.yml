@@ -58,6 +58,23 @@ jobs:
     env:
       IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
     services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "GwnTest1!"
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'GwnTest1!' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 30s
+
+      otel-collector:
+        image: otel/opentelemetry-collector:0.100.0
+        ports:
+          - 4318:4318
+
       app:
         image: ghcr.io/henrik-me/guesswhatisnext:${{ needs.build-and-push.outputs.image-tag }}
         credentials:
@@ -71,17 +88,22 @@ jobs:
           JWT_SECRET: ephemeral-smoke-test-secret
           SYSTEM_API_KEY: ephemeral-smoke-test-key
           CANONICAL_HOST: localhost:3000
+          DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=GwnTest1!;Encrypt=false;TrustServerCertificate=true"
+          OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+          FEATURE_FLAG_ALLOW_OVERRIDE: "true"
+          TRUST_PROXY: "2"
         options: >-
           --health-cmd "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/api/health', {headers: {'X-API-Key': 'ephemeral-smoke-test-key', 'X-Forwarded-Proto': 'https'}}, (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1));\""
-          --health-interval 5s
+          --health-interval 10s
           --health-timeout 10s
-          --health-retries 10
-          --health-start-period 15s
+          --health-retries 12
+          --health-start-period 30s
     steps:
-      - name: Wait for database self-initialization
+      - name: Wait for MSSQL and app initialization
         run: |
-          echo "Waiting for database self-initialization..."
-          for i in $(seq 1 30); do
+          echo "Waiting for MSSQL + app database initialization..."
+          echo "MSSQL needs ~30-60s to start, then the app self-initializes the DB."
+          for i in $(seq 1 60); do
             DB_STATUS="unreachable"
             if RESPONSE=$(curl -sf --connect-timeout 5 --max-time 10 \
               -H "X-API-Key: ephemeral-smoke-test-key" \
@@ -89,14 +111,14 @@ jobs:
               "http://localhost:3000/api/health"); then
               DB_STATUS=$(printf '%s' "$RESPONSE" | jq -r '.checks.database.status' 2>/dev/null || echo "unreachable")
             fi
-            echo "Attempt $i: database status = $DB_STATUS"
+            echo "Attempt $i/60: database status = $DB_STATUS"
             if [ "$DB_STATUS" = "ok" ]; then
               echo "Database ready!"
               exit 0
             fi
-            sleep 2
+            sleep 3
           done
-          echo "::error::Database not ready after ~60 seconds"
+          echo "::error::Database not ready after ~180 seconds"
           exit 1
 
       - name: Health check
