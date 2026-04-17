@@ -119,10 +119,15 @@ jobs:
       - name: Trigger app database initialization
         run: |
           echo "Triggering app DB initialization via /api/admin/init-db..."
-          # The app uses NODE_ENV=staging with self-init retry loop.
-          # It may have already entered draining mode if it hit a 4060 error
-          # (DB not found) before we created the database. This endpoint
-          # restarts initialization regardless.
+          # Drain first to cancel any background self-init retry that may
+          # still be scheduled, preventing concurrent initializeDatabase() calls.
+          curl -sf --connect-timeout 5 --max-time 35 \
+            -X POST "http://localhost:3000/api/admin/drain" \
+            -H "X-API-Key: ephemeral-smoke-test-key" \
+            -H "X-Forwarded-Proto: https" || true
+          sleep 2
+
+          # Now trigger fresh initialization against the newly created DB.
           for i in $(seq 1 10); do
             HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
               -X POST "http://localhost:3000/api/admin/init-db" \
