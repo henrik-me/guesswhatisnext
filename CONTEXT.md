@@ -140,7 +140,7 @@ Fix bias where 75% of puzzles have correct answer as first option. Add Fisher-Ya
 
 ## Clickstop CS25 — MSSQL E2E Testing
 
-MSSQL Docker stack stabilized (Phase 0), full E2E suite validated against MSSQL (Phase 1), HTTPS/security header tests added (Phase 2), per-test server log capture with error flagging (Phase 3), OTel trace verification with OTLP collector (Phase 4), cold start UX testing with real server delays (Phase 5). Phases 0-5 complete in PRs #183-#188. Phase 6 (CI integration / GHCR push) and Phase 7 (documentation) remain. See [full details](project/clickstops/active_cs25_mssql-e2e-testing.md).
+MSSQL Docker stack stabilized (Phase 0), full E2E suite validated against MSSQL (Phase 1), HTTPS/security header tests added (Phase 2), per-test server log capture with error flagging (Phase 3), OTel trace verification with OTLP collector (Phase 4), cold start UX testing with real server delays (Phase 5). Phases 0-5 complete in PRs #183-#188. Phase 6 (CI integration — staging deploy with MCR images) and Phase 7 (documentation) remain. See [full details](project/clickstops/active_cs25_mssql-e2e-testing.md).
 
 ---
 

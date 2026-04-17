@@ -186,7 +186,7 @@ npm run dev:mssql:down
 **Notes:**
 - First-time MSSQL image pull is ~1.5GB — allow several minutes on slow connections.
 - The stack requires Docker Compose v2+ (verified automatically by `scripts/check-compose-v2.js`).
-- MSSQL image is pinned to `2022-CU17-ubuntu-22.04` for reproducibility (GHCR mirror planned for CI).
+- MSSQL image is pinned to `2022-CU17-ubuntu-22.04` for reproducibility. CI pulls directly from MCR (mcr.microsoft.com) — no GHCR mirror needed.
 - **OTel packages must be updated together.** The `@opentelemetry/exporter-trace-otlp-http` dependency is pinned to a version compatible with `@opentelemetry/sdk-node`. When updating any OTel package, verify compatibility across all OTel deps (see CS25-4c).
 
 ---

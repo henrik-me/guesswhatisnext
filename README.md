@@ -187,7 +187,7 @@ The MSSQL stack includes:
 
 The Docker MSSQL stack produces **production-identical structured JSON logs** (Pino) — every HTTP request, WebSocket event, migration, auth event, and error is captured with the same schema as production.
 
-**CI integration (planned):** Staging deploys will validate against MSSQL using GHCR-mirrored images as service containers. This eliminates the ~1.5GB Docker Hub pull on every CI run.
+**CI integration (planned):** Staging deploys will validate against MSSQL using images pulled directly from MCR (mcr.microsoft.com) as service containers — no GHCR mirror needed since MCR has no rate limits.
 
 ### Testing
 
