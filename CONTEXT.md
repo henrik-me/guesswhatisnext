@@ -54,6 +54,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS38 | DB Cold Start UX | ✅ Complete | 11/11 | [details](project/clickstops/done/done_cs38_db-cold-start-ux.md) |
 | CS39 | CI E2E Chromium Crashes | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs39_ci-e2e-chromium-crashes.md) |
 | CS40 | Feature Flag Testing Infrastructure | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs40_feature-flag-testing.md) |
+| CS41 | Production Deploy Validation | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs41_production-deploy-validation.md) |
 
 ---
 
