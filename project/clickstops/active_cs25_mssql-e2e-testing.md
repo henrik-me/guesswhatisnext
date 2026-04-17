@@ -10,62 +10,62 @@
 
 ## Tasks
 
-### Phase 0: Stabilize MSSQL Docker Stack (🖥️ Local)
+### Phase 0: Stabilize MSSQL Docker Stack (🖥️ Local) — PR [#183](https://github.com/henrik-me/guesswhatisnext/pull/183)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-0a | Fix SYSTEM_API_KEY mismatch | ⬜ Pending | Change `docker-compose.mssql.yml` to use `SYSTEM_API_KEY=test-system-api-key` matching Playwright config. Fixes 5 known container E2E failures. |
-| CS25-0b | Add HOST_PORT support | ⬜ Pending | Port parameterization for multi-agent isolation. |
-| CS25-0c | Add DB readiness wait | ⬜ Pending | Wait for `/api/health` with `database.status=ok`, not just `/healthz`. |
-| CS25-0d | Add convenience npm scripts | ⬜ Pending | `dev:mssql`, `dev:mssql:down`, `test:e2e:mssql`. |
-| CS25-0e | Pin MSSQL image version | ⬜ Pending | Pin to specific CU tag (e.g., `2022-CU17-ubuntu-22.04`) instead of `:2022-latest`. Document version update process. GHCR mirror push is in Phase 6 (CS25-6b). |
-| CS25-0f | Verify Docker Compose v2 requirement | ⬜ Pending | Compose file uses `services:` without `version:` key (Compose v2+ format). Add version check to npm scripts (`docker compose version`), document minimum requirement in INSTRUCTIONS.md. |
+| CS25-0a | Fix SYSTEM_API_KEY mismatch | ✅ Done | Changed `docker-compose.mssql.yml` to use `SYSTEM_API_KEY=test-system-api-key` matching Playwright config. |
+| CS25-0b | Add HOST_PORT support | ✅ Done | Port parameterization for multi-agent isolation. |
+| CS25-0c | Add DB readiness wait | ✅ Done | Wait for `/api/health` with `database.status=ok`, not just `/healthz`. |
+| CS25-0d | Add convenience npm scripts | ✅ Done | `dev:mssql`, `dev:mssql:down`, `test:e2e:mssql`. |
+| CS25-0e | Pin MSSQL image version | ✅ Done | Pinned to `2022-CU17-ubuntu-22.04`. GHCR mirror push is in Phase 6. |
+| CS25-0f | Verify Docker Compose v2 requirement | ✅ Done | Added `scripts/check-compose-v2.js` version check to npm scripts. |
 
-### Phase 1: Run Existing E2E Suite Against MSSQL (🖥️ Local)
-
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| CS25-1a | Create MSSQL Playwright config | ⬜ Pending | `BASE_URL=https://localhost` (Caddy), `SYSTEM_API_KEY=test-system-api-key`, `ignoreHTTPSErrors=true`. |
-| CS25-1b | Run full E2E suite against MSSQL | ⬜ Pending | Run all 68 tests, identify and fix MSSQL-specific failures. |
-| CS25-1c | Document MSSQL E2E results | ⬜ Pending | Record pass/fail and any MSSQL-specific fixes. |
-
-### Phase 2: HTTPS / Security Header E2E Tests (🖥️ Local)
+### Phase 1: Run Existing E2E Suite Against MSSQL (🖥️ Local) — PR [#184](https://github.com/henrik-me/guesswhatisnext/pull/184)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-2a | Caddy HTTP→HTTPS redirect test | ⬜ Pending | Hit `http://localhost:3001`, verify redirect to HTTPS. Tests proxy layer. |
-| CS25-2b | HSTS header test | ⬜ Pending | Verify `Strict-Transport-Security` header (Helmet). |
-| CS25-2c | CSP header test | ⬜ Pending | Verify `Content-Security-Policy` with expected directives. |
-| CS25-2d | Security headers test | ⬜ Pending | X-Content-Type-Options, X-Frame-Options, Referrer-Policy. |
+| CS25-1a | Create MSSQL Playwright config | ✅ Done | `BASE_URL=https://localhost`, `SYSTEM_API_KEY=test-system-api-key`, `ignoreHTTPSErrors=true`. |
+| CS25-1b | Run full E2E suite against MSSQL | ✅ Done | All existing tests pass against MSSQL + Caddy HTTPS stack. |
+| CS25-1c | Document MSSQL E2E results | ✅ Done | Results recorded in PR. |
 
-### Phase 3: Per-Test Server Log Capture (🖥️ Local)
-
-| ID | Task | Status | Notes |
-|----|------|--------|-------|
-| CS25-3a | Per-test log-capture fixture | ⬜ Pending | Playwright fixture: `docker compose logs --since <timestamp>` per test, attach to HTML report. |
-| CS25-3b | ERROR/FATAL flagging per test | ⬜ Pending | Parse pino level 50/60, annotate test on server errors. |
-| CS25-3c | Log format assertions | ⬜ Pending | Verify container logs are structured JSON with expected fields. |
-| CS25-3d | Full E2E log summary | ⬜ Pending | Post-run `docker compose logs app` to `test-results/` + aggregate classifier. |
-| CS25-3e | Log capture overhead monitoring | ⬜ Pending | Measure total log capture time across all tests. Warn in CI output if >60s, fail/alert if >120s. Include the measurement in test artifacts so regressions are visible. |
-
-### Phase 4: OTel Trace Verification (🖥️ Local)
+### Phase 2: HTTPS / Security Header E2E Tests (🖥️ Local) — PR [#185](https://github.com/henrik-me/guesswhatisnext/pull/185)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-4a | OTLP exporter fallback in telemetry.js | ⬜ Pending | ~10 line change: use `@opentelemetry/exporter-trace-otlp-http` when `OTEL_EXPORTER_OTLP_ENDPOINT` set and no Azure conn string. |
-| CS25-4b | Add OTLP collector to compose stack | ⬜ Pending | `otel/opentelemetry-collector` (~50MB) with file exporter on shared volume. |
-| CS25-4c | Add exporter-trace-otlp-http dependency | ⬜ Pending | Optional dep for local/CI trace verification. Pin to version compatible with existing `@opentelemetry/sdk-node@0.214.0`. Add note in INSTRUCTIONS.md that OTel packages must be updated together. |
-| CS25-4d | E2E trace assertions | ⬜ Pending | Verify spans exist, attributes correct, trace_ids correlate with logs. |
-| CS25-4e | Integrate OTel into test:e2e:mssql | ⬜ Pending | Start collector, run tests, assert traces, include in artifacts. |
+| CS25-2a | Caddy HTTP→HTTPS redirect test | ✅ Done | Verifies redirect from `http://localhost:3001` to HTTPS. |
+| CS25-2b | HSTS header test | ✅ Done | Verifies `Strict-Transport-Security` header (Helmet). |
+| CS25-2c | CSP header test | ✅ Done | Verifies `Content-Security-Policy` with expected directives. |
+| CS25-2d | Security headers test | ✅ Done | X-Content-Type-Options, X-Frame-Options, Referrer-Policy. |
 
-### Phase 5: Cold Start UX Testing with Real Delays (🖥️ Local)
+### Phase 3: Per-Test Server Log Capture (🖥️ Local) — PR [#188](https://github.com/henrik-me/guesswhatisnext/pull/188)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-5a | Create delay-enabled compose profile | ⬜ Pending | `NODE_ENV=development` profile with `GWN_DB_DELAY_*` passthrough. Delay middleware is disabled in production. |
-| CS25-5b | Add npm script for cold-start mode | ⬜ Pending | `dev:mssql:coldstart` with default delay pattern. |
-| CS25-5c | E2E tests with real server delays | ⬜ Pending | Progressive-loading tests against real delay middleware (not client-side mocks). |
-| CS25-5d | Toggle documentation | ⬜ Pending | Document cold start on/off via compose profiles. |
+| CS25-3a | Per-test log-capture fixture | ✅ Done | Playwright fixture captures `docker compose logs --since <timestamp>` per test, attaches to HTML report. |
+| CS25-3b | ERROR/FATAL flagging per test | ✅ Done | Parses pino level 50/60, annotates test on server errors. |
+| CS25-3c | Log format assertions | ✅ Done | Verifies container logs are structured JSON with expected fields. |
+| CS25-3d | Full E2E log summary | ✅ Done | Post-run `docker compose logs app` to `test-results/` + aggregate classifier. |
+| CS25-3e | Log capture overhead monitoring | ✅ Done | Measures total log capture time across all tests. Warns in CI output if >60s, fails/alerts if >120s. |
+
+### Phase 4: OTel Trace Verification (🖥️ Local) — PR [#186](https://github.com/henrik-me/guesswhatisnext/pull/186)
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| CS25-4a | OTLP exporter fallback in telemetry.js | ✅ Done | ~10 line change: uses `@opentelemetry/exporter-trace-otlp-http` when `OTEL_EXPORTER_OTLP_ENDPOINT` set and no Azure conn string. |
+| CS25-4b | Add OTLP collector to compose stack | ✅ Done | `otel/opentelemetry-collector:0.100.0` with file exporter on shared volume. |
+| CS25-4c | Add exporter-trace-otlp-http dependency | ✅ Done | Pinned to version compatible with existing `@opentelemetry/sdk-node@0.214.0`. OTel packages must be updated together. |
+| CS25-4d | E2E trace assertions | ✅ Done | Verifies spans exist, attributes correct, trace_ids correlate with logs. |
+| CS25-4e | Integrate OTel into test:e2e:mssql | ✅ Done | Collector starts with compose, tests assert traces, results included in artifacts. |
+
+### Phase 5: Cold Start UX Testing with Real Delays (🖥️ Local) — PR [#187](https://github.com/henrik-me/guesswhatisnext/pull/187)
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| CS25-5a | Create delay-enabled compose profile | ✅ Done | `docker-compose.mssql.delay.yml` overlay with `NODE_ENV=development` for delay middleware passthrough. |
+| CS25-5b | Add npm script for cold-start mode | ✅ Done | `dev:mssql:coldstart` with default 45s/16s/0/0/0/0 delay pattern. |
+| CS25-5c | E2E tests with real server delays | ✅ Done | Progressive-loading tests against real delay middleware (not client-side mocks). |
+| CS25-5d | Toggle documentation | ✅ Done | Documented cold start on/off via compose overlay in `docker-compose.mssql.delay.yml`. |
 
 ### Phase 6: CI Integration (☁️ GitHub)
 
