@@ -1,6 +1,6 @@
 # CS25 — MSSQL E2E Testing (Expanded Scope)
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Complete
 **Goal:** MSSQL as a supported local dev container with HTTPS, logging, telemetry (including OTel trace verification), cold-start simulation, and per-test server log correlation. Run the full E2E suite against the MSSQL + Caddy HTTPS stack and add coverage for HTTPS behavior, structured logging, OTel traces, and cold-start UX with real server delays.
 
 **Deferred from:** [CS19 — Community Puzzle Navigation & Testing](done/done_cs19_community-puzzle-navigation.md) (task CS19-4)
@@ -71,9 +71,9 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-6a | Push MSSQL image to GHCR | ✅ Done | Pushed `ghcr.io/henrik-me/mssql-server:2022-CU17-ubuntu-22.04`. CI pulls from GHCR for speed. |
-| CS25-6b | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Update `staging-deploy.yml`: add MSSQL (from MCR) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. |
-| CS25-6c | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage (CS25-6b). May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
+| CS25-6a | Push MSSQL image to GHCR | ✅ Done | Pushed `ghcr.io/henrik-me/mssql-server:2022-CU17-ubuntu-22.04`. Made public for CI access. |
+| CS25-6b | Add MSSQL + OTLP to staging deploy | ✅ Done | PR [#190](https://github.com/henrik-me/guesswhatisnext/pull/190), fix [#192](https://github.com/henrik-me/guesswhatisnext/pull/192). MSSQL + OTLP as service containers. 68 tests pass against MSSQL in staging. |
+| CS25-6c | Evaluate separate MSSQL E2E workflow | ✅ Done | Not needed — staging deploy validates MSSQL + OTLP on every deploy. Cold-start testing (11 skipped tests) is local-only by design. |
 
 ### Phase 7: Documentation (📝 Docs) — PR [#189](https://github.com/henrik-me/guesswhatisnext/pull/189)
 
