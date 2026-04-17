@@ -165,6 +165,30 @@ $env:GWN_DB_DELAY_PATTERN = "45000,15000,0,0,0,0"  # cycling: cold → warm → 
 $env:GWN_DB_DELAY_MS = "20000"               # fixed 20s delay
 ```
 
+### MSSQL Local Development
+
+Run the full stack (SQL Server 2022 + app + Caddy HTTPS proxy + OTLP collector) for production-like local validation:
+
+```powershell
+# Start the MSSQL stack (first run pulls ~1.5GB MSSQL image)
+npm run dev:mssql
+
+# Run E2E tests against the MSSQL stack
+npm run test:e2e:mssql
+
+# Enable cold start simulation (delay overlay)
+npm run dev:mssql:coldstart
+
+# Tear down all containers
+npm run dev:mssql:down
+```
+
+**Notes:**
+- First-time MSSQL image pull is ~1.5GB — allow several minutes on slow connections.
+- The stack requires Docker Compose v2+ (verified automatically by `scripts/check-compose-v2.js`).
+- MSSQL image is pinned to `2022-CU17-ubuntu-22.04` for reproducibility (GHCR mirror planned for CI).
+- **OTel packages must be updated together.** The `@opentelemetry/exporter-trace-otlp-http` dependency is pinned to a version compatible with `@opentelemetry/sdk-node`. When updating any OTel package, verify compatibility across all OTel deps (see CS25-4c).
+
 ---
 
 ## 4. Logging Conventions
@@ -258,6 +282,8 @@ Background agents **must** report progress to the orchestrating agent:
 
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
+**Milestone timing table:** Sub-agents must include a timing table in their final completion report. This tracks elapsed time from session start for each major milestone (e.g., "npm install", "implementation", "validation", "PR created", "review clean"). This was identified as a process improvement during CS25 to help identify workflow bottlenecks.
+
 ### Branch Strategy & Merge Model
 - **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates and clickstop plan files committed directly on `main` by orchestrating agents. (CONTEXT.md summary rows may optionally be bundled with plan file commits.)
 - Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
@@ -335,6 +361,7 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 13. Address all review comments (reply + fix + resolve threads)
 14. Re-request review and repeat until clean (code PRs only)
 15. Report completion with PR number and summary
+16. **Include a milestone timing table** in the final report (step name + elapsed time from session start). This helps identify bottlenecks in the agent workflow.
 
 **Model selection:** The preferred model for all sub-agent implementation work is `claude-opus-4.6` (Opus). Orchestrator agents should use `claude-opus-4.6-1m` (1M context variant) to maintain full session context across long orchestration sessions. `gpt-5.4` is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 
