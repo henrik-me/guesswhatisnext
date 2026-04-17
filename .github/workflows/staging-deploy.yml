@@ -148,7 +148,7 @@ jobs:
       - name: Wait for database readiness
         run: |
           echo "Waiting for database to report healthy..."
-          for i in $(seq 1 30); do
+          for i in $(seq 1 45); do
             DB_STATUS="unreachable"
             if RESPONSE=$(curl -sf --connect-timeout 5 --max-time 10 \
               -H "X-API-Key: ephemeral-smoke-test-key" \
@@ -156,14 +156,14 @@ jobs:
               "http://localhost:3000/api/health"); then
               DB_STATUS=$(printf '%s' "$RESPONSE" | jq -r '.checks.database.status' 2>/dev/null || echo "unreachable")
             fi
-            echo "Attempt $i/30: database status = $DB_STATUS"
+            echo "Attempt $i/45: database status = $DB_STATUS"
             if [ "$DB_STATUS" = "ok" ]; then
               echo "Database ready!"
               exit 0
             fi
             sleep 2
           done
-          echo "::error::Database not ready after ~60 seconds"
+          echo "::error::Database not ready after ~90 seconds"
           exit 1
 
       - name: Health check
