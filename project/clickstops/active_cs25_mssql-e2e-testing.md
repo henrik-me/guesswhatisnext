@@ -71,8 +71,8 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-6a | Push MSSQL + OTLP images to GHCR | ⬜ Pending | One-time push of pinned MSSQL image to `ghcr.io/henrik-me/mssql-server:<tag>` and OTLP collector image. Avoids 1.5GB Docker Hub pull + rate limits on every staging deploy. Document the update process for version bumps. |
-| CS25-6b | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Update `staging-deploy.yml`: add MSSQL (from GHCR mirror) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. Only after all local phases (0-5) are proven. |
+| CS25-6a | ~~Push MSSQL + OTLP images to GHCR~~ | ⏭️ Skipped | MSSQL is on MCR (mcr.microsoft.com), not Docker Hub — no rate limits. CI pulls directly from MCR. No GHCR mirror needed. |
+| CS25-6b | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Update `staging-deploy.yml`: add MSSQL (from MCR) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. |
 | CS25-6c | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage (CS25-6b). May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
 
 ### Phase 7: Documentation (📝 Docs)
