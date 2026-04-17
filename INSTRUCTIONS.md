@@ -337,7 +337,11 @@ NOT allowed on main checkout:
 
 **Deployment monitoring:** When a staging or production deploy is triggered, the orchestrator must not rely solely on the monitoring agent to report approval gates. The orchestrator should proactively check deploy status after the expected predecessor step completes (staging: ~5-10 min for fast-forward; production: ~1-2 min for input validation) and notify the user immediately if approval is pending. Never let an approval gate sit unnotified.
 
-**No-shortcut policy:** Agents must never skip any part of the defined workflow (worktree, PR, review loop, workboard updates) without explicit user approval. The process applies equally to all changes regardless of perceived size or complexity — there is no "too small" threshold. If an agent believes a shortcut is warranted, it must ask the user before proceeding.
+**Deployment approval policy:**
+- **Staging:** Orchestrator may approve via API after verifying smoke tests passed
+- **Production:** Orchestrator must notify the user and wait for explicit approval — never auto-approve production deploys
+
+**No-shortcut policy:**Agents must never skip any part of the defined workflow (worktree, PR, review loop, workboard updates) without explicit user approval. The process applies equally to all changes regardless of perceived size or complexity — there is no "too small" threshold. If an agent believes a shortcut is warranted, it must ask the user before proceeding.
 
 **Stale instructions guard:** After every `git pull` on main, check if INSTRUCTIONS.md was updated (e.g., `git --no-pager diff ORIG_HEAD..HEAD -- INSTRUCTIONS.md`). If it changed, re-read it before continuing work. This ensures the orchestrator always operates under the latest guidelines, especially when other agents' PRs update process documentation. Additionally, re-read the Quick Reference Checklist at the top of this file after every `git pull`, regardless of whether the file changed.
 
