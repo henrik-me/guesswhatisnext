@@ -239,14 +239,14 @@ jobs:
               -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
               "${{ secrets.PROD_URL }}/api/health" 2>/dev/null) || true
 
-            HTTP_STATUS="000"
+            HEALTH_STATUS="unreachable"
             DB_STATUS="unknown"
             if [ -n "$RESPONSE" ]; then
-              HTTP_STATUS=$(echo "$RESPONSE" | jq -r '.status // "error"' 2>/dev/null || echo "error")
+              HEALTH_STATUS=$(echo "$RESPONSE" | jq -r '.status // "error"' 2>/dev/null || echo "error")
               DB_STATUS=$(echo "$RESPONSE" | jq -r '.checks.database.status // "unknown"' 2>/dev/null || echo "unknown")
             fi
 
-            echo "Health check attempt $i: http=200 db=$DB_STATUS"
+            echo "Health check attempt $i: status=$HEALTH_STATUS db=$DB_STATUS"
             if [ "$DB_STATUS" = "ok" ]; then
               echo "✅ Production deployment healthy (database connected)!"
               echo "healthy=true" >> "$GITHUB_OUTPUT"
