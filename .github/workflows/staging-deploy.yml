@@ -57,7 +57,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
-      MSSQL_SA_PASSWORD: "GwnTest1!"
     services:
       mssql:
         image: ghcr.io/henrik-me/mssql-server:2022-CU17-ubuntu-22.04
@@ -66,9 +65,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
         env:
           ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: ${{ env.MSSQL_SA_PASSWORD }}
+          MSSQL_SA_PASSWORD: "GwnTest1!"
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${{ env.MSSQL_SA_PASSWORD }}' -C -Q 'SELECT 1'"
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'GwnTest1!' -C -Q 'SELECT 1'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -90,7 +89,7 @@ jobs:
           JWT_SECRET: ephemeral-smoke-test-secret
           SYSTEM_API_KEY: ephemeral-smoke-test-key
           CANONICAL_HOST: localhost:3000
-          DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=${{ env.MSSQL_SA_PASSWORD }};Encrypt=false;TrustServerCertificate=true"
+          DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=GwnTest1!;Encrypt=false;TrustServerCertificate=true"
           OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
           FEATURE_FLAG_ALLOW_OVERRIDE: "true"
           TRUST_PROXY: "2"
@@ -105,7 +104,7 @@ jobs:
         run: |
           echo "Creating gwn database in MSSQL..."
           docker exec ${{ job.services.mssql.id }} /opt/mssql-tools18/bin/sqlcmd \
-            -S localhost -U sa -P '${{ env.MSSQL_SA_PASSWORD }}' -C \
+            -S localhost -U sa -P 'GwnTest1!' -C \
             -Q "IF DB_ID('gwn') IS NULL CREATE DATABASE [gwn]"
           echo "Database gwn created (or already exists)."
 
