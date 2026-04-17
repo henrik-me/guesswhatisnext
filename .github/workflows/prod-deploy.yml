@@ -235,19 +235,27 @@ jobs:
         id: healthcheck
         run: |
           for i in 1 2 3 4 5 6 7 8; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+            RESPONSE=$(curl -sf --max-time 30 \
               -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
-              "${{ secrets.PROD_URL }}/api/health" || true)
-            echo "Health check attempt $i: $HTTP_STATUS"
-            if [ "$HTTP_STATUS" = "200" ]; then
-              echo "✅ Production deployment healthy!"
+              "${{ secrets.PROD_URL }}/api/health" 2>/dev/null) || true
+
+            HEALTH_STATUS="unreachable"
+            DB_STATUS="unknown"
+            if [ -n "$RESPONSE" ]; then
+              HEALTH_STATUS=$(echo "$RESPONSE" | jq -r '.status // "error"' 2>/dev/null || echo "error")
+              DB_STATUS=$(echo "$RESPONSE" | jq -r '.checks.database.status // "unknown"' 2>/dev/null || echo "unknown")
+            fi
+
+            echo "Health check attempt $i: status=$HEALTH_STATUS db=$DB_STATUS"
+            if [ "$HEALTH_STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ]; then
+              echo "✅ Production deployment healthy (status ok, database connected)!"
               echo "healthy=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             sleep 30
           done
           echo "healthy=false" >> "$GITHUB_OUTPUT"
-          echo "::warning::Health check failed after 5 attempts (last: $HTTP_STATUS)"
+          echo "::warning::Health check failed after 8 attempts (last db=$DB_STATUS)"
 
       - name: Rollback on failure
         if: steps.healthcheck.outputs.healthy != 'true'
