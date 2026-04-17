@@ -60,6 +60,8 @@ jobs:
     services:
       mssql:
         image: mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04
+        ports:
+          - 1433:1433
         env:
           ACCEPT_EULA: "Y"
           MSSQL_SA_PASSWORD: "GwnTest1!"
@@ -83,7 +85,7 @@ jobs:
         ports:
           - 3000:3000
         env:
-          NODE_ENV: test
+          NODE_ENV: staging
           PORT: 3000
           JWT_SECRET: ephemeral-smoke-test-secret
           SYSTEM_API_KEY: ephemeral-smoke-test-key
@@ -99,11 +101,49 @@ jobs:
           --health-retries 12
           --health-start-period 30s
     steps:
-      - name: Wait for MSSQL and app initialization
+      - name: Create MSSQL database
         run: |
-          echo "Waiting for MSSQL + app database initialization..."
-          echo "MSSQL needs ~30-60s to start, then the app self-initializes the DB."
-          for i in $(seq 1 60); do
+          echo "Creating gwn database in MSSQL..."
+          # Service containers are accessible via localhost when ports are mapped.
+          # MSSQL health check already passed, so sqlcmd is available via docker exec.
+          MSSQL_CONTAINER=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04" -q)
+          if [ -z "$MSSQL_CONTAINER" ]; then
+            echo "::error::MSSQL container not found"
+            exit 1
+          fi
+          docker exec "$MSSQL_CONTAINER" /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P 'GwnTest1!' -C \
+            -Q "IF DB_ID('gwn') IS NULL CREATE DATABASE [gwn]"
+          echo "Database gwn created (or already exists)."
+
+      - name: Trigger app database initialization
+        run: |
+          echo "Triggering app DB initialization via /api/admin/init-db..."
+          # The app uses NODE_ENV=staging with self-init retry loop.
+          # It may have already entered draining mode if it hit a 4060 error
+          # (DB not found) before we created the database. This endpoint
+          # restarts initialization regardless.
+          for i in $(seq 1 10); do
+            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 \
+              -X POST "http://localhost:3000/api/admin/init-db" \
+              -H "X-API-Key: ephemeral-smoke-test-key" \
+              -H "X-Forwarded-Proto: https")
+            echo "Init-db attempt $i: status=$HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "Database initialization triggered successfully."
+              break
+            fi
+            sleep 3
+          done
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Failed to trigger DB initialization after 10 attempts"
+            exit 1
+          fi
+
+      - name: Wait for database readiness
+        run: |
+          echo "Waiting for database to report healthy..."
+          for i in $(seq 1 30); do
             DB_STATUS="unreachable"
             if RESPONSE=$(curl -sf --connect-timeout 5 --max-time 10 \
               -H "X-API-Key: ephemeral-smoke-test-key" \
@@ -111,14 +151,14 @@ jobs:
               "http://localhost:3000/api/health"); then
               DB_STATUS=$(printf '%s' "$RESPONSE" | jq -r '.checks.database.status' 2>/dev/null || echo "unreachable")
             fi
-            echo "Attempt $i/60: database status = $DB_STATUS"
+            echo "Attempt $i/30: database status = $DB_STATUS"
             if [ "$DB_STATUS" = "ok" ]; then
               echo "Database ready!"
               exit 0
             fi
-            sleep 3
+            sleep 2
           done
-          echo "::error::Database not ready after ~180 seconds"
+          echo "::error::Database not ready after ~60 seconds"
           exit 1
 
       - name: Health check
