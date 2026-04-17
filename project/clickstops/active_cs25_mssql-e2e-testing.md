@@ -18,7 +18,7 @@
 | CS25-0b | Add HOST_PORT support | ✅ Done | Port parameterization for multi-agent isolation. |
 | CS25-0c | Add DB readiness wait | ✅ Done | Wait for `/api/health` with `database.status=ok`, not just `/healthz`. |
 | CS25-0d | Add convenience npm scripts | ✅ Done | `dev:mssql`, `dev:mssql:down`, `test:e2e:mssql`. |
-| CS25-0e | Pin MSSQL image version | ✅ Done | Pinned to `2022-CU17-ubuntu-22.04`. GHCR mirror push is in Phase 6. |
+| CS25-0e | Pin MSSQL image version | ✅ Done | Pinned to `2022-CU17-ubuntu-22.04`. CI pulls directly from MCR (no GHCR mirror needed — CS25-6a skipped). |
 | CS25-0f | Verify Docker Compose v2 requirement | ✅ Done | Added `scripts/check-compose-v2.js` version check to npm scripts. |
 
 ### Phase 1: Run Existing E2E Suite Against MSSQL (🖥️ Local) — PR [#184](https://github.com/henrik-me/guesswhatisnext/pull/184)
@@ -97,7 +97,7 @@
 - **OTLP exporter fallback:** `server/telemetry.js` gains a ~10 line conditional: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set and `APPLICATIONINSIGHTS_CONNECTION_STRING` is absent, use `@opentelemetry/exporter-trace-otlp-http`. Production path (Azure Monitor) is unaffected.
 - **No secure-cookie tests:** Auth uses localStorage + Authorization headers, not cookies.
 - **Cold start toggle:** Compose profiles, not hot-reload. Stop and restart with different profile.
-- **CI model:** Staging deploy runs MSSQL + OTLP as service containers on every deploy (CS25-6b), using GHCR-mirrored images (CS25-6a). This is the primary CI validation path. Separate MSSQL E2E workflow is optional for deeper testing (cold start, Caddy HTTPS). PR CI skips MSSQL/OTel (unit tests sufficient).
+- **CI model:** Staging deploy runs MSSQL + OTLP as service containers on every deploy (CS25-6b), pulling directly from MCR (CS25-6a skipped — MCR has no rate limits). This is the primary CI validation path. Separate MSSQL E2E workflow is optional for deeper testing (cold start, Caddy HTTPS). PR CI skips MSSQL/OTel (unit tests sufficient).
 - **Version pinning:** MSSQL image pinned to specific CU tag (not `:latest`). OTel packages pinned to compatible versions and updated together. Docker Compose v2 minimum requirement verified in scripts.
 - **Log capture monitoring:** Total per-test log capture overhead measured and reported. Warn at >60s, alert/fail at >120s to catch regressions early.
 
@@ -108,7 +108,7 @@
 ```
 🖥️ LOCAL VALIDATION
 ───────────────────
-Phase 0 (stabilize stack + GHCR mirrors)
+Phase 0 (stabilize stack)
    │
    ▼
 Phase 1 (run existing E2E on MSSQL)

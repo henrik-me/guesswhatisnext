@@ -229,7 +229,7 @@ git worktree list    # see which branch is in which slot
 
 Each worktree agent pushes its branch and creates a PR. The orchestrating agent merges approved PRs. See [INSTRUCTIONS.md](INSTRUCTIONS.md) for full workflow details.
 
-**Current workflow:** Push branch → create PR → Copilot review → squash-merge to main.
+**Current workflow:** Push branch → create PR → local review loop (GPT 5.4) → Copilot review (code/config PRs only; docs-only PRs skip) → squash-merge to main.
 
 ### Architecture
 
