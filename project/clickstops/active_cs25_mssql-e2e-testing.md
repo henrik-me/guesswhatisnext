@@ -75,14 +75,14 @@
 | CS25-6b | Add MSSQL + OTLP to staging deploy | ⬜ Pending | Update `staging-deploy.yml`: add MSSQL (from MCR) and OTLP collector as service containers in the ephemeral smoke test job. App configured with `DATABASE_URL` pointing to MSSQL service. Validates MSSQL compatibility + trace pipeline on every staging deploy. |
 | CS25-6c | Evaluate separate MSSQL E2E workflow | ⬜ Pending | Assess whether a separate manual/weekly workflow is still needed beyond staging deploy coverage (CS25-6b). May be useful for deeper testing (cold start, full Caddy HTTPS) that staging doesn't cover. |
 
-### Phase 7: Documentation (📝 Docs)
+### Phase 7: Documentation (📝 Docs) — PR [#189](https://github.com/henrik-me/guesswhatisnext/pull/189)
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS25-7a | Update CS25 clickstop file | ⬜ Pending | Final status, PR references, completion checklist. |
-| CS25-7b | Update CONTEXT.md | ⬜ Pending | Task counts, known issues. |
-| CS25-7c | Update INSTRUCTIONS.md | ⬜ Pending | MSSQL local dev instructions, `dev:mssql` scripts. |
-| CS25-7d | Update README.md | ⬜ Pending | Container setup for local dev (MSSQL + Caddy + OTLP) and CI integration (staging deploy service containers). |
+| CS25-7a | Update CS25 clickstop file | ✅ Done | Phase 0-5 tasks marked done with PR references. |
+| CS25-7b | Update CONTEXT.md | ✅ Done | Task counts, test inventory, dev scripts updated. |
+| CS25-7c | Update INSTRUCTIONS.md | ✅ Done | MSSQL local dev instructions, milestone timing requirement. |
+| CS25-7d | Update README.md | ✅ Done | MSSQL stack docs, cold start overlay, CI integration (planned). |
 
 ---
 
@@ -93,11 +93,11 @@
 - **Not the default yet:** Available as `npm run dev:mssql` — promoted to default only after proven stable.
 - **Two modes:** Prod-like (NODE_ENV=production) for HTTPS/security/logging tests vs dev-mode (NODE_ENV=development via compose profile) for cold-start simulation. Delay middleware is disabled in production.
 - **Per-test log capture:** Playwright fixture captures `docker compose logs --since <timestamp>` per test, attaches to HTML report, flags ERROR/FATAL. ~50-100ms overhead per test.
-- **OTel trace verification:** OTLP collector container (~50MB) receives spans via OTLP HTTP exporter fallback in `server/telemetry.js`. Present locally and in staging CI; skipped in PR CI. Production uses real Azure Monitor.
+- **OTel trace verification:** OTLP collector container (~50MB) receives spans via OTLP HTTP exporter fallback in `server/telemetry.js`. Present locally; planned for staging CI (Phase 6). Skipped in PR CI. Production uses real Azure Monitor.
 - **OTLP exporter fallback:** `server/telemetry.js` gains a ~10 line conditional: when `OTEL_EXPORTER_OTLP_ENDPOINT` is set and `APPLICATIONINSIGHTS_CONNECTION_STRING` is absent, use `@opentelemetry/exporter-trace-otlp-http`. Production path (Azure Monitor) is unaffected.
 - **No secure-cookie tests:** Auth uses localStorage + Authorization headers, not cookies.
 - **Cold start toggle:** Compose profiles, not hot-reload. Stop and restart with different profile.
-- **CI model:** Staging deploy runs MSSQL + OTLP as service containers on every deploy (CS25-6b), pulling directly from MCR (CS25-6a skipped — MCR has no rate limits). This is the primary CI validation path. Separate MSSQL E2E workflow is optional for deeper testing (cold start, Caddy HTTPS). PR CI skips MSSQL/OTel (unit tests sufficient).
+- **CI model (planned — Phase 6):** Staging deploy will run MSSQL + OTLP as service containers on every deploy (CS25-6b), pulling directly from MCR (CS25-6a skipped — MCR has no rate limits). This will be the primary CI validation path. Separate MSSQL E2E workflow is optional for deeper testing (cold start, Caddy HTTPS). PR CI skips MSSQL/OTel (unit tests sufficient).
 - **Version pinning:** MSSQL image pinned to specific CU tag (not `:latest`). OTel packages pinned to compatible versions and updated together. Docker Compose v2 minimum requirement verified in scripts.
 - **Log capture monitoring:** Total per-test log capture overhead measured and reported. Warn at >60s, alert/fail at >120s to catch regressions early.
 

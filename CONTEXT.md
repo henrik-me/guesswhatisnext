@@ -39,7 +39,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS22 | Answer Randomization Fix | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs22_answer-randomization.md) |
 | CS23 | Documentation Review | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs23_docs-review.md) |
 | CS24 | Custom Domain (gwn.metzger.dk) | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs24_custom-domain.md) |
-| CS25 | MSSQL E2E Testing | 🔄 Active | 27/34 | [details](project/clickstops/active_cs25_mssql-e2e-testing.md) |
+| CS25 | MSSQL E2E Testing | 🔄 Active | 31/34 | [details](project/clickstops/active_cs25_mssql-e2e-testing.md) |
 | CS26 | Public Repository Transition | ✅ Complete | 11/11 | [details](project/clickstops/done/done_cs26_public-repo-transition.md) |
 | CS27 | Feature Flag Gating | ✅ Complete | 4/4 | [details](project/clickstops/done/done_cs27_feature-flag-gating.md) |
 | CS28 | Staging Deployment & Validation | ✅ Complete | 5/5 | [details](project/clickstops/done/done_cs28_staging-deployment.md) |
@@ -140,7 +140,7 @@ Fix bias where 75% of puzzles have correct answer as first option. Add Fisher-Ya
 
 ## Clickstop CS25 — MSSQL E2E Testing
 
-MSSQL Docker stack stabilized (Phase 0), full E2E suite validated against MSSQL (Phase 1), HTTPS/security header tests added (Phase 2), per-test server log capture with error flagging (Phase 3), OTel trace verification with OTLP collector (Phase 4), cold start UX testing with real server delays (Phase 5). Phases 0-5 complete in PRs #183-#188. Phase 6 (CI integration — staging deploy with MCR images) and Phase 7 (documentation) remain. See [full details](project/clickstops/active_cs25_mssql-e2e-testing.md).
+MSSQL Docker stack stabilized (Phase 0), full E2E suite validated against MSSQL (Phase 1), HTTPS/security header tests added (Phase 2), per-test server log capture with error flagging (Phase 3), OTel trace verification with OTLP collector (Phase 4), cold start UX testing with real server delays (Phase 5). Phases 0-5 complete in PRs #183-#188. Phase 7 docs in PR #189. Phase 6 (CI integration — staging deploy with MCR images) remains. See [full details](project/clickstops/active_cs25_mssql-e2e-testing.md).
 
 ---
 
