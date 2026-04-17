@@ -230,7 +230,13 @@ async function main() {
   }
 
   // ── Step 3b: Clear stale OTel traces ─────────────────────────────────
-  run('Clearing stale traces', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector sh -c "rm -f /data/traces.json"`, { allowFailure: true });
+  // The contrib collector image is scratch-based (no shell/cat/rm), so
+  // we stop the collector, remove its named volume, then recreate it.
+  const projectName = path.basename(ROOT);
+  run('Stopping collector for cleanup', `docker compose -f ${COMPOSE_FILE} stop otel-collector`, { allowFailure: true });
+  run('Removing collector container', `docker compose -f ${COMPOSE_FILE} rm -f otel-collector`, { allowFailure: true });
+  run('Removing stale trace volume', `docker volume rm ${projectName}_otel-data`, { allowFailure: true });
+  run('Recreating collector', `docker compose -f ${COMPOSE_FILE} up -d otel-collector`, { allowFailure: true });
 
   // ── Step 4: Run Playwright tests ─────────────────────────────────────
   console.log('\n=== Running Playwright E2E tests ===');
@@ -281,7 +287,8 @@ async function main() {
   }
 
   // ── Step 6: Collect trace artifacts ──────────────────────────────────
-  run('Collecting trace output', `docker compose -f ${COMPOSE_FILE} exec -T otel-collector cat /data/traces.json > test-results/otel-traces-raw.json`, { allowFailure: true });
+  // The contrib collector image is scratch-based (no cat), so use docker cp.
+  run('Collecting trace output', `docker compose -f ${COMPOSE_FILE} cp otel-collector:/data/traces.json test-results/otel-traces-raw.json`, { allowFailure: true });
 
   // ── Step 7: Full E2E log summary (best-effort) ──────────────────────
   try {

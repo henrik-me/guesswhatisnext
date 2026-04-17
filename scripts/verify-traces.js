@@ -23,9 +23,19 @@ function exec(cmd) {
 
 function readCollectorTraces() {
   try {
-    const raw = exec(
-      `docker compose -f ${COMPOSE_FILE} exec -T otel-collector cat /data/traces.json`,
+    // The contrib collector image is scratch-based (no shell/cat).
+    // Use `docker compose cp` to copy the file to a local temp path.
+    const localPath = path.join(ARTIFACTS_DIR, '.otel-traces-tmp.json');
+    try {
+      fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
+    } catch { /* already exists */ }
+    execSync(
+      `docker compose -f ${COMPOSE_FILE} cp otel-collector:/data/traces.json ${localPath}`,
+      { cwd: ROOT, timeout: 15000 },
     );
+    const raw = fs.readFileSync(localPath, 'utf-8');
+    // Clean up temp file
+    try { fs.unlinkSync(localPath); } catch { /* best-effort */ }
     // The file exporter writes one JSON object per line (JSONL format)
     const lines = raw.trim().split('\n').filter(Boolean);
     return lines.map((line) => JSON.parse(line));

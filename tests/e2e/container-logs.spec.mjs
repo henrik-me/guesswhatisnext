@@ -65,8 +65,10 @@ test.describe('Container Log Format', () => {
 
     // Filter out Node.js runtime warnings (e.g. MaxListenersExceededWarning,
     // DeprecationWarning) — these are not application log output and are
-    // emitted directly to stderr by the Node.js process.
-    const appNonJsonLines = nonJsonLines.filter(line => !line.startsWith('(node:'));
+    // emitted directly to stderr by the Node.js process. Multi-line warnings
+    // also emit a "(Use `node --trace-warnings ...`)" continuation line.
+    const appNonJsonLines = nonJsonLines.filter(line =>
+      !line.startsWith('(node:') && !line.startsWith('(Use `node'));
     expect(appNonJsonLines).toEqual([]);
 
     // Verify expected pino fields on all parsed JSON lines
@@ -105,8 +107,8 @@ test.describe('Container Log Format', () => {
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      // Skip Node.js runtime warnings (not application log output)
-      if (trimmed.startsWith('(node:')) continue;
+      // Skip Node.js runtime warnings and their continuation lines
+      if (trimmed.startsWith('(node:') || trimmed.startsWith('(Use `node')) continue;
 
       // Should not contain pino-pretty style output (e.g., "[14:23:45.123] INFO:")
       // eslint-disable-next-line no-control-regex
