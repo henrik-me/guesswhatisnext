@@ -279,6 +279,15 @@ Background agents **must** report progress to the orchestrating agent:
 - **On PR created:** "CS11-64: PR #\<N\> created, running local review"
 - **On review loop:** "CS11-64: local review clean — requesting Copilot review" (code/config PRs) or "CS11-64: local review clean — docs-only, skipping Copilot" (docs-only PRs)
 - **On ready:** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)"
+- **On deployment approval gate:** When monitoring a staging or production deploy, the monitoring agent must immediately report when an approval gate is reached — do not wait for the full workflow to complete. The orchestrator must immediately notify the user with the approval URL. Approval gates are:
+  - **Staging:** After "Fast-Forward release/staging" job completes → "Deploy to Azure Staging" waits for `environment: staging` approval
+  - **Production:** After "Validate Deployment Inputs" job completes → "Deploy to Azure Production" waits for `environment: production` approval
+  The monitoring agent should poll job status and when the predecessor job shows `completed` and the deploy job shows `status: waiting`, alert immediately.
+
+**Deployment monitoring agent prompts must include:**
+- The specific approval gate to watch for (which job triggers the gate)
+- Instruction to report the approval gate immediately when reached, with the approval URL
+- Instruction to NOT wait for full workflow completion before reporting approval gates
 
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
@@ -325,6 +334,8 @@ NOT allowed on main checkout:
 7. Once a task is claimed, prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 
 **Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, git operations on main (`git pull`, `git worktree add/remove`), updating WORKBOARD.md, creating and committing clickstop plan files, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
+
+**Deployment monitoring:** When a staging or production deploy is triggered, the orchestrator must not rely solely on the monitoring agent to report approval gates. The orchestrator should proactively check deploy status after the expected predecessor step completes (staging: ~5-10 min for fast-forward; production: ~1-2 min for input validation) and notify the user immediately if approval is pending. Never let an approval gate sit unnotified.
 
 **No-shortcut policy:** Agents must never skip any part of the defined workflow (worktree, PR, review loop, workboard updates) without explicit user approval. The process applies equally to all changes regardless of perceived size or complexity — there is no "too small" threshold. If an agent believes a shortcut is warranted, it must ask the user before proceeding.
 
