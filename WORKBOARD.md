@@ -19,6 +19,5 @@ Orchestrators update this file directly on main — no PR required.
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS37-3 | CS37 | Validate: manual dispatch ✅, awaiting next cron run | yoga-gwn-c2 | — | — | PR #195 merged | 2026-04-15T23:57Z |
-| — | — | Fix CS25 container log tests + OTel collector crash | yoga-gwn | wt-1 | — | — | 2026-04-17T06:09Z |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
