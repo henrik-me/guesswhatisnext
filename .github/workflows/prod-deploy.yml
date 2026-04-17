@@ -247,8 +247,8 @@ jobs:
             fi
 
             echo "Health check attempt $i: status=$HEALTH_STATUS db=$DB_STATUS"
-            if [ "$DB_STATUS" = "ok" ]; then
-              echo "✅ Production deployment healthy (database connected)!"
+            if [ "$HEALTH_STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ]; then
+              echo "✅ Production deployment healthy (status ok, database connected)!"
               echo "healthy=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
