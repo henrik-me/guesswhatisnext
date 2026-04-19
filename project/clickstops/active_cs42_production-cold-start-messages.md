@@ -7,25 +7,33 @@
 
 ## Investigation Findings (CS42-1)
 
-### Root Cause
+### Root Cause: Service Worker Stale Cache
 
-**Local cold-start:** The delay middleware (`server/middleware/delay.js`) holds HTTP requests open for the configured duration (e.g., 45s). ProgressiveLoader (`public/js/progressive-loader.js`) is purely timer-based — it shows escalating messages at 3s/6s/10s while the fetch is **pending**. This works because the response is slow.
+The progressive loading messages **do exist in the deployed code** — production has the current `progressive-loader.js` and `app.js`. The problem is the **service worker** (`public/sw.js`) serves a **stale cached version** of `app.js` from before CS38.
 
-**Production cold-start:** When Azure SQL is auto-paused and resuming (~10-30s), the server does NOT hold requests open. Instead:
-1. App starts, DB self-init retry loop runs in background (`server/app.js:352-410`)
-2. User request arrives → server checks DB readiness → not ready → returns **503 immediately** (`server/app.js:168-178`)
-3. ProgressiveLoader gets a fast error response → fetch completes → messages never escalate
-4. User sees error/empty state instead of friendly progressive messages
+**Evidence:**
+1. The text the user sees ("Leaderboard unavailable — start the server to see rankings") was **removed** in CS38 (commit `62edc68`). It existed in the original `app.js` (commit `677814e`) but was replaced by ProgressiveLoader.
+2. Production serves the correct current files:
+   - `curl -s https://gwn.metzger.dk/js/progressive-loader.js` → contains ProgressiveLoader with MESSAGE_SETS
+   - `curl -s https://gwn.metzger.dk/js/app.js` → contains `progressiveLoad()` calls, no "start the server" text
+3. The service worker cache name is `gwn-v2` (`public/sw.js:6`) and has **never been bumped** since it was created (commit `92f515e`, Phase 8). The service worker uses **cache-first** for static assets (`sw.js:92`), so returning users get the old cached `app.js` from their browser's service worker cache.
+4. The `STATIC_ASSETS` list (`sw.js:7-31`) includes `/js/app.js` — this is pre-cached on install and served from cache on subsequent visits.
 
-**The difference:** Local delay holds the request **pending** (slow response). Production returns **fast 503** (immediate error). ProgressiveLoader only shows messages while waiting — a fast error short-circuits the entire escalation.
+**Why local works:** Local development doesn't use the service worker (or uses a fresh one each time). The MSSQL Docker stack serves files directly without caching.
 
-### Evidence
-- `server/middleware/delay.js:35-45` — delay middleware disabled when `NODE_ENV=production/staging`
-- `server/app.js:168-178` — returns 503 when DB not initialized
-- `progressive-loader.js:7-11` — default timeout 15s, messages shown only while fetch pending
-- `progressive-loader.js:23-69` — escalation timers cleared when fetch resolves (even with error)
-- `docker-compose.mssql.delay.yml:22-33` — local cold-start uses NODE_ENV=development to enable delays
-- `.github/workflows/prod-deploy.yml:188` — production sets NODE_ENV=production (no delays)
+**Why production doesn't work for returning users:** The service worker installed `gwn-v2` cache on a previous visit with the old `app.js`. On return, the service worker intercepts the request for `/js/app.js` and serves the cached (pre-CS38) version — which has the old "Leaderboard unavailable" error handling instead of ProgressiveLoader.
+
+**Why new/incognito users would see it correctly:** No service worker cache → browser fetches fresh files → ProgressiveLoader works. But the ProgressiveLoader itself has a separate issue (503 auto-retry, documented below) that would also need fixing.
+
+### Secondary Issue: 503 Auto-Retry (affects new users)
+
+Even after fixing the cache, new users hitting production during Azure SQL cold start would still have a suboptimal experience:
+- Server returns 503 immediately when DB not initialized (`server/app.js:176-177`)
+- ProgressiveLoader gets fast error → escalation timers cleared → Retry button shown immediately
+- User never sees the friendly escalation messages ("coffee break ☕", "waking up database 😴")
+- This is because `maxRetries: 0` and the catch block clears timers on any error
+
+This is the issue analyzed in the previous investigation — still valid but secondary to the cache problem.
 
 ---
 
@@ -33,10 +41,11 @@
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS42-1 | Investigate: why progressive messages don't appear in production | ✅ Done | Root cause: server returns 503 immediately instead of holding request. See findings above. |
-| CS42-2 | Plan fix based on findings | ⬜ Pending | Choose approach — see options below. |
-| CS42-3 | Implement fix | ⬜ Pending | — |
-| CS42-4 | Validate in production | ⬜ Pending | Verify progressive messages appear during Azure SQL cold start. |
+| CS42-1 | Investigate: why progressive messages don't appear in production | ✅ Done | Root cause: service worker stale cache serving pre-CS38 app.js. Secondary: 503 auto-retry needed for new users. |
+| CS42-2 | Fix service worker cache versioning | ⬜ Pending | Bump `CACHE_NAME` from `gwn-v2` to `gwn-v3` (or implement hash-based versioning). Old cache is purged on activate. |
+| CS42-3 | Fix ProgressiveLoader 503 auto-retry | ⬜ Pending | Auto-retry on 503 with escalation timers kept running (Option A from analysis below). |
+| CS42-4 | Add cache-busting strategy | ⬜ Pending | Prevent this from happening again — consider versioned filenames, ETag-based revalidation, or bumping CACHE_NAME on every deploy. |
+| CS42-5 | Validate in production | ⬜ Pending | Deploy, clear service worker in browser, verify progressive messages appear during Azure SQL cold start. |
 
 ---
 
