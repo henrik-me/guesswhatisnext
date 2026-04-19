@@ -42,25 +42,40 @@
 
 ## Fix Options (CS42-2)
 
-### Option A: ProgressiveLoader handles 503 with auto-retry
-Make ProgressiveLoader treat 503 as "server is warming up" — show progressive messages and auto-retry the fetch instead of treating it as a final error. This is client-side only, no server changes.
-- **Pro:** No server changes, works with any backend that returns 503 during warmup
-- **Con:** ProgressiveLoader currently has `maxRetries: 0` default — needs retry logic for this specific case
+### Option A: ProgressiveLoader auto-retries on 503 (recommended)
+When `fetchFn` throws and the error is from a 503 response, don't count it as a failed attempt — instead, auto-retry with the progressive messages still running. The escalation timers stay active across retries, so users see the full message sequence ("Fetching the rankings..." → "coffee break ☕" → "Waking up the database 😴") while the loader silently retries in the background.
+
+Implementation sketch:
+```javascript
+// In fetchFn (app.js), throw a typed error for 503
+if (res.status === 503) throw new RetryableError('Server warming up');
+
+// In progressiveLoad, catch RetryableError separately:
+// - Don't increment attempt counter
+// - Don't clear escalation timers
+// - Wait 2-3s, then retry fetchFn
+// - Only give up after total elapsed time exceeds timeout (15s default)
+```
+
+- **Pro:** Client-side only, no server changes, progressive messages work naturally during retries, generic for any 503
+- **Con:** Need to distinguish 503 from other errors in the catch block. The server already returns `{ retryAfter: 5 }` in the 503 body — can use that as a signal.
 
 ### Option B: Server holds requests during DB warmup
 Instead of returning 503 immediately, queue incoming requests and wait for DB init to complete (with a timeout). Server responds once DB is ready or times out.
 - **Pro:** Client code unchanged, progressive messages work naturally (fetch stays pending)
-- **Con:** Complex server change, risk of connection piling up during long warmups, changes behavior for all clients
+- **Con:** Complex server change, risk of connection piling up during long warmups, changes behavior for all clients, doesn't work if Azure SQL takes 30s+ to resume
 
-### Option C: Hybrid — server returns 503 with Retry-After, client respects it
-Server returns `503` with `Retry-After: 5` header. ProgressiveLoader checks for this header and auto-retries with progressive messages during the retry window.
-- **Pro:** Standard HTTP semantics, explicit signal from server, client and server cooperate
-- **Con:** Requires changes to both client and server
+### Option C: Hybrid — server returns 503 with Retry-After header, client respects it
+Server already returns `retryAfter: 5` in the 503 JSON body (`server/app.js:173,177`). Add the `Retry-After` HTTP header too. ProgressiveLoader checks for 503 + Retry-After and auto-retries.
+- **Pro:** Standard HTTP semantics, server already has the signal in the body
+- **Con:** Requires both client and server changes for essentially the same result as Option A
+
+**Recommendation: Option A** — simplest, client-only, and the server's 503 response already distinguishes "warming up" from other errors. The key insight is: don't clear the escalation timers on a 503 retry — let them keep running so the user sees the friendly messages while the loader retries silently.
 
 ---
 
 ## Design Considerations
-- Azure SQL auto-pause resume takes 10-30s — progressive messages need to cover this window
-- The existing `SYNC_BACKOFF=[1000,3000,9000]` in score sync (`progressive-loader.js:105`) shows the loader already supports backoff for score submission — similar pattern could apply here
-- Whatever fix is chosen must not break the local delay middleware testing (which already works)
-- The fix should be generic enough to handle any transient server unavailability, not just DB warmup
+- Azure SQL auto-pause resume takes 10-30s — the ProgressiveLoader's 15s default timeout may not be enough. Consider increasing the effective timeout during 503 retries (e.g., 30s total for warming-up scenarios).
+- The existing `SYNC_BACKOFF=[1000,3000,9000]` in score sync (`progressive-loader.js:105`) shows the loader already supports backoff for score submission — similar pattern applies here.
+- Whatever fix is chosen must not break the local delay middleware testing (which already works — delay holds the request pending, no 503 involved).
+- The fix should be generic enough to handle any transient 503 (not just DB warmup).
