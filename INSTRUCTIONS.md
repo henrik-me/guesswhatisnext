@@ -430,7 +430,7 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 
 **Acceptable techniques:**
 - Direct relative file link to the authoritative source: `[deploy.sh](infra/deploy.sh)`, `[prod-deploy.yml](.github/workflows/prod-deploy.yml)`
-- Anchor link to a specific heading in another doc: `[CONTEXT.md § Known Issues](CONTEXT.md#known-issues)`
+- Anchor link to a specific heading in another doc: `[CONTEXT.md § Blockers / Open Questions](CONTEXT.md#blockers--open-questions)`
 - Embedded codeblock with an `<!-- include: path#anchor -->` marker (forward-looking — the consistency checker added in CS43-2 will eventually validate these are kept in sync with their source)
 - Linking at the GitHub-rendered file/folder listing rather than maintaining a hand-curated table: `[the workflows directory](.github/workflows/)`, `[completed clickstops](project/clickstops/done/)`
 

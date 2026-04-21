@@ -3,7 +3,7 @@
 **Status:** ✅ Complete
 **Goal:** Deploy the staging-validated image to Azure production environment and verify it works correctly.
 
-**Depends on:** [CS28 — Staging Deployment & Validation](done/done_cs28_staging-deployment.md) ✅
+**Depends on:** [CS28 — Staging Deployment & Validation](done_cs28_staging-deployment.md) ✅
 
 ## Tasks
 

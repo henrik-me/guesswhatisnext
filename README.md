@@ -187,7 +187,7 @@ The MSSQL stack includes:
 
 The Docker MSSQL stack produces **production-identical structured JSON logs** (Pino) — every HTTP request, WebSocket event, migration, auth event, and error is captured with the same schema as production.
 
-**CI integration (planned):** Staging deploys will validate against MSSQL using images pulled directly from MCR (mcr.microsoft.com) as service containers — no GHCR mirror needed since MCR has no rate limits.
+**CI integration:** Staging deploys validate against MSSQL + OTLP as GitHub Actions service containers. See [.github/workflows/staging-deploy.yml](.github/workflows/staging-deploy.yml) for the exact service definitions.
 
 ### Testing
 
@@ -360,9 +360,11 @@ guesswhatisnext/
   │(same img)│  │          │
   └──────────┘  └──────────┘
 
-  Health Monitor (every 6 hours) ──────────────────────────────────▶ gwn-prod
+  Health Monitor (scheduled cron) ─────────────────────────────────▶ gwn-prod
        │ on failure → GitHub Issue
 ```
+
+> **Pipeline sources of truth:** staging triggers and service containers live in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml); production deploy + auto-rollback in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml); health-monitor cron schedule and tier definitions in [`.github/workflows/health-monitor.yml`](.github/workflows/health-monitor.yml).
 
 > **Note:** Push to `main` does **not** deploy by default. Deployment runs when triggered
 > manually via `workflow_dispatch`, or automatically on push when `STAGING_AUTO_DEPLOY` is enabled.
