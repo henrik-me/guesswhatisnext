@@ -2,7 +2,7 @@
 
 This file captures accumulated knowledge, architecture decisions, risk analyses, and tool evaluations across all clickstops.
 
-> **Last updated:** 2026-04-09
+> **Last updated:** 2026-04-21
 
 ---
 
@@ -293,6 +293,51 @@ A reusable JS module that wraps any async fetch with timed message escalation:
 // Returns the fetch result; messages auto-clear on completion
 ```
 This keeps the pattern consistent across all pages without duplicating timer logic.
+
+---
+
+## Documentation Currency
+
+### Link, don't restate — documentation drift prevention
+
+**Date:** 2026-04-21
+
+#### Context
+
+Issue [#198](https://github.com/henrik-me/guesswhatisnext/issues/198) and an internal operating-model review (`review.md`, finding 2 / improvement 6) independently surfaced the same root cause for a growing pile of cross-doc factual conflicts: docs were paraphrasing values that lived authoritatively in workflow files, scripts, schema files, or the filesystem itself. The paraphrase silently rotted the moment the source changed, and reviewers couldn't reliably catch it by eye.
+
+Concrete drift symptoms that were live on `main` when CS43 was opened:
+
+- `infra/README.md` claimed production runs on container-local SQLite — production actually runs on Azure SQL (the truth lives in `prod-deploy.yml` and `deploy.sh`).
+- `CONTEXT.md` listed CS17 as ✅ Complete with task count 4/8, while the clickstop file in `project/clickstops/done/` told a different story.
+- The health-monitor cadence was described as "every 5 minutes" in one doc and "every 6 hours" in another, when the workflow file was the only authoritative source.
+- A handful of clickstop links in `CONTEXT.md` resolved to `planned_*` files that had already been renamed to `done_*` or never existed at all.
+
+Each one of these is the same shape of bug: a fact owned by file A was paraphrased into file B, and file B was not updated when file A changed.
+
+#### The principle
+
+A documentation file either *is* the source of truth for a fact, or it *links to* the source of truth — it never paraphrases. Acceptable techniques are direct relative file links, anchor links into another doc, or embedded codeblocks with an `<!-- include: -->` marker; the anti-pattern is restating a value inline that already lives authoritatively somewhere else. See [INSTRUCTIONS.md § Documentation Conventions](INSTRUCTIONS.md#documentation-conventions) for the rule as written, the full list of acceptable techniques, and the scope (all `.md` files in the repository; the rule does *not* apply to source-code comments, where local restatement is often the clearest option).
+
+#### Mechanism that makes it stick
+
+Writing the rule down is necessary but not sufficient — the same review surface that missed the original drift will miss future drift. CS43-2 adds a consistency checker (`npm run check:docs`) that validates relative links, clickstop-prefix-vs-status agreement, CS-number uniqueness, WORKBOARD freshness, and a small set of cross-doc invariants. It ships warn-only so authors can see violations without breaking PRs, then CS43-7 flips it to a hard gate in `ci.yml` once `main` is clean. The checker is what prevents recurrence at PR time; the written rule is what tells contributors why the checker exists and how to fix what it flags.
+
+The two-step rollout is deliberate. Flipping a checker to a hard gate while violations exist trains people to ignore CI; warn-only → baseline cleanup → hard gate is the only sequence that keeps the signal trustworthy.
+
+#### Pitfalls observed
+
+- Restatement *feels like* good documentation when you are paraphrasing for readability — it reads more naturally inline than "see [prod-deploy.yml](.github/workflows/prod-deploy.yml)" — so the failure mode is intrinsically attractive to careful writers.
+- Restatement looks correct in PR review because the reviewer rarely cross-checks the source file; the paraphrase is internally consistent and the diff is small.
+- Restated values become invisibly stale on the *next* workflow / schema / config change, because the doc that mirrors the value is not required reading for that change and nobody thinks to update it.
+- Onboarding sections and "quickstart" prose are the highest-risk places — they paraphrase aggressively in the name of being friendly to new readers, and they are read least often by people who would notice drift.
+- "I'll just keep the docs in sync manually" has been the historical strategy and is exactly what produced the symptoms listed above; it does not scale past one or two docs and one or two contributors.
+
+#### Cross-references
+
+- [CS43 — Documentation Currency & Drift Prevention](project/clickstops/active_cs43_doc-currency-and-drift-prevention.md) — the clickstop that codifies this principle and tracks the follow-on work to restructure `CONTEXT.md`, slim `infra/README.md`, and land the consistency checker as a hard gate.
+- [CS44 — WORKBOARD State Machine](project/clickstops/planned_cs44_workboard-state-machine.md) — separate effort to harden the workboard's lifecycle and stale-lock handling (review.md findings 1, 3, 5).
+- [CS45 — INSTRUCTIONS.md Split](project/clickstops/planned_cs45_instructions-split.md) — separate effort to break `INSTRUCTIONS.md` into operations / reviews / tracking files (review.md finding 4).
 
 ---
 
