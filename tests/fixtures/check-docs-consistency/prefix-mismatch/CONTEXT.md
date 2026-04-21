@@ -4,4 +4,4 @@
 
 | # | Name | Status | Tasks | Details |
 |---|------|--------|-------|---------|
-| CS1 | Mismatch | ✅ Complete | 1/1 | [details](project/clickstops/active_cs1_mismatch.md) |
+| CS1 | Mismatch | ✅ Complete | 1/1 | [details](project/clickstops/active/active_cs1_mismatch.md) |
