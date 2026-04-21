@@ -165,6 +165,85 @@ describe('check-docs-consistency', () => {
     }
   });
 
+  // ---- CS44-5b: active-row-stale / active-row-reclaimable ------------------
+
+  test('active-row-fresh fixture: recent Last Updated → no threshold findings', () => {
+    const findings = run({ root: path.join(FIX, 'active-row-fresh'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'active-row-stale')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'active-row-reclaimable')).toEqual([]);
+  });
+
+  test('active-row-stale-warn fixture: 30h old → warning only, no error', () => {
+    const findings = run({ root: path.join(FIX, 'active-row-stale-warn'), now: FIXED_NOW });
+    const stale = findings.filter(f => f.rule === 'active-row-stale');
+    const reclaim = findings.filter(f => f.rule === 'active-row-reclaimable');
+    expect(stale).toHaveLength(1);
+    expect(stale[0].severity).toBe('warning');
+    expect(stale[0].message).toContain('CS99-2');
+    expect(stale[0].message).toContain('omni-gwn');
+    expect(reclaim).toEqual([]);
+  });
+
+  test('active-row-stale-error fixture: 8d old → both warning AND error', () => {
+    const findings = run({ root: path.join(FIX, 'active-row-stale-error'), now: FIXED_NOW });
+    const stale = findings.filter(f => f.rule === 'active-row-stale');
+    const reclaim = findings.filter(f => f.rule === 'active-row-reclaimable');
+    expect(stale).toHaveLength(1);
+    expect(stale[0].severity).toBe('warning');
+    expect(reclaim).toHaveLength(1);
+    expect(reclaim[0].severity).toBe('error');
+    expect(reclaim[0].message).toContain('CS99-3');
+    expect(reclaim[0].message).toContain('yoga-gwn');
+  });
+
+  test('active-row-no-column fixture: today\'s schema (Started, no Last Updated) → silent', () => {
+    const findings = run({ root: path.join(FIX, 'active-row-no-column'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'active-row-stale')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'active-row-reclaimable')).toEqual([]);
+  });
+
+  test('active-row-ignored fixture: ignore comments suppress both rules', () => {
+    const findings = run({ root: path.join(FIX, 'active-row-ignored'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'active-row-stale')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'active-row-reclaimable')).toEqual([]);
+  });
+
+  test('active-row-malformed fixture: unparseable Last Updated → silent (CS44-5a owns format)', () => {
+    const findings = run({ root: path.join(FIX, 'active-row-malformed'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'active-row-stale')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'active-row-reclaimable')).toEqual([]);
+  });
+
+  test('active-row-loose-date fixture: parseable but non-ISO date → silent', () => {
+    // `2098/12/28 00:00Z` is accepted by Date.parse but is not ISO 8601.
+    // CS44-5a's `last-updated-iso8601` rule owns this signal; we must not
+    // emit a misleading age-based finding here.
+    const findings = run({ root: path.join(FIX, 'active-row-loose-date'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'active-row-stale')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'active-row-reclaimable')).toEqual([]);
+  });
+
+  test('active-row-leading-table fixture: note table before the real Active Work table does not silence the rules', () => {
+    const findings = run({ root: path.join(FIX, 'active-row-leading-table'), now: FIXED_NOW });
+    const stale = findings.filter(f => f.rule === 'active-row-stale');
+    const reclaim = findings.filter(f => f.rule === 'active-row-reclaimable');
+    expect(stale).toHaveLength(1);
+    expect(reclaim).toHaveLength(1);
+    expect(reclaim[0].message).toContain('CS99-7');
+  });
+
+  test('CHECK_DOCS_NOW_OVERRIDE env var injects "now" when opts.now is absent', () => {
+    const prev = process.env.CHECK_DOCS_NOW_OVERRIDE;
+    process.env.CHECK_DOCS_NOW_OVERRIDE = '2099-01-05T00:00:00Z';
+    try {
+      const findings = run({ root: path.join(FIX, 'active-row-stale-error') });
+      expect(findings.some(f => f.rule === 'active-row-reclaimable')).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.CHECK_DOCS_NOW_OVERRIDE;
+      else process.env.CHECK_DOCS_NOW_OVERRIDE = prev;
+    }
+  });
+
   test('unique-cs-state can be suppressed by own-line ignore above the heading', () => {
     // Dynamic: add an ignore comment to the top of one of the cs-in-two-states
     // files, rerun, and assert the findings for that file are gone.
