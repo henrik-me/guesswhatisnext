@@ -24,6 +24,5 @@ CS44-3 schema upgrade.
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
 | CS42-1 | CS42 | blocked | yoga-gwn | — | — | — | 2026-04-19T22:20Z | Investigate progressive messages missing in production cold start | — |
-| CS45-1 | CS45 | claimed | omni-gwn | wt-1 | omni-gwn/cs45-1-allocation | — | 2026-04-21T22:05Z | dispatch sub-agent | — |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.

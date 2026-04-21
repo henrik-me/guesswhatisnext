@@ -1,6 +1,6 @@
 # CS45 — INSTRUCTIONS.md Structural Split
 
-**Status:** 🔄 Active
+**Status:** ⬜ Planned
 **Goal:** Split the 700+-line `INSTRUCTIONS.md` into focused, single-purpose documents so each file has a clear scope, lower drift surface, and is easier to keep internally consistent.
 
 **Origin:** Identified by the local `review.md` operating-model review (finding 4 / improvement 4). `INSTRUCTIONS.md` currently mixes hard policy, rationale, examples, tooling commands, agent prompts, review procedure, and workflow theory in a single file. CS31 (Instructions Optimization) and CS36 (Instructions Lifecycle Clarity) reworked the content but did not split the file. The result is workable for a disciplined operator but is not easy to keep internally consistent — and the stale `CONTEXT.md` sections that triggered review.md were partly evidence of that drift propagating from `INSTRUCTIONS.md` outward.
