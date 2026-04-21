@@ -20,7 +20,7 @@ Active and planned clickstops listed below. Completed clickstops live in [`proje
 | CS40 | Feature Flag Testing Infrastructure | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs40_feature-flag-testing.md) |
 | CS41 | Production Deploy Validation | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs41_production-deploy-validation.md) |
 | CS42 | Production Cold Start Progressive Messages | 🔄 Active | 1/5 | [details](project/clickstops/active/active_cs42_production-cold-start-messages.md) |
-| CS45 | INSTRUCTIONS.md Structural Split | 🔄 Active | 2/7 | [details](project/clickstops/active/active_cs45_instructions-split.md) |
+| CS45 | INSTRUCTIONS.md Structural Split | 🔄 Active | 4/7 | [details](project/clickstops/active/active_cs45_instructions-split.md) |
 | CS46 | Workboard Claim Discipline (Push-Success Gating) | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs46_workboard-claim-discipline.md) |
 
 ---
