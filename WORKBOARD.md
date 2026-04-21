@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-21T15:32Z
+> **Last updated:** 2026-04-21T15:48Z
 
 ## Orchestrators
 
@@ -22,6 +22,5 @@ Orchestrators update this file directly on main — no PR required.
 | CS42-1 | CS42 | Investigate: progressive messages missing in production cold start | yoga-gwn | — | — | — | 2026-04-19T22:20Z |
 | CS43-2 | CS43 | Add docs consistency checker (warn-only) + CI integration | omni-gwn | wt-1 | omni-gwn/cs43-2-docs-consistency-check | — | 2026-04-21T15:30Z |
 | CS43-4 | CS43 | Slim infra/README.md to ~80 lines (Option A) | omni-gwn | wt-2 | omni-gwn/cs43-4-slim-infra-readme | — | 2026-04-21T15:32Z |
-| CS43-8 | CS43 | Add LEARNINGS.md entry for "link, don't restate" principle | omni-gwn | wt-3 | omni-gwn/cs43-8-learnings-link-dont-restate | — | 2026-04-21T15:32Z |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
