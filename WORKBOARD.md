@@ -3,16 +3,16 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-21T15:12Z
+> **Last updated:** 2026-04-21T15:13Z
 
 ## Orchestrators
 
 | Agent ID | Machine | Repo Folder | Status |
 |----------|---------|-------------|--------|
-| yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | ⚪ Offline |
-| yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | ⚪ Offline |
-| yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | ⚪ Offline |
-| yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | ⚪ Offline |
+| yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active |
+| yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active |
+| yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active |
+| yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active |
 | omni-gwn | HENRIKM-OMNI | C:\src\guesswhatisnext | 🟢 Active |
 
 ## Active Work
