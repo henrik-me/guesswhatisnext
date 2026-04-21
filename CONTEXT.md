@@ -56,7 +56,7 @@ This file tracks clickstops (deliverables), active tasks, and current project st
 | CS40 | Feature Flag Testing Infrastructure | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs40_feature-flag-testing.md) |
 | CS41 | Production Deploy Validation | ⬜ Planned | 0/5 | [details](project/clickstops/planned_cs41_production-deploy-validation.md) |
 | CS42 | Production Cold Start Progressive Messages | 🔄 Active | 0/4 | [details](project/clickstops/active_cs42_production-cold-start-messages.md) |
-| CS43 | Documentation Currency & Drift Prevention | 🔄 Active | 0/9 | [details](project/clickstops/active_cs43_doc-currency-and-drift-prevention.md) |
+| CS43 | Documentation Currency & Drift Prevention | 🔄 Active | 1/9 | [details](project/clickstops/active_cs43_doc-currency-and-drift-prevention.md) |
 | CS44 | WORKBOARD State Machine & Stale-Lock Handling | ⬜ Planned | 0/6 | [details](project/clickstops/planned_cs44_workboard-state-machine.md) |
 | CS45 | INSTRUCTIONS.md Structural Split | ⬜ Planned | 0/7 | [details](project/clickstops/planned_cs45_instructions-split.md) |
 
