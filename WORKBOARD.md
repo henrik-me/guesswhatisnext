@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-21T16:59Z
+> **Last updated:** 2026-04-21T17:02Z
 
 ## Orchestrators
 
@@ -20,6 +20,5 @@ Orchestrators update this file directly on main — no PR required.
 | Task ID | Clickstop | Description | Agent ID | Worktree | Branch | PR | Started |
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS42-1 | CS42 | Investigate: progressive messages missing in production cold start | yoga-gwn | — | — | — | 2026-04-19T22:20Z |
-| CS43-9 | CS43 | Update issue #198 with CS43 completion summary | omni-gwn | — | — | — | 2026-04-21T16:59Z |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status.
