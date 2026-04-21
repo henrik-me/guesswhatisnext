@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-21T22:38Z
+> **Last updated:** 2026-04-21T22:51Z
 
 ## Orchestrators
 
@@ -17,7 +17,7 @@ CS44-3 schema upgrade.
 | yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | unknown |
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active | unknown |
 | yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | unknown |
-| omni-gwn | HENRIKM-OMNI | C:\src\guesswhatisnext | �� Active | 2026-04-21T22:35Z |
+| omni-gwn | HENRIKM-OMNI | C:\src\guesswhatisnext | 🟢 Active | 2026-04-21T22:51Z |
 | omni-gwn-c2 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-21T22:38Z |
 
 ## Active Work
@@ -25,6 +25,8 @@ CS44-3 schema upgrade.
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
 | CS42-1 | CS42 | claimed | omni-gwn-c2 | — | — | — | 2026-04-21T22:38Z | Reclaimed from yoga-gwn (stale >24h, early reclamation authorized by user). Draft CS42-2..5 implementation plan. | — |
-| CS45-1 | CS45 | claimed | omni-gwn | wt-1 | omni-gwn/cs45-1-allocation | — | 2026-04-21T22:35Z | dispatch sub-agent | — |
+| CS45-2 | CS45 | claimed | omni-gwn | wt-1 | omni-gwn/cs45-2-operations | — | 2026-04-21T22:51Z | dispatch sub-agent (create OPERATIONS.md) | — |
+| CS45-3 | CS45 | claimed | omni-gwn | wt-2 | omni-gwn/cs45-3-reviews | — | 2026-04-21T22:51Z | dispatch sub-agent (create REVIEWS.md) | — |
+| CS45-4 | CS45 | claimed | omni-gwn | wt-3 | omni-gwn/cs45-4-tracking | — | 2026-04-21T22:51Z | dispatch sub-agent (create TRACKING.md) | — |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
