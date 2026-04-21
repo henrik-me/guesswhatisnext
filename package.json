@@ -24,6 +24,7 @@
     "test:all": "vitest run && playwright test",
     "lint": "eslint . --max-warnings 50",
     "check:docs": "node scripts/check-docs-consistency.js",
+    "check:docs:strict": "node scripts/check-docs-consistency.js --strict",
     "dev:full": "node scripts/dev-server.js",
     "dev:log": "node scripts/dev-server.js --no-https"
   },
