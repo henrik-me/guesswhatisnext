@@ -336,7 +336,7 @@ The two-step rollout is deliberate. Flipping a checker to a hard gate while viol
 #### Cross-references
 
 - [CS43 — Documentation Currency & Drift Prevention](project/clickstops/done/done_cs43_doc-currency-and-drift-prevention.md) — the clickstop that codifies this principle and tracks the follow-on work to restructure `CONTEXT.md`, slim `infra/README.md`, and land the consistency checker as a hard gate.
-- [CS44 — WORKBOARD State Machine](project/clickstops/active/active_cs44_workboard-state-machine.md) — separate effort to harden the workboard's lifecycle and stale-lock handling (review.md findings 1, 3, 5).
+- [CS44 — WORKBOARD State Machine](project/clickstops/done/done_cs44_workboard-state-machine.md) — separate effort to harden the workboard's lifecycle and stale-lock handling (review.md findings 1, 3, 5).
 - [CS45 — INSTRUCTIONS.md Split](project/clickstops/planned/planned_cs45_instructions-split.md) — separate effort to break `INSTRUCTIONS.md` into operations / reviews / tracking files (review.md finding 4).
 
 ---
