@@ -1,370 +1,77 @@
 # Azure Infrastructure
 
-Deployment infrastructure for GuessWhatIsNext using Azure Container Apps.
+Operational notes for deploying and maintaining the Azure Container Apps deployment of guesswhatisnext. Authoritative configuration lives in the workflow files and deploy scripts; this README points at them and covers a few topics those files don't.
 
-## Architecture
+Per [INSTRUCTIONS.md § Documentation Conventions](../INSTRUCTIONS.md#documentation-conventions), this file does not restate values (replica counts, secret names, image tags, environment names, region, CPU/memory limits, health-monitor cadence, branch-protection rules, etc.) that already live authoritatively in workflow files or deploy scripts — it links to them.
 
-```
-GitHub Actions CI/CD
-  ├── Build → GHCR (ghcr.io/henrik-me/guesswhatisnext)
-  ├── Deploy Staging → Azure Container Apps (gwn-staging)
-  ├── Smoke Tests → Health + API verification
-  └── Deploy Production → Azure Container Apps (gwn-production)
+## Quickstart
 
-Azure Resources
-  ├── Resource Group: gwn-rg
-  ├── Container Apps Environment: gwn-env
-  ├── Container App: gwn-staging  (0-2 replicas, 0.25 CPU, 0.5 GiB)
-  └── Container App: gwn-production (1-5 replicas, 0.5 CPU, 1 GiB)
-```
+- **Local / first-run bootstrap:** `./infra/deploy.sh --help` (Bash) or `.\infra\deploy.ps1 -help` (PowerShell). The scripts are idempotent.
+- **Staging + production deploys:** see [`.github/workflows/staging-deploy.yml`](../.github/workflows/staging-deploy.yml) and [`.github/workflows/prod-deploy.yml`](../.github/workflows/prod-deploy.yml) for triggers, gates, and pipeline shape.
+- **No Bicep / ARM templates:** infra is created imperatively by the deploy scripts via `az containerapp` commands.
 
-## Prerequisites
+## Custom Domain (one-time setup)
 
-1. **Azure CLI** — [Install](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
-2. **GitHub CLI** — [Install](https://cli.github.com/)
-3. **Node.js** — [Install](https://nodejs.org/) (required by `infra/deploy.sh`)
-4. **curl** — required when running the bundled health checks from Bash / Git Bash
-5. **Azure subscription** with permissions to create resources and Entra apps/service principals
-6. **GitHub repository** with Actions enabled
+Production uses **gwn.metzger.dk**. The commands below are the procedure — they are not part of any deploy pipeline and have no other authoritative home.
 
-### Azure CLI Setup
+### 1. DNS records
+
+Add these in your DNS provider before binding the hostname in Azure. Some providers expect zone-relative hostnames (e.g. `gwn`, `asuid.gwn` in the `metzger.dk` zone), others expect FQDNs (`gwn.metzger.dk`, `asuid.gwn.metzger.dk`).
+
+| Type  | Host         | Value |
+|-------|--------------|-------|
+| CNAME | `gwn`        | `gwn-production.<env-id>.<region>.azurecontainerapps.io` |
+| TXT   | `asuid.gwn`  | Output of `az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.customDomainVerificationId" -o tsv` |
+
+### 2. Bind hostname + provision managed TLS cert
 
 ```bash
-# Log in to Azure
-az login
-
-# Set your subscription (if you have multiple)
-az account set --subscription "<subscription-id>"
-
-# Register required providers
-az provider register --namespace Microsoft.App
-az provider register --namespace Microsoft.OperationalInsights
-```
-
-## Unified Setup
-
-`infra/deploy.sh` and `infra/deploy.ps1` now handle the full first-run bootstrap:
-
-- create/update the Azure resource group, Container Apps environment, and staging/production apps
-- generate or reuse `JWT_SECRET` + `SYSTEM_API_KEY`
-- create/reset the GitHub Actions Azure service principal and store `AZURE_CREDENTIALS`
-- set the GitHub secrets/variables used by the deploy and health-monitor workflows
-- configure app `CANONICAL_HOST` values from the deployed ingress URLs
-- run the existing health-check script against any app already running the real image
-
-The legacy `setup-github.sh` / `setup-github.ps1` entry points remain as compatibility wrappers and simply forward to `deploy.* --skip-provision`.
-
-### Optional environment overrides
-
-| Variable | Purpose |
-|----------|---------|
-| `GHCR_PAT` | Dedicated GitHub token with at least `read:packages` so Azure Container Apps can pull the private GHCR image |
-| `GHCR_USERNAME` | Override the GHCR username if it differs from the logged-in `gh` user |
-| `IMAGE_TAG` | Deploy a specific image tag instead of `latest` |
-| `CANONICAL_HOST` | Override the staging hostname written to Azure / GitHub vars |
-| `PRODUCTION_CANONICAL_HOST` | Override the production hostname written to Azure |
-| `STAGING_AUTO_DEPLOY` | Seed or update the repo variable that gates automatic staging deploys |
-| `RESOURCE_GROUP`, `LOCATION`, `ENVIRONMENT`, `TARGET_REPO` | Override the default infra or repo targets |
-
-If `GHCR_PAT` is omitted, the script leaves any existing `GHCR_PAT` repo secret untouched but does not seed or rotate GHCR pull credentials. Provide `GHCR_PAT` explicitly whenever you want the bootstrap to configure or update GHCR access.
-
-## Initial Deployment
-
-### PowerShell (Windows)
-
-```powershell
-# 1. Login
-az login
-
-# 2. (Recommended) provide a dedicated GHCR pull token
-$env:GHCR_PAT = '<github-token-with-read-packages>'
-
-# 3. Run the unified bootstrap
-.\infra\deploy.ps1
-```
-
-### Bash (macOS / Linux / WSL)
-
-```bash
-# 1. Login
-az login
-
-# 2. (Recommended) provide a dedicated GHCR pull token
-export GHCR_PAT='<github-token-with-read-packages>'
-
-# 3. Run the unified bootstrap
-chmod +x infra/deploy.sh
-./infra/deploy.sh
-```
-
-The bootstrap script is idempotent — safe to re-run at any time.
-
-## GitHub Configuration
-
-The unified deploy script writes the repository settings the workflows expect.
-
-### Repository secrets (set automatically when values are available)
-
-| Secret | Description |
-|--------|-------------|
-| `AZURE_CREDENTIALS` | Azure service principal JSON for `azure/login` |
-| `JWT_SECRET` | Shared app secret for JWT signing |
-| `SYSTEM_API_KEY` | Shared app secret for health/admin access |
-| `GHCR_PAT` | Token used by Azure Container Apps to pull the private GHCR image |
-| `PROD_URL` | Production base URL used by `prod-deploy.yml` and `health-monitor.yml` |
-
-### Repository variables (set automatically when values are available)
-
-| Variable | Description |
-|----------|-------------|
-| `STAGING_URL` | Staging base URL used by `staging-deploy.yml` |
-| `GHCR_USERNAME` | GHCR username paired with `GHCR_PAT` |
-| `CANONICAL_HOST` | Staging host name injected into staging runtime config |
-| `STAGING_AUTO_DEPLOY` | Gates automatic staging deploys (`false` by default unless overridden) |
-
-### GitHub environments
-
-Create two environments under **Settings → Environments**:
-
-- **`staging`** — used by staging deployment jobs
-- **`production`** — used by production deployment and health monitoring
-  - Enable **Required reviewers** for the production approval gate
-  - Optionally add a **wait timer** (for example, 5 minutes)
-
-## CI/CD Pipeline
-
-Three workflows handle the full pipeline:
-
-### PR Checks (`.github/workflows/ci.yml`)
-Runs on every pull request to `main`:
-```
-[Lint] + [Test]  (parallel)
-```
-
-### Staging Deploy (`.github/workflows/staging-deploy.yml`)
-Runs on every merge to `main`:
-```
-Build & Push GHCR → Ephemeral Smoke Test → ff release/staging
-  → Manual Approval → Deploy Azure Staging → Verify Health
-```
-
-### Production Deploy (`.github/workflows/prod-deploy.yml`)
-Manual trigger from `release/staging`:
-```
-Deploy same image to prod → Verify → Auto-rollback on failure
-```
-
-### Auto-Rollback
-
-If production verification fails after deployment:
-1. The previous container image is automatically redeployed
-2. A GitHub issue is created with the `deployment-failure` label
-3. The workflow run logs contain full details
-
-### Docker Image Tags
-
-Images are tagged with the short git SHA: `ghcr.io/henrik-me/guesswhatisnext:<sha>`
-
-## Health Monitoring
-
-The health monitor (`.github/workflows/health-monitor.yml`) runs every 5 minutes and
-performs a multi-layer check of production:
-
-### What it checks
-
-| Check | Details |
-|-------|---------|
-| **Health endpoint** | `GET /api/health` with `X-API-Key` — verifies database, WebSocket, disk, and uptime |
-| **Response time** | Flags as degraded if health endpoint takes >5 seconds |
-| **Puzzles endpoint** | Registers a temp user, obtains a JWT, fetches `GET /api/puzzles` |
-| **Retry logic** | Retries up to 3 times with 10 s delay before declaring failure |
-
-### On failure
-
-- Creates a GitHub issue with the `service-health` label containing full diagnostics
-  (HTTP status, response time, response body, timestamp, workflow run link)
-- If an open `service-health` issue already exists, adds a comment instead of a duplicate
-
-### Workflow outputs
-
-Other workflows can consume the health status via job outputs:
-
-```yaml
-jobs:
-  downstream:
-    needs: health-check
-    if: needs.health-check.outputs.status == 'healthy'
-```
-
-Available outputs: `status` (healthy / degraded / failed), `health_status`,
-`health_response_time`, `puzzles_status`, `timestamp`.
-
-### Running health checks locally
-
-Use the included scripts to check any environment from your machine:
-
-```bash
-# Bash / macOS / Linux / Git Bash
-./scripts/health-check.sh http://localhost:3000 gwn-dev-system-key
-
-# PowerShell (Windows)
-.\scripts\health-check.ps1 -BaseUrl http://localhost:3000 -ApiKey gwn-dev-system-key
-```
-
-> **Note:** The examples above use the local dev default key (`gwn-dev-system-key`). When checking a Docker container started via `docker-compose.yml`, use `test-system-api-key` instead (the key configured for E2E testing).
-
-The scripts check:
-1. `GET /api/health` — status and response time
-2. Auth flow — register → login → fetch scores
-3. `GET /api/puzzles` — data availability
-
-Exit code `0` = all pass, `1` = any failure. Colored output shows pass/fail per check.
-
-### Interpreting service-health issues
-
-When the monitor creates an issue:
-- **Health endpoint failed** — the server may be down or unhealthy (check Azure
-  Container Apps logs)
-- **Response time degraded** — the server is slow; check database latency or resource
-  usage
-- **Puzzles endpoint failed** — auth or data layer may be broken even though `/api/health`
-  reports OK
-- Close the issue once the root cause is resolved — the monitor will create a new one if
-  the problem recurs
-
-## Storage
-
-SQLite databases are stored on the container's local filesystem (`GWN_DB_PATH=/tmp/game.db`
-in staging/production). Data is ephemeral — lost on container restart. This is acceptable
-for staging; production will migrate to Azure SQL (Phase 11b-c).
-
-## Cost Estimates
-
-With Container Apps consumption plan (pay-per-use):
-- **Staging** (0 min replicas): ~$0 when idle
-- **Production** (1 min replica): ~$15-30/month at low traffic
-
-## Custom Domain
-
-Production uses a custom domain: **gwn.metzger.dk**
-
-### DNS Records
-
-Two DNS records are required before binding the custom domain in Azure:
-
-| Type | Host (zone-relative) | Value |
-|------|------|-------|
-| CNAME | `gwn` | `gwn-production.<env-id>.<region>.azurecontainerapps.io` |
-| TXT | `asuid.gwn` | Domain verification ID from Azure (`az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.customDomainVerificationId" -o tsv`) |
-
-> **Note:** Some DNS providers expect zone-relative hostnames (for example, `gwn` and `asuid.gwn` in the `metzger.dk` zone), while others expect FQDNs (`gwn.metzger.dk` and `asuid.gwn.metzger.dk`). Use whichever format your provider requires for each record.
-
-### Binding the Domain
-
-After DNS records are in place, bind the custom domain and provision a managed TLS certificate:
-
-```bash
-# Add the custom hostname
 az containerapp hostname add \
   --name gwn-production --resource-group gwn-rg \
   --hostname gwn.metzger.dk
 
-# Bind and provision managed certificate
 az containerapp hostname bind \
   --name gwn-production --resource-group gwn-rg \
   --hostname gwn.metzger.dk --environment gwn-env \
   --validation-method CNAME
 ```
 
-This is a **one-time setup** — the commands are not part of the regular deploy pipeline. The deploy scripts (`deploy.sh` / `deploy.ps1`) include these commands as commented-out reference.
+The free managed TLS cert is issued automatically after DNS validation and renews automatically.
 
-### Managed TLS Certificate
+### 3. `PROD_URL` GitHub secret gotcha
 
-Azure Container Apps provisions a free managed TLS certificate when the hostname is bound. The certificate:
-- Is issued automatically after DNS validation succeeds
-- Renews automatically — no manual rotation needed
-- Covers only the bound hostname (`gwn.metzger.dk`)
+Re-running `infra/deploy.sh` / `infra/deploy.ps1` resets the `PROD_URL` GitHub secret back to the Azure FQDN. After re-bootstrap, manually restore `PROD_URL` to `https://gwn.metzger.dk` (or whatever your custom domain is) so GitHub Actions keep targeting the custom hostname. `PRODUCTION_CANONICAL_HOST` only affects the container app's `CANONICAL_HOST` env var, not the secret.
 
-### GitHub Settings
+## Operational troubleshooting
 
-After custom domain binding, update the GitHub repository secret for the production URL:
-
-| Setting | Key | Value |
-|---------|-----|-------|
-| Secret | `PROD_URL` | `https://gwn.metzger.dk` |
-
-The production `CANONICAL_HOST` env var is derived from `PROD_URL` by the production deploy workflow — there is no separate repo variable for it. The repo-level `CANONICAL_HOST` variable controls **staging** only and should keep the staging Azure FQDN.
-
-> **Note:** Re-running `infra/deploy.sh` or `infra/deploy.ps1` will reset the GitHub `PROD_URL` secret to the Azure FQDN. Setting `PRODUCTION_CANONICAL_HOST=gwn.metzger.dk` before running the script affects only the production container app's `CANONICAL_HOST`; it does **not** preserve the `PROD_URL` secret. After the script finishes, manually restore `PROD_URL` to `https://gwn.metzger.dk` if you want GitHub Actions to keep using the custom domain.
-
-### Backward Compatibility
-
-The old Azure FQDN (`gwn-production.<env-id>.<region>.azurecontainerapps.io`) continues to work for direct HTTPS access. The security middleware does not perform canonical-host redirects for already-HTTPS requests, so both HTTPS URLs serve traffic. However, HTTP requests to the old Azure FQDN will still redirect to `https://${CANONICAL_HOST}` (for production, `https://gwn.metzger.dk`), so test the legacy hostname with an explicit `https://` if you want to verify it directly.
-
-## Troubleshooting
+When prod is misbehaving, these are the `az` commands to reach for. For workflow context (what the pipeline did, which image tag is live, what the verify step checked) see [`prod-deploy.yml`](../.github/workflows/prod-deploy.yml) and [`health-monitor.yml`](../.github/workflows/health-monitor.yml).
 
 ```bash
-# View container app logs
+# Tail logs
 az containerapp logs show --name gwn-production --resource-group gwn-rg --follow
 
-# Check app status
-az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.runningStatus"
+# List revisions (find the active one + recent ones to roll back to)
+az containerapp revision list --name gwn-production --resource-group gwn-rg -o table
 
-# Restart an app
+# Restart a revision
 az containerapp revision restart --name gwn-production --resource-group gwn-rg --revision <revision-name>
 
-# List revisions
-az containerapp revision list --name gwn-production --resource-group gwn-rg -o table
+# Running status
+az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.runningStatus"
 ```
 
-## GitHub Repository Settings
+Local health-check scripts: [`scripts/health-check.sh`](../scripts/health-check.sh) / [`scripts/health-check.ps1`](../scripts/health-check.ps1).
 
-For the CI/CD pipeline and health monitoring to work, the following must be
-configured in the GitHub repository settings.
+## Authoritative sources
 
-### Required Secrets
+For everything not covered above (replica counts, CPU/memory, secrets list, environment variables, image tags, region, GitHub environments setup, branch protection, health-monitor cadence + checks, CI/CD pipeline shape, auto-rollback behaviour, storage backend), go to the source — do not rely on a paraphrase here:
 
-Navigate to **Settings → Secrets and variables → Actions → Secrets** and verify:
-
-| Secret | Description |
-|--------|-------------|
-| `AZURE_CREDENTIALS` | Service principal JSON for Azure deployments |
-| `JWT_SECRET` | Secret key used for signing JWT authentication tokens |
-| `SYSTEM_API_KEY` | API key for health-check and admin endpoints |
-| `GHCR_PAT` | GitHub token with package-read access for Azure Container Apps pulls |
-| `PROD_URL` | Production application URL (e.g. `https://gwn.metzger.dk`) |
-
-### Required Variables
-
-Navigate to **Settings → Secrets and variables → Actions → Variables** and verify:
-
-| Variable | Description |
-|----------|-------------|
-| `STAGING_URL` | Staging application URL (e.g. `https://gwn-staging.<region>.azurecontainerapps.io`) |
-| `GHCR_USERNAME` | Username paired with `GHCR_PAT` |
-| `CANONICAL_HOST` | Staging hostname used by the staging deploy workflow |
-| `STAGING_AUTO_DEPLOY` | Auto-deploy gate (`false` by default unless intentionally enabled) |
-
-### Environments
-
-Create two environments under **Settings → Environments**:
-
-- **staging** — used by staging deployment and smoke tests
-- **production** — used by production deployment, verification, and health monitor
-  - Enable **Required reviewers** for manual approval before production deploys
-  - Optionally add a **wait timer** (e.g. 5 minutes)
-
-### Branch Protection Rules
-
-Navigate to **Settings → Branches → Add rule** for the `main` branch:
-
-| Setting | Value |
-|---------|-------|
-| Branch name pattern | `main` |
-| Require a pull request before merging | ✅ |
-| Require approvals | 1 |
-| Require status checks to pass | ✅ — select **Lint** and **Test** |
-| Require branches to be up to date | ✅ |
-| Include administrators | ✅ (recommended) |
-
-This ensures every change to `main` passes CI and is reviewed before merging.
+- [`.github/workflows/prod-deploy.yml`](../.github/workflows/prod-deploy.yml) — production deploy pipeline, verify, auto-rollback, replica counts, image, secrets used.
+- [`.github/workflows/staging-deploy.yml`](../.github/workflows/staging-deploy.yml) — staging deploy pipeline, auto-deploy gating, smoke tests, manual approval.
+- [`.github/workflows/health-monitor.yml`](../.github/workflows/health-monitor.yml) — production health monitor cadence, checks, retry logic, on-failure issue creation.
+- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) — PR check pipeline (lint + test).
+- [`infra/deploy.sh`](deploy.sh) / [`infra/deploy.ps1`](deploy.ps1) — local bootstrap + GitHub secret/variable seeding. Run with `--help` / `-help` for options.
+- [`server/db/mssql-adapter.js`](../server/db/mssql-adapter.js) — production database adapter (Azure SQL serverless free tier; connection-string handling lives in `prod-deploy.yml`).
+- [`CONTEXT.md § Current Codebase State`](../CONTEXT.md#current-codebase-state) — high-level architecture and component layout.
+- [`README.md § Architecture`](../README.md#architecture) — repo overview and developer guide.
+- [`project/clickstops/done/done_cs26_public-repo-transition.md`](../project/clickstops/done/done_cs26_public-repo-transition.md) — branch protection, GitHub environments, CODEOWNERS, fork-PR security (the historical setup record).
