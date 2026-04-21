@@ -33,6 +33,11 @@
  *                              — every Active Work `Owner` (or `Agent ID`)
  *                                 value appears in the Orchestrators
  *                                 table's agent-ID column.
+ *   8. active-row-stale        — WORKBOARD.md Active Work row whose
+ *                                 `Last Updated` cell is > 24h old (warn).
+ *                                 Conditional on the column existing.
+ *   9. active-row-reclaimable  — same row > 7d old (error). Conditional on
+ *                                 the column existing. (CS44-5b)
  *
  * Escape hatch:`<!-- check:ignore <rule-name> -->` on the line itself or on
  * its own line above the next markdown block.
@@ -78,6 +83,12 @@ const CANONICAL_STATES = [
   'ready_to_merge',
   'blocked',
 ];
+// Stale-lock thresholds for WORKBOARD.md Active Work rows. Source of truth:
+// project/clickstops/active/active_cs44_workboard-state-machine.md (CS44-2,
+// stale-lock policy). Keep these named constants so the policy doc and the
+// checker stay in sync — bump here and in CS44-2 together.
+const STALE_THRESHOLD_HOURS = 24;
+const RECLAIMABLE_THRESHOLD_DAYS = 7;
 
 // ---------- generic helpers ---------------------------------------------------
 
@@ -610,11 +621,138 @@ function checkOwnerInOrchestratorsTable(wbPath, lines, ignores) {
   return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
 }
 
+// ---------- check 8 & 9: active-row-stale / active-row-reclaimable ----------
+// CS44-5b. Threshold-based freshness check for individual Active Work rows.
+// Conditional: only fires when the Active Work table has a `Last Updated`
+// column (added by CS44-3 schema upgrade). Today's schema uses `Started`, so
+// these rules are silent until the upgrade lands — by design.
+
+function parseTableRow(line) {
+  // A markdown table row: leading `|`, cells separated by `|`, trailing `|`.
+  // Returns trimmed cells (without the leading/trailing empty strings) or
+  // null if the line is not a table row.
+  if (!line.includes('|')) return null;
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|')) return null;
+  const parts = trimmed.split('|').map(s => s.trim());
+  if (parts.length >= 2 && parts[0] === '') parts.shift();
+  if (parts.length >= 1 && parts[parts.length - 1] === '') parts.pop();
+  return parts;
+}
+
+function isSeparatorRow(cells) {
+  return cells.length > 0 && cells.every(c => /^:?-{3,}:?$/.test(c));
+}
+
+// Strict ISO-8601 gate. We only act on values matching the format the
+// CS44-5a `last-updated-iso8601` rule will enforce, so anything looser
+// (e.g. `2026/04/01 00:00Z`, which `Date.parse` happily accepts) stays
+// silent here — CS44-5a owns the format-error signal, and acting on a
+// loose parse would emit a misleading age. Allows `Z` or numeric offset
+// (with or without colon) and optional seconds/fractional seconds.
+const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/;
+
+function checkActiveRowFreshness(repoRoot, now) {
+  const findings = [];
+  const wbPath = path.join(repoRoot, 'WORKBOARD.md');
+  if (!fs.existsSync(wbPath)) return findings;
+  const lines = readLines(wbPath);
+  const wbIgnores = parseIgnores(lines);
+
+  // Walk the `## Active Work` section. Multiple tables may exist (e.g. an
+  // example/note table before the real one); we treat each table independently
+  // so that a leading non-Active-Work table doesn't silence the rule. A
+  // "table" is a contiguous block of `|`-prefixed lines. The first row of
+  // each block is its header; we only act on tables whose header includes a
+  // `Last Updated` column.
+  let inActive = false;
+  let header = null;        // {idxLastUpdated, idxTaskId, idxOwner}
+  let sawSeparator = false;
+  let skipThisTable = false;
+
+  const resetTableState = () => { header = null; sawSeparator = false; skipThisTable = false; };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^##\s+Active Work/.test(line)) { inActive = true; resetTableState(); continue; }
+    if (inActive && /^##\s+/.test(line)) break;
+    if (!inActive) continue;
+
+    const cells = parseTableRow(line);
+    if (!cells) {
+      // Non-table line ends the current table block.
+      if (line.trim() !== '' || header || skipThisTable) resetTableState();
+      continue;
+    }
+
+    if (skipThisTable) continue;
+
+    if (!header) {
+      const idxLastUpdated = cells.findIndex(c => /^last\s*updated$/i.test(c));
+      if (idxLastUpdated === -1) {
+        // Not the Active Work data table — skip until block ends, then
+        // resume looking for the real header in the next block.
+        skipThisTable = true;
+        continue;
+      }
+      const idxTaskId = cells.findIndex(c => /^task\s*id$/i.test(c));
+      let idxOwner = cells.findIndex(c => /^owner$/i.test(c));
+      if (idxOwner === -1) idxOwner = cells.findIndex(c => /^agent\s*id$/i.test(c));
+      header = { idxLastUpdated, idxTaskId, idxOwner };
+      continue;
+    }
+
+    if (!sawSeparator) {
+      if (isSeparatorRow(cells)) { sawSeparator = true; continue; }
+      sawSeparator = true; // tolerate missing separator
+    }
+
+    const cell = cells[header.idxLastUpdated];
+    if (cell == null || cell === '' || cell === '—' || cell === '-') continue;
+    if (!ISO8601_RE.test(cell)) continue;
+    const ts = Date.parse(cell);
+    if (Number.isNaN(ts)) continue;
+
+    const ageMs = now.getTime() - ts;
+    const ageHours = ageMs / 3600000;
+    const ageDays = ageMs / 86400000;
+    const taskId = header.idxTaskId !== -1 ? cells[header.idxTaskId] : '(unknown task)';
+    const owner = header.idxOwner !== -1 ? cells[header.idxOwner] : '(unknown owner)';
+
+    if (ageDays > RECLAIMABLE_THRESHOLD_DAYS) {
+      findings.push({
+        rule: 'active-row-reclaimable', file: wbPath, line: i + 1,
+        severity: 'error',
+        message: `${taskId} (owner ${owner}): Last Updated ${ageDays.toFixed(1)}d ago (>${RECLAIMABLE_THRESHOLD_DAYS}d) — reclaimable per CS44-2`,
+      });
+    }
+    if (ageHours > STALE_THRESHOLD_HOURS) {
+      findings.push({
+        rule: 'active-row-stale', file: wbPath, line: i + 1,
+        severity: 'warning',
+        message: `${taskId} (owner ${owner}): Last Updated ${ageHours.toFixed(1)}h ago (>${STALE_THRESHOLD_HOURS}h) — stale per CS44-2`,
+      });
+    }
+  }
+
+  return findings.filter(f => !isIgnored(wbIgnores, f.rule, f.line));
+}
+
 // ---------- main runner ------------------------------------------------------
 
 function run(opts) {
   const repoRoot = path.resolve(opts.root || process.cwd());
-  const now = opts.now || new Date();
+  // `now` injection: opts.now (programmatic) > CHECK_DOCS_NOW_OVERRIDE env
+  // var (test harness convenience) > real wall clock. The env var exists so
+  // fixture timestamps in tests/fixtures/ can stay deterministic without
+  // every caller threading `now` through manually. Tests only — do not set
+  // this in production CI.
+  let now = opts.now;
+  if (!now && process.env.CHECK_DOCS_NOW_OVERRIDE) {
+    const parsed = new Date(process.env.CHECK_DOCS_NOW_OVERRIDE);
+    if (!Number.isNaN(parsed.getTime())) now = parsed;
+  }
+  if (!now) now = new Date();
   const findings = [];
 
   const mdFiles = walkMarkdown(repoRoot);
@@ -632,6 +770,7 @@ function run(opts) {
   findings.push(...checkDoneTaskCount(rows, contextPath, repoRoot, ctxIgnores));
   findings.push(...checkNoOrphanActiveWork(repoRoot, rows));
   findings.push(...checkWorkboardStampFresh(repoRoot, now));
+  findings.push(...checkActiveRowFreshness(repoRoot, now));
 
   // CS44-5a: WORKBOARD state-vocabulary / ISO 8601 / owner-in-orchestrators.
   // All three are no-ops until CS44-3 upgrades the schema.
