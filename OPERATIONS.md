@@ -29,6 +29,8 @@ Background agents **must** report progress to the orchestrating agent. Each mile
 
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
+**Workboard transitions are push-gated too.** The sub-agent `STATE:` discipline above is only half the contract: orchestrator-driven workboard state transitions (notably `claimed`, but also any orchestrator-side column update such as reclamation) are not effective until the corresponding commit has landed on `origin/main`. See [§ WORKBOARD.md — Live Coordination, "Claim effectiveness" in TRACKING.md](TRACKING.md#workboardmd--live-coordination) for the gating rule and the push-rejected recovery procedure.
+
 **Milestone timing table:** Sub-agents must include a timing table in their final completion report. This tracks elapsed time from session start for each major milestone (e.g., "npm install", "implementation", "validation", "PR created", "review clean"). This was identified as a process improvement during CS25 to help identify workflow bottlenecks.
 
 ## Branch Strategy & Merge Model
@@ -68,7 +70,7 @@ NOT allowed on main checkout:
 3. Read WORKBOARD.md for current active work and task assignments
 4. Read CONTEXT.md for project state and available clickstops
 5. Determine agent ID from hostname + repo suffix (see [§ Agent Identification in TRACKING.md](TRACKING.md#agent-identification))
-6. Update WORKBOARD.md to register the session (update Orchestrators table), then commit and push immediately
+6. Update WORKBOARD.md to register the session (update Orchestrators table), then commit and push immediately. The claim is not effective until the push lands on `origin/main` — see [§ WORKBOARD.md — Live Coordination, "Claim effectiveness" in TRACKING.md](TRACKING.md#workboardmd--live-coordination). If the push is rejected, follow the push-rejected recovery procedure in the same section before proceeding.
 7. Once a task is claimed, prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 
 **Orchestrator responsiveness:** The orchestrator must never block on work it can delegate. All delegatable work — code changes in worktrees; investigation, research, and analysis as non-worktree background agents — must run as background agents. The orchestrator's sole purpose is to stay available for user input and sub-agent coordination. The only synchronous work the orchestrator does is: reading/re-reading docs, lightweight planning and task decomposition, git operations on main (`git pull`, `git worktree add/remove`), updating WORKBOARD.md, creating and committing clickstop plan files, merging approved PRs, and communicating with the user. After dispatching a background agent, do not continue working on that task — report dispatch status to the user and wait for the next user message or agent completion notification.
