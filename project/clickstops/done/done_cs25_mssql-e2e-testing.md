@@ -3,7 +3,7 @@
 **Status:** ✅ Complete
 **Goal:** MSSQL as a supported local dev container with HTTPS, logging, telemetry (including OTel trace verification), cold-start simulation, and per-test server log correlation. Run the full E2E suite against the MSSQL + Caddy HTTPS stack and add coverage for HTTPS behavior, structured logging, OTel traces, and cold-start UX with real server delays.
 
-**Deferred from:** [CS19 — Community Puzzle Navigation & Testing](done/done_cs19_community-puzzle-navigation.md) (task CS19-4)
+**Deferred from:** [CS19 — Community Puzzle Navigation & Testing](done_cs19_community-puzzle-navigation.md) (task CS19-4)
 **Reason deferred:** Docker MSSQL E2E testing requires additional infrastructure setup beyond the scope of the CS19 navigation changes. The MSSQL Docker stack (`docker-compose.mssql.yml`) was set up as part of CS18 but E2E test automation against it has not been implemented yet.
 
 ---

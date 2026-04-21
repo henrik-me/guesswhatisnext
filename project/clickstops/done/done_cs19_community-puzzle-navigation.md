@@ -14,7 +14,7 @@
 | CS19-1 | Extract puzzle submission to dedicated sub-page | ✅ Done | Moved community section (Create Puzzle, My Submissions, gallery) from home screen into a navigable sub-page. Home screen has a single "Community Puzzles" menu item that navigates to the sub-page. |
 | CS19-2 | Gate submission/authoring flows behind feature flag | ✅ Done | The `submitPuzzle` feature flag controls visibility of authoring/submission actions (Create Puzzle button, submission form). The Community Puzzles menu item and browse/gallery remain always visible per CS14 design — only the create/submit actions are gated. |
 | CS19-3 | Update existing E2E tests for new navigation | ✅ Done | Updated `tests/e2e/community.spec.mjs`, `tests/e2e/my-submissions.spec.mjs`, `tests/e2e/moderation.spec.mjs` to work with the new sub-page navigation structure. |
-| CS19-4 | Add Docker MSSQL E2E validation | ➡️ Deferred to CS25 | Deferred to [CS25 — MSSQL E2E Testing](../clickstops/planned_cs25_mssql-e2e-testing.md). Docker MSSQL E2E testing requires additional infrastructure setup beyond the scope of the CS19 navigation changes. |
+| CS19-4 | Add Docker MSSQL E2E validation | ➡️ Deferred to CS25 | Deferred to [CS25 — MSSQL E2E Testing](done_cs25_mssql-e2e-testing.md). Docker MSSQL E2E testing requires additional infrastructure setup beyond the scope of the CS19 navigation changes. |
 | CS19-5 | Clean up home screen layout | ✅ Done | Home screen is clean — no leftover community puzzle UI elements when feature flag is off or on. |
 
 ---
