@@ -566,6 +566,53 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 **Public repository note:** When branch protection is enabled with required reviews, the repository owner (henrik-me) uses a repository ruleset bypass to allow direct WORKBOARD.md and clickstop plan file pushes. This bypass is configured in Settings → Rules → Rulesets and applies only to the owner role. Non-owner orchestrating agents (if any) would need to use PR-based updates instead.
 
+#### WORKBOARD State Machine
+
+This section defines the canonical vocabulary for the lifecycle of an Active Work row. The `State` column itself is added to `WORKBOARD.md` as part of CS44-3; this section defines the vocabulary CS44-3 will use. Sub-agent prompt updates that propagate this vocabulary land in CS44-4 (see § Agent Progress Reporting for the current event-reporting list).
+
+**A. Canonical states (8).** Every Active Work row is in exactly one of:
+
+| State | Entered when |
+|---|---|
+| `claimed` | Orchestrator has added the row but no work has begun. |
+| `implementing` | Sub-agent is making changes in its worktree. |
+| `validating` | Sub-agent has finished changes and is running the full validation suite locally (see § Branch Strategy & Merge Model for the canonical commands). |
+| `pr_open` | PR has been opened on GitHub but no review activity yet (or CI still running). |
+| `local_review` | Local code-review pass (e.g. via the `code-review` sub-agent) is in flight. |
+| `copilot_review` | Awaiting or addressing GitHub Copilot's review on the PR. |
+| `ready_to_merge` | All reviews approved, CI green, awaiting orchestrator's `gh pr merge`. |
+| `blocked` | Work cannot proceed; reason recorded in the Blocked Reason column. |
+
+**B. Allowed transitions.**
+
+- Forward path: `claimed → implementing → validating → pr_open → local_review → [copilot_review] → ready_to_merge`. `local_review` is required after `pr_open` (see § Agent Progress Reporting). `copilot_review` is required for code/config PRs and skipped for docs-only PRs.
+- `local_review` and `copilot_review` may interleave or repeat across review round-trips (e.g. local → copilot → local again after fixes).
+- Any state → `blocked` is permitted at any time.
+- `blocked` → the previous state when unblocked (do not invent a new state to record "was blocked"; `git log` on `WORKBOARD.md` is the audit trail).
+- **Terminal:** the row is *removed* from `WORKBOARD.md` after merge (see § WORKBOARD.md — Live Coordination). There is no `done` / `merged` state — do not add one. This matches the existing direct-on-main workboard discipline and the CS43 strict-shape principle.
+
+**C. Event → state mapping (the protocol).** State changes are driven by observable events, not judgement calls:
+
+| Event (observed by) | New State |
+|---|---|
+| Orchestrator dispatches sub-agent | `claimed` |
+| Sub-agent starts editing files | `implementing` |
+| Sub-agent finishes edits, begins the full validation suite (see § Branch Strategy & Merge Model) | `validating` |
+| Sub-agent opens PR (e.g. via `gh pr create`) | `pr_open` |
+| Sub-agent invokes the `code-review` agent | `local_review` |
+| Local review clean; sub-agent requests Copilot review (or Copilot review begins) | `copilot_review` |
+| All reviews approved + CI green | `ready_to_merge` |
+| Anything that prevents progress | `blocked` (with reason in Blocked Reason column) |
+
+**D. Reporting protocol (sub-agent → orchestrator).** The State column is owned by the orchestrator. Sub-agents do not edit `WORKBOARD.md` (per § Row ownership above). Instead:
+
+- Sub-agents **report state-change events** in their interim updates and final report. Use a greppable line of the form `STATE: <new-state>` (e.g. `STATE: pr_open`) so the orchestrator can extract transitions mechanically from agent output.
+- The sub-agent's final report **must** include the latest state — typically `pr_open`, `ready_to_merge`, or `blocked`.
+- The orchestrator updates the State column on receipt of the event report. The orchestrator may also infer state directly when the sub-agent's report is delayed — e.g. by querying `gh pr view`, checking CI status, or reading PR review threads.
+- The `Last Updated` timestamp on the row is the time the orchestrator wrote the State change, **not** the time the sub-agent observed the event. This keeps the column meaningful for staleness checks (CS44-2 / CS44-5b will define thresholds).
+
+This protocol is what makes the State column trustworthy. Without disciplined event reporting from sub-agents and disciplined column updates from orchestrators, State drifts and becomes fiction.
+
 #### CONTEXT.md — Project State Updates
 
 CONTEXT.md tracks clickstop summaries and current project state. Updates to CONTEXT.md **require PR review** because:
