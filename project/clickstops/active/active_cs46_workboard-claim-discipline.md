@@ -1,6 +1,6 @@
 # CS46 — Workboard Claim Discipline (Push-Success Gating)
 
-**Status:** ⬜ Planned
+**Status:** 🔄 Active
 **Goal:** Make explicit in TRACKING.md that a WORKBOARD.md claim (or reclamation) is not effective until the push to `origin/main` succeeds, and that no task work may proceed until then. Add the missing push-rejected recovery procedure.
 
 **Origin:** Surfaced 2026-04-21 while reclaiming CS42-1 (see WORKBOARD git log, commits `6f535a8` → `a330f70`). An orchestrator (`omni-gwn-c2`) committed a workboard claim locally, the push was rejected because another agent pushed to `main` in between, and — absent an explicit rule — it was unclear whether the claim was effective and whether downstream task work could continue. The user had to state the principle verbally ("do not move forward unless you can claim work"). The rule is partially present in the workboard procedures (TRACKING.md) but never stated as a gating principle.
