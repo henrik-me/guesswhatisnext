@@ -1,0 +1,32 @@
+name: Docs Consistency
+
+# CS43-2: warn-only. CS43-7 will flip to --strict.
+# Deliberately has no `paths-ignore`: this workflow MUST run on docs-only
+# PRs — that is exactly the gap the CS43 doc-currency clickstop closes.
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: docs-check-${{ github.head_ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Run check-docs-consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+
+      - name: Run docs consistency check
+        # No --strict yet. CS43-7 will flip this once CS43-3..CS43-6 clean
+        # up the baseline.
+        run: node scripts/check-docs-consistency.js
+        continue-on-error: true

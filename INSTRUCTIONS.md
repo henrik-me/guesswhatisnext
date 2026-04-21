@@ -445,6 +445,8 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 
 **Transitional note:** today's `CONTEXT.md` summary table and per-clickstop blocks restate status and task counts that live authoritatively in the clickstop files — a known violation of this rule. CS43-3 restructures `CONTEXT.md` to comply. Until that lands, the existing instructions for updating `CONTEXT.md` (in the [§ CONTEXT.md — Project State Updates](#contextmd--project-state-updates) and [§ Clickstop File Lifecycle](#clickstop-file-lifecycle) sections below) still apply; the principle is the target state, not a license to leave `CONTEXT.md` half-updated in the meantime.
 
+**Automated check:** `npm run check:docs` (script: [`scripts/check-docs-consistency.js`](scripts/check-docs-consistency.js)) enforces the mechanical half of this rule on every PR via the `Docs Consistency` workflow. The check runs in **warn-only** mode today (CS43-2) and will be flipped to a hard gate by CS43-7 once the baseline is cleaned up. Rule names: `link-resolves`, `clickstop-link-resolves`, `prefix-matches-status`, `unique-cs-state`, `done-task-count`, `no-orphan-active-work`, `workboard-stamp-fresh`. For a legitimate exception, add an `<!-- check:ignore <rule-name> -->` HTML comment either inline on the offending line or on its own line directly above the affected markdown block. Use sparingly — every escape-hatch comment is an admission that the principle is not being upheld.
+
 ### Clickstop & Task Management
 
 **Clickstops** are the unit of deliverable work — each represents a feature, capability, or related set of changes. **Tasks** are the breakdown within a clickstop.
