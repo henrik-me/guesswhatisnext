@@ -1,6 +1,6 @@
 name: Docs Consistency
 
-# CS43-2: warn-only. CS43-7 will flip to --strict.
+# CS43-7: strict mode — errors fail the job.
 # Deliberately has no `paths-ignore`: this workflow MUST run on docs-only
 # PRs — that is exactly the gap the CS43 doc-currency clickstop closes.
 on:
@@ -26,10 +26,6 @@ jobs:
           node-version: 22
 
       - name: Run docs consistency check
-        # No --strict yet. CS43-7 will flip this once CS43-3..CS43-6 clean
-        # up the baseline.
-        # `continue-on-error` is retained per the CS43-2 spec so an unexpected
-        # script failure (regex bug, I/O error) still lets docs-only PRs
-        # proceed during the warn-only rollout. CS43-7 will also drop this.
-        run: node scripts/check-docs-consistency.js
-        continue-on-error: true
+        # CS43-7: strict mode. Non-zero exit (any error-severity finding)
+        # fails the job. Baseline on main is zero findings as of CS43-6.
+        run: npm run check:docs:strict
