@@ -93,10 +93,19 @@ function slugify(heading) {
 
 function anchorsForFile(p) {
   const lines = readLines(p);
+  const counts = new Map();
   const set = new Set();
+  let inFence = false;
   for (const line of lines) {
+    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
     const m = /^#{1,6}\s+(.+?)\s*$/.exec(line);
-    if (m) set.add(slugify(m[1]));
+    if (!m) continue;
+    const base = slugify(m[1]);
+    const n = counts.get(base) || 0;
+    // GitHub: first occurrence is the bare slug, subsequent ones get -1, -2, ...
+    set.add(n === 0 ? base : `${base}-${n}`);
+    counts.set(base, n + 1);
   }
   return set;
 }
@@ -243,6 +252,15 @@ function parseClickstopSummary(contextPath) {
 
 // ---------- check 2 & 3: clickstop link + prefix -----------------------------
 
+function resolveRelative(base, linkPath) {
+  // Mirror of the path handling in checkLinkResolves so consumers of the
+  // CONTEXT.md Clickstop Summary don't trip on fragment/query suffixes.
+  const [pathPartRaw] = linkPath.split('#');
+  const pathPart = pathPartRaw.split('?')[0];
+  if (!pathPart) return null;
+  return path.resolve(base, decodeURIComponent(pathPart));
+}
+
 function checkClickstopLinksAndPrefix(repoRoot, rows, contextPath, ignores) {
   const findings = [];
   for (const r of rows) {
@@ -251,8 +269,8 @@ function checkClickstopLinksAndPrefix(repoRoot, rows, contextPath, ignores) {
         severity: 'error', message: `${r.cs}: row missing details link` });
       continue;
     }
-    const target = path.resolve(path.dirname(contextPath), r.linkPath);
-    if (!fs.existsSync(target)) {
+    const target = resolveRelative(path.dirname(contextPath), r.linkPath);
+    if (!target || !fs.existsSync(target)) {
       findings.push({ rule: 'clickstop-link-resolves', file: contextPath, line: r.line,
         severity: 'error', message: `${r.cs}: link does not resolve → ${r.linkPath}` });
       continue;
@@ -290,13 +308,21 @@ function checkUniqueCsState(repoRoot) {
     const states = new Set(arr.map(a => a.prefix));
     if (states.size > 1) {
       for (const a of arr) {
-        findings.push({ rule: 'unique-cs-state', file: a.file, line: null,
+        // Emit on line 1 (not null) so the escape hatch can target the file
+        // via `<!-- check:ignore unique-cs-state -->` at its top.
+        findings.push({ rule: 'unique-cs-state', file: a.file, line: 1,
           severity: 'error',
           message: `${cs} appears in multiple states: ${[...states].sort().join(', ')}` });
       }
     }
   }
-  return findings;
+  // Per-file ignore: read each offending file's directives and filter.
+  return findings.filter(f => {
+    try {
+      const ig = parseIgnores(readLines(f.file));
+      return !isIgnored(ig, f.rule, f.line);
+    } catch { return true; }
+  });
 }
 
 // ---------- check 5: done-task-count -----------------------------------------
@@ -308,8 +334,8 @@ function checkDoneTaskCount(rows, contextPath, repoRoot, ignores) {
     if (r.n >= r.m) continue;
     let hasDeferred = false;
     if (r.linkPath) {
-      const target = path.resolve(path.dirname(contextPath), r.linkPath);
-      if (fs.existsSync(target)) {
+      const target = resolveRelative(path.dirname(contextPath), r.linkPath);
+      if (target && fs.existsSync(target)) {
         const txt = fs.readFileSync(target, 'utf8');
         hasDeferred = /^#{1,6}\s+(deferred|will\s+not\s+be\s+done)/im.test(txt);
       }
