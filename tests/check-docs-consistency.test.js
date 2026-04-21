@@ -86,7 +86,7 @@ describe('check-docs-consistency', () => {
     // files, rerun, and assert the findings for that file are gone.
     const fs = require('fs');
     const root = path.join(FIX, 'cs-in-two-states');
-    const targetFile = path.join(root, 'project', 'clickstops', 'active_cs7_thing.md');
+    const targetFile = path.join(root, 'project', 'clickstops', 'active', 'active_cs7_thing.md');
     const original = fs.readFileSync(targetFile, 'utf8');
     try {
       fs.writeFileSync(targetFile, '<!-- check:ignore unique-cs-state -->\n' + original);

@@ -3,8 +3,8 @@
  * scripts/check-docs-consistency.js — CS43-2
  *
  * Pure Node (no deps) docs consistency checker. See INSTRUCTIONS.md
- * § Documentation Conventions and project/clickstops/active_cs43_*.md
- * for the why.
+ * § Documentation Conventions and project/clickstops/active/active_cs43_*.md
+ * (or project/clickstops/done/done_cs43_*.md once archived) for the why.
  *
  * Checks:
  *   1. link-resolves           — every relative link [text](path[#anchor]) in
@@ -312,7 +312,12 @@ function checkClickstopLinksAndPrefix(repoRoot, rows, contextPath, ignores) {
 
 function checkUniqueCsState(repoRoot) {
   const findings = [];
-  const dirs = ['project/clickstops', 'project/clickstops/done'];
+  const dirs = [
+    'project/clickstops',          // root: should be empty of clickstop files post-CS43-5
+    'project/clickstops/planned',
+    'project/clickstops/active',
+    'project/clickstops/done',
+  ];
   const map = new Map(); // CS# → [{file, prefix}]
   for (const d of dirs) {
     const full = path.join(repoRoot, d);
