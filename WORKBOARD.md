@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-21T17:35Z
+> **Last updated:** 2026-04-21T16:37Z
 
 ## Orchestrators
 
@@ -21,6 +21,5 @@ Orchestrators update this file directly on main — no PR required.
 |---------|-----------|-------------|----------|----------|--------|----|---------|
 | CS42-1 | CS42 | Investigate: progressive messages missing in production cold start | yoga-gwn | — | — | — | 2026-04-19T22:20Z |
 | CS43-5 | CS43 | Standardize clickstop file location convention | omni-gwn | wt-2 | omni-gwn/cs43-5-clickstop-file-location | — | 2026-04-21T17:35Z |
-| CS43-7 | CS43 | Flip docs consistency check to --strict | omni-gwn | wt-3 | omni-gwn/cs43-7-flip-strict | — | 2026-04-21T17:35Z |
 
 > **Note:** For queued or in-flight clickstops, check files with `planned_` or `active_` prefixes in `project/clickstops/`. For completed clickstops, check files with `done_` prefix. See the task tables inside those files for task-level status.
