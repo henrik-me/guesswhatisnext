@@ -227,7 +227,7 @@ For parallel work, the project uses **fixed git worktree slots** with task-speci
 git worktree list    # see which branch is in which slot
 ```
 
-Each worktree agent pushes its branch and creates a PR. The orchestrating agent merges approved PRs. See [INSTRUCTIONS.md](INSTRUCTIONS.md) for full workflow details.
+Each worktree agent pushes its branch and creates a PR. The orchestrating agent merges approved PRs. See [OPERATIONS.md](OPERATIONS.md) for full workflow details.
 
 **Current workflow:** Push branch → create PR → local review loop (GPT 5.4) → Copilot review (code/config PRs only; docs-only PRs skip) → squash-merge to main.
 
@@ -291,7 +291,10 @@ guesswhatisnext/
 ├── infra/                          # Azure deployment (deploy.sh + README)
 ├── eslint.config.mjs               # ESLint flat config
 ├── package.json
-├── INSTRUCTIONS.md                 # Architecture & coding guidelines
+├── INSTRUCTIONS.md                 # Durable policy (architecture, coding, testing) + index to procedure docs
+├── OPERATIONS.md                   # Agent workflow, parallelism, deployment procedures
+├── REVIEWS.md                      # Local review loop + Copilot PR review policy
+├── TRACKING.md                     # Clickstop lifecycle, WORKBOARD state machine, CONTEXT protocol
 ├── CONTEXT.md                      # Project plan & status tracker
 └── README.md                       # This file
 ```
