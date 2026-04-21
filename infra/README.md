@@ -6,9 +6,8 @@ Per [INSTRUCTIONS.md § Documentation Conventions](../INSTRUCTIONS.md#documentat
 
 ## Quickstart
 
-- **Local / first-run bootstrap:** `./infra/deploy.sh --help` (Bash) or `.\infra\deploy.ps1 -help` (PowerShell). The scripts are idempotent and handle resource-group / Container Apps env / staging+production app / GitHub secrets+variables / service-principal setup.
-- **Staging deploys:** triggered by [`.github/workflows/staging-deploy.yml`](../.github/workflows/staging-deploy.yml) on every merge to `main` (auto-deploy gating, smoke tests, manual approval — see workflow file).
-- **Production deploys:** triggered manually via [`.github/workflows/prod-deploy.yml`](../.github/workflows/prod-deploy.yml) from `release/staging` (verify + auto-rollback — see workflow file).
+- **Local / first-run bootstrap:** `./infra/deploy.sh --help` (Bash) or `.\infra\deploy.ps1 -help` (PowerShell). The scripts are idempotent.
+- **Staging + production deploys:** see [`.github/workflows/staging-deploy.yml`](../.github/workflows/staging-deploy.yml) and [`.github/workflows/prod-deploy.yml`](../.github/workflows/prod-deploy.yml) for triggers, gates, and pipeline shape.
 - **No Bicep / ARM templates:** infra is created imperatively by the deploy scripts via `az containerapp` commands.
 
 ## Custom Domain (one-time setup)
