@@ -81,6 +81,90 @@ describe('check-docs-consistency', () => {
     expect(findings).toEqual([]);
   });
 
+  // ---- CS44-5a: state-vocabulary, ISO 8601, owner-in-orchestrators-table ----
+
+  test('workboard-new-schema-happy: zero findings from new rules', () => {
+    const findings = run({ root: path.join(FIX, 'workboard-new-schema-happy'), now: FIXED_NOW });
+    expect(findings).toEqual([]);
+  });
+
+  test('workboard-bad-state: state-in-vocabulary error', () => {
+    const findings = run({ root: path.join(FIX, 'workboard-bad-state'), now: FIXED_NOW });
+    expect(rules(findings)).toEqual(['state-in-vocabulary']);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].file).toBe('WORKBOARD.md');
+    expect(findings[0].message).toContain('reviewing');
+  });
+
+  test('workboard-bad-last-updated: last-updated-iso8601 error', () => {
+    const findings = run({ root: path.join(FIX, 'workboard-bad-last-updated'), now: FIXED_NOW });
+    expect(rules(findings)).toEqual(['last-updated-iso8601']);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].message).toContain('yesterday');
+  });
+
+  test('workboard-bad-owner: owner-in-orchestrators-table error', () => {
+    const findings = run({ root: path.join(FIX, 'workboard-bad-owner'), now: FIXED_NOW });
+    expect(rules(findings)).toEqual(['owner-in-orchestrators-table']);
+    expect(findings[0].severity).toBe('error');
+    expect(findings[0].message).toContain('omni-gwn-typo');
+  });
+
+  test('workboard-old-schema-compat: new rules silent on pre-CS44-3 schema', () => {
+    // Today's WORKBOARD has `Agent ID` (no `State`, no `Last Updated`).
+    // state-in-vocabulary and last-updated-iso8601 should be silent;
+    // owner-in-orchestrators-table activates on `Agent ID` and the value
+    // is a known orchestrator, so it produces no finding either.
+    const findings = run({ root: path.join(FIX, 'workboard-old-schema-compat'), now: FIXED_NOW });
+    expect(findings).toEqual([]);
+  });
+
+  test('workboard-state-escape-hatch: inline ignores suppress all three rules', () => {
+    const findings = run({ root: path.join(FIX, 'workboard-state-escape-hatch'), now: FIXED_NOW });
+    expect(findings).toEqual([]);
+  });
+
+  test('last-updated-iso8601: rejects non-ISO formats Date.parse would accept', () => {
+    // Sanity: Date.parse accepts these locale/RFC strings, but the rule
+    // must not. Verify by running a synthetic fixture in a scratch dir.
+    const fs = require('fs');
+    const tmp = path.join(__dirname, '.tmp-iso-' + process.pid);
+    fs.mkdirSync(tmp, { recursive: true });
+    try {
+      fs.writeFileSync(path.join(tmp, 'WORKBOARD.md'),
+        '# WORKBOARD\n\n> **Last updated:** 2099-01-01T00:00Z\n\n' +
+        '## Orchestrators\n\n| Agent ID | Status |\n|----------|--------|\n| a | x |\n\n' +
+        '## Active Work\n\n| Task ID | Owner | Last Updated |\n|---------|-------|--------------|\n' +
+        '| T1 | a | 01/02/2099 |\n' +
+        '| T2 | a | Mon, 05 Jan 2099 00:00:00 GMT |\n');
+      const findings = run({ root: tmp, now: FIXED_NOW });
+      const iso = findings.filter(f => f.rule === 'last-updated-iso8601');
+      expect(iso).toHaveLength(2);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test('table parser: respects escaped pipes (\\|) inside cells', () => {
+    const fs = require('fs');
+    const tmp = path.join(__dirname, '.tmp-pipe-' + process.pid);
+    fs.mkdirSync(tmp, { recursive: true });
+    try {
+      // Cell contains an escaped pipe; without escape-aware splitting
+      // later columns would shift and `bogus-state` would be read as
+      // State, causing a false positive.
+      fs.writeFileSync(path.join(tmp, 'WORKBOARD.md'),
+        '# WORKBOARD\n\n> **Last updated:** 2099-01-01T00:00Z\n\n' +
+        '## Orchestrators\n\n| Agent ID | Status |\n|----------|--------|\n| omni-gwn | x |\n\n' +
+        '## Active Work\n\n| Task ID | Description | State | Owner |\n|---------|-------------|-------|-------|\n' +
+        '| T1 | foo \\| bar \\| baz | implementing | omni-gwn |\n');
+      const findings = run({ root: tmp, now: FIXED_NOW });
+      expect(findings).toEqual([]);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   test('unique-cs-state can be suppressed by own-line ignore above the heading', () => {
     // Dynamic: add an ignore comment to the top of one of the cs-in-two-states
     // files, rerun, and assert the findings for that file are gone.

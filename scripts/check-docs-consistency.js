@@ -23,8 +23,18 @@
  *                                 reference a CS# already marked ✅.
  *   7. workboard-stamp-fresh   — WORKBOARD.md "Last updated" stamp must be
  *                                 within 14 days of today (warn-only).
+ *   8. state-in-vocabulary     — every Active Work `State` cell is one of
+ *                                 the canonical states (CS44-1). Silent
+ *                                 until the schema gains a State column.
+ *   9. last-updated-iso8601    — every Active Work `Last Updated` cell
+ *                                 parses as ISO 8601. Silent until the
+ *                                 schema gains a Last Updated column.
+ *  10. owner-in-orchestrators-table
+ *                              — every Active Work `Owner` (or `Agent ID`)
+ *                                 value appears in the Orchestrators
+ *                                 table's agent-ID column.
  *
- * Escape hatch: `<!-- check:ignore <rule-name> -->` on the line itself or on
+ * Escape hatch:`<!-- check:ignore <rule-name> -->` on the line itself or on
  * its own line above the next markdown block.
  *
  * Flags:
@@ -53,6 +63,21 @@ const SKIP_PATH_FRAGMENTS = ['tests/fixtures'];
 
 const STATUS_ICON = { '✅': 'done', '🔄': 'active', '⬜': 'planned' };
 const PREFIX_FOR_STATE = { done: 'done_', active: 'active_', planned: 'planned_' };
+
+// Canonical WORKBOARD Active Work states (CS44-1). The human-readable source
+// of truth lives in INSTRUCTIONS.md § "WORKBOARD State Machine"; this
+// constant is intentionally a duplicate so the checker has no parsing
+// dependency on that file. Keep the two in sync.
+const CANONICAL_STATES = [
+  'claimed',
+  'implementing',
+  'validating',
+  'pr_open',
+  'local_review',
+  'copilot_review',
+  'ready_to_merge',
+  'blocked',
+];
 
 // ---------- generic helpers ---------------------------------------------------
 
@@ -442,6 +467,149 @@ function checkWorkboardStampFresh(repoRoot, now) {
   return findings.filter(f => !isIgnored(wbIgnores, f.rule, f.line));
 }
 
+// ---------- checks 8/9/10: WORKBOARD state-vocabulary, ISO 8601, owner ------
+//
+// All three rules are conditional: they activate only when the relevant
+// columns exist in the WORKBOARD.md Active Work header. Until CS44-3
+// upgrades the schema (today the columns are `Task ID | Clickstop |
+// Description | Agent ID | Worktree | Branch | PR | Started`) these rules
+// emit nothing.
+
+function findSection(lines, headingRe) {
+  // Returns {start, end} (0-based, end exclusive) for lines under a `##`
+  // heading matching headingRe, or null. `end` is the next `##` or EOF.
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (headingRe.test(lines[i])) { start = i + 1; break; }
+  }
+  if (start === -1) return null;
+  let end = lines.length;
+  for (let i = start; i < lines.length; i++) {
+    if (/^##\s+/.test(lines[i])) { end = i; break; }
+  }
+  return { start, end };
+}
+
+function parseMarkdownTable(lines, start, end) {
+  // Find the first markdown table inside lines[start..end). Returns
+  // { headers: [...], rows: [{cells, lineNo (1-based), raw}] } or null.
+  let headerIdx = -1;
+  for (let i = start; i < end - 1; i++) {
+    const cur = lines[i];
+    const next = lines[i + 1];
+    if (/^\s*\|.*\|\s*$/.test(cur) && /^\s*\|[\s:|-]+\|\s*$/.test(next)) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx === -1) return null;
+  const splitRow = (line) => {
+    // Split on `|` that is not preceded by a backslash, then unescape `\|`.
+    const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+    return trimmed.split(/(?<!\\)\|/).map(s => s.trim().replace(/\\\|/g, '|'));
+  };
+  const headers = splitRow(lines[headerIdx]);
+  const rows = [];
+  for (let i = headerIdx + 2; i < end; i++) {
+    const line = lines[i];
+    if (!/^\s*\|/.test(line)) break;
+    rows.push({ cells: splitRow(line), lineNo: i + 1, raw: line });
+  }
+  return { headers, rows };
+}
+
+function colIndex(headers, predicate) {
+  for (let i = 0; i < headers.length; i++) {
+    if (predicate(headers[i])) return i;
+  }
+  return -1;
+}
+
+function getActiveWorkTable(lines) {
+  const sec = findSection(lines, /^##\s+Active Work/);
+  if (!sec) return null;
+  return parseMarkdownTable(lines, sec.start, sec.end);
+}
+
+function getOrchestratorsTable(lines) {
+  const sec = findSection(lines, /^##\s+Orchestrators/);
+  if (!sec) return null;
+  return parseMarkdownTable(lines, sec.start, sec.end);
+}
+
+function checkStateInVocabulary(wbPath, lines, ignores) {
+  const findings = [];
+  const tbl = getActiveWorkTable(lines);
+  if (!tbl) return findings;
+  const idx = colIndex(tbl.headers, h => /^state$/i.test(h));
+  if (idx === -1) return findings; // schema not upgraded yet — silent.
+  const allowed = new Set(CANONICAL_STATES);
+  for (const row of tbl.rows) {
+    const value = (row.cells[idx] || '').trim();
+    if (!value) continue;
+    if (!allowed.has(value)) {
+      findings.push({
+        rule: 'state-in-vocabulary', file: wbPath, line: row.lineNo,
+        severity: 'error',
+        message: `State '${value}' is not in canonical vocabulary (${CANONICAL_STATES.join(', ')})`,
+      });
+    }
+  }
+  return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
+}
+
+// Strict-ish ISO 8601 date / date-time pattern. Accepts:
+//   YYYY-MM-DD
+//   YYYY-MM-DDTHH:mm[:ss[.fff]][Z|±HH:mm|±HHmm]
+// Rejects locale/RFC-2822 strings that Date.parse() would otherwise accept.
+const ISO_8601_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+function checkLastUpdatedIso8601(wbPath, lines, ignores) {
+  const findings = [];
+  const tbl = getActiveWorkTable(lines);
+  if (!tbl) return findings;
+  const idx = colIndex(tbl.headers, h => /^last\s*updated$/i.test(h));
+  if (idx === -1) return findings; // silent until schema upgrade.
+  for (const row of tbl.rows) {
+    const value = (row.cells[idx] || '').trim();
+    if (!value || value === '—' || value === '-') continue;
+    if (!ISO_8601_RE.test(value) || Number.isNaN(Date.parse(value))) {
+      findings.push({
+        rule: 'last-updated-iso8601', file: wbPath, line: row.lineNo,
+        severity: 'error',
+        message: `Last Updated value '${value}' is not parseable as ISO 8601`,
+      });
+    }
+  }
+  return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
+}
+
+function checkOwnerInOrchestratorsTable(wbPath, lines, ignores) {
+  const findings = [];
+  const active = getActiveWorkTable(lines);
+  if (!active) return findings;
+  // Accept either the post-CS44-3 `Owner` column or today's `Agent ID`.
+  const ownerIdx = colIndex(active.headers, h => /^(owner|agent\s*id)$/i.test(h));
+  if (ownerIdx === -1) return findings;
+  const orch = getOrchestratorsTable(lines);
+  if (!orch) return findings;
+  const orchIdx = colIndex(orch.headers, h => /^(agent\s*id|orchestrator|owner)$/i.test(h));
+  if (orchIdx === -1) return findings;
+  const known = new Set(orch.rows.map(r => (r.cells[orchIdx] || '').trim()).filter(Boolean));
+  for (const row of active.rows) {
+    const value = (row.cells[ownerIdx] || '').trim();
+    if (!value || value === '—' || value === '-') continue;
+    if (!known.has(value)) {
+      findings.push({
+        rule: 'owner-in-orchestrators-table', file: wbPath, line: row.lineNo,
+        severity: 'error',
+        message: `Owner '${value}' is not listed in the Orchestrators table`,
+      });
+    }
+  }
+  return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
+}
+
 // ---------- main runner ------------------------------------------------------
 
 function run(opts) {
@@ -464,6 +632,17 @@ function run(opts) {
   findings.push(...checkDoneTaskCount(rows, contextPath, repoRoot, ctxIgnores));
   findings.push(...checkNoOrphanActiveWork(repoRoot, rows));
   findings.push(...checkWorkboardStampFresh(repoRoot, now));
+
+  // CS44-5a: WORKBOARD state-vocabulary / ISO 8601 / owner-in-orchestrators.
+  // All three are no-ops until CS44-3 upgrades the schema.
+  const wbPath = path.join(repoRoot, 'WORKBOARD.md');
+  if (fs.existsSync(wbPath)) {
+    const wbLines = readLines(wbPath);
+    const wbIgnores = parseIgnores(wbLines);
+    findings.push(...checkStateInVocabulary(wbPath, wbLines, wbIgnores));
+    findings.push(...checkLastUpdatedIso8601(wbPath, wbLines, wbIgnores));
+    findings.push(...checkOwnerInOrchestratorsTable(wbPath, wbLines, wbIgnores));
+  }
 
   // Normalise file paths to repo-relative for output stability.
   for (const f of findings) {
