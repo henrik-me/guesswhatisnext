@@ -23,6 +23,7 @@
     "test:e2e:mssql": "node scripts/test-e2e-mssql.js",
     "test:all": "vitest run && playwright test",
     "lint": "eslint . --max-warnings 50",
+    "check:docs": "node scripts/check-docs-consistency.js",
     "dev:full": "node scripts/dev-server.js",
     "dev:log": "node scripts/dev-server.js --no-https"
   },
