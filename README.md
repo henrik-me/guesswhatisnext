@@ -362,8 +362,9 @@ guesswhatisnext/
 
   Health Monitor (scheduled cron) ─────────────────────────────────▶ gwn-prod
        │ on failure → GitHub Issue
-       │ (schedule + tiers defined in .github/workflows/health-monitor.yml)
 ```
+
+> **Pipeline sources of truth:** staging triggers and service containers live in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml); production deploy + auto-rollback in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml); health-monitor cron schedule and tier definitions in [`.github/workflows/health-monitor.yml`](.github/workflows/health-monitor.yml).
 
 > **Note:** Push to `main` does **not** deploy by default. Deployment runs when triggered
 > manually via `workflow_dispatch`, or automatically on push when `STAGING_AUTO_DEPLOY` is enabled.
