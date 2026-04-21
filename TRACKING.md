@@ -118,7 +118,17 @@ Agent: {agent-id}
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```
 
+**Claim effectiveness:** A claim or reclamation is **not effective** until the commit has been pushed to `origin/main`. No task work — exploration, planning, sub-agent dispatch, or any downstream orchestrator state transition — may proceed while the row exists only in the local checkout. If `git push` is rejected, follow the push-rejected recovery procedure in "Conflict handling" below and only resume task work once the row has landed on `origin/main`. This rule applies equally to initial claims (§ Orchestrator Startup Checklist in OPERATIONS.md, step 6) and to reclamation (§ WORKBOARD Row Ownership & Stale-Lock Policy, point C step 3).
+
 **Conflict handling:** Since multiple orchestrators may update WORKBOARD.md concurrently, conflicts are possible. Orchestrators should `git pull` before updating. If a conflict occurs **only in `WORKBOARD.md`**, this is the one exception to the general "do not resolve merge conflicts in the main checkout" rule: resolve it by keeping both agents' entries (additive merge), then complete the workboard-only update. If the pull produces conflicts in any other file, abort the merge and follow the normal abort + worktree workflow instead.
+
+**Push-rejected recovery procedure.** The common failure mode is not a `git pull` conflict but a rejected push — another agent pushed to `main` between your last fetch and your push. Recovery steps (do not skip any; claim is not effective until step 4 succeeds — see "Claim effectiveness" above):
+
+1. `git push origin main` → rejected (non-fast-forward).
+2. `git pull --rebase origin main`. If a conflict appears **only in `WORKBOARD.md`**, resolve it additively (keep both agents' rows where appropriate), per the `WORKBOARD.md`-only exception above. If the conflict spans any other file, abort (`git rebase --abort`) and hand off to a worktree per the normal branch workflow — do not attempt to resolve non-workboard conflicts on main.
+3. `git commit` the merge resolution. This is permitted on main because it falls under the same `WORKBOARD.md`-only exception already carved out for the direct-on-main workboard discipline.
+4. `git push origin main` again; verify it lands on `origin/main` (e.g. `git log --oneline origin/main -1` matches your local HEAD).
+5. **Only now** may you transition to the next action for that task (begin exploration, dispatch a sub-agent, update the State column, etc.).
 
 **Public repository note:** When branch protection is enabled with required reviews, the repository owner (henrik-me) uses a repository ruleset bypass to allow direct WORKBOARD.md and clickstop plan file pushes. This bypass is configured in Settings → Rules → Rulesets and applies only to the owner role. Non-owner orchestrating agents (if any) would need to use PR-based updates instead.
 
@@ -209,7 +219,7 @@ These thresholds are enforced mechanically by the CS43-2 consistency checker —
    - Prior owner agent ID
    - Reclaimer agent ID
    - The reclaimer's plan (continue / restart / abandon)
-3. Commit and push the row edit using the standard workboard commit format (§ WORKBOARD.md — Live Coordination, "Commit convention for workboard updates").
+3. Commit and push the row edit using the standard workboard commit format (§ WORKBOARD.md — Live Coordination, "Commit convention for workboard updates"); if the push is rejected, follow the push-rejected recovery procedure (§ WORKBOARD.md — Live Coordination, "Push-rejected recovery procedure"). **Do not take any further action on the reclaimed task until the push has landed on `origin/main`** (see § WORKBOARD.md — Live Coordination, "Claim effectiveness").
 
 `git log` and `git blame` on `WORKBOARD.md` retain the full chain-of-custody history; the row itself reflects only the current state. Do not try to encode prior owners in the row beyond the brief note in step 1.
 
