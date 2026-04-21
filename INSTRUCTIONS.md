@@ -429,8 +429,8 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 **Link, don't restate.** A documentation file either *is* the source of truth for a fact, or it *links to* the source of truth — it never paraphrases. When a value lives authoritatively in a workflow file, script, schema file, config file, or the filesystem itself, docs that need to refer to that value must link to the authoritative source rather than repeat the value inline. Restated values silently rot the moment the source changes, and every cross-doc factual conflict we have hit to date has been a restatement-drift symptom.
 
 **Acceptable techniques:**
-- Direct relative file link to the authoritative source: `[deploy.sh](scripts/deploy.sh)`, `[prod-deploy.yml](.github/workflows/prod-deploy.yml)`
-- Anchor link to a specific heading in another doc: `[CONTEXT.md § Current Codebase State](CONTEXT.md#current-codebase-state)`
+- Direct relative file link to the authoritative source: `[deploy.sh](infra/deploy.sh)`, `[prod-deploy.yml](.github/workflows/prod-deploy.yml)`
+- Anchor link to a specific heading in another doc: `[CONTEXT.md § Known Issues](CONTEXT.md#known-issues)`
 - Embedded codeblock with an `<!-- include: path#anchor -->` marker (forward-looking — the consistency checker added in CS43-2 will eventually validate these are kept in sync with their source)
 - Linking at the GitHub-rendered file/folder listing rather than maintaining a hand-curated table: `[the workflows directory](.github/workflows/)`, `[completed clickstops](project/clickstops/done/)`
 
@@ -442,6 +442,8 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 **Rationale:** removing the surface where paraphrase can occur eliminates the only place where two docs can disagree about a fact that has a single owner. See [LEARNINGS.md § Doc currency](LEARNINGS.md) for the full origin story and the drift symptoms that motivated the rule.
 
 **Scope:** this rule applies to all `.md` files in the repository, including `README.md`, `CONTEXT.md`, `WORKBOARD.md`, `LEARNINGS.md`, `infra/README.md`, every file under `project/`, and every clickstop file. It does *not* apply to source-code comments, where local restatement is often the clearest option.
+
+**Transitional note:** today's `CONTEXT.md` summary table and per-clickstop blocks restate status and task counts that live authoritatively in the clickstop files — a known violation of this rule. CS43-3 restructures `CONTEXT.md` to comply. Until that lands, the existing instructions for updating `CONTEXT.md` (in the [§ CONTEXT.md — Project State Updates](#contextmd--project-state-updates) and [§ Clickstop File Lifecycle](#clickstop-file-lifecycle) sections below) still apply; the principle is the target state, not a license to leave `CONTEXT.md` half-updated in the meantime.
 
 ### Clickstop & Task Management
 
