@@ -47,6 +47,16 @@ describe('check-docs-consistency', () => {
     expect(findings[0].message).toContain('CS7');
   });
 
+  test('clickstop-link-missing fixture: CONTEXT.md details link that does not resolve', () => {
+    const findings = run({ root: path.join(FIX, 'clickstop-link-missing'), now: FIXED_NOW });
+    // The same broken link fires both rules; assert clickstop-link-resolves
+    // is among them and reports the right CS.
+    const cs = findings.find(f => f.rule === 'clickstop-link-resolves');
+    expect(cs).toBeDefined();
+    expect(cs.message).toContain('CS1');
+    expect(cs.message).toContain('does_not_exist.md');
+  });
+
   test('done-task-count fixture: error when n<m and no Deferred section', () => {
     const findings = run({ root: path.join(FIX, 'done-task-count'), now: FIXED_NOW });
     expect(rules(findings)).toEqual(['done-task-count']);
@@ -69,6 +79,25 @@ describe('check-docs-consistency', () => {
   test('escape-hatch fixture: ignore comments suppress findings', () => {
     const findings = run({ root: path.join(FIX, 'escape-hatch'), now: FIXED_NOW });
     expect(findings).toEqual([]);
+  });
+
+  test('unique-cs-state can be suppressed by own-line ignore above the heading', () => {
+    // Dynamic: add an ignore comment to the top of one of the cs-in-two-states
+    // files, rerun, and assert the findings for that file are gone.
+    const fs = require('fs');
+    const root = path.join(FIX, 'cs-in-two-states');
+    const targetFile = path.join(root, 'project', 'clickstops', 'active_cs7_thing.md');
+    const original = fs.readFileSync(targetFile, 'utf8');
+    try {
+      fs.writeFileSync(targetFile, '<!-- check:ignore unique-cs-state -->\n' + original);
+      const findings = run({ root, now: FIXED_NOW });
+      const byFile = findings.filter(f => f.file.endsWith('active_cs7_thing.md'));
+      expect(byFile).toEqual([]);
+      // The other file still produces its finding (ignore is file-scoped).
+      expect(findings.some(f => f.file.endsWith('done_cs7_thing.md'))).toBe(true);
+    } finally {
+      fs.writeFileSync(targetFile, original);
+    }
   });
 });
 

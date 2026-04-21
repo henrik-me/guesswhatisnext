@@ -81,7 +81,9 @@ function readLines(p) {
 
 function slugify(heading) {
   // GitHub-style: strip leading #s, lowercase, drop punctuation except `-`
-  // and word chars, collapse whitespace to single `-`.
+  // and word chars, then map each whitespace char to a single `-` — note
+  // runs of whitespace (e.g. where an em-dash was stripped leaving two
+  // spaces around it) therefore become runs of hyphens, matching GitHub.
   return heading
     .replace(/^#+\s*/, '')
     .toLowerCase()
@@ -191,7 +193,12 @@ function checkLinkResolves(file, lines, ignores, repoRoot) {
       const pathPart = pathPartRaw.split('?')[0];
       if (!pathPart) continue;
       const baseDir = path.dirname(file);
-      const target = path.resolve(baseDir, decodeURIComponent(pathPart));
+      const target = safeResolveInside(baseDir, repoRoot, pathPart);
+      if (!target) {
+        findings.push({ rule: 'link-resolves', file, line: i + 1,
+          severity: 'error', message: `invalid or out-of-repo link → ${url}` });
+        continue;
+      }
       // Allow links to directories.
       let stat;
       try { stat = fs.statSync(target); } catch { stat = null; }
@@ -252,13 +259,28 @@ function parseClickstopSummary(contextPath) {
 
 // ---------- check 2 & 3: clickstop link + prefix -----------------------------
 
-function resolveRelative(base, linkPath) {
+function safeResolveInside(baseDir, repoRoot, rawPath) {
+  // Return the resolved absolute path iff it decodes cleanly and stays under
+  // repoRoot; otherwise return null. Guards against (a) malformed percent
+  // escapes throwing URIError and (b) `../../..`-style traversal out of the
+  // repository.
+  let decoded;
+  try { decoded = decodeURIComponent(rawPath); }
+  catch { return null; }
+  const abs = path.resolve(baseDir, decoded);
+  const rootAbs = path.resolve(repoRoot);
+  if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) return null;
+  return abs;
+}
+
+function resolveRelative(base, linkPath, repoRoot) {
   // Mirror of the path handling in checkLinkResolves so consumers of the
-  // CONTEXT.md Clickstop Summary don't trip on fragment/query suffixes.
+  // CONTEXT.md Clickstop Summary don't trip on fragment/query suffixes and
+  // can't accidentally stat something outside the repo.
   const [pathPartRaw] = linkPath.split('#');
   const pathPart = pathPartRaw.split('?')[0];
   if (!pathPart) return null;
-  return path.resolve(base, decodeURIComponent(pathPart));
+  return safeResolveInside(base, repoRoot, pathPart);
 }
 
 function checkClickstopLinksAndPrefix(repoRoot, rows, contextPath, ignores) {
@@ -269,7 +291,7 @@ function checkClickstopLinksAndPrefix(repoRoot, rows, contextPath, ignores) {
         severity: 'error', message: `${r.cs}: row missing details link` });
       continue;
     }
-    const target = resolveRelative(path.dirname(contextPath), r.linkPath);
+    const target = resolveRelative(path.dirname(contextPath), r.linkPath, repoRoot);
     if (!target || !fs.existsSync(target)) {
       findings.push({ rule: 'clickstop-link-resolves', file: contextPath, line: r.line,
         severity: 'error', message: `${r.cs}: link does not resolve → ${r.linkPath}` });
@@ -308,9 +330,18 @@ function checkUniqueCsState(repoRoot) {
     const states = new Set(arr.map(a => a.prefix));
     if (states.size > 1) {
       for (const a of arr) {
-        // Emit on line 1 (not null) so the escape hatch can target the file
-        // via `<!-- check:ignore unique-cs-state -->` at its top.
-        findings.push({ rule: 'unique-cs-state', file: a.file, line: 1,
+        // Emit on the first non-blank content line so an own-line
+        // `<!-- check:ignore unique-cs-state -->` placed above it (per the
+        // documented block-scope semantics of the escape hatch) suppresses
+        // this finding.
+        let contentLine = 1;
+        try {
+          const lines = readLines(a.file);
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].trim() !== '' && !/<!--/.test(lines[i])) { contentLine = i + 1; break; }
+          }
+        } catch { /* fall through with line=1 */ }
+        findings.push({ rule: 'unique-cs-state', file: a.file, line: contentLine,
           severity: 'error',
           message: `${cs} appears in multiple states: ${[...states].sort().join(', ')}` });
       }
@@ -334,7 +365,7 @@ function checkDoneTaskCount(rows, contextPath, repoRoot, ignores) {
     if (r.n >= r.m) continue;
     let hasDeferred = false;
     if (r.linkPath) {
-      const target = resolveRelative(path.dirname(contextPath), r.linkPath);
+      const target = resolveRelative(path.dirname(contextPath), r.linkPath, repoRoot);
       if (target && fs.existsSync(target)) {
         const txt = fs.readFileSync(target, 'utf8');
         hasDeferred = /^#{1,6}\s+(deferred|will\s+not\s+be\s+done)/im.test(txt);
@@ -351,12 +382,12 @@ function checkDoneTaskCount(rows, contextPath, repoRoot, ignores) {
 
 // ---------- check 6: no-orphan-active-work ----------------------------------
 
-function checkNoOrphanActiveWork(repoRoot, rows, ignores) {
+function checkNoOrphanActiveWork(repoRoot, rows) {
   const findings = [];
   const wbPath = path.join(repoRoot, 'WORKBOARD.md');
   if (!fs.existsSync(wbPath)) return findings;
-  const wbIgnores = parseIgnores(readLines(wbPath));
   const lines = readLines(wbPath);
+  const wbIgnores = parseIgnores(lines);
   const doneCs = new Set(rows.filter(r => r.state === 'done').map(r => r.cs));
   let inActive = false;
   for (let i = 0; i < lines.length; i++) {
@@ -381,7 +412,7 @@ function checkNoOrphanActiveWork(repoRoot, rows, ignores) {
 
 // ---------- check 7: workboard-stamp-fresh -----------------------------------
 
-function checkWorkboardStampFresh(repoRoot, ignores, now) {
+function checkWorkboardStampFresh(repoRoot, now) {
   const findings = [];
   const wbPath = path.join(repoRoot, 'WORKBOARD.md');
   if (!fs.existsSync(wbPath)) return findings;
@@ -426,8 +457,8 @@ function run(opts) {
   findings.push(...checkClickstopLinksAndPrefix(repoRoot, rows, contextPath, ctxIgnores));
   findings.push(...checkUniqueCsState(repoRoot));
   findings.push(...checkDoneTaskCount(rows, contextPath, repoRoot, ctxIgnores));
-  findings.push(...checkNoOrphanActiveWork(repoRoot, rows, ctxIgnores));
-  findings.push(...checkWorkboardStampFresh(repoRoot, ctxIgnores, now));
+  findings.push(...checkNoOrphanActiveWork(repoRoot, rows));
+  findings.push(...checkWorkboardStampFresh(repoRoot, now));
 
   // Normalise file paths to repo-relative for output stability.
   for (const f of findings) {

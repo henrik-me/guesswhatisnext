@@ -28,5 +28,8 @@ jobs:
       - name: Run docs consistency check
         # No --strict yet. CS43-7 will flip this once CS43-3..CS43-6 clean
         # up the baseline.
+        # `continue-on-error` is retained per the CS43-2 spec so an unexpected
+        # script failure (regex bug, I/O error) still lets docs-only PRs
+        # proceed during the warn-only rollout. CS43-7 will also drop this.
         run: node scripts/check-docs-consistency.js
         continue-on-error: true
