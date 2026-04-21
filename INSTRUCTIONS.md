@@ -455,7 +455,7 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 Format: `CS<clickstop#>-<task#>` (e.g., `CS11-64`, `CS14-82`). Used in branch names, commit messages, PR titles, and WORKBOARD.md.
 
 **CS number allocation:** Before assigning a new clickstop number, verify the number is not already taken by checking all three sources:
-1. **Existing clickstop files:** `ls project/clickstops/` and `ls project/clickstops/done/` — check all `planned_`, `active_`, and `done_` files for the highest CS number
+1. **Existing clickstop files:** `ls project/clickstops/planned/`, `ls project/clickstops/active/`, and `ls project/clickstops/done/` — check all `planned_`, `active_`, and `done_` files for the highest CS number
 2. **WORKBOARD.md Active Work:** Another agent may have just claimed a CS number but not yet committed the plan file — check Active Work for any CS numbers in use
 3. **CONTEXT.md clickstop summary table:** Cross-reference the summary table for any CS numbers added by other agents
 
@@ -583,28 +583,30 @@ CONTEXT.md updates are typically bundled into the PR that completes the relevant
 
 #### Clickstop File Lifecycle
 
-Each clickstop gets a detail file with a status prefix. Active and planned files live in `project/clickstops/`; completed files are archived in `project/clickstops/done/`:
+Each clickstop gets a detail file with a status prefix. Each lifecycle state has its own subdirectory under `project/clickstops/`:
 
 | Prefix | Location | Meaning | Example |
 |--------|----------|---------|---------|
-| `planned_` | `project/clickstops/` | Defined but no tasks started | `planned_cs19_community-puzzle-navigation.md` |
-| `active_` | `project/clickstops/` | Has work in progress | `active_cs11_database-migration.md` |
+| `planned_` | `project/clickstops/planned/` | Defined but no tasks started | `planned_cs19_community-puzzle-navigation.md` |
+| `active_` | `project/clickstops/active/` | Has work in progress | `active_cs11_database-migration.md` |
 | `done_` | `project/clickstops/done/` | Fully complete | `done_cs10_cicd-pipeline.md` |
+
+A status change is always a `git mv` between two of these sibling directories (e.g. `planned/planned_cs11_*.md` → `active/active_cs11_*.md`).
 
 **File format:** Each file contains the clickstop title, status, goal, full task table (with CS-prefixed IDs), design decisions, and notes (parallelism, architecture details).
 
 **Claiming a clickstop (step-by-step):**
 
 1. Update WORKBOARD.md Active Work table — add your row with task ID, description, agent ID, worktree, branch. Commit and push immediately.
-2. Create or update the CS file in `project/clickstops/`:
-   - If the clickstop is new: create `planned_{cs-id}_{kebab-name}.md` with task table and design notes
-   - If work is starting immediately: rename from `planned_` to `active_` (`git mv`), update Status field to 🔄 In Progress
+2. Create or update the CS file under the appropriate lifecycle subdirectory:
+   - If the clickstop is new: create `project/clickstops/planned/planned_{cs-id}_{kebab-name}.md` with task table and design notes
+   - If work is starting immediately: `git mv` from `planned/planned_*` to `active/active_*`, update Status field to 🔄 In Progress
 3. Commit the CS file to main before dispatching any sub-agents (prevents untracked file conflicts on `git pull`)
 4. Prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 
 **Closing a clickstop (step-by-step):**
 
-1. Rename CS file from `active_` (or `planned_`) to `done_` and move from `project/clickstops/` to `project/clickstops/done/` using `git mv`
+1. Rename CS file from `active_` (or `planned_`) to `done_` and move from `project/clickstops/active/` (or `project/clickstops/planned/`) to `project/clickstops/done/` using `git mv`
 2. Update the CS file content:
    - Status → ✅ Complete
    - All tasks marked ✅ Done in the task table
@@ -619,7 +621,7 @@ CONTEXT.md always contains only a short summary (2-4 lines) per clickstop with a
 
 Legacy archives from before CS0 may omit the completion checklist.
 
-**CS number conflicts:** Before creating a new clickstop, check ALL existing files in `project/clickstops/` (`planned_`, `active_`) and `project/clickstops/done/` (`done_`). Pick the next unused number. Multiple agents creating clickstops concurrently can cause number collisions if they only check one prefix.
+**CS number conflicts:** Before creating a new clickstop, check ALL existing files across the three lifecycle subdirectories — `project/clickstops/planned/`, `project/clickstops/active/`, and `project/clickstops/done/`. Pick the next unused number. Multiple agents creating clickstops concurrently can cause number collisions if they only check one prefix.
 
 ### Local Review Loop (GPT 5.4)
 
@@ -658,7 +660,7 @@ This preserves the review audit trail in the PR for future reference.
 | **Docs-only** (clickstop files, CONTEXT.md, README, INSTRUCTIONS.md) | ✅ Required | ⏭️ Skip | Local review is sufficient; Copilot review adds 10+ min overhead for no additional value |
 | **Config/CI changes** (workflows, Dockerfile, docker-compose) | ✅ Required | ✅ Required | Security-sensitive changes need Copilot review |
 
-**Docs-only PR definition:** A PR is docs-only if it modifies ONLY files with extensions `.md`, or files in `project/clickstops/` or `project/clickstops/done/`. If ANY non-docs file is changed, treat it as a code PR.
+**Docs-only PR definition:** A PR is docs-only if it modifies ONLY files with extensions `.md`, or files anywhere under `project/clickstops/` (including the `planned/`, `active/`, and `done/` subdirectories). If ANY non-docs file is changed, treat it as a code PR.
 
 **Copilot PR Review Policy:**
 - Every code/config PR must be reviewed by Copilot before merging (docs-only PRs may skip — see Local Review Loop above)

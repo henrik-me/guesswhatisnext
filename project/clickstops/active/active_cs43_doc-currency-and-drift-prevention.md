@@ -12,7 +12,7 @@
 Three classes of doc problem coexist and reinforce each other:
 
 1. **Restatement drift.** Docs paraphrase values that live authoritatively in workflow files, scripts, schema files, or the filesystem itself. When the source changes, the paraphrase is silently wrong. Every cross-doc factual conflict found to date (DB backend, replica counts, health-monitor cadence, staging auto-deploy claim, secrets list, environments setup) is a restatement-drift symptom.
-2. **CONTEXT.md scope creep.** [`INSTRUCTIONS.md:595`](../../INSTRUCTIONS.md) explicitly limits `CONTEXT.md` to short summaries with links to clickstop files, but several clickstops carry full prose detail blocks in `CONTEXT.md` itself, some of which are stale or contradict the summary table or link to non-existent files.
+2. **CONTEXT.md scope creep.** [`INSTRUCTIONS.md:595`](../../../INSTRUCTIONS.md) explicitly limits `CONTEXT.md` to short summaries with links to clickstop files, but several clickstops carry full prose detail blocks in `CONTEXT.md` itself, some of which are stale or contradict the summary table or link to non-existent files.
 3. **No mechanical guardrail.** All consistency is human-enforced. Reviewers cannot reliably catch every drift symptom by eye, and most don't try.
 
 ## Approach
