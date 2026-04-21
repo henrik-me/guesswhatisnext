@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-21T22:27Z
+> **Last updated:** 2026-04-21T22:30Z
 
 ## Orchestrators
 
@@ -17,7 +17,7 @@ CS44-3 schema upgrade.
 | yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | unknown |
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active | unknown |
 | yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | unknown |
-| omni-gwn | HENRIKM-OMNI | C:\src\guesswhatisnext | 🟢 Active | 2026-04-21T21:52Z |
+| omni-gwn | HENRIKM-OMNI | C:\src\guesswhatisnext | 🟢 Active | 2026-04-21T22:30Z |
 | omni-gwn-c2 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-21T22:27Z |
 
 ## Active Work
@@ -25,5 +25,6 @@ CS44-3 schema upgrade.
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
 | CS42-1 | CS42 | blocked | yoga-gwn | — | — | — | 2026-04-19T22:20Z | Investigate progressive messages missing in production cold start | — |
+| CS45-1 | CS45 | claimed | omni-gwn | — | — | — | 2026-04-21T22:30Z | promote planned→active, fix broken-link errors, then dispatch sub-agent | — |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
