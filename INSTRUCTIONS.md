@@ -613,6 +613,57 @@ This section defines the canonical vocabulary for the lifecycle of an Active Wor
 
 This protocol is what makes the State column trustworthy. Without disciplined event reporting from sub-agents and disciplined column updates from orchestrators, State drifts and becomes fiction.
 
+#### WORKBOARD Row Ownership & Stale-Lock Policy
+
+This section defines who may edit which `WORKBOARD.md` rows and the timeouts that govern when a stalled row may be reclaimed. It builds on the per-row state vocabulary in § WORKBOARD State Machine and on the general row-ownership note in § WORKBOARD.md — Live Coordination; this section is the authoritative statement.
+
+**A. Strict row ownership.** Orchestrators may **only** edit rows they own:
+
+- Their own entry in the Orchestrators table.
+- Active Work rows where they appear in the `Owner` column.
+
+Orchestrators must **NOT**:
+
+- Change another agent's status in the Orchestrators table (including marking another orchestrator offline or idle).
+- Claim another agent's Active Work row.
+- Remove another agent's Active Work row.
+- Edit any column on another agent's Active Work row.
+
+The single exception is the reclamation procedure in § C below.
+
+Sub-agents do not edit `WORKBOARD.md` at all — they report state-change events to their orchestrator per the protocol in § WORKBOARD State Machine (point D, "Reporting protocol").
+
+**B. Stale-lock thresholds.** Both thresholds are measured as time since the row's `Last Updated` timestamp (added to the schema by CS44-3):
+
+| Threshold | Age | Meaning |
+|---|---|---|
+| `stale` | > **24 hours** | Row is flagged. Original owner remains authoritative; other orchestrators must not modify it. |
+| `reclaimable` | > **7 days** | Original owner is presumed unavailable. Any orchestrator may take the row over via the reclamation procedure (§ C). |
+
+These thresholds are enforced mechanically by the CS43-2 consistency checker — the threshold extension lands in CS44-5b (warning at 24h, error at 7d). Manual reclamation before the 7-day threshold is **not** permitted regardless of circumstance; if a row is genuinely blocked sooner, the owner sets State to `blocked` with a reason rather than allowing another agent to reclaim it.
+
+**C. Reclamation procedure.** When a row reaches the `reclaimable` threshold, any orchestrator may take it over by performing **all** of the following:
+
+1. **Edit the original row in place** (do not append a new row, do not delete and re-add):
+   - Replace `Owner` with the reclaimer's agent ID.
+   - Set `State` to `claimed` (if restarting from scratch) or `implementing` (if continuing where the prior owner left off).
+   - Bump `Last Updated` to the current ISO 8601 UTC timestamp (per § WORKBOARD.md — Live Coordination, "Timestamps").
+   - Add a brief note in `Blocked Reason` or `Next Action` referencing the prior owner — e.g. `reclaimed from yoga-gwn (stale > 7d)`.
+2. **Announce the reclamation** by posting a comment on the related PR (if one exists) or otherwise on the related issue. Use the existing PR/issue commenting conventions in § Agent Progress Reporting. The comment must include:
+   - Prior owner agent ID
+   - Reclaimer agent ID
+   - The reclaimer's plan (continue / restart / abandon)
+3. Commit and push the row edit using the standard workboard commit format (§ WORKBOARD.md — Live Coordination, "Commit convention for workboard updates").
+
+`git log` and `git blame` on `WORKBOARD.md` retain the full chain-of-custody history; the row itself reflects only the current state. Do not try to encode prior owners in the row beyond the brief note in step 1.
+
+Any reclamation that does not follow this procedure — silently editing another agent's row before the 7-day threshold, reclaiming without an announcement comment, or appending a parallel row instead of editing in place — is a process violation.
+
+**D. Forward references.**
+
+- CS44-3 (schema upgrade) renames the current `Agent ID` column to `Owner` and adds the `Last Updated`, `Blocked Reason`, and `Next Action` columns. Until CS44-3 lands, treat references to `Owner` in this section as the existing `Agent ID` column, and treat the thresholds in § B and the reclamation procedure in § C as not yet mechanically enforceable.
+- The CS43-2 consistency checker is extended in CS44-5b to emit a warning at 24h and an error at 7d against the `Last Updated` column.
+
 #### CONTEXT.md — Project State Updates
 
 CONTEXT.md tracks clickstop summaries and current project state. Updates to CONTEXT.md **require PR review** because:
