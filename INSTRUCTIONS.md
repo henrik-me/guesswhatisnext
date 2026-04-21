@@ -270,15 +270,17 @@ Commit locally after every meaningful, working change — each commit should be 
 
 All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → local review loop → Copilot review (code/config PRs only). The orchestrating agent only intervenes to merge approved PRs.
 
-Background agents **must** report progress to the orchestrating agent:
-- **On start:** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql"
-- **On milestone:** "CS11-64: completed \<step\>, running validation..."
-- **On validation pass:** "CS11-64: lint ✓ test ✓ e2e ✓ — creating PR"
-- **On validation fail:** "CS11-64: validation FAILED — \<error summary\>. Fixing..."
-- **On abort:** "CS11-64: BLOCKED — \<reason\>. Needs orchestrator intervention."
-- **On PR created:** "CS11-64: PR #\<N\> created, running local review"
-- **On review loop:** "CS11-64: local review clean — requesting Copilot review" (code/config PRs) or "CS11-64: local review clean — docs-only, skipping Copilot" (docs-only PRs)
-- **On ready:** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)"
+Background agents **must** report progress to the orchestrating agent. Each milestone below maps to a canonical state in § WORKBOARD State Machine; the sub-agent's prose update **must** be accompanied by a greppable `STATE: <value>` line so the orchestrator can extract the transition mechanically. **Only the orchestrator updates the `State` column in `WORKBOARD.md`** — sub-agents report events, the orchestrator records them. See § WORKBOARD State Machine point D ("Reporting protocol") for the authoritative description.
+
+- **On start (after claiming work and beginning edits):** "Starting CS11-64 in wt-1 on branch yoga-gwn/cs11-64-provision-azure-sql" → `STATE: implementing`
+- **On milestone:** "CS11-64: completed \<step\>, running validation..." (no state change unless this transitions to validation)
+- **On validation pass (lint + test + e2e + check:docs all green locally):** "CS11-64: lint ✓ test ✓ e2e ✓ — creating PR" → `STATE: validating`
+- **On validation fail:** "CS11-64: validation FAILED — \<error summary\>. Fixing..." (remain in `implementing` while fixing; only emit `STATE: blocked` if unable to proceed)
+- **On abort / cannot proceed:** "CS11-64: BLOCKED — \<reason\>. Needs orchestrator intervention." → `STATE: blocked` plus a `Blocked Reason: <short prose>` line so the orchestrator can populate the Blocked Reason column verbatim
+- **On PR created (`gh pr create` succeeded):** "CS11-64: PR #\<N\> created, running local review" → `STATE: pr_open` and `PR: <number>`
+- **On local review started:** "CS11-64: local review in progress" → `STATE: local_review`
+- **On Copilot review requested (code/config PRs):** "CS11-64: local review clean — requesting Copilot review" → `STATE: copilot_review`. For docs-only PRs: "CS11-64: local review clean — docs-only, skipping Copilot" (no Copilot transition; remain in `local_review` until ready).
+- **On ready (CI green AND all reviews approved):** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)" → `STATE: ready_to_merge`
 - **On deployment approval gate:** When monitoring a staging or production deploy, the monitoring agent must immediately report when an approval gate is reached — do not wait for the full workflow to complete. The orchestrator must immediately notify the user with the approval URL. Approval gates are:
   - **Staging:** After "Fast-Forward release/staging" job completes → "Deploy to Azure Staging" waits for `environment: staging` approval
   - **Production:** After "Validate Deployment Inputs" job completes → "Deploy to Azure Production" waits for `environment: production` approval
@@ -362,21 +364,33 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 
 **Sub-Agent Checklist** (include verbatim in every sub-agent prompt — the orchestrator must provide: task ID, acceptance criteria, worktree slot, branch name, port, and edge cases):
 1. Read INSTRUCTIONS.md in the repository root before starting any work
-2. Read WORKBOARD.md for current project context and active work
+2. Read WORKBOARD.md for current project context and active work — **do not edit it**; State updates are the orchestrator's job (see § WORKBOARD State Machine point D)
 3. Run `npm install` in worktree
 4. Set `$env:PORT = "300N"` for the assigned slot
-5. Implement the task (commit after each meaningful step with `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer)
+5. Implement the task (commit after each meaningful step with `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer). **Emit `STATE: implementing` on the first interim update after edits begin.**
 6. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
-7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs). If validation fails, fix and re-run (up to 3 attempts). If stuck, report failure details to the orchestrator and stop.
-8. Push branch and create PR with task ID in title and agent metadata in description
-9. Run local review loop (see § Local Review Loop): launch `code-review` agent with `model=gpt-5.4`, fix issues, push fixes, repeat until clean
+7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs; docs-only PRs must still pass `npm run check:docs:strict`). **On all-green, emit `STATE: validating`.** If validation fails, fix and re-run (up to 3 attempts). If stuck, emit `STATE: blocked` with a `Blocked Reason: <short prose>` line, report failure details, and stop.
+8. Push branch and create PR with task ID in title and agent metadata in description. **On `gh pr create` success, emit `STATE: pr_open` and `PR: <number>` on a separate line.**
+9. Run local review loop (see § Local Review Loop): launch `code-review` agent with `model=gpt-5.4`, fix issues, push fixes, repeat until clean. **Emit `STATE: local_review` when the loop starts.**
 10. **Document local review findings in PR description** (see § Local Review Loop for format)
-11. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per § Waiting for Copilot Review
-12. **For docs-only PRs:** Skip Copilot review — local review is sufficient
+11. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per § Waiting for Copilot Review. **Emit `STATE: copilot_review` after the reviewer is added.**
+12. **For docs-only PRs:** Skip Copilot review — local review is sufficient (no `copilot_review` transition; stay in `local_review` until ready)
 13. Address all review comments (reply + fix + resolve threads)
 14. Re-request review and repeat until clean (code PRs only)
-15. Report completion with PR number and summary
+15. Report completion with PR number and summary. **When CI is green AND all required reviews approve, emit `STATE: ready_to_merge` as the final state.** The final report must always end with the latest `STATE: <value>` line so the orchestrator can extract it mechanically.
 16. **Include a milestone timing table** in the final report (step name + elapsed time from session start). This helps identify bottlenecks in the agent workflow.
+17. **Update the claimed task row in the clickstop file** (e.g. mark `✅ Done` with the PR link) as part of the implementation commits. **Do not edit `WORKBOARD.md`** — that is the orchestrator's responsibility per § WORKBOARD State Machine point D and § WORKBOARD Row Ownership & Stale-Lock Policy point A.
+
+**Sub-agent dispatch checklist (for orchestrators).** Every dispatch prompt the orchestrator writes for a sub-agent must include, at minimum:
+
+- **Worktree path** (e.g. `C:\src\gwn-worktrees\wt-1`) and the **branch name** already checked out there.
+- **Required reads:** `INSTRUCTIONS.md`, `WORKBOARD.md`, the clickstop plan file under `project/clickstops/active/`, plus any task-specific docs.
+- **Validation commands:** the `npm run lint && npm test && npm run test:e2e` line (or `npm run check:docs:strict` for docs-only) the agent must run before opening a PR.
+- **Commit & PR steps:** commit message format (conventional + `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`), `git push -u origin <branch>`, `gh pr create` with title/body conventions, and (for code/config PRs) `gh pr edit <#> --add-reviewer Copilot`.
+- **State-reporting protocol:** the explicit `STATE: <value>` line for each transition listed in § Agent Progress Reporting. The final report must end with greppable `STATE:` (and `PR:` when applicable) lines. Reference § WORKBOARD State Machine for the canonical vocabulary.
+- **Constraints:** do not edit `WORKBOARD.md`; do not touch other agents' clickstop rows; do not work outside the assigned worktree; mark only the agent's own claimed task row `✅ Done` with the PR link.
+
+This checklist exists so dispatched agents have everything needed to report state mechanically without orchestrator follow-up. Omitting any bullet pushes work back onto the orchestrator and degrades the State column to fiction (see § WORKBOARD State Machine point D).
 
 **Model selection:** The preferred model for all sub-agent implementation work is `claude-opus-4.6` (Opus). Orchestrator agents should use `claude-opus-4.6-1m` (1M context variant) to maintain full session context across long orchestration sessions. `gpt-5.4` is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 
@@ -568,7 +582,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 #### WORKBOARD State Machine
 
-This section defines the canonical vocabulary for the lifecycle of an Active Work row. The `State` column itself is added to `WORKBOARD.md` as part of CS44-3; this section defines the vocabulary CS44-3 will use. Sub-agent prompt updates that propagate this vocabulary land in CS44-4 (see § Agent Progress Reporting for the current event-reporting list).
+This section defines the canonical vocabulary for the lifecycle of an Active Work row. The `State` column lives in `WORKBOARD.md` (added by CS44-3). The sub-agent → orchestrator reporting protocol that drives this column is described in § Agent Progress Reporting and the dispatch checklist in § Agent Work Model ("Sub-agent dispatch checklist").
 
 **A. Canonical states (8).** Every Active Work row is in exactly one of:
 
