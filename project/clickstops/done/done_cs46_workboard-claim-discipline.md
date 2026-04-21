@@ -1,6 +1,6 @@
 # CS46 — Workboard Claim Discipline (Push-Success Gating)
 
-**Status:** 🔄 Active
+**Status:** ✅ Done
 **Linked PR:** #220 (CS46-1..4)
 **Goal:** Make explicit in TRACKING.md that a WORKBOARD.md claim (or reclamation) is not effective until the push to `origin/main` succeeds, and that no task work may proceed until then. Add the missing push-rejected recovery procedure.
 
@@ -45,6 +45,10 @@ There is also no orchestrator-side analogue to the sub-agent `STATE:` reporting 
 - The principle "claim is not effective until push lands on origin" appears as a named rule, not just as scattered hygiene advice.
 - Existing `npm run check:docs:strict` still passes on the PR.
 
-## Decisions
+## Deferred
 
 - **CS46-5 (consistency-checker push-sync warning) evaluated and deferred — low value vs. effort.** The strict checker already catches stale rows via `active-row-stale` (warn >24h, reclaim >7d), which is the signal that actually matters for stuck orchestrators. A dedicated push-sync rule would have to fetch `origin/main` and correlate per-row commits — a meaningful amount of new logic — to flag a window (local-committed but not pushed) that is almost always seconds long in practice. The named "Claim effectiveness" rule added in CS46-1 plus the push-rejected recovery procedure in CS46-2 address the documentation gap that actually burned us on 2026-04-21; a mechanical check would duplicate an existing signal without materially improving agent experience. Revisit if this becomes a recurring pain point.
+
+## Decisions
+
+- See Deferred section above for CS46-5 evaluation.

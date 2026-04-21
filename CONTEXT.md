@@ -20,7 +20,7 @@ Active and planned clickstops listed below. Completed clickstops live in [`proje
 | CS40 | Feature Flag Testing Infrastructure | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs40_feature-flag-testing.md) |
 | CS41 | Production Deploy Validation | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs41_production-deploy-validation.md) |
 | CS42 | Production Cold Start Progressive Messages | 🔄 Active | 1/8 | [details](project/clickstops/active/active_cs42_production-cold-start-messages.md) |
-| CS46 | Workboard Claim Discipline (Push-Success Gating) | 🔄 Active | 0/5 | [details](project/clickstops/active/active_cs46_workboard-claim-discipline.md) |
+| CS46 | Workboard Claim Discipline (Push-Success Gating) | ✅ Done | 4/5 | [details](project/clickstops/done/done_cs46_workboard-claim-discipline.md) |
 | CS47 | ProgressiveLoader Client UX Telemetry & Alerting | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs47_progressive-loader-telemetry.md) |
 
 ---
