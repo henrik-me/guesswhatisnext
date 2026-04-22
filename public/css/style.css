@@ -3965,6 +3965,37 @@ body::before {
   animation: progressiveFadeIn 0.3s ease-in;
 }
 
+/* Animated ellipsis dots after loading messages */
+.progressive-ellipsis {
+  display: inline;
+  margin-left: 0.1em;
+}
+
+.progressive-ellipsis > span {
+  display: inline-block;
+  width: 0.3em;
+  height: 0.3em;
+  margin: 0 0.05em;
+  border-radius: 50%;
+  background-color: currentColor;
+  vertical-align: middle;
+  opacity: 0.2;
+  animation: ellipsisPulse 1.4s infinite ease-in-out;
+}
+
+.progressive-ellipsis > span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.progressive-ellipsis > span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes ellipsisPulse {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
+}
+
 .progressive-failed {
   display: flex;
   flex-direction: column;
@@ -4029,6 +4060,10 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .progressive-message {
     animation: none;
+  }
+  .progressive-ellipsis > span {
+    animation: none;
+    opacity: 0.6;
   }
   .sync-indicator {
     transition: none;

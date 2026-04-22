@@ -7,7 +7,33 @@ import { Game, shuffle } from './game.js';
 import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
-import { progressiveLoad, MESSAGE_SETS, queueScoreForSync, syncQueuedScores } from './progressive-loader.js';
+import { progressiveLoad, MESSAGE_SETS, RetryableError, queueScoreForSync, syncQueuedScores } from './progressive-loader.js';
+
+/**
+ * Check a fetch Response for a retryable 503 signal and throw RetryableError if present.
+ * Retry signal: Retry-After HTTP header (preferred) or retryAfter JSON body field (fallback).
+ * SW-synthesised offline 503s lack both signals and are NOT retried.
+ */
+async function throwIfRetryable(res) {
+  if (res.status !== 503) return;
+  const headerVal = res.headers.get('Retry-After');
+  if (headerVal) {
+    const seconds = parseInt(headerVal, 10);
+    if (!isNaN(seconds) && seconds >= 0) {
+      throw new RetryableError('Server warming up', seconds * 1000);
+    }
+  }
+  // Fallback: check JSON body for retryAfter field
+  try {
+    const body = await res.clone().json();
+    if (body && typeof body.retryAfter === 'number' && body.retryAfter >= 0) {
+      throw new RetryableError('Server warming up', body.retryAfter * 1000);
+    }
+  } catch (e) {
+    if (e instanceof RetryableError) throw e;
+    // JSON parse failed or no retryAfter — not retryable
+  }
+}
 
 // Client-side error reporting (IIFE keeps internals private)
 (function initErrorReporting() {
@@ -1076,6 +1102,7 @@ async function fetchLeaderboard(period) {
   const data = await progressiveLoad(
     async (signal) => {
       const res = await apiFetch(url, { signal });
+      await throwIfRetryable(res);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -1237,6 +1264,7 @@ async function fetchAchievements() {
     async (signal) => {
       const res = await apiFetch('/api/achievements', { signal });
       if (res.status === 401) return null;
+      await throwIfRetryable(res);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -2783,35 +2811,47 @@ async function fetchProfile() {
       const [meResult, scoresResult, achievementsResult, historyResult] = await Promise.allSettled([
         apiFetch('/api/auth/me', { signal }).then(async (res) => {
           if (res.status === 401) return null;
+          await throwIfRetryable(res);
           if (!res.ok) throw new Error(`me: ${res.status}`);
           return res.json();
         }),
         apiFetch('/api/scores/me', { signal }).then(async (res) => {
           if (res.status === 401) return null;
+          await throwIfRetryable(res);
           if (!res.ok) throw new Error(`scores: ${res.status}`);
           return res.json();
         }),
         apiFetch('/api/achievements', { signal }).then(async (res) => {
           if (res.status === 401) return null;
+          await throwIfRetryable(res);
           if (!res.ok) throw new Error(`achievements: ${res.status}`);
           return res.json();
         }),
         apiFetch('/api/matches/history', { signal }).then(async (res) => {
           if (res.status === 401) return null;
+          await throwIfRetryable(res);
           if (!res.ok) throw new Error(`history: ${res.status}`);
           return res.json();
         }),
       ]);
 
       // If any returned 401 (mapped to null), the user is not logged in
-      const results = [meResult, scoresResult, achievementsResult, historyResult];
-      const anyAuth401 = results.some(r => r.status === 'fulfilled' && r.value === null);
+      const settledResults = [meResult, scoresResult, achievementsResult, historyResult];
+      const anyAuth401 = settledResults.some(r => r.status === 'fulfilled' && r.value === null);
       if (anyAuth401) return null;
+
+      // If any sub-request rejected with RetryableError, promote the whole batch
+      const retryables = settledResults
+        .filter(r => r.status === 'rejected' && r.reason instanceof RetryableError);
+      if (retryables.length > 0) {
+        const maxRetryMs = Math.max(...retryables.map(r => r.reason.retryAfterMs));
+        throw new RetryableError('Server warming up (batch)', maxRetryMs);
+      }
 
       const meData = meResult.status === 'fulfilled' ? meResult.value : null;
 
       // If all requests rejected (e.g. all aborted on timeout), rethrow to show Retry button
-      const allRejected = [meResult, scoresResult, achievementsResult, historyResult]
+      const allRejected = settledResults
         .every(r => r.status === 'rejected');
       if (allRejected) throw meResult.reason || new Error('All profile requests failed');
 
@@ -3581,6 +3621,7 @@ async function loadGallery(append = false) {
     if (galleryDifficulty && galleryDifficulty !== 'all') params.set('difficulty', galleryDifficulty);
 
     const res = await fetch(`/api/puzzles/community?${params}`, { signal });
+    await throwIfRetryable(res);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load puzzles');
     return data;
