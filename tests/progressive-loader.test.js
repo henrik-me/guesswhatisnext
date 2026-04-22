@@ -150,6 +150,234 @@ describe('progressiveLoad', () => {
   });
 });
 
+describe('RetryableError and 503 auto-retry', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('retries on 503 with Retry-After header (RetryableError)', async () => {
+    const { progressiveLoad, RetryableError, MESSAGE_SETS } = await loadModule();
+    let callCount = 0;
+    const fetchFn = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return Promise.reject(new RetryableError('warming up', 5000));
+      return Promise.resolve({ scores: [1, 2] });
+    });
+    const container = { innerHTML: '', querySelector: () => null };
+
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
+
+    // First attempt fails with RetryableError
+    await vi.advanceTimersByTimeAsync(100);
+    // Wait for retry delay (clamped to 2000-8000, so 5000ms)
+    await vi.advanceTimersByTimeAsync(5100);
+
+    const result = await promise;
+    expect(result).toEqual({ scores: [1, 2] });
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry 503 without header or body retry signal (terminal failure)', async () => {
+    const { progressiveLoad, MESSAGE_SETS } = await loadModule();
+    // A plain Error (not RetryableError) for a 503 without signal
+    const fetchFn = vi.fn().mockRejectedValue(new Error('HTTP 503'));
+    const retryBtn = { addEventListener: vi.fn() };
+    const container = {
+      innerHTML: '',
+      querySelector: vi.fn().mockReturnValue(retryBtn),
+    };
+
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = await promise;
+    expect(result).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(container.innerHTML).toContain('progressive-retry-btn');
+  });
+
+  it('honors 30s wall-clock cap — falls through to retry-button path', async () => {
+    const { progressiveLoad, RetryableError, MESSAGE_SETS } = await loadModule();
+    // Always returns RetryableError with 8s delay
+    const fetchFn = vi.fn().mockRejectedValue(new RetryableError('warming up', 8000));
+    const retryBtn = { addEventListener: vi.fn() };
+    const container = {
+      innerHTML: '',
+      querySelector: vi.fn().mockReturnValue(retryBtn),
+    };
+
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
+
+    // Advance well past 30s to exhaust the wall-clock cap
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(5000);
+    }
+
+    const result = await promise;
+    expect(result).toBeNull();
+    expect(container.innerHTML).toContain('progressive-retry-btn');
+    // Should have been called multiple times (initial + retries) but eventually stopped
+    expect(fetchFn.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('message-escalation timers persist across retries', async () => {
+    const { progressiveLoad, RetryableError, MESSAGE_SETS } = await loadModule();
+    let callCount = 0;
+    const fetchFn = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount <= 2) return Promise.reject(new RetryableError('warming up', 3000));
+      return Promise.resolve({ data: 'ok' });
+    });
+    const container = { innerHTML: '', querySelector: () => null };
+
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
+
+    // First attempt fails immediately
+    await vi.advanceTimersByTimeAsync(100);
+    // Advance past the 3s mark — escalation timer should fire showing second message
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(container.innerHTML).toContain('Tallying up everyone');
+
+    // Still retrying — advance to get past retry delay and succeed
+    await vi.advanceTimersByTimeAsync(3000);
+
+    const result = await promise;
+    expect(result).toEqual({ data: 'ok' });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('AbortError still terminates the loader immediately', async () => {
+    const { progressiveLoad, MESSAGE_SETS } = await loadModule();
+    const abortErr = new Error('The operation was aborted');
+    abortErr.name = 'AbortError';
+    const fetchFn = vi.fn().mockRejectedValue(abortErr);
+    const retryBtn = { addEventListener: vi.fn() };
+    const container = {
+      innerHTML: '',
+      querySelector: vi.fn().mockReturnValue(retryBtn),
+    };
+
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = await promise;
+    expect(result).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(container.innerHTML).toContain('progressive-retry-btn');
+  });
+
+  it('ellipsis dots are present in loading-state DOM and absent in Retry-state', async () => {
+    const { progressiveLoad, MESSAGE_SETS } = await loadModule();
+    const container = { innerHTML: '', querySelector: () => null };
+
+    // Start a load — check loading state
+    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => {})); // never resolves
+    progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, { timeout: 60000 });
+
+    // Loading state should have ellipsis dots
+    expect(container.innerHTML).toContain('progressive-ellipsis');
+    expect(container.innerHTML).toContain('aria-hidden="true"');
+    expect(container.innerHTML).toMatch(/<span class="progressive-ellipsis"[^>]*>.*<span><\/span>.*<span><\/span>.*<span><\/span>/s);
+
+    // Now test retry state — trigger failure
+    const failFn = vi.fn().mockRejectedValue(new Error('fail'));
+    const retryBtn = { addEventListener: vi.fn() };
+    const retryContainer = {
+      innerHTML: '',
+      querySelector: vi.fn().mockReturnValue(retryBtn),
+    };
+
+    const promise2 = progressiveLoad(failFn, retryContainer, [], { timeout: 5000 });
+    await vi.advanceTimersByTimeAsync(100);
+    await promise2;
+
+    // Retry state should NOT have ellipsis dots
+    expect(retryContainer.innerHTML).toContain('progressive-retry-btn');
+    expect(retryContainer.innerHTML).not.toContain('progressive-ellipsis');
+  });
+});
+
+describe('New message timer steps (6s and 20s)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('achievements 6s message fires at 6000ms', async () => {
+    const { progressiveLoad, MESSAGE_SETS } = await loadModule();
+    const container = { innerHTML: '', querySelector: () => null };
+    // Never-resolving fetch to keep timers running
+    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+    progressiveLoad(fetchFn, container, MESSAGE_SETS.achievements, { timeout: 60000 });
+
+    // At 0ms — first message
+    expect(container.innerHTML).toContain('Checking your trophy case...');
+
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(container.innerHTML).toContain('Polishing your badges');
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(container.innerHTML).toContain('Counting your wins 🏅');
+  });
+
+  it('community 6s message fires at 6000ms', async () => {
+    const { progressiveLoad, MESSAGE_SETS } = await loadModule();
+    const container = { innerHTML: '', querySelector: () => null };
+    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+    progressiveLoad(fetchFn, container, MESSAGE_SETS.community, { timeout: 60000 });
+
+    expect(container.innerHTML).toContain('Loading community puzzles...');
+
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(container.innerHTML).toContain('Gathering submissions');
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(container.innerHTML).toContain('Checking for fresh puzzles 🧩');
+  });
+
+  it('20s messages fire for all screens', async () => {
+    const { progressiveLoad, MESSAGE_SETS } = await loadModule();
+
+    const expectedMessages = {
+      leaderboard: 'Almost there — servers stretching their legs 🦵',
+      profile: 'Almost there — dusting off your trophy shelf 🏆',
+      achievements: 'Almost there — assembling the trophy wall 🎖️',
+      community: 'Almost there — unpacking the puzzle box 📦',
+    };
+
+    for (const [screen, expectedMsg] of Object.entries(expectedMessages)) {
+      const container = { innerHTML: '', querySelector: () => null };
+      const fetchFn = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+      progressiveLoad(fetchFn, container, MESSAGE_SETS[screen], { timeout: 60000 });
+      await vi.advanceTimersByTimeAsync(20100);
+
+      expect(container.innerHTML).toContain(expectedMsg);
+    }
+  });
+});
+
 describe('MESSAGE_SETS', () => {
   it('has message sets for all screens', async () => {
     const { MESSAGE_SETS } = await loadModule();
