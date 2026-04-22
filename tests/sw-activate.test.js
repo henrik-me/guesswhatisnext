@@ -5,7 +5,10 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('sw.js activate handler', () => {
   let activateHandler;
@@ -31,7 +34,7 @@ describe('sw.js activate handler', () => {
     };
 
     // Load sw.js as a script (not a module) by evaluating it
-    const swSource = readFileSync(join(import.meta.dirname, '..', 'public', 'sw.js'), 'utf-8');
+    const swSource = readFileSync(join(__dirname, '..', 'public', 'sw.js'), 'utf-8');
     const fn = new Function('self', 'caches', swSource);
     fn(globalThis.self, globalThis.caches);
 

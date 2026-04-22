@@ -4,13 +4,16 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Load sw-register.js in an isolated scope with injectable globals.
  * Returns the controllerchange handler and the mocks for assertions.
  */
-function loadSwRegister({ sessionStoreInit = {} } = {}) {
+function loadSwRegister({ sessionStoreInit = {}, hasExistingController = true } = {}) {
   const store = { ...sessionStoreInit };
   const mockSessionStorage = {
     getItem: vi.fn((key) => store[key] ?? null),
@@ -21,6 +24,7 @@ function loadSwRegister({ sessionStoreInit = {} } = {}) {
   const listeners = {};
   const mockNavigator = {
     serviceWorker: {
+      controller: hasExistingController ? { scriptURL: '/sw.js' } : null,
       register: vi.fn().mockResolvedValue({}),
       addEventListener: vi.fn((event, handler) => {
         listeners[event] = listeners[event] || [];
@@ -31,7 +35,7 @@ function loadSwRegister({ sessionStoreInit = {} } = {}) {
 
   const mockWindow = { location: { reload: mockReload } };
 
-  const source = readFileSync(join(import.meta.dirname, '..', 'public', 'js', 'sw-register.js'), 'utf-8');
+  const source = readFileSync(join(__dirname, '..', 'public', 'js', 'sw-register.js'), 'utf-8');
   const fn = new Function('navigator', 'sessionStorage', 'window', source);
   fn(mockNavigator, mockSessionStorage, mockWindow);
 
@@ -71,6 +75,16 @@ describe('sw-register controllerchange reload guard', () => {
   it('does not reload if sessionStorage flag was already set', () => {
     const { controllerChangeHandler, mockReload } = loadSwRegister({
       sessionStoreInit: { 'gwn-sw-reloaded': '1' },
+    });
+
+    controllerChangeHandler();
+
+    expect(mockReload).not.toHaveBeenCalled();
+  });
+
+  it('does not reload on initial SW install (no prior controller)', () => {
+    const { controllerChangeHandler, mockReload } = loadSwRegister({
+      hasExistingController: false,
     });
 
     controllerChangeHandler();
