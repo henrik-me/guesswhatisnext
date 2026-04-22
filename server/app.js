@@ -170,11 +170,11 @@ function createServer() {
     if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/') || req.path.startsWith('/api/telemetry/')) return next();
 
     if (draining) {
-      return res.status(503).json({ error: 'Server is draining', retryAfter: 5 });
+      return res.set('Retry-After', '5').status(503).json({ error: 'Server is draining', retryAfter: 5 });
     }
 
     if (!dbInitialized && req.path.startsWith('/api/')) {
-      return res.status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
+      return res.set('Retry-After', '5').status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
     }
 
     activeRequests++;
