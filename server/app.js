@@ -9,6 +9,7 @@ const http = require('http');
 const fs = require('fs');
 const pinoHttp = require('pino-http');
 const { config } = require('./config');
+const { isTransientDbError } = require('./lib/transient-db-error');
 const logger = require('./logger');
 const { getDbAdapter, closeDbAdapter, isAdapterInitialized } = require('./db');
 const migrations = require('./db/migrations');
@@ -328,21 +329,40 @@ function createServer() {
 
   // Centralized error handler — must be after all routes
   app.use((err, req, res, next) => {
-    const status = err.status || err.statusCode || 500;
+    let status = err.status || err.statusCode || 500;
+
+    // Convert transient/cold-start DB errors into 503 with Retry-After so the
+    // client's CS42-3 ProgressiveLoader can retry, instead of surfacing a
+    // generic "Internal server error" (CS45). This matters most for Azure SQL
+    // serverless, which auto-pauses while the server still believes the pool
+    // is initialized; the next query then times out mid-request.
+    let isTransient = false;
+    if (status >= 500 && isTransientDbError(err, config.DB_BACKEND)) {
+      isTransient = true;
+      status = 503;
+    }
+
     const logLevel = status >= 500 ? 'error' : 'warn';
     logger[logLevel](
       {
         err,
         status,
+        transient: isTransient || undefined,
         method: req.method,
         url: req.originalUrl || req.url,
         requestId: req.id,
         remoteAddress: req.ip || (req.socket && req.socket.remoteAddress),
       },
-      'Unhandled request error'
+      isTransient ? 'Transient DB error — responded 503' : 'Unhandled request error'
     );
     if (res.headersSent) {
       return next(err);
+    }
+    if (isTransient) {
+      return res
+        .set('Retry-After', '5')
+        .status(503)
+        .json({ error: 'Database temporarily unavailable', retryAfter: 5 });
     }
     res.status(status).json({ error: status >= 500 ? 'Internal server error' : err.message });
   });
@@ -369,21 +389,7 @@ function createServer() {
         dbInitialized = false;
         const db = isAdapterInitialized() ? await getDbAdapter() : null;
         const dialect = db ? db.dialect : config.DB_BACKEND;
-
-        let isRetryable;
-        if (dialect === 'mssql') {
-          // MSSQL transient errors: serverless auto-pause wake-up, pool timeouts, Azure transient failures
-          const MSSQL_TRANSIENT_NUMBERS = new Set([40613, 40197, 40501, 49918, 49919, 49920]);
-          const errNumber = err.number || (err.originalError && err.originalError.number);
-          isRetryable = MSSQL_TRANSIENT_NUMBERS.has(errNumber) ||
-            /ETIMEOUT|ECONNREFUSED|ESOCKET|ECONNRESET/.test(err.code) ||
-            /connection.*timeout|pool.*failed|database.*paused|database.*unavailable/i.test(err.message);
-        } else {
-          // SQLite lock / busy errors
-          isRetryable = err.code === 'SQLITE_BUSY' ||
-            err.code === 'SQLITE_LOCKED' ||
-            err.code === 'SQLITE_BUSY_SNAPSHOT';
-        }
+        const isRetryable = isTransientDbError(err, dialect);
 
         if (!isRetryable) {
           try { await closeDbAdapter(); } catch { /* ignore */ }
