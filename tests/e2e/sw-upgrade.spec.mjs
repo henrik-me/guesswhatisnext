@@ -82,6 +82,12 @@ test.describe('SW Upgrade Migration', () => {
         try { sessionStorage.removeItem('gwn-sw-reloaded'); } catch { /* noop */ }
       });
 
+      // Count navigations to verify exactly one reload occurs (not zero, not two).
+      let navigationCount = 0;
+      page.on('framenavigated', (frame) => {
+        if (frame === page.mainFrame()) navigationCount++;
+      });
+
       // Set a JS sentinel that won't survive a page reload — this lets us
       // distinguish "flag set in the pre-reload context" from "post-reload".
       await page.evaluate(() => { window.__preReloadSentinel = true; });
@@ -125,14 +131,15 @@ test.describe('SW Upgrade Migration', () => {
       expect(cacheNames).not.toContain('gwn-v2');
 
       // 4c: The freshly served /js/app.js does NOT contain the sentinel
-      const appJsText = await page.evaluate(async () => {
+      //     and is a valid JavaScript response (not a 404 or error page)
+      const appJsResult = await page.evaluate(async () => {
         const resp = await fetch('/js/app.js');
-        return resp.text();
+        return { ok: resp.ok, status: resp.status, text: await resp.text() };
       });
-      expect(appJsText).not.toContain(SENTINEL);
+      expect(appJsResult.ok).toBe(true);
+      expect(appJsResult.text).not.toContain(SENTINEL);
 
-      // 4d: controllerchange reload happened exactly once (flag already
-      // verified in the waitForFunction above; explicit assertion here)
+      // 4d: controllerchange reload happened exactly once
       const reloadFlag = await page.evaluate(() => {
         try {
           return sessionStorage.getItem('gwn-sw-reloaded');
@@ -141,6 +148,7 @@ test.describe('SW Upgrade Migration', () => {
         }
       });
       expect(reloadFlag).toBe('1');
+      expect(navigationCount).toBe(1);
     } finally {
       await context.close();
     }
