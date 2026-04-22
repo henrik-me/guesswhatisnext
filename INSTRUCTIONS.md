@@ -20,7 +20,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Deferred tasks → must create new `planned_` clickstop (never silently drop)
 - Sub-agent prompts must include full Sub-Agent Checklist verbatim
 - Run local review loop (GPT 5.4) before Copilot review — skip Copilot for docs-only PRs
-- Report progress to user after dispatching agents — never go silent
+- Report progress to user after dispatching agents — never go silent; relay every sub-agent turn/state transition the same turn it lands, and post a heartbeat update at least every ~10 min if nothing has transitioned (see [§ Agent Progress Reporting in OPERATIONS.md](OPERATIONS.md#agent-progress-reporting))
 - Commit after each meaningful step — don't batch unrelated changes
 - Record local review findings in PR description
 - Do not remove task from WORKBOARD.md until PR is merged and task is fully complete
