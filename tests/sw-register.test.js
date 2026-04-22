@@ -13,11 +13,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * Load sw-register.js in an isolated scope with injectable globals.
  * Returns the controllerchange handler and the mocks for assertions.
  */
-function loadSwRegister({ sessionStoreInit = {}, hasExistingController = true } = {}) {
+function loadSwRegister({ sessionStoreInit = {}, hasExistingController = true, throwOnStorage = false } = {}) {
   const store = { ...sessionStoreInit };
   const mockSessionStorage = {
-    getItem: vi.fn((key) => store[key] ?? null),
-    setItem: vi.fn((key, val) => { store[key] = String(val); }),
+    getItem: vi.fn((key) => {
+      if (throwOnStorage) throw new DOMException('Storage disabled');
+      return store[key] ?? null;
+    }),
+    setItem: vi.fn((key, val) => {
+      if (throwOnStorage) throw new DOMException('Storage disabled');
+      store[key] = String(val);
+    }),
   };
 
   const mockReload = vi.fn();
@@ -90,5 +96,18 @@ describe('sw-register controllerchange reload guard', () => {
     controllerChangeHandler();
 
     expect(mockReload).not.toHaveBeenCalled();
+  });
+
+  it('still reloads once when sessionStorage throws (in-memory fallback)', () => {
+    const { controllerChangeHandler, mockReload } = loadSwRegister({
+      throwOnStorage: true,
+    });
+
+    controllerChangeHandler();
+    expect(mockReload).toHaveBeenCalledTimes(1);
+
+    // Second call should not reload — in-memory flag prevents loops
+    controllerChangeHandler();
+    expect(mockReload).toHaveBeenCalledTimes(1);
   });
 });
