@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-22T00:55Z
+> **Last updated:** 2026-04-22T01:50Z
 
 ## Orchestrators
 
@@ -24,6 +24,6 @@ CS44-3 schema upgrade.
 
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
-| CS42-1 | CS42 | claimed | omni-gwn-c2 | — | — | — | 2026-04-21T22:38Z | Reclaimed from yoga-gwn (stale >24h, early reclamation authorized by user). Draft CS42-2..5 implementation plan. | — |
+| CS42 | CS42 | in_progress | omni-gwn-c2 | — | — | — | 2026-04-22T01:50Z | CS42-1 (investigation + refined plan) complete. Owning the full clickstop; next: dispatch CS42-2+2b (SW cache bump + controllerchange reload) and CS42-3 (ProgressiveLoader 503 retry + UX) to worktree sub-agents. | — |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
