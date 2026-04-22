@@ -3,8 +3,8 @@
  * E2E test — /api/health returns correct shape for any backend.
  *
  * Validates the adapter-level healthCheck() contract end-to-end:
- * - SQLite adapter returns `storage.status: 'ok'` with `dbSizeMb`
- * - MSSQL adapter returns `storage.status: 'ok'` with `latencyMs`
+ * - Both adapters return `storage.status: 'ok'` with `latencyMs`
+ * - SQLite adapter may also include `dbSizeMb` (file-backed databases)
  *
  * Runs as part of `npm run test:e2e` (SQLite) and `npm run test:e2e:mssql` (MSSQL).
  */
@@ -55,10 +55,13 @@ test.describe('/api/health contract', () => {
     const body = await res.json();
     const storage = body.checks.storage;
 
-    // SQLite returns dbSizeMb; MSSQL returns latencyMs.
-    // At least one must be present.
-    const hasSqliteFields = typeof storage.dbSizeMb === 'number';
-    const hasMssqlFields = typeof storage.latencyMs === 'number';
-    expect(hasSqliteFields || hasMssqlFields).toBe(true);
+    // Both adapters always return latencyMs from the SELECT 1 ping
+    expect(typeof storage.latencyMs).toBe('number');
+
+    // SQLite may also return dbSizeMb (file-backed only); MSSQL won't.
+    // Either is acceptable — the key contract is latencyMs.
+    if (storage.dbSizeMb !== undefined) {
+      expect(typeof storage.dbSizeMb).toBe('number');
+    }
   });
 });
