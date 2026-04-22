@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-22T03:33Z
+> **Last updated:** 2026-04-22T03:36Z
 
 ## Orchestrators
 
@@ -24,6 +24,6 @@ CS44-3 schema upgrade.
 
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
-| CS42 | CS42 | claimed | omni-gwn-c2 | — | — | — | 2026-04-22T03:33Z | CS42-1/2/2b/3 merged (PRs #222, #223). Next: CS42-4 (content-hashed CACHE_NAME, depends on CS42-2 merged ✓), then CS42-5a/5b/5c E2E + manual verification. | — |
+| CS42 | CS42 | implementing | omni-gwn-c2 | wt-2, wt-3, wt-4 | omni-gwn-c2/cs42-4-content-hashed-cache-name, omni-gwn-c2/cs42-5a-e2e-sw-upgrade, omni-gwn-c2/cs42-5b-e2e-503-retry | — | 2026-04-22T03:36Z | 4/8 tasks merged (CS42-1/2/2b/3). Three parallel sub-agents in flight: CS42-4 (drift-proofing), CS42-5a (SW-upgrade E2E), CS42-5b (503-retry E2E). CS42-5c is one-shot manual prod verification, queued for after these merge + deploy. | — |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
