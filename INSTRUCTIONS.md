@@ -4,7 +4,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 
 - Claiming a clickstop → update WORKBOARD.md (commit+push), rename CS file to active_, update content, commit to main
 - Closing a clickstop → rename CS file to done_, move to `project/clickstops/done/`, update content with results, update CONTEXT.md, remove from WORKBOARD.md
-- Preferred model: Claude Opus 4.6 (1M context) for both orchestrators and sub-agents, GPT 5.4 for reviews
+- Preferred model: Claude Opus 4.6 (1M context) for both orchestrators and sub-agents, latest GPT model (GPT 5.4 at time of writing) for reviews
 - CS number conflicts → check done_, active_, AND planned_ files before picking a new number
 - After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 - Session start → `git pull` before reading project files
@@ -19,7 +19,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Commit clickstop plan file to main BEFORE starting implementation work
 - Deferred tasks → must create new `planned_` clickstop (never silently drop)
 - Sub-agent prompts must include full Sub-Agent Checklist verbatim
-- Run local review loop (GPT 5.4) before Copilot review — skip Copilot for docs-only PRs
+- Run local review loop (latest GPT model, GPT 5.4 at time of writing) before Copilot review — skip Copilot for docs-only PRs
 - Report progress to user after dispatching agents — never go silent; relay every sub-agent turn/state transition the same turn it lands, and post a heartbeat update at least every ~10 min if nothing has transitioned (see [§ Agent Progress Reporting in OPERATIONS.md](OPERATIONS.md#agent-progress-reporting))
 - Commit after each meaningful step — don't batch unrelated changes
 - Record local review findings in PR description
