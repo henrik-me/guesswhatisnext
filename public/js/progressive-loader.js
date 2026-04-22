@@ -130,8 +130,8 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
       return null;
     }
 
-    // Sleep for the retry delay (clamped 2000–8000ms)
-    const retryDelay = Math.max(2000, Math.min(8000, lastErr.retryAfterMs));
+    // Sleep for the retry delay (clamped 2000–8000ms), but never past the warmup cap
+    const retryDelay = Math.min(Math.max(2000, Math.min(8000, lastErr.retryAfterMs)), remaining);
     await sleep(retryDelay);
 
     // Re-check remaining after sleep
