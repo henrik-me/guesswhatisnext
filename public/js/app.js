@@ -19,14 +19,14 @@ async function throwIfRetryable(res) {
   const headerVal = res.headers.get('Retry-After');
   if (headerVal) {
     const seconds = parseInt(headerVal, 10);
-    if (!isNaN(seconds) && seconds > 0) {
+    if (!isNaN(seconds) && seconds >= 0) {
       throw new RetryableError('Server warming up', seconds * 1000);
     }
   }
   // Fallback: check JSON body for retryAfter field
   try {
     const body = await res.clone().json();
-    if (body && typeof body.retryAfter === 'number' && body.retryAfter > 0) {
+    if (body && typeof body.retryAfter === 'number' && body.retryAfter >= 0) {
       throw new RetryableError('Server warming up', body.retryAfter * 1000);
     }
   } catch (e) {
