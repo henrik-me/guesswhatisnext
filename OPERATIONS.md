@@ -121,7 +121,7 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 6. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
 7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs; docs-only PRs must still pass `npm run check:docs:strict`). **On all-green, emit `STATE: validating`.** If validation fails, fix and re-run (up to 3 attempts). If stuck, emit `STATE: blocked` with a `Blocked Reason: <short prose>` line, report failure details, and stop.
 8. Push branch and create PR with task ID in title and agent metadata in description. **On `gh pr create` success, emit `STATE: pr_open` and `PR: <number>` on a separate line.**
-9. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop-gpt-54)): launch `code-review` agent with `model=gpt-5.4`, fix issues, push fixes, repeat until clean. **Emit `STATE: local_review` when the loop starts.**
+9. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop-gpt-54-or-higher)): launch `code-review` agent with GPT 5.4 or higher (`model=gpt-5.4` is the floor), fix issues, push fixes, repeat until clean. **Emit `STATE: local_review` when the loop starts.**
 10. **Document local review findings in PR description** (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop-gpt-54) for format)
 11. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per [§ Waiting for Copilot Review in REVIEWS.md](REVIEWS.md#waiting-for-copilot-review). **Emit `STATE: copilot_review` after the reviewer is added.**
 12. **For docs-only PRs:** Skip Copilot review — local review is sufficient (no `copilot_review` transition; stay in `local_review` until ready)
@@ -142,7 +142,7 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 
 This checklist exists so dispatched agents have everything needed to report state mechanically without orchestrator follow-up. Omitting any bullet pushes work back onto the orchestrator and degrades the State column to fiction (see [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D).
 
-**Model selection:** The preferred model for all sub-agent implementation work is `claude-opus-4.6` (Opus). Orchestrator agents should use `claude-opus-4.6-1m` (1M context variant) to maintain full session context across long orchestration sessions. `gpt-5.4` is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
+**Model selection:** The preferred model for both orchestrators and sub-agents is Claude Opus 4.7 or higher (use the 1M context variant — e.g. `claude-opus-4.6-1m` — when available). GPT 5.4 or higher (`gpt-5.4` is the floor) is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 
 ## Parallel Agent Workflow
 

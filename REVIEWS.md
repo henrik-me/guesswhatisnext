@@ -4,14 +4,14 @@ This file contains review procedures for sub-agents during PR work (local review
 
 <!-- OPERATIONS.md and TRACKING.md are created by CS45-2 and CS45-4 (parallel with this PR); once both land the references above can be upgraded from code spans to markdown links. -->
 
-## Local Review Loop (GPT 5.4)
+## Local Review Loop (GPT 5.4 or higher)
 
-Before requesting Copilot PR review, sub-agents **must** run a local review loop using the `code-review` agent with model `gpt-5.4`. This catches issues in ~60 seconds vs the 2-10 minute Copilot polling cycle.
+Before requesting Copilot PR review, sub-agents **must** run a local review loop using the `code-review` agent with GPT 5.4 or higher (use the newest available GPT release; `gpt-5.4` is the floor). This catches issues in ~60 seconds vs the 2-10 minute Copilot polling cycle.
 
 **Local review procedure:**
 1. After pushing changes and creating the PR, launch a local review:
    ```
-   task agent_type=code-review model=gpt-5.4:
+   task agent_type=code-review model=gpt-5.4:  # GPT 5.4 or higher
      "Review changes on branch <branch-name> in <worktree-path>.
       Run `git --no-pager diff main...HEAD` to see changes.
       Focus on: bugs, security, correctness, broken links, factual accuracy.
