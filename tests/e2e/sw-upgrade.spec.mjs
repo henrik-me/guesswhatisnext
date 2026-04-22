@@ -123,9 +123,12 @@ test.describe('SW Upgrade Migration', () => {
 
       // ── Phase 4: Assert all four acceptance criteria ──
 
-      // 4a: The new SW activated with the current CACHE_NAME (gwn-v3)
+      // 4a: The new SW activated with the current content-hashed CACHE_NAME
+      //     (gwn-<8-hex> per CS42-4). Match either the legacy gwn-v3 form or
+      //     the new gwn-<hash> form so this test is resilient to either scheme.
       const cacheNames = await page.evaluate(() => caches.keys());
-      expect(cacheNames).toContain('gwn-v3');
+      const hasCurrentCache = cacheNames.some((n) => /^gwn-(v3|[0-9a-f]{8})$/.test(n));
+      expect(hasCurrentCache).toBe(true);
 
       // 4b: The old gwn-v2 cache has been purged
       expect(cacheNames).not.toContain('gwn-v2');
