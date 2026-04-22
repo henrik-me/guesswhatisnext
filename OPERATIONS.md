@@ -29,6 +29,18 @@ Background agents **must** report progress to the orchestrating agent. Each mile
 
 The orchestrating agent **must actively relay progress to the user** — never dispatch tasks and wait silently. When multiple tasks run in parallel, provide a summary table of all task statuses.
 
+**Update cadence to the user (mandatory).** After dispatching one or more background agents, the orchestrator must keep the user informed on a predictable rhythm. The orchestrator owns the polling — the user must never have to ask "what's happening?".
+
+- **On dispatch:** post a summary table listing every dispatched agent (agent_id, slot, branch, task, current status). This is the "kickoff snapshot".
+- **On every sub-agent turn / state transition:** when a background agent emits a new turn (state transition, blocked report, intermediate milestone, completion notification), call `read_agent` and post an updated summary table to the user the same turn. Do not let transitions accumulate silently.
+- **On every completion notification:** call `read_agent` immediately, summarize the result (PR link, final `STATE:`, any blockers), and tell the user what the orchestrator is doing next (e.g., "starting local-review monitor", "queuing merge", "dispatching dependent task").
+- **Idle-poll floor:** if no transition or completion notification has arrived within ~10 minutes of the last user-facing update, the orchestrator must proactively call `list_agents` + `read_agent` and post a heartbeat update — even if the only thing to report is "still running, current intent: X, tool calls: N". The point is the user must not have to ask.
+- **On all agents complete or idle:** post a closing summary and either await the next user instruction or proceed with the next planned step (and announce it).
+
+The summary table format should include at minimum: agent_id, slot/branch, current state (or `current_intent` if pre-first-turn), elapsed time, and next expected transition. When multiple agents run in parallel, a single combined table is preferred over per-agent prose.
+
+Do not use the "tell the user you're waiting and end your response" pattern as an excuse to go silent for long stretches — that pattern means "do not redo the agent's work in the foreground", not "do not check on it". The idle-poll floor above always applies.
+
 **Workboard transitions are push-gated too.** The sub-agent `STATE:` discipline above is only half the contract: orchestrator-driven workboard state transitions (notably `claimed`, but also any orchestrator-side column update such as reclamation) are not effective until the corresponding commit has landed on `origin/main`. See [§ WORKBOARD.md — Live Coordination, "Claim effectiveness" in TRACKING.md](TRACKING.md#workboardmd--live-coordination) for the gating rule and the push-rejected recovery procedure.
 
 **Milestone timing table:** Sub-agents must include a timing table in their final completion report. This tracks elapsed time from session start for each major milestone (e.g., "npm install", "implementation", "validation", "PR created", "review clean"). This was identified as a process improvement during CS25 to help identify workflow bottlenecks.
