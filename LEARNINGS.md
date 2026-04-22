@@ -403,8 +403,8 @@ Recommendations based on benchmark results comparing claude-opus-4.6, claude-son
 
 | Task Type | Recommended Model | Rationale |
 |---|---|---|
-| **Orchestration / planning** | claude-opus-4.6 | Best instruction following, fastest, manages complex workflows without extra prompting |
-| **Quick iteration / convention-heavy coding** | claude-opus-4.6 | 2x speed advantage, fewest review comments, strong convention compliance |
+| **Orchestration / planning** | claude-opus-4.6-1m | Best instruction following, fastest, manages complex workflows without extra prompting. 1M context for full session visibility. |
+| **Quick iteration / convention-heavy coding** | claude-opus-4.6-1m | 2x speed advantage, fewest review comments, strong convention compliance. 1M context preferred for all sub-agent work. |
 | **Deep refactoring / architecture** | gpt-5.4 | Bolder design choices (immutable patterns, DRY helpers, proactive cleanup), more thorough |
 | **Test authoring** | gpt-5.4 | More thorough coverage (reason verification, hermetic env vars, DRY test factories, edge cases) |
 | **Exploration / research** | claude-haiku-4.5 | Cost-effective for read-only codebase analysis |

@@ -4,7 +4,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 
 - Claiming a clickstop → update WORKBOARD.md (commit+push), rename CS file to active_, update content, commit to main
 - Closing a clickstop → rename CS file to done_, move to `project/clickstops/done/`, update content with results, update CONTEXT.md, remove from WORKBOARD.md
-- Preferred model: Claude Opus 4.6 for sub-agents, Opus 4.6 (1M context) for orchestrators, GPT 5.4 for reviews
+- Preferred model: Claude Opus 4.6 (1M context) for both orchestrators and sub-agents, GPT 5.4 for reviews
 - CS number conflicts → check done_, active_, AND planned_ files before picking a new number
 - After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
 - Session start → `git pull` before reading project files
