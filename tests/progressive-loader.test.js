@@ -284,16 +284,26 @@ describe('RetryableError and 503 auto-retry', () => {
 
   it('ellipsis dots are present in loading-state DOM and absent in Retry-state', async () => {
     const { progressiveLoad, MESSAGE_SETS } = await loadModule();
-    const container = { innerHTML: '', querySelector: () => null };
+    const container = { innerHTML: '', querySelector: vi.fn().mockReturnValue({ addEventListener: vi.fn() }) };
 
-    // Start a load — check loading state
-    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => {})); // never resolves
-    progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, { timeout: 60000 });
+    // Start a load with abort-aware fetchFn
+    const fetchFn = vi.fn().mockImplementation((signal) => new Promise((_, reject) => {
+      signal.addEventListener('abort', () => {
+        const abortErr = new Error('The operation was aborted');
+        abortErr.name = 'AbortError';
+        reject(abortErr);
+      }, { once: true });
+    }));
+    const loadingPromise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, { timeout: 60000 });
 
     // Loading state should have ellipsis dots
     expect(container.innerHTML).toContain('progressive-ellipsis');
     expect(container.innerHTML).toContain('aria-hidden="true"');
     expect(container.innerHTML).toMatch(/<span class="progressive-ellipsis"[^>]*>.*<span><\/span>.*<span><\/span>.*<span><\/span>/s);
+
+    // Advance past timeout to let the loader clean up
+    await vi.advanceTimersByTimeAsync(60000);
+    await loadingPromise;
 
     // Now test retry state — trigger failure
     const failFn = vi.fn().mockRejectedValue(new Error('fail'));
@@ -324,11 +334,15 @@ describe('New message timer steps (6s and 20s)', () => {
 
   it('achievements 6s message fires at 6000ms', async () => {
     const { progressiveLoad, MESSAGE_SETS } = await loadModule();
-    const container = { innerHTML: '', querySelector: () => null };
-    // Never-resolving fetch to keep timers running
-    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => {}));
+    const container = { innerHTML: '', querySelector: vi.fn().mockReturnValue({ addEventListener: vi.fn() }) };
+    // Abort-aware fetch to allow clean teardown
+    const fetchFn = vi.fn().mockImplementation((signal) => new Promise((_, reject) => {
+      signal.addEventListener('abort', () => {
+        const err = new Error('aborted'); err.name = 'AbortError'; reject(err);
+      }, { once: true });
+    }));
 
-    progressiveLoad(fetchFn, container, MESSAGE_SETS.achievements, { timeout: 60000 });
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.achievements, { timeout: 60000 });
 
     // At 0ms — first message
     expect(container.innerHTML).toContain('Checking your trophy case...');
@@ -338,14 +352,22 @@ describe('New message timer steps (6s and 20s)', () => {
 
     await vi.advanceTimersByTimeAsync(3000);
     expect(container.innerHTML).toContain('Counting your wins 🏅');
+
+    // Clean up
+    await vi.advanceTimersByTimeAsync(60000);
+    await promise;
   });
 
   it('community 6s message fires at 6000ms', async () => {
     const { progressiveLoad, MESSAGE_SETS } = await loadModule();
-    const container = { innerHTML: '', querySelector: () => null };
-    const fetchFn = vi.fn().mockImplementation(() => new Promise(() => {}));
+    const container = { innerHTML: '', querySelector: vi.fn().mockReturnValue({ addEventListener: vi.fn() }) };
+    const fetchFn = vi.fn().mockImplementation((signal) => new Promise((_, reject) => {
+      signal.addEventListener('abort', () => {
+        const err = new Error('aborted'); err.name = 'AbortError'; reject(err);
+      }, { once: true });
+    }));
 
-    progressiveLoad(fetchFn, container, MESSAGE_SETS.community, { timeout: 60000 });
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.community, { timeout: 60000 });
 
     expect(container.innerHTML).toContain('Loading community puzzles...');
 
@@ -354,6 +376,10 @@ describe('New message timer steps (6s and 20s)', () => {
 
     await vi.advanceTimersByTimeAsync(3000);
     expect(container.innerHTML).toContain('Checking for fresh puzzles 🧩');
+
+    // Clean up
+    await vi.advanceTimersByTimeAsync(60000);
+    await promise;
   });
 
   it('20s messages fire for all screens', async () => {
@@ -367,13 +393,21 @@ describe('New message timer steps (6s and 20s)', () => {
     };
 
     for (const [screen, expectedMsg] of Object.entries(expectedMessages)) {
-      const container = { innerHTML: '', querySelector: () => null };
-      const fetchFn = vi.fn().mockImplementation(() => new Promise(() => {}));
+      const container = { innerHTML: '', querySelector: vi.fn().mockReturnValue({ addEventListener: vi.fn() }) };
+      const fetchFn = vi.fn().mockImplementation((signal) => new Promise((_, reject) => {
+        signal.addEventListener('abort', () => {
+          const err = new Error('aborted'); err.name = 'AbortError'; reject(err);
+        }, { once: true });
+      }));
 
-      progressiveLoad(fetchFn, container, MESSAGE_SETS[screen], { timeout: 60000 });
+      const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS[screen], { timeout: 60000 });
       await vi.advanceTimersByTimeAsync(20100);
 
       expect(container.innerHTML).toContain(expectedMsg);
+
+      // Clean up
+      await vi.advanceTimersByTimeAsync(60000);
+      await promise;
     }
   });
 });

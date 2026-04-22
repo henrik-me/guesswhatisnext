@@ -2836,12 +2836,12 @@ async function fetchProfile() {
       ]);
 
       // If any returned 401 (mapped to null), the user is not logged in
-      const results = [meResult, scoresResult, achievementsResult, historyResult];
-      const anyAuth401 = results.some(r => r.status === 'fulfilled' && r.value === null);
+      const settledResults = [meResult, scoresResult, achievementsResult, historyResult];
+      const anyAuth401 = settledResults.some(r => r.status === 'fulfilled' && r.value === null);
       if (anyAuth401) return null;
 
       // If any sub-request rejected with RetryableError, promote the whole batch
-      const retryables = results
+      const retryables = settledResults
         .filter(r => r.status === 'rejected' && r.reason instanceof RetryableError);
       if (retryables.length > 0) {
         const maxRetryMs = Math.max(...retryables.map(r => r.reason.retryAfterMs));
@@ -2851,7 +2851,7 @@ async function fetchProfile() {
       const meData = meResult.status === 'fulfilled' ? meResult.value : null;
 
       // If all requests rejected (e.g. all aborted on timeout), rethrow to show Retry button
-      const allRejected = [meResult, scoresResult, achievementsResult, historyResult]
+      const allRejected = settledResults
         .every(r => r.status === 'rejected');
       if (allRejected) throw meResult.reason || new Error('All profile requests failed');
 

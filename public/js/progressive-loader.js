@@ -49,6 +49,9 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
     setMessage(containerEl, messageSet[0].msg);
   }
 
+  // Track wall-clock start from first attempt for the warmup cap
+  const warmupStart = Date.now();
+
   while (attempt <= maxRetries) {
     const escalationTimers = [];
     const requestTimers = [];
@@ -75,7 +78,7 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
       // RetryableError — enter the warmup auto-retry loop
       if (err instanceof RetryableError) {
         // Preserve escalation timers — they persist across retries
-        const result = await retryLoop(fetchFn, containerEl, escalationTimers, err, timeout, onRetry, messageSet, options);
+        const result = await retryLoop(fetchFn, containerEl, escalationTimers, err, timeout, onRetry, messageSet, options, warmupStart);
         return result;
       }
 
@@ -114,8 +117,7 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
  * Message-escalation timers persist across retries. Each attempt gets a
  * fresh request-timeout timer bounded by the remaining warmup cap.
  */
-async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, timeout, onRetry, messageSet, options) {
-  const warmupStart = Date.now();
+async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, timeout, onRetry, messageSet, options, warmupStart) {
   let lastErr = initialErr;
 
   while (true) {
