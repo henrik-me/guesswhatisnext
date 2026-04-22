@@ -10,6 +10,25 @@ const DEFAULTS = {
   timeout: 15000,
 };
 
+/** Wall-clock cap for the 503 auto-retry warmup loop (ms). */
+const WARMUP_CAP_MS = 30000;
+
+/**
+ * Typed error for retryable 503 responses.
+ * Thrown by fetchFn call sites when the server returns 503 with a retry signal.
+ */
+export class RetryableError extends Error {
+  /**
+   * @param {string} message
+   * @param {number} retryAfterMs - raw retry delay in ms (clamped at the loader, not here)
+   */
+  constructor(message, retryAfterMs) {
+    super(message);
+    this.name = 'RetryableError';
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
 /**
  * Run an async fetch with timed message escalation and user-initiated retry.
  *
@@ -31,30 +50,48 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
   }
 
   while (attempt <= maxRetries) {
-    const timers = [];
+    const escalationTimers = [];
+    const requestTimers = [];
 
     try {
-      // Start escalating messages
-      startMessageEscalation(containerEl, messageSet, timers);
+      // Start escalating messages (persist across retries — started once per attempt loop)
+      startMessageEscalation(containerEl, messageSet, escalationTimers);
 
       // Run fetchFn with timeout via AbortController
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
-      timers.push(timeoutId);
+      requestTimers.push(timeoutId);
 
       const result = await fetchFn(controller.signal);
 
       // Success — clean up and return
-      clearTimers(timers);
+      clearTimers(escalationTimers);
+      clearTimers(requestTimers);
       clearMessage(containerEl);
       return result;
-    } catch {
-      clearTimers(timers);
+    } catch (err) {
+      clearTimers(requestTimers);
+
+      // RetryableError — enter the warmup auto-retry loop
+      if (err instanceof RetryableError) {
+        // Preserve escalation timers — they persist across retries
+        const result = await retryLoop(fetchFn, containerEl, escalationTimers, err, timeout, onRetry, messageSet, options);
+        return result;
+      }
+
+      // AbortError terminates immediately (existing behavior)
+      if (err && err.name === 'AbortError') {
+        clearTimers(escalationTimers);
+        const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
+        showRetryButton(containerEl, retryHandler);
+        return null;
+      }
+
+      clearTimers(escalationTimers);
 
       attempt++;
       if (attempt > maxRetries) {
         // All retries exhausted — show retry button
-        // If caller provided onRetry, use it to re-run the entire screen flow
         const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
         showRetryButton(containerEl, retryHandler);
         return null;
@@ -72,6 +109,72 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
   return null;
 }
 
+/**
+ * Auto-retry loop for RetryableError (503 with retry signal).
+ * Message-escalation timers persist across retries. Each attempt gets a
+ * fresh request-timeout timer bounded by the remaining warmup cap.
+ */
+async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, timeout, onRetry, messageSet, options) {
+  const warmupStart = Date.now();
+  let lastErr = initialErr;
+
+  while (true) {
+    const elapsed = Date.now() - warmupStart;
+    const remaining = WARMUP_CAP_MS - elapsed;
+
+    if (remaining <= 0) {
+      // Wall-clock cap exhausted — fall through to retry-button path
+      clearTimers(escalationTimers);
+      const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
+      showRetryButton(containerEl, retryHandler);
+      return null;
+    }
+
+    // Sleep for the retry delay (clamped 2000–8000ms)
+    const retryDelay = Math.max(2000, Math.min(8000, lastErr.retryAfterMs));
+    await sleep(retryDelay);
+
+    // Re-check remaining after sleep
+    const elapsedAfterSleep = Date.now() - warmupStart;
+    const remainingAfterSleep = WARMUP_CAP_MS - elapsedAfterSleep;
+    if (remainingAfterSleep <= 0) {
+      clearTimers(escalationTimers);
+      const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
+      showRetryButton(containerEl, retryHandler);
+      return null;
+    }
+
+    const requestTimers = [];
+    try {
+      const controller = new AbortController();
+      const effectiveTimeout = Math.min(timeout, remainingAfterSleep);
+      const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
+      requestTimers.push(timeoutId);
+
+      const result = await fetchFn(controller.signal);
+
+      // Success
+      clearTimers(requestTimers);
+      clearTimers(escalationTimers);
+      clearMessage(containerEl);
+      return result;
+    } catch (retryErr) {
+      clearTimers(requestTimers);
+
+      if (retryErr instanceof RetryableError) {
+        lastErr = retryErr;
+        continue;
+      }
+
+      // AbortError or other non-retryable error — terminate
+      clearTimers(escalationTimers);
+      const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
+      showRetryButton(containerEl, retryHandler);
+      return null;
+    }
+  }
+}
+
 /** Message sets for each screen — escalate over 15s before timeout. */
 export const MESSAGE_SETS = {
   leaderboard: [
@@ -79,22 +182,28 @@ export const MESSAGE_SETS = {
     { after: 3000, msg: 'Tallying up everyone\'s scores...' },
     { after: 6000, msg: 'The leaderboard keeper is on a coffee break ☕' },
     { after: 10000, msg: 'Waking up the database — hang tight 😴' },
+    { after: 20000, msg: 'Almost there — servers stretching their legs 🦵' },
   ],
   profile: [
     { after: 0, msg: 'Loading your profile...' },
     { after: 3000, msg: 'Gathering your stats...' },
     { after: 6000, msg: 'Polishing your achievements ✨' },
     { after: 10000, msg: 'Waking up the database — hang tight 😴' },
+    { after: 20000, msg: 'Almost there — dusting off your trophy shelf 🏆' },
   ],
   achievements: [
     { after: 0, msg: 'Checking your trophy case...' },
     { after: 3000, msg: 'Polishing your badges... ✨' },
+    { after: 6000, msg: 'Counting your wins 🏅' },
     { after: 10000, msg: 'Waking up the database — hang tight 😴' },
+    { after: 20000, msg: 'Almost there — assembling the trophy wall 🎖️' },
   ],
   community: [
     { after: 0, msg: 'Loading community puzzles...' },
     { after: 3000, msg: 'Gathering submissions...' },
+    { after: 6000, msg: 'Checking for fresh puzzles 🧩' },
     { after: 10000, msg: 'Waking up the database — hang tight 😴' },
+    { after: 20000, msg: 'Almost there — unpacking the puzzle box 📦' },
   ],
 };
 
@@ -212,7 +321,7 @@ export async function syncQueuedScores(apiFetchFn, callbacks = {}) {
 
 function setMessage(el, msg) {
   if (!el) return;
-  el.innerHTML = `<div class="progressive-message" role="status" aria-live="polite">${msg}</div>`;
+  el.innerHTML = `<div class="progressive-message" role="status" aria-live="polite">${msg}<span class="progressive-ellipsis" aria-hidden="true"><span></span><span></span><span></span></span></div>`;
 }
 
 function clearMessage(el) {
