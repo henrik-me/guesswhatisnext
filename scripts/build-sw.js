@@ -60,7 +60,10 @@ function computeDigest(templateText, sortedAssets, publicDir) {
   // 2. Sorted asset path list as JSON
   hash.update(JSON.stringify(sortedAssets), 'utf8');
 
-  // 3. Asset file contents in sorted order (as raw buffers)
+  // 3. Asset file contents in sorted order
+  // Text files are read as UTF-8 and LF-normalized for cross-platform consistency.
+  // Binary files (detected by extension) are hashed as raw buffers.
+  const BINARY_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.woff', '.woff2', '.ttf', '.eot']);
   const missing = [];
   for (const assetPath of sortedAssets) {
     // Map URL path to filesystem path (e.g. '/' → 'index.html', '/css/style.css' → 'css/style.css')
@@ -75,7 +78,12 @@ function computeDigest(templateText, sortedAssets, publicDir) {
       missing.push(`${assetPath} → ${fullPath}`);
       continue;
     }
-    hash.update(fs.readFileSync(fullPath));
+    const ext = path.extname(fullPath).toLowerCase();
+    if (BINARY_EXTS.has(ext)) {
+      hash.update(fs.readFileSync(fullPath));
+    } else {
+      hash.update(normalizeLF(fs.readFileSync(fullPath, 'utf8')), 'utf8');
+    }
   }
 
   if (missing.length > 0) {

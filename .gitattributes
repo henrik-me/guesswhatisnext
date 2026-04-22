@@ -1,6 +1,12 @@
 # Force LF line endings for shell scripts (Docker containers need Unix endings)
 *.sh text eol=lf
 
-# Force LF for service worker files so build-sw.js produces identical hashes cross-platform
+# Force LF for service worker and all public text assets so build-sw.js
+# produces identical content hashes on Windows and Linux
 public/sw.js text eol=lf
 public/sw.template.js text eol=lf
+public/*.html text eol=lf
+public/css/*.css text eol=lf
+public/js/*.js text eol=lf
+public/*.json text eol=lf
+public/img/**/*.svg text eol=lf
