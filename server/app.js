@@ -6,7 +6,6 @@
 const express = require('express');
 const path = require('path');
 const http = require('http');
-const fs = require('fs');
 const pinoHttp = require('pino-http');
 const { config } = require('./config');
 const { isTransientDbError } = require('./lib/transient-db-error');
@@ -234,17 +233,14 @@ function createServer() {
       }
       checks.websocket = { status: 'ok', activeConnections };
 
-      // Disk check (SQLite only — no local DB file when using MSSQL)
-      if (config.DB_BACKEND !== 'mssql') {
-        const dbPath = config.GWN_DB_PATH;
+      // Storage check — delegates to the adapter's healthCheck()
+      // (SQLite: file stat / MSSQL: SELECT 1 ping)
+      if (dbInitialized && isAdapterInitialized()) {
         try {
-          const stat = fs.statSync(dbPath);
-          checks.disk = {
-            status: 'ok',
-            dbSizeMb: Math.round((stat.size / (1024 * 1024)) * 100) / 100,
-          };
+          const db = await getDbAdapter();
+          checks.storage = await db.healthCheck();
         } catch {
-          checks.disk = { status: 'error', dbSizeMb: 0 };
+          checks.storage = { status: 'error' };
         }
       }
 

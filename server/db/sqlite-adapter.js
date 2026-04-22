@@ -116,6 +116,22 @@ class SqliteAdapter extends BaseAdapter {
       this._db = null;
     }
   }
+
+  async _healthCheck() {
+    try {
+      if (this._dbPath === ':memory:') {
+        await this.get('SELECT 1 AS ok');
+        return { status: 'ok' };
+      }
+      const stat = fs.statSync(this._dbPath);
+      return {
+        status: 'ok',
+        dbSizeMb: Math.round((stat.size / (1024 * 1024)) * 100) / 100,
+      };
+    } catch (err) {
+      return { status: 'error', error: err.message };
+    }
+  }
 }
 
 module.exports = SqliteAdapter;

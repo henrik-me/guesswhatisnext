@@ -274,6 +274,53 @@ describe('isHealthy', () => {
   });
 });
 
+/* ── healthCheck ──────────────────────────────────────────────────── */
+
+describe('healthCheck', () => {
+  test('returns ok for in-memory database', async () => {
+    const result = await adapter.healthCheck();
+    expect(result.status).toBe('ok');
+    // :memory: has no file, so no dbSizeMb
+    expect(result).not.toHaveProperty('dbSizeMb');
+  });
+
+  test('returns ok with dbSizeMb for file-backed database', async () => {
+    const path = require('path');
+    const os = require('os');
+    const fs = require('fs');
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-hc-'));
+    const dbPath = path.join(tmpDir, 'test-hc.db');
+
+    const fileAdapter = new SqliteAdapter(dbPath);
+    await fileAdapter.connect();
+    await fileAdapter.exec('CREATE TABLE hctest (id INTEGER PRIMARY KEY)');
+
+    const result = await fileAdapter.healthCheck();
+    expect(result.status).toBe('ok');
+    expect(typeof result.dbSizeMb).toBe('number');
+    expect(result.dbSizeMb).toBeGreaterThanOrEqual(0);
+
+    await fileAdapter.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns error when database file is missing', async () => {
+    const path = require('path');
+    const os = require('os');
+    const fs = require('fs');
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-hc-'));
+    const dbPath = path.join(tmpDir, 'nonexistent.db');
+
+    // Adapter with a path that doesn't exist — statSync will fail
+    const brokenAdapter = new SqliteAdapter(dbPath);
+    const result = await brokenAdapter.healthCheck();
+    expect(result.status).toBe('error');
+    expect(result.error).toBeDefined();
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
 /* ── Close ─────────────────────────────────────────────────────────── */
 
 describe('close', () => {

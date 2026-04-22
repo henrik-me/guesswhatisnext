@@ -108,6 +108,18 @@ class BaseAdapter {
   }
 
   /**
+   * Detailed health check — returns backend-specific diagnostics.
+   *
+   * Each adapter implements `_healthCheck()` with its own checks
+   * (e.g. file stat for SQLite, ping latency for MSSQL).
+   *
+   * @returns {Promise<{status: 'ok'|'error', [key: string]: *}>}
+   */
+  async healthCheck() {
+    return this._healthCheck();
+  }
+
+  /**
    * Close the database connection and release resources.
    * @returns {Promise<void>}
    */
@@ -123,6 +135,7 @@ class BaseAdapter {
   async _run(_sql, _params) { throw new Error('Not implemented: _run'); }
   async _exec(_sql) { throw new Error('Not implemented: _exec'); }
   async _transaction(_fn) { throw new Error('Not implemented: _transaction'); }
+  async _healthCheck() { throw new Error('Not implemented: _healthCheck'); }
   async _close() { throw new Error('Not implemented: _close'); }
 
   /**
