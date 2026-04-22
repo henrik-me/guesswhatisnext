@@ -234,16 +234,18 @@ function createServer() {
       }
       checks.websocket = { status: 'ok', activeConnections };
 
-      // Disk check
-      const dbPath = config.GWN_DB_PATH;
-      try {
-        const stat = fs.statSync(dbPath);
-        checks.disk = {
-          status: 'ok',
-          dbSizeMb: Math.round((stat.size / (1024 * 1024)) * 100) / 100,
-        };
-      } catch {
-        checks.disk = { status: 'error', dbSizeMb: 0 };
+      // Disk check (SQLite only — no local DB file when using MSSQL)
+      if (config.DB_BACKEND !== 'mssql') {
+        const dbPath = config.GWN_DB_PATH;
+        try {
+          const stat = fs.statSync(dbPath);
+          checks.disk = {
+            status: 'ok',
+            dbSizeMb: Math.round((stat.size / (1024 * 1024)) * 100) / 100,
+          };
+        } catch {
+          checks.disk = { status: 'error', dbSizeMb: 0 };
+        }
       }
 
       // Uptime check
