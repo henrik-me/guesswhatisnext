@@ -13,9 +13,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 describe('sw.js activate handler', () => {
   let activateHandler;
   let mockCaches;
-  const CURRENT_CACHE = 'gwn-v3';
+  let CURRENT_CACHE;
 
   beforeEach(() => {
+    // Extract the current CACHE_NAME from the generated sw.js
+    const swSource = readFileSync(join(__dirname, '..', 'public', 'sw.js'), 'utf-8');
+    const cacheMatch = swSource.match(/const CACHE_NAME = '([^']+)'/);
+    CURRENT_CACHE = cacheMatch ? cacheMatch[1] : 'gwn-unknown';
+
     // Build a mock caches API
     mockCaches = {
       _stores: new Map(),
@@ -34,7 +39,6 @@ describe('sw.js activate handler', () => {
     };
 
     // Load sw.js as a script (not a module) by evaluating it
-    const swSource = readFileSync(join(__dirname, '..', 'public', 'sw.js'), 'utf-8');
     const fn = new Function('self', 'caches', swSource);
     fn(globalThis.self, globalThis.caches);
 
