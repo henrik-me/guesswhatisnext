@@ -119,15 +119,18 @@ class SqliteAdapter extends BaseAdapter {
 
   async _healthCheck() {
     try {
-      if (this._dbPath === ':memory:') {
-        await this.get('SELECT 1 AS ok');
-        return { status: 'ok' };
+      const start = Date.now();
+      await this.get('SELECT 1 AS ok');
+      const latencyMs = Date.now() - start;
+
+      const result = { status: 'ok', latencyMs };
+
+      if (this._dbPath !== ':memory:') {
+        const stat = fs.statSync(this._dbPath);
+        result.dbSizeMb = Math.round((stat.size / (1024 * 1024)) * 100) / 100;
       }
-      const stat = fs.statSync(this._dbPath);
-      return {
-        status: 'ok',
-        dbSizeMb: Math.round((stat.size / (1024 * 1024)) * 100) / 100,
-      };
+
+      return result;
     } catch (err) {
       return { status: 'error', error: err.message };
     }

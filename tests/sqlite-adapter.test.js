@@ -277,14 +277,16 @@ describe('isHealthy', () => {
 /* ── healthCheck ──────────────────────────────────────────────────── */
 
 describe('healthCheck', () => {
-  test('returns ok for in-memory database', async () => {
+  test('returns ok with latencyMs for in-memory database', async () => {
     const result = await adapter.healthCheck();
     expect(result.status).toBe('ok');
+    expect(typeof result.latencyMs).toBe('number');
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     // :memory: has no file, so no dbSizeMb
     expect(result).not.toHaveProperty('dbSizeMb');
   });
 
-  test('returns ok with dbSizeMb for file-backed database', async () => {
+  test('returns ok with latencyMs and dbSizeMb for file-backed database', async () => {
     const path = require('path');
     const os = require('os');
     const fs = require('fs');
@@ -297,11 +299,24 @@ describe('healthCheck', () => {
 
     const result = await fileAdapter.healthCheck();
     expect(result.status).toBe('ok');
+    expect(typeof result.latencyMs).toBe('number');
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
     expect(typeof result.dbSizeMb).toBe('number');
     expect(result.dbSizeMb).toBeGreaterThanOrEqual(0);
 
     await fileAdapter.close();
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('returns error when query fails', async () => {
+    // Close the underlying database so SELECT 1 throws
+    await adapter.close();
+    adapter = new SqliteAdapter(':memory:');
+    // Do NOT call connect — _db is null, so get('SELECT 1') will throw
+    const result = await adapter.healthCheck();
+    expect(result.status).toBe('error');
+    expect(result.error).toBeDefined();
+    adapter = null; // prevent afterEach double-close
   });
 
   test('returns error when database file is missing', async () => {
@@ -311,7 +326,7 @@ describe('healthCheck', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-hc-'));
     const dbPath = path.join(tmpDir, 'nonexistent.db');
 
-    // Adapter with a path that doesn't exist — statSync will fail
+    // Adapter with a path that doesn't exist — connect not called so query fails
     const brokenAdapter = new SqliteAdapter(dbPath);
     const result = await brokenAdapter.healthCheck();
     expect(result.status).toBe('error');
