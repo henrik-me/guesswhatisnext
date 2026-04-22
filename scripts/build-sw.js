@@ -100,6 +100,12 @@ function computeDigest(templateText, sortedAssets, publicDir) {
  */
 function generate(templateText, digest8) {
   const cacheName = `gwn-${digest8}`;
+  const placeholderCount = templateText.split(PLACEHOLDER).length - 1;
+  if (placeholderCount !== 1) {
+    throw new Error(
+      `Expected exactly one ${PLACEHOLDER} placeholder in service worker template, found ${placeholderCount}`
+    );
+  }
   const body = templateText.replace(PLACEHOLDER, cacheName);
   return HEADER + body;
 }

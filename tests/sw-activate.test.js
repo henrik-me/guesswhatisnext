@@ -18,8 +18,11 @@ describe('sw.js activate handler', () => {
   beforeEach(() => {
     // Extract the current CACHE_NAME from the generated sw.js
     const swSource = readFileSync(join(__dirname, '..', 'public', 'sw.js'), 'utf-8');
-    const cacheMatch = swSource.match(/const CACHE_NAME = '([^']+)'/);
-    CURRENT_CACHE = cacheMatch ? cacheMatch[1] : 'gwn-unknown';
+    const cacheMatch = swSource.match(/CACHE_NAME\s*=\s*'([^']+)'/);
+    if (!cacheMatch) {
+      throw new Error('Unable to parse CACHE_NAME from public/sw.js');
+    }
+    CURRENT_CACHE = cacheMatch[1];
 
     // Build a mock caches API
     mockCaches = {
