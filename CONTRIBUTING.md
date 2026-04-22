@@ -15,7 +15,7 @@ Thank you for your interest in contributing! This project welcomes contributions
 
 ## Service Worker Cache Build Step
 
-The service worker (`public/sw.js`) uses a **content-hashed `CACHE_NAME`** to ensure browser caches rotate automatically when static assets or SW logic change. The generated file is committed so fresh checkouts and `npm start` work without a build step.
+The service worker (`public/sw.js`) uses a **content-hashed `CACHE_NAME`** to ensure browser caches rotate automatically when the service worker logic or the pre-cached assets referenced by `STATIC_ASSETS` change. The generated file is committed so fresh checkouts and `npm start` work without a build step.
 
 **How it works:**
 
