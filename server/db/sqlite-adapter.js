@@ -116,6 +116,30 @@ class SqliteAdapter extends BaseAdapter {
       this._db = null;
     }
   }
+
+  async _healthCheck() {
+    try {
+      const start = Date.now();
+      await this.get('SELECT 1 AS ok');
+      const latencyMs = Date.now() - start;
+
+      const result = { status: 'ok', latencyMs };
+
+      // File stat is supplementary — don't let it fail the connection check
+      if (this._dbPath !== ':memory:') {
+        try {
+          const stat = fs.statSync(this._dbPath);
+          result.dbSizeMb = Math.round((stat.size / (1024 * 1024)) * 100) / 100;
+        } catch {
+          // stat unavailable (e.g. tmpfs race); connection is still healthy
+        }
+      }
+
+      return result;
+    } catch (err) {
+      return { status: 'error', error: err.message };
+    }
+  }
 }
 
 module.exports = SqliteAdapter;

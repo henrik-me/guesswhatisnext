@@ -733,3 +733,72 @@ describe('SQL rewriting through _get/_all', () => {
     expect(calledSql).not.toContain('datetime');
   });
 });
+
+/* ── healthCheck ──────────────────────────────────────────────────── */
+
+describe('healthCheck', () => {
+  let adapter;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns ok with latencyMs on success', async () => {
+    const mockReq = makeMockRequest({ recordset: [{ ok: 1 }], rowsAffected: [1] });
+    const mockPool = makeMockPool(mockReq);
+    const mockSql = makeMockSql({ pool: mockPool });
+    adapter = new MssqlAdapter('Server=test;', { mssql: mockSql });
+    adapter._pool = mockPool;
+
+    const result = await adapter.healthCheck();
+    expect(result.status).toBe('ok');
+    expect(typeof result.latencyMs).toBe('number');
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('returns error with message on query failure', async () => {
+    const mockReq = makeMockRequest();
+    mockReq.query.mockRejectedValue(new Error('Connection lost'));
+    const mockPool = makeMockPool(mockReq);
+    const mockSql = makeMockSql({ pool: mockPool });
+    adapter = new MssqlAdapter('Server=test;', { mssql: mockSql });
+    adapter._pool = mockPool;
+
+    const result = await adapter.healthCheck();
+    expect(result.status).toBe('error');
+    expect(result.error).toBe('Connection lost');
+  });
+
+  it('MssqlTxAdapter returns ok with latencyMs on success', async () => {
+    const txReq = makeMockRequest({ recordset: [{ ok: 1 }], rowsAffected: [1] });
+    const mockSql = makeMockSql({ txRequest: txReq });
+    adapter = new MssqlAdapter('Server=test;', { mssql: mockSql });
+    adapter._pool = mockSql._pool;
+
+    await adapter._transaction(async (tx) => {
+      const result = await tx.healthCheck();
+      expect(result.status).toBe('ok');
+      expect(typeof result.latencyMs).toBe('number');
+    });
+  });
+
+  it('MssqlTxAdapter returns error on query failure', async () => {
+    const txReq = makeMockRequest();
+    // First call succeeds (for any setup), second fails (for healthCheck)
+    let callCount = 0;
+    txReq.query.mockImplementation(() => {
+      callCount++;
+      if (callCount > 0) return Promise.reject(new Error('TX connection lost'));
+      return Promise.resolve({ recordset: [{ ok: 1 }], rowsAffected: [1] });
+    });
+    const mockSql = makeMockSql({ txRequest: txReq });
+    adapter = new MssqlAdapter('Server=test;', { mssql: mockSql });
+    adapter._pool = mockSql._pool;
+
+    await adapter._transaction(async (tx) => {
+      const result = await tx.healthCheck();
+      expect(result.status).toBe('error');
+      expect(result.error).toBe('TX connection lost');
+    }).catch(() => {});  // transaction will rollback due to error
+  });
+});

@@ -280,6 +280,16 @@ class MssqlTxAdapter extends BaseAdapter {
     throw new Error('Nested transactions are not supported in MSSQL adapter');
   }
 
+  async _healthCheck() {
+    try {
+      const start = Date.now();
+      await this._get('SELECT 1 AS ok');
+      return { status: 'ok', latencyMs: Date.now() - start };
+    } catch (err) {
+      return { status: 'error', error: err.message };
+    }
+  }
+
   async _close() { /* no-op */ }
 }
 
@@ -357,6 +367,16 @@ class MssqlAdapter extends BaseAdapter {
     if (this._pool) {
       await this._pool.close();
       this._pool = null;
+    }
+  }
+
+  async _healthCheck() {
+    try {
+      const start = Date.now();
+      await this._get('SELECT 1 AS ok');
+      return { status: 'ok', latencyMs: Date.now() - start };
+    } catch (err) {
+      return { status: 'error', error: err.message };
     }
   }
 }

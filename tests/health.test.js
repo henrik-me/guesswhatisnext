@@ -19,6 +19,8 @@ describe('GET /api/health', () => {
     expect(res.body.status).toBe('ok');
     expect(res.body.checks.database).toBeDefined();
     expect(res.body.checks.websocket).toBeDefined();
+    expect(res.body.checks.storage).toBeDefined();
+    expect(res.body.checks.storage.status).toBe('ok');
     expect(res.body.checks.uptime).toBeDefined();
     expect(res.body.version).toBeDefined();
     expect(res.body.environment).toBe('test');
