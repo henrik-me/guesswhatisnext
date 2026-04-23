@@ -54,6 +54,39 @@ describe('isTransientDbError (mssql dialect)', () => {
     err.number = 207;
     expect(isTransientDbError(err, 'mssql')).toBe(false);
   });
+
+  test('does NOT classify Azure SQL Free Tier monthly allowance exhaustion as transient (ELOGIN + free amount message)', () => {
+    // Real Azure SQL Free Tier exhaustion error shape (CS53):
+    // err.name = 'ConnectionError', err.code = 'ELOGIN'
+    // The DB is intentionally paused until the 1st of next month;
+    // retrying within the same month cannot succeed.
+    const err = new Error(
+      "This database has reached the monthly free amount allowance for the month of April 2026 " +
+      "and is paused for the remainder of the month. The free amount will renew at 12:00 AM (UTC) on May 01, 2026."
+    );
+    err.name = 'ConnectionError';
+    err.code = 'ELOGIN';
+    expect(isTransientDbError(err, 'mssql')).toBe(false);
+  });
+
+  test('does NOT classify free-tier exhaustion when wrapped in originalError', () => {
+    const err = new Error('Login failed');
+    err.name = 'ConnectionError';
+    err.code = 'ELOGIN';
+    err.originalError = {
+      message: 'free amount allowance for the month of April 2026 and is paused for the remainder of the month',
+    };
+    expect(isTransientDbError(err, 'mssql')).toBe(false);
+  });
+
+  test('still detects normal cold-start ConnectionError after free-tier exclusion', () => {
+    // Regression: ensure the free-tier early-return does not break the
+    // common Azure SQL serverless cold-start path (CS42).
+    const err = new Error('Failed to connect to gwn-sqldb.database.windows.net:1433 in 15000ms');
+    err.name = 'ConnectionError';
+    err.code = 'ETIMEOUT';
+    expect(isTransientDbError(err, 'mssql')).toBe(true);
+  });
 });
 
 describe('isTransientDbError (sqlite dialect)', () => {
