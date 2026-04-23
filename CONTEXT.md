@@ -1,10 +1,9 @@
 # Project Context — Guess What's Next
 
-This file tracks active and planned clickstops and current project state.
+This file describes the project's current codebase state and known blockers. **Clickstop status lives on disk** under `project/clickstops/{active,planned,done}/` — see the [Clickstops](#clickstops) section below.
 
 - **Live work coordination:** [WORKBOARD.md](WORKBOARD.md)
 - **Architecture decisions & learnings:** [LEARNINGS.md](LEARNINGS.md)
-- **Completed clickstop archives:** [project/clickstops/done/](project/clickstops/done/)
 - **Development guidelines:** [INSTRUCTIONS.md](INSTRUCTIONS.md)
 
 > **Last updated:** 2026-04-23
