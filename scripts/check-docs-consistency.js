@@ -20,7 +20,9 @@
  *   5. done-task-count         — ✅ rows with n/m where n<m must have a
  *                                 "Deferred" or "Will not be done" section.
  *   6. no-orphan-active-work   — WORKBOARD.md Active Work rows must not
- *                                 reference a CS# already marked ✅.
+ *                                 reference a CS# that already has a
+ *                                 `done_cs<N>_*.md` file under
+ *                                 `project/clickstops/done/`.
  *   7. workboard-stamp-fresh   — WORKBOARD.md "Last updated" stamp must be
  *                                 within 14 days of today (warn-only).
  *   8. state-in-vocabulary     — every Active Work `State` cell is one of
@@ -423,13 +425,26 @@ function checkDoneTaskCount(rows, contextPath, repoRoot, ignores) {
 
 // ---------- check 6: no-orphan-active-work ----------------------------------
 
-function checkNoOrphanActiveWork(repoRoot, rows) {
+// The done-set is derived from the filesystem (`project/clickstops/done/`)
+// rather than CONTEXT.md. The CONTEXT.md clickstop summary table was
+// retired in favor of folder pointers; the filesystem is now the source of
+// truth for clickstop status. The `rows` parameter is intentionally
+// unused here (kept for signature stability and other table-dependent
+// rules).
+function checkNoOrphanActiveWork(repoRoot, _rows) {
   const findings = [];
   const wbPath = path.join(repoRoot, 'WORKBOARD.md');
   if (!fs.existsSync(wbPath)) return findings;
   const lines = readLines(wbPath);
   const wbIgnores = parseIgnores(lines);
-  const doneCs = new Set(rows.filter(r => r.state === 'done').map(r => r.cs));
+  const doneCs = new Set();
+  const doneDir = path.join(repoRoot, 'project', 'clickstops', 'done');
+  if (fs.existsSync(doneDir)) {
+    for (const name of fs.readdirSync(doneDir)) {
+      const m = /^done_(cs\d+)_.+\.md$/i.exec(name);
+      if (m) doneCs.add(m[1].toUpperCase());
+    }
+  }
   let inActive = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -445,7 +460,7 @@ function checkNoOrphanActiveWork(repoRoot, rows) {
     if (doneCs.has(cs)) {
       findings.push({ rule: 'no-orphan-active-work', file: wbPath, line: i + 1,
         severity: 'error',
-        message: `Active Work row references ${cs} which is marked ✅ in CONTEXT.md` });
+        message: `Active Work row references ${cs} which has a done_${cs.toLowerCase()}_*.md file under project/clickstops/done/` });
     }
   }
   return findings.filter(f => !isIgnored(wbIgnores, f.rule, f.line));
