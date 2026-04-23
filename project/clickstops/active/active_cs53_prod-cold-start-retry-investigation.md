@@ -38,6 +38,8 @@ Findings from this session (no new bugs needed yet):
 | CS53-4 | Audit raw-`fetch` callsites that touch the API and decide which need to be routed through `apiFetch` + retry-aware handling. Specifically: `public/js/app.js:530` (boot token validation). Find others via `grep -nE "fetch\\('/api"`. | ⬜ Pending | Quick code audit; small fix scope if any need migration. |
 | CS53-5 | Re-run manual cold-start validation against (a) leaderboard, (b) achievements, (c) multiplayer history, (d) community submissions, after waiting for Azure SQL to auto-pause. Record retry-count + wall-clock-to-success per screen. Confirms whether the issue is profile-specific or universal. | ⬜ Pending | Manual; orchestrator drafts a checklist, user runs. |
 | CS53-6 | Implement remediation chosen in CS53-3 (and CS53-2/CS53-4 if those surfaced fixes). Land in one or more PRs through standard validation. | ⬜ Pending | Scope depends on findings. May be "no code change, document floor" if logs reveal the cap is well above warm-DB latency and the issue is purely cold-start length. |
+| CS53-7 | Investigate the stuck-state failure mode observed 2026-04-23 ~12:15/~14:30 PT (site permanently stuck in "db is cold"). See dedicated section below for hypotheses (H1/H2/H3/H4) and diagnostic queries. | 🔄 In Progress | Diagnostics drafted; awaiting user-supplied logs + live `/api/admin/init-db` probe. |
+| CS53-8 | Implement stuck-state remediation (fixes #4–#8 below): never permanently stop self-init, pool watchdog, public `/api/db-status`, surface stuck state to users. | ⬜ Pending | Depends on CS53-7 findings. Likely lands as a follow-up PR after the CS53-3 timeout/probe/cap fixes. |
 
 ## CS53-1 findings (preliminary, 2026-04-23)
 
@@ -91,7 +93,144 @@ Three small, additive fixes — all needed; none alone is sufficient:
 - A query to find Path A 503s in the window — they would prove whether self-init was ever re-attempted. Path A is silent in logs today, so we'd need to either (a) add a debug log to that branch, or (b) infer absence from the fact that no `Self-init attempt` lines appear in Q5/Q7.
 - A second-incident replay (CS53-5 manual re-validation after auto-pause) to verify the proposed fixes actually reduce retry count.
 
-## CS53-1 findings — log timeline (raw)
+## CS53-7 second incident (2026-04-23 ~12:15 PT and ~14:30 PT) — STUCK STATE
+
+User attempted to reproduce the cold-DB experience by visiting the leaderboard twice. **The second attempt left the site in an "infinite db is cold" state with no automatic recovery.** This is a different failure mode than CS53-2; the server is not just slow to warm — it appears to be locked in a permanent 503 state.
+
+### Stuck-state hypotheses (ranked by likelihood, all from code reading)
+
+**H1 — Self-init's permanent-stop branch** (`server/app.js:392-395`):
+
+```js
+if (!isRetryable) {
+  try { await closeDbAdapter(); } catch { /* ignore */ }
+  draining = true;
+  logger.error({ err }, 'Self-init failed with non-retryable error — call POST /api/admin/init-db after fixing the underlying issue');
+}
+// NOTE: no setTimeout(attemptSelfInit, ...) is scheduled here.
+```
+
+If self-init throws an error that `isTransientDbError` does *not* classify transient (e.g. a schema/migration error, an auth/connection-string problem, or any new error class we haven't seen before), the server:
+- closes the pool,
+- sets `draining = true`,
+- **does not schedule any further self-init attempt**.
+
+After that, the gating middleware (`server/app.js:172-174`) returns `503 + {error: 'Server is draining', retryAfter: 5}` for **every** `/api/*` request, forever, until a human calls `POST /api/admin/init-db`. `attemptSelfInit` itself short-circuits on `if (draining || dbInitialized) return;` (line 379), so even a manually re-triggered timer wouldn't help.
+
+This **exactly matches** "infinite state of db is cold". It would only require a single non-classified error class on container start, or a container restart after the first incident landing the boot in a bad state.
+
+**H2 — Self-init exhausted MAX_ATTEMPTS** (`server/app.js:402-408`):
+
+```js
+} else {
+  try { await closeDbAdapter(); } catch { /* ignore */ }
+  draining = true;
+  logger.error({ attempts: SELF_INIT_MAX_ATTEMPTS }, 'Self-init failed after max attempts ...');
+}
+```
+
+`SELF_INIT_MAX_ATTEMPTS = 30` × `SELF_INIT_INTERVAL_MS = 5000` = **150 seconds total budget**. Azure SQL serverless cold-starts are routinely longer than that. After 30 attempts the server gives up *permanently* and goes to the same stuck-`draining=true` state as H1.
+
+This matches the symptom too — and is more likely if the user hit a long auto-pause between incidents.
+
+**H3 — mssql Pool stuck in a broken state**:
+
+`server/db/mssql-adapter.js:308` stores the pool: `this._pool = await this._sql.connect(connectionString);` and **never reassigns it**. `_get`, `_all`, `_run`, `_exec` all reuse `this._pool`. If the pool's internal state goes bad (all connections dead, can't reconnect) but `dbInitialized` is still `true` and `draining` is still `false`, every request slides past the gating middleware, hits the route handler, and times out at the pool — emitting "Transient DB error — responded 503" forever with no recovery path.
+
+This case would NOT show as "Self-init failed" log lines (because self-init has already succeeded once). It would just be an endless stream of `transient: true` 503s — visually indistinguishable to the user from H1/H2.
+
+**H4 — No watchdog**:
+
+There is no background process that periodically pings the DB to detect a broken pool and proactively recover. All recovery is reactive (driven by user requests) and short-circuits as soon as one of the above stuck states is reached.
+
+### Diagnostic queries for the second incident (CS53-7-Q1..Q5)
+
+**User incident timestamps:** 2026-04-23 **~12:15 PT (≈19:15 UTC)** and **~14:30 PT (≈21:30 UTC)**. The second one left the site stuck.
+
+> Run these in Container App → Logs. Time window is wider on purpose — we need to see container start, all self-init attempts, and the slide into stuck state.
+
+**CS53-7-Q1 — Did self-init permanently fail?** (smoking gun for H1/H2)
+
+```kql
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T19:00:00Z) .. datetime(2026-04-23T22:30:00Z))
+| extend P = parse_json(Log_s)
+| extend msg = tostring(P.msg)
+| where msg has_any("Self-init", "Database self-initialized", "Server is draining", "Database not yet initialized", "non-retryable", "max attempts")
+| project TimeGenerated, level = toint(P.level), msg, attempt = toint(P.attempt), errMsg = tostring(P.err.message), errCode = tostring(P.err.code)
+| order by TimeGenerated asc
+```
+
+If you see `Self-init failed with non-retryable error` or `Self-init failed after max attempts` — that confirms H1 or H2 and the server is permanently stuck.
+
+**CS53-7-Q2 — Did the container restart between incidents?** (boundary check)
+
+```kql
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T19:00:00Z) .. datetime(2026-04-23T22:30:00Z))
+| extend P = parse_json(Log_s)
+| extend msg = tostring(P.msg)
+| where msg has_any("listening", "Server started", "OpenTelemetry", "Database initialized", "process exit", "SIGTERM", "SIGINT")
+| project TimeGenerated, msg, port = toint(P.port), env = tostring(P.env)
+| order by TimeGenerated asc
+```
+
+Plus: in the Container App Revisions blade, check whether a new revision was created between 19:15 UTC and 21:30 UTC.
+
+**CS53-7-Q3 — Volume of 503s in second window** (H1/H2 vs H3 distinguisher)
+
+```kql
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T21:25:00Z) .. datetime(2026-04-23T22:30:00Z))
+| extend P = parse_json(Log_s)
+| extend msg = tostring(P.msg), status = toint(P.status)
+| summarize count(),
+            transient_count = countif(tobool(P.transient) == true),
+            draining_count  = countif(msg contains "draining" or msg contains "draining"),
+            error_msgs      = make_set(msg, 20)
+            by status, msg
+| order by count_ desc
+```
+
+- If the dominant message is `"Transient DB error — responded 503"` → H3 (broken pool).
+- If you see `"Server is draining"` 503s with no per-request error logs → H1/H2 (gating middleware path; cheap silent 503s — but actually they ARE silent in current code, so absence of logs + 503s in browser DevTools is the signal).
+
+**CS53-7-Q4 — Anything that touched `dbInitialized` or `draining` flags** (catch-all)
+
+```kql
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T19:00:00Z) .. datetime(2026-04-23T22:30:00Z))
+| extend P = parse_json(Log_s)
+| extend msg = tostring(P.msg)
+| where toint(P.level) >= 40 or msg contains "Database" or msg contains "drain" or msg contains "init"
+| project TimeGenerated, level = toint(P.level), msg, errMsg = tostring(P.err.message), errCode = tostring(P.err.code), errNumber = toint(P.err.number)
+| order by TimeGenerated asc
+```
+
+**CS53-7-Q5 — What's the current state right now?** (live diagnostic)
+
+If the site is still stuck, hit these endpoints (in order) and paste responses:
+
+1. `GET https://gwn.metzger.dk/healthz` — should return `200 ok` regardless of DB state. If it doesn't, the container itself is broken (not a DB issue).
+2. `GET https://gwn.metzger.dk/api/scores/leaderboard?mode=freeplay&period=alltime` — likely 503. Check the response body: `{"error":"Server is draining"...}` → H1/H2 confirmed; `{"error":"Database temporarily unavailable"...}` → H3 confirmed.
+3. `POST https://gwn.metzger.dk/api/admin/init-db` with `Authorization: Bearer <SYSTEM_API_KEY>` — if this returns `{"status":"initialized"}`, the site recovers immediately and H1/H2 was the cause. If it returns 500 with an error message, that error tells us what's actually broken.
+
+### Additional remediation needed (extends CS53-3 proposal)
+
+The 3 fixes proposed earlier (mssql timeout tuning, proactive resume probe in error handler, adaptive client cap) **do not fully address the stuck-state failure modes**. Add:
+
+4. **Server: never permanently stop self-init.** Replace the "give up" branches at `app.js:392-395` and `app.js:402-408` with a long-interval re-try (e.g., every 60s for non-retryable errors, every 30s after MAX_ATTEMPTS exhausted). Pair with a clear log line at each cycle so we know the server is still trying. Manual `POST /api/admin/init-db` remains available as a faster recovery option but is no longer the *only* recovery path.
+5. **Server: pool health watchdog.** Background interval (every 30s) that runs `SELECT 1` against the pool when `dbInitialized=true`. After N (3?) consecutive failures, flip `dbInitialized=false`, close+recreate the pool, and re-enter self-init. This catches H3 (broken pool with stuck `dbInitialized=true`).
+6. **Server: recreate pool on persistent transient errors.** In the central error handler, track consecutive transient-error counts per pool instance; after a threshold, schedule a pool recreate (the watchdog from #5 is the cleaner way; this is a backup mechanism).
+7. **Public diagnostic endpoint.** `/api/db-status` (no auth required) returning `{state: 'ready'|'initializing'|'stuck', lastInitAttempt, consecutiveFailures}`. Lets the SPA show a meaningful "the server is recovering" / "the server is stuck — please contact support" message instead of looping silently.
+8. **Surface stuck state to users.** Once the SPA detects state = 'stuck' (either by /api/db-status or by seeing N consecutive 503s with the `'Server is draining'` message specifically), render a one-off message rather than re-entering the retry loop indefinitely.
+
+### What you can do to help the investigation
+
+- **Run CS53-7-Q1..Q4** above and paste the rows — that pins H1/H2 vs H3.
+- **If the site is still stuck**, run CS53-7-Q5 (especially the `/api/admin/init-db` call). If that recovers it instantly, H1/H2 is confirmed and we can ship fix #4 with high confidence.
+- **Container Apps revision history** — was there a deploy or a restart between 19:00 UTC and 21:30 UTC?
+- **Don't restart the container yet** — the live stuck state is the most informative diagnostic we have; restarting will likely "fix" it temporarily and lose the evidence. Once we've grabbed the data, restart is fine.
 
 **Q1 results from incident window (`2026-04-23T14:09:00Z` – `14:31:30Z`):**
 - Every error in the window is the same shape: `Failed to connect to gwn-sqldb.database.windows.net:1433 in 15000ms`, `errCode = ETIMEOUT`, `transient = true`, status 503 emitted.
