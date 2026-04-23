@@ -3,7 +3,7 @@
 Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't change.
 
 - Claiming a clickstop → update WORKBOARD.md (commit+push), rename CS file to active_, update content, commit to main
-- Closing a clickstop → rename CS file to done_, move to `project/clickstops/done/`, update content with results, update CONTEXT.md, remove from WORKBOARD.md
+- Closing a clickstop → rename CS file to done_, move to `project/clickstops/done/`, update content with results, remove from WORKBOARD.md
 - Preferred model: Claude Opus (4.7 or higher, 1M context variant when available) for both orchestrators and sub-agents, GPT (5.4 or higher) for reviews
 - CS number conflicts → check done_, active_, AND planned_ files before picking a new number
 - After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
@@ -40,7 +40,7 @@ This file contains durable policy (architecture, coding standards, testing, logg
 - [REVIEWS.md](REVIEWS.md) — local review loop, Copilot PR review policy, review comment handling
 - [TRACKING.md](TRACKING.md) — clickstop lifecycle, WORKBOARD state machine, CONTEXT update protocol
 
-For clickstops, task plans, detailed test specifications, tool evaluations, and current project state, see **CONTEXT.md**. For live work coordination, see **WORKBOARD.md**. For architecture decisions and learnings, see **LEARNINGS.md**.
+For current project state and codebase architecture, see **CONTEXT.md**. For active/planned/done clickstops, browse `project/clickstops/{active,planned,done}/` (run `git pull` first). For live work coordination, see **WORKBOARD.md**. For architecture decisions and learnings, see **LEARNINGS.md**.
 
 ---
 
@@ -293,8 +293,6 @@ Commit locally after every meaningful, working change — each commit should be 
 **Rationale:** removing the surface where paraphrase can occur eliminates the only place where two docs can disagree about a fact that has a single owner. See [LEARNINGS.md § Doc currency](LEARNINGS.md) for the full origin story and the drift symptoms that motivated the rule.
 
 **Scope:** this rule applies to all `.md` files in the repository, including `README.md`, `CONTEXT.md`, `WORKBOARD.md`, `LEARNINGS.md`, `infra/README.md`, every file under `project/`, and every clickstop file. It does *not* apply to source-code comments, where local restatement is often the clearest option.
-
-**Transitional note:** today's `CONTEXT.md` summary table and per-clickstop blocks restate status and task counts that live authoritatively in the clickstop files — a known violation of this rule. CS43-3 restructures `CONTEXT.md` to comply. Until that lands, the existing instructions for updating `CONTEXT.md` (in [§ CONTEXT.md — Project State Updates in `TRACKING.md`](TRACKING.md#contextmd--project-state-updates) and [§ Clickstop File Lifecycle in `TRACKING.md`](TRACKING.md#clickstop-file-lifecycle)) still apply; the principle is the target state, not a license to leave `CONTEXT.md` half-updated in the meantime.
 
 **Automated check:** `npm run check:docs` (script: [`scripts/check-docs-consistency.js`](scripts/check-docs-consistency.js)) enforces the mechanical half of this rule on every PR via the `Docs Consistency` workflow. The check runs in **warn-only** mode today (CS43-2) and will be flipped to a hard gate by CS43-7 once the baseline is cleaned up. Rule names: `link-resolves`, `clickstop-link-resolves`, `prefix-matches-status`, `unique-cs-state`, `done-task-count`, `no-orphan-active-work`, `workboard-stamp-fresh`. For a legitimate exception, add an `<!-- check:ignore <rule-name> -->` HTML comment either inline on the offending line or on its own line directly above the affected markdown block. Use sparingly — every escape-hatch comment is an admission that the principle is not being upheld.
 
