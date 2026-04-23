@@ -24,7 +24,7 @@ Findings from this session (no new bugs needed yet):
 
 ## Incident window (user-supplied)
 
-- **2026-04-23 14:09:06.640 PT → 14:31:13.943 PT** (≈22 minutes total, 3 client retry-button cycles, "more than 3 server-side DB timeouts per cycle").
+- **2026-04-23 14:09:06.640 UTC → 14:31:13.943 UTC** (≈22 minutes total, 3 client retry-button cycles, "more than 3 server-side DB timeouts per cycle").
 - App: production deployment of `gwn.metzger.dk` on Azure Container Apps, Azure SQL serverless free tier as backend.
 - Telemetry: OTel SDK exporting traces to Azure Monitor via `APPLICATIONINSIGHTS_CONNECTION_STRING`. Pino logs (stdout) include `requestId`, `transient` flag, OTel `trace_id`/`span_id`. Container Apps stdout is also queryable.
 
@@ -47,8 +47,8 @@ Findings from this session (no new bugs needed yet):
 **Q1 — All errors emitted by the app (App Insights `traces` table for Pino logs via OTel):**
 
 ```kql
-let win_start = datetime(2026-04-23T21:09:00Z);
-let win_end   = datetime(2026-04-23T21:31:30Z);
+let win_start = datetime(2026-04-23T14:09:00Z);
+let win_end   = datetime(2026-04-23T14:31:30Z);
 traces
 | where timestamp between (win_start .. win_end)
 | where severityLevel >= 2  // 2 = Warning, 3 = Error
@@ -67,7 +67,7 @@ traces
 
 ```kql
 traces
-| where timestamp between (datetime(2026-04-23T21:09:00Z) .. datetime(2026-04-23T21:31:30Z))
+| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
 | where severityLevel >= 3
 | extend errMsg = tostring(customDimensions["err.message"]),
          errCode = tostring(customDimensions["err.code"]),
@@ -81,7 +81,7 @@ traces
 
 ```kql
 requests
-| where timestamp between (datetime(2026-04-23T21:09:00Z) .. datetime(2026-04-23T21:31:30Z))
+| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
 | where url contains "/api/"
 | summarize count() by name, resultCode
 | order by name, resultCode
@@ -91,7 +91,7 @@ requests
 
 ```kql
 requests
-| where timestamp between (datetime(2026-04-23T21:09:00Z) .. datetime(2026-04-23T21:31:30Z))
+| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
 | where url has_any("/api/auth/me", "/api/scores/me", "/api/achievements", "/api/matches/history")
 | project timestamp, name, resultCode, duration, id
 | order by timestamp asc
@@ -101,7 +101,7 @@ requests
 
 ```kql
 traces
-| where timestamp between (datetime(2026-04-23T21:09:00Z) .. datetime(2026-04-23T21:31:30Z))
+| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
 | where message has_any("Self-init", "Database self-initialized")
 | project timestamp, message, customDimensions
 | order by timestamp asc
@@ -111,7 +111,7 @@ traces
 
 ```kql
 union traces, exceptions
-| where timestamp between (datetime(2026-04-23T21:09:00Z) .. datetime(2026-04-23T21:31:30Z))
+| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
 | project timestamp, itemType, severityLevel, message, problemId = column_ifexists("problemId", ""), customDimensions
 | order by timestamp asc
 ```

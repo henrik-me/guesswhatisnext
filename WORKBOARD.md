@@ -24,6 +24,6 @@ CS44-3 schema upgrade.
 
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
-| CS53 | CS53 prod cold-start retry investigation | claimed | yoga-gwn | (planning, no worktree yet) | (none) | — | 2026-04-23T15:30Z | Await user-supplied prod logs (window 2026-04-23 14:09–14:31 PT); then audit transient classification + retry budget | — |
+| CS53 | CS53 prod cold-start retry investigation | claimed | yoga-gwn | (planning, no worktree yet) | (none) | — | 2026-04-23T15:35Z | Await user-supplied prod logs (window 2026-04-23 14:09–14:31 UTC); then audit transient classification + retry budget | — |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
