@@ -7,21 +7,17 @@ This file tracks active and planned clickstops and current project state.
 - **Completed clickstop archives:** [project/clickstops/done/](project/clickstops/done/)
 - **Development guidelines:** [INSTRUCTIONS.md](INSTRUCTIONS.md)
 
-> **Last updated:** 2026-04-21
+> **Last updated:** 2026-04-23
 
 ---
 
-## Clickstop Summary
+## Clickstops
 
-Active and planned clickstops listed below. Completed clickstops live in [`project/clickstops/done/`](project/clickstops/done/) — browse the folder for the full archive.
+The **filesystem is the source of truth** for clickstop status — there is no per-clickstop summary table here anymore (it kept drifting from disk). Run `git pull` first, then browse the three folders directly:
 
-| ID | Name | Status | Tasks | Detail |
-|----|------|--------|-------|--------|
-| CS40 | Feature Flag Testing Infrastructure | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs40_feature-flag-testing.md) |
-| CS41 | Production Deploy Validation | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs41_production-deploy-validation.md) |
-| CS42 | Production Cold Start Progressive Messages | 🔄 Active | 1/8 | [details](project/clickstops/active/active_cs42_production-cold-start-messages.md) |
-| CS46 | Workboard Claim Discipline (Push-Success Gating) | ✅ Done | 4/5 | [details](project/clickstops/done/done_cs46_workboard-claim-discipline.md) |
-| CS47 | ProgressiveLoader Client UX Telemetry & Alerting | ⬜ Planned | 0/5 | [details](project/clickstops/planned/planned_cs47_progressive-loader-telemetry.md) |
+- Active: [`project/clickstops/active/`](project/clickstops/active/)
+- Planned: [`project/clickstops/planned/`](project/clickstops/planned/)
+- Done: [`project/clickstops/done/`](project/clickstops/done/)
 
 ---
 
