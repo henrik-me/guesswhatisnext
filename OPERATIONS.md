@@ -46,7 +46,7 @@ Do not use the "tell the user you're waiting and end your response" pattern as a
 **Milestone timing table:** Sub-agents must include a timing table in their final completion report. This tracks elapsed time from session start for each major milestone (e.g., "npm install", "implementation", "validation", "PR created", "review clean"). This was identified as a process improvement during CS25 to help identify workflow bottlenecks.
 
 ## Branch Strategy & Merge Model
-- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates and clickstop plan files committed directly on `main` by orchestrating agents. (CONTEXT.md summary rows may optionally be bundled with plan file commits.)
+- **No direct commits to `main`** — all code changes go through pull requests, except `WORKBOARD.md` updates and clickstop plan files committed directly on `main` by orchestrating agents.
 - Feature branches: `{agent-id}/{task-id}-{description}` (e.g., `yoga-gwn/cs11-64-provision-azure-sql`, `yoga-gwn/cs14-82-authoring-form`)
 - Every PR must pass the **full validation suite** before merge:
   1. **Lint:** `npm run lint`
@@ -72,7 +72,7 @@ Allowed on main checkout:
 - Planning, decomposing, and delegating work to sub-agents
 
 NOT allowed on main checkout:
-- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates and clickstop plan files (optionally with CONTEXT.md summary rows) are committed and pushed directly from main
+- No file edits, no commits, no branch creation (other than implicit via `git worktree add -b`) — **exception:** WORKBOARD.md updates and clickstop plan files are committed and pushed directly from main
 - No `git push` from main (except WORKBOARD.md and clickstop plan file updates)
 - No merge conflict resolution on main, **except for conflicts confined to `WORKBOARD.md` and handled per the WORKBOARD.md conflict-handling guidance** — if `git pull` conflicts on anything else, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
@@ -80,7 +80,7 @@ NOT allowed on main checkout:
 1. Run `git pull` to ensure the latest changes from all agents
 2. Read INSTRUCTIONS.md in the repository root
 3. Read WORKBOARD.md for current active work and task assignments
-4. Read CONTEXT.md for project state and available clickstops
+4. Read CONTEXT.md for project state and codebase architecture; browse `project/clickstops/active/` and `project/clickstops/planned/` for available clickstops (after `git pull`)
 5. Determine agent ID from hostname + repo suffix (see [§ Agent Identification in TRACKING.md](TRACKING.md#agent-identification))
 6. Update WORKBOARD.md to register the session (update Orchestrators table), then commit and push immediately. The claim is not effective until the push lands on `origin/main` — see [§ WORKBOARD.md — Live Coordination, "Claim effectiveness" in TRACKING.md](TRACKING.md#workboardmd--live-coordination). If the push is rejected, follow the push-rejected recovery procedure in the same section before proceeding.
 7. Once a task is claimed, prompt user to rename the session: `/rename [{agent-id}]-{task-id}: {clickstop name}`

@@ -13,9 +13,8 @@ Format: `CS<clickstop#>-<task#>` (e.g., `CS11-64`, `CS14-82`). Used in branch na
 **CS number allocation:** Before assigning a new clickstop number, verify the number is not already taken by checking all three sources:
 1. **Existing clickstop files:** `ls project/clickstops/planned/`, `ls project/clickstops/active/`, and `ls project/clickstops/done/` — check all `planned_`, `active_`, and `done_` files for the highest CS number
 2. **WORKBOARD.md Active Work:** Another agent may have just claimed a CS number but not yet committed the plan file — check Active Work for any CS numbers in use
-3. **CONTEXT.md clickstop summary table:** Cross-reference the summary table for any CS numbers added by other agents
 
-Use the next number after the highest found across all three sources. If in doubt, use a higher number — gaps in CS numbering are harmless, collisions cause real problems.
+Use the next number after the highest found across both sources.If in doubt, use a higher number — gaps in CS numbering are harmless, collisions cause real problems.
 
 ### Task Statuses
 - ⬜ Pending — not started, may have unmet dependencies
@@ -62,7 +61,6 @@ Every clickstop must satisfy ALL of these before marking complete:
 - [ ] All tasks done and merged (or deferred — see Deferred work policy below)
 - [ ] README updated (if user-facing changes)
 - [ ] INSTRUCTIONS.md updated (if architectural/workflow changes)
-- [ ] CONTEXT.md updated with final state
 - [ ] Tests added/updated, coverage measured
 - [ ] Performance/load test evaluation (if applicable)
 - [ ] Data structure changes documented
@@ -73,8 +71,7 @@ Filled-in checklists are recorded in the clickstop's archive file upon completio
 
 **Deferred work policy:** When completing a clickstop with deferred tasks, the orchestrator must:
 1. Create a new `planned_` clickstop file for the deferred work, including: what was deferred, why it was deferred, and a link back to the originating clickstop
-2. Add the new clickstop to the CONTEXT.md summary table
-3. Inform the user that deferred work has been placed in a new clickstop, with a link and summary
+2. Inform the user that deferred work has been placed in a new clickstop, with a link and summary
 
 A clickstop may be marked complete with deferred tasks only if the deferred work has been captured in a new clickstop. Never silently drop deferred tasks.
 
@@ -232,18 +229,7 @@ Any reclamation that does not follow this procedure — silently editing another
 
 ### CONTEXT.md — Project State Updates
 
-CONTEXT.md tracks clickstop summaries and current project state. Updates to CONTEXT.md **require PR review** because:
-- It defines the project's roadmap and task dependencies
-- Multiple agents reference it for planning decisions
-- Errors in CONTEXT.md can cause agents to work on wrong tasks or miss dependencies
-
-**When to update CONTEXT.md:**
-- Clickstop status changes (planned → active → done)
-- Task count changes (new tasks added, tasks completed)
-- Codebase state section updates (new routes, test counts, workflows)
-- Blocker/known issue changes
-
-CONTEXT.md updates are typically bundled into the PR that completes the relevant task. Stand-alone CONTEXT.md updates (e.g., adding a new clickstop) go through their own PR. **Exception:** when committing a clickstop plan file directly to main, the CONTEXT.md summary row may be bundled in the same commit or deferred to the implementation PR.
+CONTEXT.md no longer carries a per-clickstop summary table; clickstop status lives in the filesystem under `project/clickstops/{active,planned,done}/`. CONTEXT.md is reserved for codebase architecture and blockers, and only changes when those change. CONTEXT.md changes still go through PR review since it remains a shared planning doc.
 
 ### Clickstop File Lifecycle
 
@@ -276,12 +262,9 @@ A status change is always a `git mv` between two of these sibling directories (e
    - All tasks marked ✅ Done in the task table
    - Add PR references (number + link) and merge dates
    - Fill in the completion checklist
-3. Update CONTEXT.md: set status to ✅ Complete in the summary table, update task counts (e.g., 6/6), and update ALL archive links (both in the summary table and in the clickstop detail sections) to point to the `done_` file in `project/clickstops/done/`
-4. Remove your row from WORKBOARD.md Active Work, commit and push immediately
+3. Remove your row from WORKBOARD.md Active Work, commit and push immediately
 
-**Important:** Steps 1-3 of closing are typically done in the implementation PR (bundled with the last code change). Step 4 (workboard update) is done by the orchestrator on main after merging.
-
-CONTEXT.md always contains only a short summary (2-4 lines) per clickstop with a link to the detail file. Full task tables, design decisions, and architecture details live in the clickstop files.
+**Important:** Steps 1-2 of closing are typically done in the implementation PR (bundled with the last code change). Step 3 (workboard update) is done by the orchestrator on main after merging.
 
 Legacy archives from before CS0 may omit the completion checklist.
 
