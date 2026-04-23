@@ -43,6 +43,56 @@ Findings from this session (no new bugs needed yet):
 
 App Insights is **not configured in production** (no `APPLICATIONINSIGHTS_CONNECTION_STRING` env var on the Container App), so OTel does not export traces. We are working from Container Apps stdout → Log Analytics (`ContainerAppConsoleLogs_CL`). Enabling App Insights in prod is tracked separately as **CS54** (planned).
 
+## CS53-2 root-cause analysis (after deeper code reading, 2026-04-23)
+
+Two distinct 503 paths exist server-side; understanding which one fired in the incident changes the remediation:
+
+- **Path A — gating middleware (`server/app.js:170–178`)**: when `draining || !dbInitialized`, returns 503 + `Retry-After: 5` *before any DB call* with **no log statement**. Cost: ~0ms per request.
+- **Path B — central error handler (`server/app.js:328–366`)**: triggered when a route handler reaches a transient DB error mid-request. **Emits the "Transient DB error — responded 503" log line**. Cost: 15000ms (mssql `connectTimeout`/`requestTimeout` defaults).
+
+**Every error in Q1/Q7 is Path B** (all carry the "Transient DB error — responded 503" message). This is a critical signal:
+
+> `dbInitialized` was **`true`** at incident time. The DB had already been initialized in this container; what we observed was Azure SQL **auto-pausing mid-session**, not a deploy-time cold-start.
+
+This rules out the leading hypothesis from earlier ("deploy cold-start hits the WARMUP_CAP_MS too early"). The actual chain of events:
+
+1. Azure SQL serverless auto-paused after the configured idle period.
+2. Next request reaches a route handler → mssql pool tries to use a paused connection → **15s `requestTimeout`** fires → ETIMEOUT.
+3. Central error handler catches it, classifies transient (correctly), emits 503 + `Retry-After: 5`. Logs the line we see.
+4. Client `progressive-loader` enters `retryLoop()`. Sleeps 2–8s clamped from `Retry-After`. Retries. Server tries again → another 15s timeout → another 503.
+5. Wall-clock cap (`WARMUP_CAP_MS = 30000`) exhausts after ~2 server attempts. Retry button shown.
+6. **Self-init loop NEVER re-runs** — it short-circuits on `if (draining || dbInitialized) return;` (`server/app.js:379`). So the server has **no proactive DB warming** after the initial bootstrap. The only thing waking the DB is the per-request connection attempts themselves — and each one times out at 15s before the DB finishes warming.
+7. Eventually (after some number of failed attempts) Azure SQL completes its resume cycle and a subsequent attempt succeeds.
+
+**Confirmed defaults from `node_modules/mssql/lib/tedious/connection-pool.js:41–42`:** both `connectTimeout` AND `requestTimeout` default to **15000ms**. `mssql.connect(connectionString)` in `server/db/mssql-adapter.js:312` passes no options → we inherit both defaults.
+
+**Why wave 1 had only 3 endpoints (no `/api/auth/me`):** the boot-time raw `fetch('/api/auth/me')` at `public/js/app.js:530` fires at page load *before* the profile-screen `fetchProfile()` batch. It overlapped wave 1 (already in flight when `progressiveLoad` started), so wave 1 only saw 3 distinct fan-out URLs. Wave 2 (the retry batch) included `/api/auth/me` because the boot-time fetch had already failed silently and `fetchProfile()`'s batch picked it up. **The boot-time raw fetch is also unhardened** — on 503 it silently does nothing (only 401/403 are handled at `app.js:533`), so a paused DB at app boot leaves the user logged-in-but-not-loaded.
+
+**Why `/api/notifications/count` shows up at 14:09:00 and 14:31:13:** `NOTIFICATION_POLL_INTERVAL = 60000ms` (`public/js/app.js:3142`) — it's a 60s interval poller hitting the DB. Each tick during a paused window adds a 15s timeout to the pool's traffic. The 14:31:13 entry is almost certainly a *second* auto-pause cycle (22 min idle from 14:09 → 14:31 lines up with Azure SQL's free-tier auto-pause threshold), not the tail of the same event.
+
+## Root cause (one-line)
+
+Azure SQL serverless auto-pauses idle; the mssql driver's default 15s `requestTimeout` is shorter than the DB's resume time, so each per-request connection attempt times out before the DB warms — and the server has **no proactive resume probe** after `dbInitialized = true` is set, so warming relies entirely on the very requests that keep timing out. The client's 30s `WARMUP_CAP_MS` then surfaces the Retry button after ~2 such attempts.
+
+## Proposed remediation (CS53-3 decision)
+
+Three small, additive fixes — all needed; none alone is sufficient:
+
+1. **Server: tune mssql timeouts** — pass `connectionTimeout: 8000` and `requestTimeout: 8000` to `mssql.connect()`. Trades long single timeouts for more attempts per wall-clock window. (Going below ~5s risks false positives on real network jitter.)
+2. **Server: add a proactive resume probe** — when the central error handler catches a transient error AND `dbInitialized === true`, schedule a short async background ping (`SELECT 1` with the same short timeout, retry-with-backoff up to N attempts) to wake the pool without holding the response. This is the missing piece that converts every paused-DB user-request into "fail-fast + warm in background" instead of "block 15s + hope the next click happens after warmup".
+3. **Client: adaptive `WARMUP_CAP_MS`** — extend the wall-clock budget by `Retry-After` on each successive 503 instead of fixing 30s. Cap total at ~120s. Combined with #1, this means a typical Azure SQL resume (~30–60s) fits inside one client cycle without the user ever seeing a Retry button.
+
+**Out-of-scope but flagged:**
+- Boot-time raw `fetch('/api/auth/me')` at `public/js/app.js:530` should be migrated to `apiFetch` + tolerate 503. Small follow-up; fold into CS53-4.
+- The 60s notifications poller adds steady pool pressure during paused windows. Could be backed off when the last response was 503. Optional polish, not required for the core fix.
+
+## Data points still useful (not blocking)
+
+- A query to find Path A 503s in the window — they would prove whether self-init was ever re-attempted. Path A is silent in logs today, so we'd need to either (a) add a debug log to that branch, or (b) infer absence from the fact that no `Self-init attempt` lines appear in Q5/Q7.
+- A second-incident replay (CS53-5 manual re-validation after auto-pause) to verify the proposed fixes actually reduce retry count.
+
+## CS53-1 findings — log timeline (raw)
+
 **Q1 results from incident window (`2026-04-23T14:09:00Z` – `14:31:30Z`):**
 - Every error in the window is the same shape: `Failed to connect to gwn-sqldb.database.windows.net:1433 in 15000ms`, `errCode = ETIMEOUT`, `transient = true`, status 503 emitted.
 - Affected URLs include the four profile endpoints **plus** `/api/notifications/count` (a 60s poller, see `public/js/app.js:3163`).
