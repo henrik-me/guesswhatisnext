@@ -39,84 +39,131 @@ Findings from this session (no new bugs needed yet):
 | CS53-5 | Re-run manual cold-start validation against (a) leaderboard, (b) achievements, (c) multiplayer history, (d) community submissions, after waiting for Azure SQL to auto-pause. Record retry-count + wall-clock-to-success per screen. Confirms whether the issue is profile-specific or universal. | ⬜ Pending | Manual; orchestrator drafts a checklist, user runs. |
 | CS53-6 | Implement remediation chosen in CS53-3 (and CS53-2/CS53-4 if those surfaced fixes). Land in one or more PRs through standard validation. | ⬜ Pending | Scope depends on findings. May be "no code change, document floor" if logs reveal the cap is well above warm-DB latency and the issue is purely cold-start length. |
 
+## CS53-1 findings (preliminary, 2026-04-23)
+
+App Insights is **not configured in production** (no `APPLICATIONINSIGHTS_CONNECTION_STRING` env var on the Container App), so OTel does not export traces. We are working from Container Apps stdout → Log Analytics (`ContainerAppConsoleLogs_CL`). Enabling App Insights in prod is tracked separately as **CS54** (planned).
+
+**Q1 results from incident window (`2026-04-23T14:09:00Z` – `14:31:30Z`):**
+- Every error in the window is the same shape: `Failed to connect to gwn-sqldb.database.windows.net:1433 in 15000ms`, `errCode = ETIMEOUT`, `transient = true`, status 503 emitted.
+- Affected URLs include the four profile endpoints **plus** `/api/notifications/count` (a 60s poller, see `public/js/app.js:3163`).
+- **CS48 classified every observed error as transient — no gaps to plug there.**
+
+**Root-cause hypothesis (confirmed by code reading + log evidence):**
+1. **mssql `connectTimeout` = 15000ms** — `server/db/mssql-adapter.js:312` calls `mssql.connect(connectionString)` with no options, so we inherit the mssql package's library default of 15s.
+2. **Client `WARMUP_CAP_MS = 30000ms`** in `public/js/progressive-loader.js:14`.
+3. With a 15s server attempt and a 30s client cap, **at most ~2 server attempts fit per client retry cycle** before the cap exhausts and the Retry button appears.
+4. User clicked Retry 3 times → ~6 server attempts × 15s ≈ 90s of effective warmup, lining up with Azure SQL serverless free-tier cold-start times (typically 60–120s).
+
+**Likely remediations (CS53-3 will pick one):**
+- **(a)** Lower mssql `connectTimeout` to ~5s so 4–6 attempts fit per client cycle (faster failure surfacing, cheaper to retry).
+- **(b)** Raise client `WARMUP_CAP_MS` to ~120s (covers full cold-start; risk: long perceived hang if it's a real outage).
+- **(c)** Make the client cap *adaptive* — extend the budget by `Retry-After` from the latest 503 instead of using a fixed wall-clock (cleanest, more code).
+- **(d)** Combine: lower server timeout + adaptive client cap.
+
+**Open data point still needed (Q7 below):** the actual end-to-end cold-start duration on this incident — i.e., from first 503 to first 200 — and the self-init attempt cadence.
+
 ## KQL queries for user to run (CS53-1)
 
-> Run in Azure Portal → Application Insights → Logs (or Container Apps → Log Stream → KQL).
-> Time window: `2026-04-23T21:09:06Z` to `2026-04-23T21:31:14Z` (assuming Pacific = UTC−7; **adjust if user was on a different TZ**).
+> Run in Azure Portal → Container App → Logs (Log Analytics workspace).
+> Time window: `2026-04-23T14:09:00Z` to `2026-04-23T14:31:30Z` (UTC, per user-supplied incident timestamps).
+> Pino JSON lives in the `Log_s` field of `ContainerAppConsoleLogs_CL`.
 
-**Q1 — All errors emitted by the app (App Insights `traces` table for Pino logs via OTel):**
+**Q1 — All warn/error logs in the window (✅ already run; results captured above):**
 
 ```kql
 let win_start = datetime(2026-04-23T14:09:00Z);
 let win_end   = datetime(2026-04-23T14:31:30Z);
-traces
-| where timestamp between (win_start .. win_end)
-| where severityLevel >= 2  // 2 = Warning, 3 = Error
-| extend status = tostring(customDimensions.status),
-         transient = tostring(customDimensions.transient),
-         url = tostring(customDimensions.url),
-         requestId = tostring(customDimensions.requestId),
-         errMsg = tostring(customDimensions["err.message"]),
-         errCode = tostring(customDimensions["err.code"]),
-         errNumber = tostring(customDimensions["err.number"])
-| project timestamp, severityLevel, message, status, transient, url, requestId, errMsg, errCode, errNumber
-| order by timestamp asc
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (win_start .. win_end)
+| extend P = parse_json(Log_s)
+| where isnotempty(P.level) and toint(P.level) >= 40   // pino: 40=warn, 50=error, 60=fatal
+| project TimeGenerated,
+          level     = toint(P.level),
+          msg       = tostring(P.msg),
+          status    = toint(P.status),
+          transient = tobool(P.transient),
+          method    = tostring(P.method),
+          url       = tostring(P.url),
+          requestId = tostring(P.requestId),
+          errMsg    = tostring(P.err.message),
+          errCode   = tostring(P.err.code),
+          errNumber = toint(P.err.number),
+          ContainerAppName_s
+| order by TimeGenerated asc
 ```
 
-**Q2 — Distinct error classes seen (drives CS53-2 gap analysis):**
+**Q2 — Distinct error classes (drives the CS48 gap analysis):**
 
 ```kql
-traces
-| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
-| where severityLevel >= 3
-| extend errMsg = tostring(customDimensions["err.message"]),
-         errCode = tostring(customDimensions["err.code"]),
-         errNumber = tostring(customDimensions["err.number"]),
-         transient = tostring(customDimensions.transient)
-| summarize count(), min(timestamp), max(timestamp) by errMsg, errCode, errNumber, transient
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
+| extend P = parse_json(Log_s)
+| where toint(P.level) >= 50
+| extend errMsg = tostring(P.err.message),
+         errCode = tostring(P.err.code),
+         errNumber = toint(P.err.number),
+         transient = tobool(P.transient),
+         status = toint(P.status)
+| summarize count(), min(TimeGenerated), max(TimeGenerated) by errMsg, errCode, errNumber, transient, status
 | order by count_ desc
 ```
 
-**Q3 — HTTP responses (App Insights `requests` table) — confirms 503 vs 500 emission ratios per URL:**
+**Q3 — Response-code mix per URL (confirms 503 vs 500 emission ratios):**
 
 ```kql
-requests
-| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
-| where url contains "/api/"
-| summarize count() by name, resultCode
-| order by name, resultCode
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
+| extend P = parse_json(Log_s)
+| where isnotempty(P.url) and isnotempty(P.status)
+| summarize count() by url = tostring(P.url), status = toint(P.status)
+| order by url asc, status asc
 ```
 
-**Q4 — Per-request timeline for the four profile endpoints (lets us see the exact retry pattern on the client):**
+**Q4 — Per-request timeline for the four profile endpoints + notifications poller:**
 
 ```kql
-requests
-| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
-| where url has_any("/api/auth/me", "/api/scores/me", "/api/achievements", "/api/matches/history")
-| project timestamp, name, resultCode, duration, id
-| order by timestamp asc
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
+| extend P = parse_json(Log_s)
+| extend url = tostring(P.url)
+| where url has_any("/api/auth/me", "/api/scores/me", "/api/achievements", "/api/matches/history", "/api/notifications/count")
+| project TimeGenerated, url, status = toint(P.status), transient = tobool(P.transient), requestId = tostring(P.requestId), msg = tostring(P.msg)
+| order by TimeGenerated asc
 ```
 
-**Q5 — Self-init progress (was the DB pool warm by the time requests started succeeding?):**
+**Q5 — Self-init timeline (when did the pool actually come up?):**
 
 ```kql
-traces
-| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
-| where message has_any("Self-init", "Database self-initialized")
-| project timestamp, message, customDimensions
-| order by timestamp asc
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
+| extend P = parse_json(Log_s)
+| extend msg = tostring(P.msg)
+| where msg has_any("Self-init", "Database self-initialized", "Self-init attempt")
+| project TimeGenerated, msg, attempt = toint(P.attempt), errMsg = tostring(P.err.message)
+| order by TimeGenerated asc
 ```
 
-**Q6 — Anything we missed (catch-all for the same window):**
+**Q6 — Catch-all (raw rows, when JSON parse fails or fields are unexpected):**
 
 ```kql
-union traces, exceptions
-| where timestamp between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
-| project timestamp, itemType, severityLevel, message, problemId = column_ifexists("problemId", ""), customDimensions
-| order by timestamp asc
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:31:30Z))
+| project TimeGenerated, Log_s, ContainerAppName_s, ContainerName_s
+| order by TimeGenerated asc
 ```
 
-If any column names don't match (App Insights schemas vary by SDK version), Q1's `customDimensions` dump is the safest starting point — paste a raw row and the orchestrator will refine.
+**Q7 — End-to-end cold-start duration (first 503 → first 2xx + self-init markers):**
+
+```kql
+ContainerAppConsoleLogs_CL
+| where TimeGenerated between (datetime(2026-04-23T14:09:00Z) .. datetime(2026-04-23T14:35:00Z))
+| extend P = parse_json(Log_s)
+| extend status = toint(P.status), msg = tostring(P.msg)
+| where msg has_any("Self-init", "Database self-initialized") or status >= 200
+| project TimeGenerated, msg, status, attempt = toint(P.attempt), url = tostring(P.url)
+| order by TimeGenerated asc
+| take 200
+```
 
 ## Acceptance Criteria
 
