@@ -1,5 +1,9 @@
 # CS48 — Transient DB errors → 503 (cold-start UX fix)
 
+**Status:** ✅ Complete
+**PR:** [#228](https://github.com/henrik-me/guesswhatisnext/pull/228) (squashed as `7558adb` on `main`)
+**Closed:** 2026-04-23
+
 ## Problem
 
 During production validation of CS42 (cold-start progressive messages), a real
@@ -48,6 +52,16 @@ over instead of showing an error message.
 
 - `npm test` → 473 passed (36 files)
 - `npm run lint` → clean
+- Re-verified on close-out (2026-04-23): `tests/transient-db-error.test.js` → 14/14 passed; `server/lib/transient-db-error.js` and the `server/app.js` wiring (lines 11, 338, 390) confirmed present on `main` at `7558adb`.
+
+## Completion Checklist
+
+- [x] All tasks ✅ Done
+- [x] PR merged to `main` (#228 → `7558adb`)
+- [x] Unit tests added and passing (14/14)
+- [x] Code present in repo and exercised at runtime by central error handler + startup retry loop
+- [x] No CONTEXT.md update required (filesystem is the source of truth for clickstop state)
+- [x] No WORKBOARD.md row to remove (no agent had claimed this CS at close-out)
 
 ## Post-deploy verification (manual, by user)
 
