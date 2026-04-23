@@ -1,6 +1,8 @@
 # CS42 — Production Cold Start Progressive Messages
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Complete
+**Closed:** 2026-04-23
+**PRs:** [#221](https://github.com/henrik-me/guesswhatisnext/pull/221), [#222](https://github.com/henrik-me/guesswhatisnext/pull/222), [#223](https://github.com/henrik-me/guesswhatisnext/pull/223), [#224](https://github.com/henrik-me/guesswhatisnext/pull/224), [#225](https://github.com/henrik-me/guesswhatisnext/pull/225), [#227](https://github.com/henrik-me/guesswhatisnext/pull/227)
 **Goal:** Investigate and fix why progressive loading messages (friendly "waking up the database" UX) appear during local cold-start testing but not in production when Azure SQL is auto-paused.
 
 ---
@@ -48,7 +50,7 @@ This is the issue analyzed in the previous investigation — still valid but sec
 | CS42-4 | Content-hashed `CACHE_NAME` (drift-proofing) | ✅ Done | [PR #224](https://github.com/henrik-me/guesswhatisnext/pull/224) — Build-time SHA-256 content hash over template + sorted STATIC_ASSETS + asset bytes. `scripts/build-sw.js` generates `public/sw.js` with `gwn-<8-hex>` cache name. CI freshness check, Dockerfile wired, CONTRIBUTING.md documented. |
 | CS42-5a | E2E — SW upgrade/migration path | ✅ Done | [PR #225](https://github.com/henrik-me/guesswhatisnext/pull/225) — `tests/e2e/sw-upgrade.spec.mjs`: seeds bogus `gwn-v2` cache with sentinel, triggers SW update to `gwn-v3`, asserts cache purge + sentinel not served + controllerchange one-shot reload. |
 | CS42-5b | E2E — 503 retry path | ✅ Done | [PR #227](https://github.com/henrik-me/guesswhatisnext/pull/227) — Playwright `page.route()` interception: Variant A (503 with Retry-After → full message escalation, no Retry button, data renders) + Variant B (503 without signal → Retry button immediate, no auto-retry). |
-| CS42-5c | One-time manual production verification | ⬜ Pending | Post-deploy checklist recorded in this file. **Critical:** start from a real `gwn-v2`-controlled browser (do **not** unregister/clear the SW first — the migration path is the thing we're validating). Steps: (1) confirm the test browser has `gwn-v2` cached via DevTools → Application → Cache Storage, (2) leave prod idle ~70 min or confirm DB is paused via Azure portal, (3) reload the site, (4) observe: new SW activates + controllerchange reload fires (CS42-2b); freshly-loaded app shows the full 0/3/6/10/20s message escalation on the cold `/api/scores/leaderboard` call with animated ellipsis visible throughout (CS42-3); data renders without the Retry button inside 30s, (5) paste DevTools Application + Network screenshots into the implementation PR. One-shot human sign-off; not automated. |
+| CS42-5c | One-time manual production verification | ✅ Done | Verified by user on 2026-04-23 against deployed prod. Progressive messages render and the SW migration path works. **Hiccup observed:** profile screen required ~3 retry clicks before DB connected — not a regression of CS42 (the retry path itself worked), but the wait time / number of retries warrants investigation. Tracked separately in **[CS53 — Production cold-start retry hiccup investigation](../planned/planned_cs53_prod-cold-start-retry-investigation.md)**. Leaderboard + other-screen cold-start scenarios still pending user validation, also covered by CS53. |
 
 ---
 
@@ -122,3 +124,14 @@ Two review rounds:
   - CS42-5b depends on **CS42-3** merged only.
   - CS42-5c depends on 2, 2b, 3, 4 all merged and deployed.
 - **Not in scope.** Changing the server's decision to return 503 fast (we keep it — healthy clients should not hang). Changing Azure SQL's auto-pause delay (infra decision, separate). Generic client UX telemetry (deferred to CS47).
+
+---
+
+## Completion Checklist
+
+- [x] CS42-1 through CS42-5b merged via PRs #221, #222, #223, #224, #225, #227
+- [x] CS42-5c manual production verification signed off by user (2026-04-23) — progressive messages render, SW migration path works
+- [x] Hiccup observed during validation (profile screen needed ~3 retry clicks) deferred to **CS53** per the deferred-task policy
+- [x] Outstanding cold-start screen validations (leaderboard, others) tracked under CS53
+- [x] Code in production and observed working
+- [x] WORKBOARD.md row removed (original owner `omni-gwn-c2` is offline; closed by orchestrator `yoga-gwn` with explicit user authorization)
