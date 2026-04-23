@@ -62,6 +62,32 @@ App Insights is **not configured in production** (no `APPLICATIONINSIGHTS_CONNEC
 
 **Open data point still needed (Q7 below):** the actual end-to-end cold-start duration on this incident — i.e., from first 503 to first 200 — and the self-init attempt cadence.
 
+**Q7 results (registered 2026-04-23; analysis pending):**
+
+```
+14:09:00.633   503  /api/notifications/count        ← first failure (poller)
+14:09:06.640   503  /api/scores/me                  ┐
+14:09:06.640   503  /api/achievements               │ profile wave 1 (3 endpoints; no auth/me)
+14:09:06.640   503  /api/matches/history            ┘
+14:09:17.733   503  /api/matches/history            ┐
+14:09:17.733   503  /api/auth/me                    │ profile wave 2 (4 endpoints, ~11.1s later)
+14:09:17.733   503  /api/scores/me                  │
+14:09:17.733   503  /api/achievements               ┘
+14:31:13.943   503  /api/notifications/count        ← last 503 in window (poller)
+```
+
+Observations (raw, not yet interpreted into a remediation):
+- **Only two client-driven waves** on the profile endpoints, not three. Wave 2 fired 11.1s after Wave 1 — consistent with a client `retryLoop` sleep (clamped 2–8s) + a 15s mssql attempt overlap.
+- **Wave 1 has three endpoints, wave 2 has four.** The missing `/api/auth/me` in wave 1 is noteworthy — likely because `/api/auth/me` was already in flight from the boot-time raw `fetch` (`public/js/app.js:530`) and overlapped.
+- **No `Self-init attempt failed` or `Database self-initialized` rows** appeared in Q7 — suggests either the self-init loop wasn't emitting during this window (it's quiet on success), or messages fell outside the level filter.
+- **22-minute gap** between 14:09:17 and 14:31:13 with no visible error rows → strongly implies the DB warmed somewhere in that gap and subsequent requests succeeded. The 14:31:13 entry is likely a fresh auto-pause cycle catching the 60s-interval notifications poller.
+- **Successful 2xx responses were not in the result set** — either because Pino only logs request-level detail on warn+ paths, or Q7's `status >= 200` branch didn't match (Pino info-level access logs may not carry a `status` field at the top level). A follow-up query against request-access logs would pin down the exact "first 200" timestamp.
+
+**What we still do not know (do NOT move forward on remediation until these are answered):**
+- Exact timestamp of the first successful 200 — i.e. the real cold-start floor.
+- Whether the self-init loop ran and at what cadence during 14:09–14:31.
+- Whether the 14:31:13 entry is a *second* auto-pause cycle (in which case the cold-start was much shorter than 22 min) or the tail of the same event.
+
 ## KQL queries for user to run (CS53-1)
 
 > Run in Azure Portal → Container App → Logs (Log Analytics workspace).
