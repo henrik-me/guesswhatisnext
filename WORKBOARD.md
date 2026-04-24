@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-24T00:20Z
+> **Last updated:** 2026-04-24T00:30Z
 
 ## Orchestrators
 
@@ -24,6 +24,7 @@ CS44-3 schema upgrade.
 
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
-| CS53 | CS53 prod cold-start retry investigation | pr_open | yoga-gwn | C:\src\guesswhatisnext (main checkout — PROCEDURE VIOLATION, see note) | cs53-1-classifier-and-selfinit-resilience, cs53-2-permanent-unavailable-and-poller | #233, #234 | 2026-04-24T00:20Z | Await GPT-5.4 local review (in flight) and Copilot review on #233/#234; address findings; then merge | Local-review-loop violation: Copilot review was requested before GPT-5.4 review completed |
+| CS53-1b | CS53 #233 follow-up: admin-init draining + concurrency guard | dispatched | yoga-gwn | C:\src\gwn-worktrees\wt-1 (port 3001) | cs53-1-classifier-and-selfinit-resilience | #233 | 2026-04-24T00:30Z | Background sub-agent (Opus 4.7) addressing GPT-5.4 P2 findings; will push to existing PR #233 branch | — |
+| CS53-2 | CS53 #234 rebase + integration test | blocked | yoga-gwn | (pending) | cs53-2-permanent-unavailable-and-poller | #234 | 2026-04-24T00:30Z | Wait for PR #233 to merge, then dispatch wt-2 to rebase #234 onto main and add the route-level 503-unavailable integration test | Depends on PR #233 merge |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
