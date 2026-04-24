@@ -8,6 +8,7 @@ import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
 import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError, queueScoreForSync, syncQueuedScores } from './progressive-loader.js';
+import { validateStoredAuthToken } from './auth-boot.js';
 
 /**
  * Check a fetch Response for a retryable 503 signal and throw RetryableError if present.
@@ -535,12 +536,21 @@ function init() {
   updateHomeAuthDisplay();
   refreshFeatureFlags();
 
-  // Validate stored token on startup (non-blocking)
+  // Validate stored token on startup (non-blocking).
+  //
+  // CS53-4 + CS53 Policy 1: route through apiFetch so we honor the 503
+  // warmup / UnavailableError contract. This call runs before any UI is
+  // mounted, so there is no progressive-loader container to render warmup
+  // messages into. On RetryableError or UnavailableError we silently defer
+  // — auth state stays whatever localStorage gave us, and the next real
+  // user action will surface the warming/unavailable banner via the
+  // central error handler. We do NOT poll and we do NOT retry here
+  // (Policy 1: no DB-waking background work).
   if (authToken) {
-    fetch('/api/auth/me', {
-      headers: { 'Authorization': `Bearer ${authToken}` },
-    }).then(res => {
-      if (res.status === 401 || res.status === 403) {
+    validateStoredAuthToken({
+      apiFetch,
+      throwIfRetryable,
+      onUnauthorized: () => {
         authToken = null;
         authUsername = null;
         authRole = null;
@@ -553,25 +563,22 @@ function init() {
         }
         updateHomeAuthDisplay();
         if (currentScreen === 'community') updateCommunityAuthDisplay();
-      } else if (res.ok) {
-        return res.json().then(data => {
-          if (data.user && data.user.role) {
-            authRole = data.user.role;
-            localStorage.setItem('gwn_auth_role', authRole);
-            updateHomeAuthDisplay();
-            if (currentScreen === 'community') updateCommunityAuthDisplay();
-          }
-        }).then(() => {
-          // Token confirmed valid — sync any queued scores
-          syncQueuedScores(apiFetch, {
-            onSyncing: () => showSyncIndicator('Syncing scores...'),
-            onSynced: () => showSyncIndicator('Scores synced ✓'),
-            onFailed: () => showSyncIndicator('Some scores pending sync'),
-          });
+      },
+      onValidated: (data) => {
+        if (data && data.user && data.user.role) {
+          authRole = data.user.role;
+          localStorage.setItem('gwn_auth_role', authRole);
+          updateHomeAuthDisplay();
+          if (currentScreen === 'community') updateCommunityAuthDisplay();
+        }
+        // Token confirmed valid — sync any queued scores
+        syncQueuedScores(apiFetch, {
+          onSyncing: () => showSyncIndicator('Syncing scores...'),
+          onSynced: () => showSyncIndicator('Scores synced ✓'),
+          onFailed: () => showSyncIndicator('Some scores pending sync'),
         });
-      }
-    }).catch(() => {
-      // Network error — keep token, will validate on next API call
+      },
+      // onDeferred intentionally omitted — silent defer per CS53-4 / Policy 1.
     });
   }
 
@@ -3642,7 +3649,9 @@ async function loadGallery(append = false) {
     if (galleryCategory) params.set('category', galleryCategory);
     if (galleryDifficulty && galleryDifficulty !== 'all') params.set('difficulty', galleryDifficulty);
 
-    const res = await fetch(`/api/puzzles/community?${params}`, { signal });
+    // CS53-4: route through apiFetch so 503 warmup + UnavailableError signals
+    // bubble to the surrounding progressiveLoad wrapper (see line ~3664).
+    const res = await apiFetch(`/api/puzzles/community?${params}`, { signal });
     await throwIfRetryable(res);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load puzzles');
