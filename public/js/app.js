@@ -1414,11 +1414,10 @@ function updateHomeAuthDisplay() {
     if (loggedOutBar) loggedOutBar.style.display = 'none';
     if (loggedInBar) loggedInBar.style.display = '';
     if (usernameText) usernameText.textContent = authUsername;
-    startNotificationPolling();
+    refreshNotificationBadge();
   } else {
     if (loggedOutBar) loggedOutBar.style.display = '';
     if (loggedInBar) loggedInBar.style.display = 'none';
-    stopNotificationPolling();
     updateNotificationBadge(0);
   }
 
@@ -3190,7 +3189,7 @@ function updateNotificationBadge(count) {
 }
 
 /** Fetch unread notification count and update badge (one-shot, no timer). */
-async function pollNotificationCount() {
+async function refreshNotificationBadge() {
   if (!isLoggedIn()) return;
   try {
     const res = await apiFetch('/api/notifications/count');
@@ -3199,16 +3198,6 @@ async function pollNotificationCount() {
       updateNotificationBadge(data.unread_count || 0);
     }
   } catch { /* ignore badge-refresh errors */ }
-}
-
-/** One-shot refresh of the notification badge (called on login). */
-function startNotificationPolling() {
-  pollNotificationCount();
-}
-
-/** Clear the notification badge (called on logout). */
-function stopNotificationPolling() {
-  updateNotificationBadge(0);
 }
 
 /** Render a single notification item. */
