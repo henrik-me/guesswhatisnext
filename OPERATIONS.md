@@ -41,7 +41,46 @@ The summary table format should include at minimum: agent_id, slot/branch, curre
 
 Do not use the "tell the user you're waiting and end your response" pattern as an excuse to go silent for long stretches — that pattern means "do not redo the agent's work in the foreground", not "do not check on it". The idle-poll floor above always applies.
 
-**Workboard transitions are push-gated too.** The sub-agent `STATE:` discipline above is only half the contract: orchestrator-driven workboard state transitions (notably `claimed`, but also any orchestrator-side column update such as reclamation) are not effective until the corresponding commit has landed on `origin/main`. See [§ WORKBOARD.md — Live Coordination, "Claim effectiveness" in TRACKING.md](TRACKING.md#workboardmd--live-coordination) for the gating rule and the push-rejected recovery procedure.
+### Fallback progress signals (when sub-agent is silent)
+
+Sub-agents are required to emit `STATE:` lines on every transition (see the bullet list above). In practice they sometimes don't — they push commits, turn CI green, and edit files without ever surfacing a `STATE:` line to the orchestrator's `read_agent` view. **The orchestrator must not mistake a missing `STATE:` line for a missing heartbeat.** Silence on `STATE:` is not silence on progress.
+
+On every heartbeat (still ≤ 10 min cadence per the idle-poll floor above), if no new `STATE:` line has arrived since the last user-facing update, the orchestrator **must** check the following fallback signals (in parallel where possible) before reporting status to the user:
+
+1. **Sub-agent runtime signal.** `read_agent` returns `tool_calls_completed` and `current_intent`. If `tool_calls_completed` is increasing turn-over-turn, the agent is alive and working — even if it hasn't said `STATE:` yet.
+2. **Git branch activity.** `git fetch origin <branch> && git --no-pager log --oneline origin/<branch> -10` reveals new commits the sub-agent has pushed. **Each new commit is a real progress signal — far stronger than a missing `STATE:` line.**
+3. **PR state on GitHub.** `gh pr view <num> --json updatedAt,statusCheckRollup,reviews,comments` reveals new CI runs, new reviews (including local-review and Copilot turns), and new comments. `updatedAt` advancing is a heartbeat by itself.
+4. **CI workflow runs.** `gh run list --branch <branch> --limit 5` shows new workflow runs being triggered by the sub-agent's pushes (a separate signal from PR `statusCheckRollup`, useful when CI is queued or just started).
+5. **Working-tree file mtimes.** Recent edits the agent hasn't yet committed:
+
+   ```powershell
+   Get-ChildItem <worktree-path> -Recurse -File |
+     Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-15) -and $_.FullName -notmatch 'node_modules|\\.git\\' } |
+     Sort-Object LastWriteTime -Descending |
+     Select-Object -First 10
+   ```
+
+   On Unix-like hosts the equivalent is `find <worktree-path> -type f -mmin -15 -not -path '*/node_modules/*' -not -path '*/.git/*' | head`.
+
+**Heartbeat protocol.** On every heartbeat:
+
+1. First call `read_agent` (cheap).
+2. If a new `STATE:` line is present, report it as before — done.
+3. If no new `STATE:` line, run the fallback-signal checks above (parallelize the `gh` / `git` / file-mtime calls).
+4. **Report to the user using the richest signal available.** Prefer concrete progress ("4 new commits since last heartbeat, all CI green, 2 review comments resolved") over absence-of-signal complaints ("no STATE: transitions in N minutes"). The user wants to know what the agent has accomplished, not what it hasn't said.
+5. Only if **all** fallback signals are also flat — no new commits, no new CI runs, no file mtime changes within ~15 min, and `tool_calls_completed` not incrementing across two consecutive `read_agent` calls — treat the agent as potentially stuck and escalate per the existing blocked/escalation guidance.
+
+This subsection does **not** change the sub-agent's reporting duties. Sub-agents must still emit `STATE:` lines per the canonical vocabulary above. This is purely about what the orchestrator does *additionally* to compensate when that contract is not honored, so that a sub-agent's reporting lapse never degrades into a user-visible "nothing is happening" claim when in fact a lot is happening.
+
+**Worked example — bad vs good heartbeat.** Sub-agent in slot wt-N has been silent on `STATE:` for ~70 minutes but has pushed 4 commits and turned PR #N's CI green:
+
+| ❌ Bad heartbeat (the failure mode) | ✅ Good heartbeat (what the user should see) |
+|---|---|
+| "wt-N: no STATE: transitions in 70 minutes. Current intent: editing files. Will keep watching." | "wt-N (PR #N): 4 new commits since last heartbeat (`abc1234..def5678`), CI all green ✓, local-review agent posted 2 comments — both already resolved by follow-up commits. `tool_calls_completed` 142 → 198. Agent is actively in `local_review`; expecting `ready_to_merge` shortly. (Note: sub-agent has not emitted a fresh `STATE:` line — inferred from branch + PR signals.)" |
+
+The bad version is technically true but operationally useless: it tells the user only what the agent failed to say, not what the agent did. The good version uses fallback signals to reconstruct the actual state of the work, flags the inference explicitly, and ends with a concrete next-transition expectation.
+
+**Workboard transitions are push-gated too.**The sub-agent `STATE:` discipline above is only half the contract: orchestrator-driven workboard state transitions (notably `claimed`, but also any orchestrator-side column update such as reclamation) are not effective until the corresponding commit has landed on `origin/main`. See [§ WORKBOARD.md — Live Coordination, "Claim effectiveness" in TRACKING.md](TRACKING.md#workboardmd--live-coordination) for the gating rule and the push-rejected recovery procedure.
 
 **Milestone timing table:** Sub-agents must include a timing table in their final completion report. This tracks elapsed time from session start for each major milestone (e.g., "npm install", "implementation", "validation", "PR created", "review clean"). This was identified as a process improvement during CS25 to help identify workflow bottlenecks.
 
