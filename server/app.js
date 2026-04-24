@@ -9,6 +9,7 @@ const http = require('http');
 const pinoHttp = require('pino-http');
 const { config } = require('./config');
 const { isTransientDbError } = require('./lib/transient-db-error');
+const { createInitGuard } = require('./lib/db-init-guard');
 const logger = require('./logger');
 const { getDbAdapter, closeDbAdapter, isAdapterInitialized } = require('./db');
 const migrations = require('./db/migrations');
@@ -89,6 +90,22 @@ function createServer() {
   let draining = false;
   let activeRequests = 0;
   const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
+
+  // CS53-1b: concurrency guard so /api/admin/init-db and the slow-retry
+  // self-init timer cannot run `initializeDatabase()` in parallel. Both
+  // paths funnel through `runInit()`; the loser awaits the winner's result.
+  const initGuard = createInitGuard(initializeDatabase);
+  async function runInit() {
+    try {
+      await initGuard.runOnce();
+      dbInitialized = true;
+      return { ok: true };
+    } catch (err) {
+      dbInitialized = false;
+      try { await closeDbAdapter(); } catch { /* ignore close errors */ }
+      return { ok: false, err };
+    }
+  }
 
   // Security middleware — HTTPS redirect (production only) and headers
   app.use(httpsRedirect);
@@ -304,18 +321,22 @@ function createServer() {
 
   // Admin: initialize DB connection (for orchestrated deploys)
   app.post('/api/admin/init-db', requireSystem, async (_req, res, _next) => {
-    try {
-      await initializeDatabase();
+    const result = await runInit();
+    if (result.ok) {
+      // Note: we deliberately do NOT touch `draining` here. `draining` is
+      // only set by /api/admin/drain; an init success implicitly means the
+      // operator wants traffic again, so clear it.
       draining = false;
-      dbInitialized = true;
       logger.info('Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
-    } catch (err) {
-      try { await closeDbAdapter(); } catch { /* ignore */ }
-      draining = true;
-      dbInitialized = false;
-      logger.error({ err }, 'Database init failed');
-      res.status(500).json({ error: 'Database initialization failed', message: err.message });
+    } else {
+      // CS53-1b: do NOT set `draining = true` on failure. Doing so would
+      // soft-brick the slow-retry self-init loop (which early-returns when
+      // `draining || dbInitialized`), preventing the container from
+      // self-healing at free-tier renewal until someone makes a successful
+      // admin call. Reporting the failure to the caller is enough.
+      logger.error({ err: result.err }, 'Database init failed');
+      res.status(500).json({ error: 'Database initialization failed', message: result.err.message });
     }
   });
 
@@ -391,38 +412,43 @@ function createServer() {
 
     const attemptSelfInit = async () => {
       if (draining || dbInitialized) return;
-      selfInitAttempt++;
-      try {
-        await initializeDatabase();
-        dbInitialized = true;
-        logger.info({ attempt: selfInitAttempt }, 'Database self-initialized');
-      } catch (err) {
-        dbInitialized = false;
-        const db = isAdapterInitialized() ? await getDbAdapter() : null;
-        const dialect = db ? db.dialect : config.DB_BACKEND;
-        const isRetryable = isTransientDbError(err, dialect);
 
-        // Always close any half-open adapter so the next attempt builds a
-        // fresh pool. Safe to call even if no adapter exists.
-        try { await closeDbAdapter(); } catch { /* ignore */ }
-
-        let nextIntervalMs;
-        if (isRetryable && selfInitAttempt < SELF_INIT_MAX_FAST_ATTEMPTS) {
-          nextIntervalMs = SELF_INIT_INTERVAL_MS;
-          logger.warn(
-            { attempt: selfInitAttempt, maxFastAttempts: SELF_INIT_MAX_FAST_ATTEMPTS, err },
-            `Self-init attempt failed (transient), retrying in ${nextIntervalMs / 1000}s`
-          );
-        } else {
-          nextIntervalMs = SELF_INIT_BACKOFF_INTERVAL_MS;
-          const reason = isRetryable ? 'max fast attempts exhausted' : 'non-retryable error';
-          logger.error(
-            { attempt: selfInitAttempt, retryable: isRetryable, err },
-            `Self-init failed (${reason}); backing off to ${nextIntervalMs / 1000}s slow-retry. POST /api/admin/init-db to force an immediate retry.`
-          );
-        }
-        setTimeout(attemptSelfInit, nextIntervalMs);
+      // CS53-1b: if /api/admin/init-db is currently running an init, skip
+      // this tick and check again shortly. Avoids two concurrent
+      // initializeDatabase() calls fighting over the singleton adapter.
+      if (initGuard.isInFlight()) {
+        setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
+        return;
       }
+
+      selfInitAttempt++;
+      const result = await runInit();
+      if (result.ok) {
+        logger.info({ attempt: selfInitAttempt }, 'Database self-initialized');
+        return;
+      }
+
+      const err = result.err;
+      const db = isAdapterInitialized() ? await getDbAdapter().catch(() => null) : null;
+      const dialect = db ? db.dialect : config.DB_BACKEND;
+      const isRetryable = isTransientDbError(err, dialect);
+
+      let nextIntervalMs;
+      if (isRetryable && selfInitAttempt < SELF_INIT_MAX_FAST_ATTEMPTS) {
+        nextIntervalMs = SELF_INIT_INTERVAL_MS;
+        logger.warn(
+          { attempt: selfInitAttempt, maxFastAttempts: SELF_INIT_MAX_FAST_ATTEMPTS, err },
+          `Self-init attempt failed (transient), retrying in ${nextIntervalMs / 1000}s`
+        );
+      } else {
+        nextIntervalMs = SELF_INIT_BACKOFF_INTERVAL_MS;
+        const reason = isRetryable ? 'max fast attempts exhausted' : 'non-retryable error';
+        logger.error(
+          { attempt: selfInitAttempt, retryable: isRetryable, err },
+          `Self-init failed (${reason}); backing off to ${nextIntervalMs / 1000}s slow-retry. POST /api/admin/init-db to force an immediate retry.`
+        );
+      }
+      setTimeout(attemptSelfInit, nextIntervalMs);
     };
 
     setTimeout(attemptSelfInit, 2000);
