@@ -33,8 +33,13 @@ let agent = null;
 let tmpDir = null;
 let liveAdapter = null;
 let originalAll = null;
+let prevEnv = {};
 
 beforeAll(async () => {
+  prevEnv = {
+    GWN_DB_PATH: process.env.GWN_DB_PATH,
+    NODE_ENV: process.env.NODE_ENV,
+  };
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-unavail-'));
   process.env.GWN_DB_PATH = path.join(tmpDir, 'test.db');
   process.env.NODE_ENV = 'test';
@@ -81,7 +86,10 @@ afterAll(async () => {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
     tmpDir = null;
   }
-  delete process.env.GWN_DB_PATH;
+  if (prevEnv.GWN_DB_PATH === undefined) delete process.env.GWN_DB_PATH;
+  else process.env.GWN_DB_PATH = prevEnv.GWN_DB_PATH;
+  if (prevEnv.NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = prevEnv.NODE_ENV;
 });
 
 describe('Central error handler — permanent DB unavailability (CS53 Bug B)', () => {
@@ -163,8 +171,13 @@ describe('Request gate — permanent DB unavailability before init succeeds (CS5
   let tmpDir2 = null;
   let sqliteAdapterPath2 = null;
   let originalSqliteCacheEntry2 = null;
+  let prevEnv2 = {};
 
   beforeAll(async () => {
+    prevEnv2 = {
+      GWN_DB_PATH: process.env.GWN_DB_PATH,
+      NODE_ENV: process.env.NODE_ENV,
+    };
     tmpDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-unavail-startup-'));
     process.env.GWN_DB_PATH = path.join(tmpDir2, 'test.db');
     process.env.NODE_ENV = 'test';
@@ -204,7 +217,10 @@ describe('Request gate — permanent DB unavailability before init succeeds (CS5
       fs.rmSync(tmpDir2, { recursive: true, force: true });
       tmpDir2 = null;
     }
-    delete process.env.GWN_DB_PATH;
+    if (prevEnv2.GWN_DB_PATH === undefined) delete process.env.GWN_DB_PATH;
+    else process.env.GWN_DB_PATH = prevEnv2.GWN_DB_PATH;
+    if (prevEnv2.NODE_ENV === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = prevEnv2.NODE_ENV;
   });
 
   test('a free-tier-exhaustion failure during init makes the gate return { unavailable: true } with NO Retry-After', async () => {
