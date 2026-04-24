@@ -330,7 +330,27 @@ class MssqlAdapter extends BaseAdapter {
       MssqlAdapter._coldStartConsumed = true;
       await new Promise((resolve) => setTimeout(resolve, simulateMs));
     }
-    this._pool = await this._sql.connect(this._connectionString);
+    // Parse the connection string into a config object so we can override
+    // timeout defaults without losing user-supplied options (encrypt,
+    // trustServerCertificate, etc.). CS53-3 / CS53-6:
+    //   - connectionTimeout: 5000  (was the mssql library default of 15000)
+    //     — fail fast on a paused Azure SQL serverless DB so the warmup
+    //     retry path can exercise more attempts inside the client budget.
+    //     Also mirrored to options.connectTimeout so the underlying
+    //     tedious driver honors the same value if mssql's top-level→options
+    //     forwarding ever changes.
+    //   - requestTimeout: 15000 — explicit so we don't drift if the
+    //     library default ever changes; warm-pool query latency is the
+    //     same as before. Also mirrored to options.requestTimeout.
+    const config = this._sql.ConnectionPool.parseConnectionString(this._connectionString);
+    config.connectionTimeout = MssqlAdapter.CONNECT_TIMEOUT_MS;
+    config.requestTimeout = MssqlAdapter.REQUEST_TIMEOUT_MS;
+    config.options = config.options || {};
+    // Pass through to tedious explicitly so the timeout is honored even if
+    // mssql's top-level→options forwarding logic changes between versions.
+    config.options.connectTimeout = MssqlAdapter.CONNECT_TIMEOUT_MS;
+    config.options.requestTimeout = MssqlAdapter.REQUEST_TIMEOUT_MS;
+    this._pool = await this._sql.connect(config);
   }
 
   async _get(sqlStr, params = []) {
@@ -408,5 +428,9 @@ MssqlAdapter._rewriteSql = rewriteSql;
 // Process-lifetime flag — see _connect() above.
 MssqlAdapter._coldStartConsumed = false;
 MssqlAdapter._resetColdStart = () => { MssqlAdapter._coldStartConsumed = false; };
+// Connection / request timeouts (CS53-3 / CS53-6). Exposed as static fields
+// so tests can assert against them and so future tuning lives in one place.
+MssqlAdapter.CONNECT_TIMEOUT_MS = 5000;
+MssqlAdapter.REQUEST_TIMEOUT_MS = 15000;
 
 module.exports = MssqlAdapter;

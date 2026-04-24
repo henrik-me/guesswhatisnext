@@ -10,8 +10,20 @@ const DEFAULTS = {
   timeout: 15000,
 };
 
-/** Wall-clock cap for the 503 auto-retry warmup loop (ms). */
-const WARMUP_CAP_MS = 30000;
+/**
+ * Adaptive warmup budget (CS53-6). The wall-clock deadline starts at
+ * INITIAL_WARMUP_BUDGET_MS and is *extended* on each 503 received, up to
+ * MAX_WARMUP_BUDGET_MS. This lets a typical Azure SQL serverless cold
+ * start (60–120s) complete inside one client cycle without surfacing
+ * the Retry button, while still bounding the total wait so a truly
+ * down DB does eventually fall through to the retry-button path.
+ */
+const INITIAL_WARMUP_BUDGET_MS = 30000;   // unchanged for warm-DB UX
+const MAX_WARMUP_BUDGET_MS     = 120000;  // hard ceiling (Azure cold-start p99)
+const EXTENSION_PER_503_MS     = 15000;   // headroom added per server 503
+const MIN_EXTENSION_MS         =  5000;   // floor — always make progress
+const MAX_SLEEP_MS             =  8000;   // existing ceiling per attempt
+const JITTER_FRAC              = 0.20;    // ±20% on sleep to desync parallel callers
 
 /**
  * Typed error for retryable 503 responses.
@@ -144,36 +156,43 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
 /**
  * Auto-retry loop for RetryableError (503 with retry signal).
  * Message-escalation timers persist across retries. Each attempt gets a
- * fresh request-timeout timer bounded by the remaining warmup cap.
+ * fresh request-timeout timer bounded by the remaining warmup budget.
+ *
+ * Adaptive warmup budget (CS53-6): the wall-clock deadline starts at
+ * INITIAL_WARMUP_BUDGET_MS and is extended per 503 by
+ * clamp(retryAfterMs * 2, MIN_EXTENSION_MS, EXTENSION_PER_503_MS), capped
+ * at MAX_WARMUP_BUDGET_MS. Sleeps follow a bounded backoff schedule
+ * (2s, 4s, 6s, 8s, 8s, …) overridden by the server's Retry-After when
+ * larger, then clamped to MAX_SLEEP_MS and ±JITTER_FRAC jitter.
  */
 async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, timeout, onRetry, messageSet, options, warmupStart) {
   let lastErr = initialErr;
+  // Initial 503 already received — extend budget once before the first sleep.
+  let currentBudget = INITIAL_WARMUP_BUDGET_MS;
+  currentBudget = extendBudget(currentBudget, lastErr.retryAfterMs);
+  let deadline = warmupStart + currentBudget;
+  // Sleep-schedule index for the next sleep: 1=2s, 2=4s, 3=6s, 4+=8s.
+  let retryIdx = 1;
+
+  const bailOutToRetryButton = () => {
+    clearTimers(escalationTimers);
+    const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
+    showRetryButton(containerEl, retryHandler);
+    return null;
+  };
 
   while (true) {
-    const elapsed = Date.now() - warmupStart;
-    const remaining = WARMUP_CAP_MS - elapsed;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return bailOutToRetryButton();
 
-    if (remaining <= 0) {
-      // Wall-clock cap exhausted — fall through to retry-button path
-      clearTimers(escalationTimers);
-      const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
-      showRetryButton(containerEl, retryHandler);
-      return null;
-    }
-
-    // Sleep for the retry delay (clamped 2000–8000ms), but never past the warmup cap
-    const retryDelay = Math.min(Math.max(2000, Math.min(8000, lastErr.retryAfterMs)), remaining);
-    await sleep(retryDelay);
+    const baseSleep = baseSleepFor(retryIdx);
+    const sleepMs = computeSleepMs(baseSleep, lastErr.retryAfterMs, remaining);
+    await sleep(sleepMs);
+    retryIdx++;
 
     // Re-check remaining after sleep
-    const elapsedAfterSleep = Date.now() - warmupStart;
-    const remainingAfterSleep = WARMUP_CAP_MS - elapsedAfterSleep;
-    if (remainingAfterSleep <= 0) {
-      clearTimers(escalationTimers);
-      const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
-      showRetryButton(containerEl, retryHandler);
-      return null;
-    }
+    const remainingAfterSleep = deadline - Date.now();
+    if (remainingAfterSleep <= 0) return bailOutToRetryButton();
 
     const requestTimers = [];
     try {
@@ -194,6 +213,9 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
 
       if (retryErr instanceof RetryableError) {
         lastErr = retryErr;
+        // Extend the budget per 503 (capped), then loop.
+        currentBudget = extendBudget(currentBudget, lastErr.retryAfterMs);
+        deadline = warmupStart + currentBudget;
         continue;
       }
 
@@ -205,12 +227,50 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
       }
 
       // AbortError or other non-retryable error — terminate
-      clearTimers(escalationTimers);
-      const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
-      showRetryButton(containerEl, retryHandler);
-      return null;
+      return bailOutToRetryButton();
     }
   }
+}
+
+/** Backoff schedule (ms) before the Nth retry attempt, capped at MAX_SLEEP_MS. */
+function baseSleepFor(retryIdx) {
+  const schedule = [2000, 4000, 6000, MAX_SLEEP_MS];
+  return schedule[Math.min(retryIdx - 1, schedule.length - 1)];
+}
+
+/**
+ * Compute the actual sleep for this attempt:
+ *   - take max(baseSleep, retryAfterMs) so the server's hint wins when larger;
+ *   - cap at MAX_SLEEP_MS;
+ *   - apply ±JITTER_FRAC jitter to desync parallel callers;
+ *   - re-clamp to MAX_SLEEP_MS so the documented ceiling holds even when
+ *     jitter scales above 1.0;
+ *   - clamp to the remaining budget so we never sleep past the deadline.
+ */
+function computeSleepMs(baseSleep, retryAfterMs, remaining) {
+  const safeRetryAfter = Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? retryAfterMs : 0;
+  let effective = Math.max(baseSleep, safeRetryAfter);
+  effective = Math.min(MAX_SLEEP_MS, effective);
+  // ±JITTER_FRAC jitter
+  const jitter = 1 + ((Math.random() * 2 - 1) * JITTER_FRAC);
+  effective = Math.round(effective * jitter);
+  // Re-clamp after jitter so the per-attempt ceiling (MAX_SLEEP_MS) is
+  // strictly honored even when jitter would otherwise push above it.
+  effective = Math.min(MAX_SLEEP_MS, effective);
+  // Clamp to remaining (always ≥0 here because caller checked)
+  return Math.max(0, Math.min(effective, remaining));
+}
+
+/**
+ * Extend the warmup budget by the per-503 increment.
+ * extension = clamp(retryAfterMs * 2, MIN_EXTENSION_MS, EXTENSION_PER_503_MS).
+ * Result is capped at MAX_WARMUP_BUDGET_MS.
+ */
+function extendBudget(currentBudget, retryAfterMs) {
+  const safeRetryAfter = Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? retryAfterMs : 0;
+  const raw = safeRetryAfter * 2;
+  const extension = Math.min(EXTENSION_PER_503_MS, Math.max(MIN_EXTENSION_MS, raw));
+  return Math.min(MAX_WARMUP_BUDGET_MS, currentBudget + extension);
 }
 
 /** Message sets for each screen — escalate over 15s before timeout. */
@@ -221,6 +281,7 @@ export const MESSAGE_SETS = {
     { after: 6000, msg: 'The leaderboard keeper is on a coffee break ☕' },
     { after: 10000, msg: 'Waking up the database — hang tight 😴' },
     { after: 20000, msg: 'Almost there — servers stretching their legs 🦵' },
+    { after: 60000, msg: 'This is taking unusually long. The service may be experiencing issues.' },
   ],
   profile: [
     { after: 0, msg: 'Loading your profile...' },
@@ -228,6 +289,7 @@ export const MESSAGE_SETS = {
     { after: 6000, msg: 'Polishing your achievements ✨' },
     { after: 10000, msg: 'Waking up the database — hang tight 😴' },
     { after: 20000, msg: 'Almost there — dusting off your trophy shelf 🏆' },
+    { after: 60000, msg: 'This is taking unusually long. The service may be experiencing issues.' },
   ],
   achievements: [
     { after: 0, msg: 'Checking your trophy case...' },
@@ -235,6 +297,7 @@ export const MESSAGE_SETS = {
     { after: 6000, msg: 'Counting your wins 🏅' },
     { after: 10000, msg: 'Waking up the database — hang tight 😴' },
     { after: 20000, msg: 'Almost there — assembling the trophy wall 🎖️' },
+    { after: 60000, msg: 'This is taking unusually long. The service may be experiencing issues.' },
   ],
   community: [
     { after: 0, msg: 'Loading community puzzles...' },
@@ -242,6 +305,7 @@ export const MESSAGE_SETS = {
     { after: 6000, msg: 'Checking for fresh puzzles 🧩' },
     { after: 10000, msg: 'Waking up the database — hang tight 😴' },
     { after: 20000, msg: 'Almost there — unpacking the puzzle box 📦' },
+    { after: 60000, msg: 'This is taking unusually long. The service may be experiencing issues.' },
   ],
 };
 

@@ -18,6 +18,9 @@ function makeMockSql() {
     connect: vi.fn().mockResolvedValue({ request: vi.fn(), close: vi.fn() }),
     Request: function () {},
     Transaction: function () {},
+    ConnectionPool: {
+      parseConnectionString: vi.fn(() => ({ server: 'test', options: {} })),
+    },
   };
 }
 

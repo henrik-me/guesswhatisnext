@@ -62,6 +62,21 @@ function makeMockSql({ pool, transaction, txRequest } = {}) {
     connect: vi.fn().mockResolvedValue(mockPool),
     Request: RequestCtor,
     Transaction: TransactionCtor,
+    ConnectionPool: {
+      parseConnectionString: vi.fn((cs) => ({
+        server: 'test.database.windows.net',
+        database: 'testdb',
+        user: 'sa',
+        password: 'pwd',
+        options: {
+          encrypt: true,
+          trustServerCertificate: false,
+          enableArithAbort: true,
+        },
+        authentication: { type: 'default' },
+        _originalConnectionString: cs,
+      })),
+    },
     _pool: mockPool,
     _tx: mockTx,
     _txReq: mockTxReq,
@@ -147,10 +162,40 @@ describe('MssqlAdapter', () => {
   });
 
   describe('_connect', () => {
-    it('creates a connection pool via sql.connect', async () => {
+    it('creates a connection pool via sql.connect with a config object', async () => {
       await adapter._connect();
-      expect(mockSql.connect).toHaveBeenCalledWith(adapter._connectionString);
+      // We now pass a parsed config object (not the raw connection string)
+      // so we can override connection/request timeouts (CS53-3 / CS53-6).
+      expect(mockSql.ConnectionPool.parseConnectionString).toHaveBeenCalledWith(
+        adapter._connectionString
+      );
+      expect(mockSql.connect).toHaveBeenCalledTimes(1);
+      const cfg = mockSql.connect.mock.calls[0][0];
+      expect(typeof cfg).toBe('object');
+      expect(cfg.connectionTimeout).toBe(5000);
+      expect(cfg.requestTimeout).toBe(15000);
+      expect(cfg.options.connectTimeout).toBe(5000);
+      expect(cfg.options.requestTimeout).toBe(15000);
+      // Existing fields from the parsed config must be preserved unchanged
+      // (we only override timeouts; everything else is pass-through).
+      expect(cfg.server).toBe('test.database.windows.net');
+      expect(cfg.database).toBe('testdb');
+      expect(cfg.user).toBe('sa');
+      expect(cfg.password).toBe('pwd');
+      expect(cfg.authentication).toEqual({ type: 'default' });
+      expect(cfg.options.encrypt).toBe(true);
+      expect(cfg.options.trustServerCertificate).toBe(false);
+      expect(cfg.options.enableArithAbort).toBe(true);
       expect(adapter._pool).toBe(mockSql._pool);
+    });
+
+    it('uses MssqlAdapter.CONNECT_TIMEOUT_MS / REQUEST_TIMEOUT_MS constants', async () => {
+      expect(MssqlAdapter.CONNECT_TIMEOUT_MS).toBe(5000);
+      expect(MssqlAdapter.REQUEST_TIMEOUT_MS).toBe(15000);
+      await adapter._connect();
+      const cfg = mockSql.connect.mock.calls[0][0];
+      expect(cfg.connectionTimeout).toBe(MssqlAdapter.CONNECT_TIMEOUT_MS);
+      expect(cfg.options.connectTimeout).toBe(MssqlAdapter.CONNECT_TIMEOUT_MS);
     });
   });
 
