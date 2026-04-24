@@ -213,48 +213,43 @@ describe('RetryableError and 503 auto-retry', () => {
   it('Down-DB case: eventually shows retry button at MAX_WARMUP_BUDGET_MS (~120s)', async () => {
     // Server keeps returning RetryableError forever — the adaptive budget
     // tops out at MAX_WARMUP_BUDGET_MS (120s) and then the loader falls
-    // through to the retry-button path. We pin Math.random=0.5 here for
-    // deterministic timing so we can assert the cap precisely.
+    // through to the retry-button path. The suite-level beforeEach already
+    // pins Math.random=0.5 (jitter factor = 1.0) so timing is deterministic.
     const { progressiveLoad, RetryableError, MESSAGE_SETS } = await loadModule();
-    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
-    try {
-      const fetchFn = vi.fn().mockRejectedValue(new RetryableError('warming up', 8000));
-      let buttonShownAtMs = -1;
-      const startMs = Date.now();
-      const container = {
-        _html: '',
-        get innerHTML() { return this._html; },
-        set innerHTML(v) {
-          this._html = v;
-          if (v.includes('progressive-retry-btn') && buttonShownAtMs < 0) {
-            buttonShownAtMs = Date.now() - startMs;
-          }
-        },
-        querySelector: vi.fn().mockReturnValue({ addEventListener: vi.fn() }),
-      };
+    const fetchFn = vi.fn().mockRejectedValue(new RetryableError('warming up', 8000));
+    let buttonShownAtMs = -1;
+    const startMs = Date.now();
+    const container = {
+      _html: '',
+      get innerHTML() { return this._html; },
+      set innerHTML(v) {
+        this._html = v;
+        if (v.includes('progressive-retry-btn') && buttonShownAtMs < 0) {
+          buttonShownAtMs = Date.now() - startMs;
+        }
+      },
+      querySelector: vi.fn().mockReturnValue({ addEventListener: vi.fn() }),
+    };
 
-      const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
-        timeout: 15000,
-      });
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
 
-      // Advance well past the 120s ceiling.
-      for (let i = 0; i < 30; i++) {
-        await vi.advanceTimersByTimeAsync(5000);
-      }
-
-      const result = await promise;
-      expect(result).toBeNull();
-      expect(container.innerHTML).toContain('progressive-retry-btn');
-      // Should have been called multiple times before the cap exhausted.
-      expect(fetchFn.mock.calls.length).toBeGreaterThan(3);
-      // Retry button must not appear before the documented MAX cap (120s),
-      // and must appear soon after — not significantly later (allow a small
-      // tolerance for one final sleep clamped by remaining budget).
-      expect(buttonShownAtMs).toBeGreaterThanOrEqual(120000);
-      expect(buttonShownAtMs).toBeLessThanOrEqual(132000);
-    } finally {
-      randomSpy.mockRestore();
+    // Advance well past the 120s ceiling.
+    for (let i = 0; i < 30; i++) {
+      await vi.advanceTimersByTimeAsync(5000);
     }
+
+    const result = await promise;
+    expect(result).toBeNull();
+    expect(container.innerHTML).toContain('progressive-retry-btn');
+    // Should have been called multiple times before the cap exhausted.
+    expect(fetchFn.mock.calls.length).toBeGreaterThan(3);
+    // Retry button must not appear before the documented MAX cap (120s),
+    // and must appear soon after — not significantly later (allow a small
+    // tolerance for one final sleep clamped by remaining budget).
+    expect(buttonShownAtMs).toBeGreaterThanOrEqual(120000);
+    expect(buttonShownAtMs).toBeLessThanOrEqual(132000);
   });
 
   it('message-escalation timers persist across retries', async () => {

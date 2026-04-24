@@ -333,12 +333,15 @@ class MssqlAdapter extends BaseAdapter {
     // Parse the connection string into a config object so we can override
     // timeout defaults without losing user-supplied options (encrypt,
     // trustServerCertificate, etc.). CS53-3 / CS53-6:
-    //   - connectTimeout: 5000  (was the mssql library default of 15000) —
-    //     fail fast on a paused Azure SQL serverless DB so the warmup
+    //   - connectionTimeout: 5000  (was the mssql library default of 15000)
+    //     — fail fast on a paused Azure SQL serverless DB so the warmup
     //     retry path can exercise more attempts inside the client budget.
+    //     Also mirrored to options.connectTimeout so the underlying
+    //     tedious driver honors the same value if mssql's top-level→options
+    //     forwarding ever changes.
     //   - requestTimeout: 15000 — explicit so we don't drift if the
     //     library default ever changes; warm-pool query latency is the
-    //     same as before.
+    //     same as before. Also mirrored to options.requestTimeout.
     const config = this._sql.ConnectionPool.parseConnectionString(this._connectionString);
     config.connectionTimeout = MssqlAdapter.CONNECT_TIMEOUT_MS;
     config.requestTimeout = MssqlAdapter.REQUEST_TIMEOUT_MS;
