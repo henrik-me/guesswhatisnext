@@ -66,7 +66,14 @@ function makeMockSql({ pool, transaction, txRequest } = {}) {
       parseConnectionString: vi.fn((cs) => ({
         server: 'test.database.windows.net',
         database: 'testdb',
-        options: { encrypt: true },
+        user: 'sa',
+        password: 'pwd',
+        options: {
+          encrypt: true,
+          trustServerCertificate: false,
+          enableArithAbort: true,
+        },
+        authentication: { type: 'default' },
         _originalConnectionString: cs,
       })),
     },
@@ -169,8 +176,16 @@ describe('MssqlAdapter', () => {
       expect(cfg.requestTimeout).toBe(15000);
       expect(cfg.options.connectTimeout).toBe(5000);
       expect(cfg.options.requestTimeout).toBe(15000);
-      // Existing options (e.g. encrypt) from the parsed config are preserved.
+      // Existing fields from the parsed config must be preserved unchanged
+      // (we only override timeouts; everything else is pass-through).
+      expect(cfg.server).toBe('test.database.windows.net');
+      expect(cfg.database).toBe('testdb');
+      expect(cfg.user).toBe('sa');
+      expect(cfg.password).toBe('pwd');
+      expect(cfg.authentication).toEqual({ type: 'default' });
       expect(cfg.options.encrypt).toBe(true);
+      expect(cfg.options.trustServerCertificate).toBe(false);
+      expect(cfg.options.enableArithAbort).toBe(true);
       expect(adapter._pool).toBe(mockSql._pool);
     });
 

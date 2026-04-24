@@ -210,32 +210,51 @@ describe('RetryableError and 503 auto-retry', () => {
     expect(container.innerHTML).toContain('progressive-retry-btn');
   });
 
-  it('Down-DB case: eventually shows retry button at MAX_WARMUP_BUDGET_MS', async () => {
+  it('Down-DB case: eventually shows retry button at MAX_WARMUP_BUDGET_MS (~120s)', async () => {
     // Server keeps returning RetryableError forever — the adaptive budget
     // tops out at MAX_WARMUP_BUDGET_MS (120s) and then the loader falls
-    // through to the retry-button path.
+    // through to the retry-button path. We pin Math.random=0.5 here for
+    // deterministic timing so we can assert the cap precisely.
     const { progressiveLoad, RetryableError, MESSAGE_SETS } = await loadModule();
-    const fetchFn = vi.fn().mockRejectedValue(new RetryableError('warming up', 8000));
-    const retryBtn = { addEventListener: vi.fn() };
-    const container = {
-      innerHTML: '',
-      querySelector: vi.fn().mockReturnValue(retryBtn),
-    };
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    try {
+      const fetchFn = vi.fn().mockRejectedValue(new RetryableError('warming up', 8000));
+      let buttonShownAtMs = -1;
+      const startMs = Date.now();
+      const container = {
+        _html: '',
+        get innerHTML() { return this._html; },
+        set innerHTML(v) {
+          this._html = v;
+          if (v.includes('progressive-retry-btn') && buttonShownAtMs < 0) {
+            buttonShownAtMs = Date.now() - startMs;
+          }
+        },
+        querySelector: vi.fn().mockReturnValue({ addEventListener: vi.fn() }),
+      };
 
-    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
-      timeout: 15000,
-    });
+      const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+        timeout: 15000,
+      });
 
-    // Advance well past the 120s ceiling.
-    for (let i = 0; i < 30; i++) {
-      await vi.advanceTimersByTimeAsync(5000);
+      // Advance well past the 120s ceiling.
+      for (let i = 0; i < 30; i++) {
+        await vi.advanceTimersByTimeAsync(5000);
+      }
+
+      const result = await promise;
+      expect(result).toBeNull();
+      expect(container.innerHTML).toContain('progressive-retry-btn');
+      // Should have been called multiple times before the cap exhausted.
+      expect(fetchFn.mock.calls.length).toBeGreaterThan(3);
+      // Retry button must not appear before the documented MAX cap (120s),
+      // and must appear soon after — not significantly later (allow a small
+      // tolerance for one final sleep clamped by remaining budget).
+      expect(buttonShownAtMs).toBeGreaterThanOrEqual(120000);
+      expect(buttonShownAtMs).toBeLessThanOrEqual(132000);
+    } finally {
+      randomSpy.mockRestore();
     }
-
-    const result = await promise;
-    expect(result).toBeNull();
-    expect(container.innerHTML).toContain('progressive-retry-btn');
-    // Should have been called multiple times before the cap exhausted.
-    expect(fetchFn.mock.calls.length).toBeGreaterThan(3);
   });
 
   it('message-escalation timers persist across retries', async () => {
@@ -863,6 +882,36 @@ describe('Adaptive warmup cap (CS53-6)', () => {
       const longMsg = set.find((m) => m.after === 60000);
       expect(longMsg, `${key} should have a 60s escalation message`).toBeDefined();
       expect(longMsg.msg).toMatch(/unusually long|service may be experiencing/i);
+    }
+  });
+
+  it('per-attempt sleep never exceeds MAX_SLEEP_MS even with worst-case jitter', async () => {
+    // Pin Math.random to its maximum (=> jitter factor +20%) and verify that
+    // once the schedule reaches 8s, the actual sleep is re-clamped at 8000ms.
+    randomSpy.mockReturnValue(0.999999);
+    const { progressiveLoad, RetryableError, MESSAGE_SETS } = await loadModule();
+    const callTimes = [];
+    let calls = 0;
+    const fetchFn = vi.fn().mockImplementation(() => {
+      callTimes.push(Date.now());
+      calls++;
+      if (calls <= 6) return Promise.reject(new RetryableError('warming up', 0));
+      return Promise.resolve({ ok: true });
+    });
+    const container = { innerHTML: '', querySelector: () => null };
+
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
+    for (let i = 0; i < 60; i++) await vi.advanceTimersByTimeAsync(1000);
+    await promise;
+
+    // Compute gaps; once base hits 8000, gap must be ≤ 8000 (no 9.6s overshoot).
+    const gaps = [];
+    for (let i = 1; i < callTimes.length; i++) gaps.push(callTimes[i] - callTimes[i - 1]);
+    // Steady-state sleeps (retry idx 4+) — schedule = 8000ms, max jitter applied.
+    for (let i = 3; i < gaps.length; i++) {
+      expect(gaps[i]).toBeLessThanOrEqual(8000);
     }
   });
 });

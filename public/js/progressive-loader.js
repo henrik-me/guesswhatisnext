@@ -243,6 +243,8 @@ function baseSleepFor(retryIdx) {
  *   - take max(baseSleep, retryAfterMs) so the server's hint wins when larger;
  *   - cap at MAX_SLEEP_MS;
  *   - apply ±JITTER_FRAC jitter to desync parallel callers;
+ *   - re-clamp to MAX_SLEEP_MS so the documented ceiling holds even when
+ *     jitter scales above 1.0;
  *   - clamp to the remaining budget so we never sleep past the deadline.
  */
 function computeSleepMs(baseSleep, retryAfterMs, remaining) {
@@ -252,6 +254,9 @@ function computeSleepMs(baseSleep, retryAfterMs, remaining) {
   // ±JITTER_FRAC jitter
   const jitter = 1 + ((Math.random() * 2 - 1) * JITTER_FRAC);
   effective = Math.round(effective * jitter);
+  // Re-clamp after jitter so the per-attempt ceiling (MAX_SLEEP_MS) is
+  // strictly honored even when jitter would otherwise push above it.
+  effective = Math.min(MAX_SLEEP_MS, effective);
   // Clamp to remaining (always ≥0 here because caller checked)
   return Math.max(0, Math.min(effective, remaining));
 }
