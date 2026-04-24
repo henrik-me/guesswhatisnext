@@ -166,6 +166,27 @@ describe('validateStoredAuthToken — CS53-4 boot defer behavior', () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
     expect(onDeferred).toHaveBeenCalledTimes(1);
   });
+
+  it('onDeferred callback throwing does not reject the promise (defense-in-depth for boot)', async () => {
+    // Triggers the RetryableError defer path, then onDeferred throws —
+    // must still resolve so a fire-and-forget caller never sees an
+    // unhandledrejection at boot.
+    const apiFetch = vi.fn().mockResolvedValue({ status: 503, ok: false });
+    const throwIfRetryable = vi.fn(() => {
+      throw new RetryableError('warming', 2000);
+    });
+    const onDeferred = vi.fn(() => { throw new Error('boom from onDeferred'); });
+
+    await expect(validateStoredAuthToken({
+      apiFetch,
+      throwIfRetryable,
+      onUnauthorized: vi.fn(),
+      onValidated: vi.fn(),
+      onDeferred,
+    })).resolves.toBeUndefined();
+
+    expect(onDeferred).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('CS53-4 audit guard: no raw fetch(\'/api ... callsites in public/js/', () => {

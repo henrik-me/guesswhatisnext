@@ -39,12 +39,19 @@ export async function validateStoredAuthToken({
   onValidated,
   onDeferred,
 }) {
+  // Defensively wrap onDeferred so a throwing callback cannot re-introduce
+  // a boot-time unhandledrejection in fire-and-forget callers.
+  const safeOnDeferred = (err) => {
+    if (!onDeferred) return;
+    try { onDeferred(err); } catch { /* swallow — boot must not reject */ }
+  };
+
   let res;
   try {
     res = await apiFetch('/api/auth/me');
   } catch (err) {
     // Network error before a response was received — defer.
-    if (onDeferred) onDeferred(err);
+    safeOnDeferred(err);
     return;
   }
 
@@ -55,11 +62,11 @@ export async function validateStoredAuthToken({
     await throwIfRetryable(res);
   } catch (err) {
     if (err instanceof RetryableError || err instanceof UnavailableError) {
-      if (onDeferred) onDeferred(err);
+      safeOnDeferred(err);
       return;
     }
     // Unexpected error from throwIfRetryable (e.g., body parse) — also defer.
-    if (onDeferred) onDeferred(err);
+    safeOnDeferred(err);
     return;
   }
 
@@ -67,7 +74,7 @@ export async function validateStoredAuthToken({
     try {
       onUnauthorized();
     } catch (err) {
-      if (onDeferred) onDeferred(err);
+      safeOnDeferred(err);
     }
     return;
   }
@@ -77,7 +84,7 @@ export async function validateStoredAuthToken({
     try {
       data = await res.json();
     } catch (err) {
-      if (onDeferred) onDeferred(err);
+      safeOnDeferred(err);
       return;
     }
     try {
@@ -86,11 +93,11 @@ export async function validateStoredAuthToken({
       // A callback failure (e.g., localStorage quota exceeded) must not
       // surface as an unhandledrejection at boot. Treat as deferred so
       // the next real user action re-validates.
-      if (onDeferred) onDeferred(err);
+      safeOnDeferred(err);
     }
     return;
   }
 
   // Any other status (e.g., 500 not classified transient) — defer silently.
-  if (onDeferred) onDeferred(new Error(`Unexpected status ${res.status}`));
+  safeOnDeferred(new Error(`Unexpected status ${res.status}`));
 }
