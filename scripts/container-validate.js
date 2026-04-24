@@ -1,0 +1,221 @@
+#!/usr/bin/env node
+/**
+ * container-validate.js — CS53 Policy 2 cold-start container validation.
+ *
+ * Restarts the local MSSQL Docker stack with GWN_SIMULATE_COLD_START_MS=30000
+ * so the FIRST mssql-adapter connect after process start sleeps 30s before
+ * contacting the database. This makes the local container behave like Azure
+ * SQL serverless after auto-pause: the first 1-3 inbound /api/* requests
+ * exercise the warmup/retry path before succeeding.
+ *
+ * What this script asserts:
+ *   1. Container starts and /healthz becomes reachable.
+ *   2. Hitting a DB-touching endpoint (/api/puzzles) during cold-start
+ *      yields at least one 503 + Retry-After response (proves the warmup
+ *      retry path was exercised, i.e. the lazy init guard fired and the
+ *      simulated cold-start sleep was actually applied).
+ *   3. Within WARMUP_CAP_MS + 30s the same endpoint responds 200 (proves
+ *      the recovery path completes and the lazy request-driven init
+ *      pattern actually heals without operator intervention).
+ *
+ * Exits non-zero on any assertion failure.
+ *
+ * Usage:
+ *   npm run container:validate
+ *
+ * Override (env vars):
+ *   COLD_START_MS=20000              # default 30000
+ *   HTTPS_PORT=8443 HTTP_PORT=3001    # if 443/3001 are taken
+ *   COMPOSE_PROJECT=gwn-validate-wt1  # default derived from cwd
+ *   KEEP_RUNNING=1                    # skip teardown for debugging
+ */
+
+'use strict';
+
+const { execSync, spawnSync } = require('child_process');
+const https = require('https');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+const COMPOSE_FILE = 'docker-compose.mssql.yml';
+const COLD_START_MS = parseInt(process.env.COLD_START_MS, 10) || 30000;
+const HTTPS_PORT = process.env.HTTPS_PORT || '8443';
+const HTTP_PORT = process.env.HTTP_PORT || '3001';
+const PROJECT_NAME = process.env.COMPOSE_PROJECT || `gwn-validate-${path.basename(ROOT)}`;
+const BASE_URL = HTTPS_PORT === '443' ? 'https://localhost' : `https://localhost:${HTTPS_PORT}`;
+// Mirrors public/js/progressive-loader.js WARMUP_CAP_MS.
+const WARMUP_CAP_MS = 30000;
+const RECOVERY_BUDGET_MS = WARMUP_CAP_MS + 30000 + COLD_START_MS;
+
+function ts() { return new Date().toISOString(); }
+function log(msg) { console.log(`[${ts()}] ${msg}`); }
+function logErr(msg) { console.error(`[${ts()}] ✗ ${msg}`); }
+
+function compose(args, opts = {}) {
+  const cmd = `docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} ${args}`;
+  log(`> ${cmd}`);
+  return spawnSync(cmd, {
+    cwd: ROOT,
+    stdio: opts.silent ? 'pipe' : 'inherit',
+    shell: true,
+    env: { ...process.env, ...(opts.env || {}) },
+  });
+}
+
+function teardown() {
+  if (process.env.KEEP_RUNNING) {
+    log('KEEP_RUNNING=1 — leaving stack up for inspection.');
+    return;
+  }
+  log('Tearing down validation stack…');
+  compose('down -v', { silent: true });
+}
+
+let tornDown = false;
+function safeTeardown(signal) {
+  if (tornDown) return;
+  tornDown = true;
+  log(`Received ${signal} — cleaning up…`);
+  teardown();
+  process.exit(1);
+}
+process.on('SIGINT', () => safeTeardown('SIGINT'));
+process.on('SIGTERM', () => safeTeardown('SIGTERM'));
+
+function httpsGet(url, { timeoutMs = 5000 } = {}) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const req = https.get(url, { rejectUnauthorized: false, timeout: timeoutMs }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        resolve({
+          status: res.statusCode,
+          headers: res.headers,
+          body,
+          elapsedMs: Date.now() - start,
+        });
+      });
+    });
+    req.on('error', (err) => resolve({ error: err.message, elapsedMs: Date.now() - start }));
+    req.on('timeout', () => { req.destroy(); resolve({ error: 'timeout', elapsedMs: Date.now() - start }); });
+  });
+}
+
+async function waitForHealthz(timeoutMs = 180000) {
+  const url = new URL('/healthz', BASE_URL).href;
+  log(`Waiting for ${url} to respond 200 (up to ${Math.round(timeoutMs / 1000)}s)…`);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await httpsGet(url, { timeoutMs: 3000 });
+    if (res.status === 200) {
+      log(`/healthz OK (${res.elapsedMs}ms)`);
+      return true;
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return false;
+}
+
+async function probeColdStart() {
+  const url = new URL('/api/puzzles', BASE_URL).href;
+  log(`Probing ${url} — expecting at least one 503+Retry-After then a 200 within ${Math.round(RECOVERY_BUDGET_MS / 1000)}s.`);
+
+  const start = Date.now();
+  let saw503 = false;
+  let firstRetryAfter = null;
+  let first200ElapsedMs = null;
+  let attempts = 0;
+
+  while (Date.now() - start < RECOVERY_BUDGET_MS) {
+    attempts++;
+    const res = await httpsGet(url, { timeoutMs: 10000 });
+    const elapsed = Date.now() - start;
+    if (res.error) {
+      log(`  attempt ${attempts} (+${elapsed}ms): network error — ${res.error}`);
+    } else {
+      const ra = res.headers['retry-after'];
+      log(`  attempt ${attempts} (+${elapsed}ms): HTTP ${res.status}${ra ? ` Retry-After=${ra}` : ''}`);
+      if (res.status === 503) {
+        saw503 = true;
+        if (firstRetryAfter === null && ra) firstRetryAfter = ra;
+      } else if (res.status === 200) {
+        first200ElapsedMs = elapsed;
+        break;
+      }
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+
+  return { saw503, firstRetryAfter, first200ElapsedMs, attempts };
+}
+
+async function main() {
+  log(`CS53 cold-start container validation — project=${PROJECT_NAME}`);
+  log(`COLD_START_MS=${COLD_START_MS} HTTPS_PORT=${HTTPS_PORT} HTTP_PORT=${HTTP_PORT}`);
+
+  // Step 1: tear down any existing instance with the same project name.
+  log('Stopping any existing validation stack…');
+  compose('down -v', { silent: true });
+
+  // Step 2: bring up fresh stack with cold-start sim enabled.
+  const env = {
+    GWN_SIMULATE_COLD_START_MS: String(COLD_START_MS),
+    HTTPS_PORT,
+    HTTP_PORT,
+  };
+  const up = compose('up -d --build', { env });
+  if (up.status !== 0) {
+    logErr('docker compose up failed.');
+    teardown();
+    process.exit(1);
+  }
+
+  // Step 3: wait for /healthz (which does NOT touch the DB).
+  const healthy = await waitForHealthz();
+  if (!healthy) {
+    logErr('/healthz did not become reachable within timeout.');
+    compose('logs --tail=200 app');
+    teardown();
+    process.exit(1);
+  }
+
+  // Step 4: probe a DB-touching endpoint and assert cold-start path was
+  // exercised AND recovery happened.
+  const result = await probeColdStart();
+  log(`Result: attempts=${result.attempts} saw503=${result.saw503} firstRetryAfter=${result.firstRetryAfter} first200ElapsedMs=${result.first200ElapsedMs}`);
+
+  let ok = true;
+  if (!result.saw503) {
+    logErr('FAIL: never observed a 503 — cold-start warmup path was NOT exercised.');
+    ok = false;
+  }
+  if (result.first200ElapsedMs == null) {
+    logErr(`FAIL: never observed a 200 within ${Math.round(RECOVERY_BUDGET_MS / 1000)}s — recovery did not complete.`);
+    ok = false;
+  }
+  if (ok && result.firstRetryAfter == null) {
+    logErr('FAIL: 503 response did not include a Retry-After header.');
+    ok = false;
+  }
+
+  if (!ok) {
+    log('Dumping last 200 lines of app logs for diagnosis:');
+    compose('logs --tail=200 app');
+  }
+
+  teardown();
+  if (ok) {
+    log('✅ Container validation PASSED.');
+    process.exit(0);
+  } else {
+    logErr('Container validation FAILED.');
+    process.exit(1);
+  }
+}
+
+main().catch((err) => {
+  logErr(`Unhandled error: ${err.stack || err.message}`);
+  teardown();
+  process.exit(1);
+});

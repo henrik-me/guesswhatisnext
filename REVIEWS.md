@@ -21,6 +21,10 @@ Before requesting Copilot PR review, sub-agents **must** run a local review loop
 3. Re-run the local review until clean (no issues found)
 4. **Then** proceed to Copilot review or skip, based on PR type:
 
+**Local-review checklist (must verify in addition to whatever the model surfaces):**
+- No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data)).
+- PR body has a `## Container Validation` section with at least one passing cycle dated within the last hour, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
+
 **Documenting review findings:**
 After each local review round, update the PR description with a log of findings and fixes:
 ```
@@ -48,6 +52,10 @@ This preserves the review audit trail in the PR for future reference.
 - Categorize comments as **Fix** (real bugs, security, correctness), **Skip** (cosmetic, by-design), or **Accept suggestion** (correct code improvement)
 - Fix valid issues, reply with rationale on each thread, resolve all threads
 - If Copilot re-reviews after fixes, repeat the cycle
+
+**Copilot-review checklist (must verify before merge, in addition to Copilot's own findings):**
+- No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data)).
+- PR body's `## Container Validation` section has a fresh passing cycle from after the last fix push, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
 
 **Copilot Review — Detailed Workflow:**
 

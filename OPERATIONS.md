@@ -182,6 +182,36 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 
 This checklist exists so dispatched agents have everything needed to report state mechanically without orchestrator follow-up. Omitting any bullet pushes work back onto the orchestrator and degrades the State column to fiction (see [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D).
 
+### Cold-start container validation
+
+Policy reference: [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data) — "Cold-start container validation gates every check-in".
+
+**Why.** Container/cold-start behavior surfaces issues that unit and E2E tests routinely miss: lazy request-driven DB init, the `503 + Retry-After` warmup path, the SPA `progressive-loader` cycle, and the `Database not yet initialized` vs `Database temporarily unavailable` (no-retry) shape distinction. The `npm run container:validate` script restarts the local MSSQL Docker stack with `GWN_SIMULATE_COLD_START_MS=30000` so the first `mssql-adapter._connect()` after process start sleeps 30 seconds — mimicking Azure SQL serverless auto-pause resume timing — and asserts that a representative DB-touching endpoint (`/api/puzzles`) gets at least one `503 + Retry-After` then a `200` within `WARMUP_CAP_MS + 30s`. Both halves of the assertion matter: the 503 proves the warmup retry path was exercised; the 200 proves the request-driven lazy init pattern actually heals without operator intervention.
+
+**When.** Every PR that changes server/client runtime or DB-touching code (i.e. anything that is NOT a docs-only or CI-config-only change) must run validation:
+
+1. **Before requesting local review** — stop the local container, restart it, exercise the affected code paths against the freshly-restarted container.
+2. **After local-review fixes are pushed** — repeat.
+3. **After each Copilot review iteration's fixes are pushed** — repeat.
+
+If validation fails at any step, do not request the next review round; fix and re-validate first.
+
+**How.** Run `npm run container:validate` from the worktree root. The script (`scripts/container-validate.js`) handles full restart, readiness wait, smoke probe, log capture on failure, and teardown. Override env vars: `COLD_START_MS` (default 30000), `HTTPS_PORT` / `HTTP_PORT` (defaults 8443 / 3001), `COMPOSE_PROJECT` (default derived from cwd), `KEEP_RUNNING=1` (skip teardown for debugging). Note: `/api/db-status` (when CS53-8b lands) is safe to probe externally — it reads in-memory state only and does not touch the DB.
+
+**What to record.** Append a `## Container Validation` section to the PR body with one entry per cycle, e.g.:
+
+```
+## Container Validation
+
+| Cycle | Timestamp (UTC) | Result | Notes |
+|-------|-----------------|--------|-------|
+| Pre-local-review   | 2026-04-24T08:42Z | ✅ pass | saw 1×503 then 200 in 33s |
+| Post-local-review  | 2026-04-24T09:11Z | ✅ pass | saw 2×503 then 200 in 38s |
+| Post-Copilot R1    | 2026-04-24T09:55Z | ✅ pass | saw 1×503 then 200 in 31s |
+```
+
+A docs-only or CI-config-only PR may instead state `## Container Validation: not applicable (docs/CI-only)`.
+
 **Model selection:** The preferred model for both orchestrators and sub-agents is Claude Opus 4.7 or higher (use the 1M context variant — e.g. `claude-opus-4.6-1m` — when available). GPT 5.4 or higher (`gpt-5.4` is the floor) is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 
 ## Parallel Agent Workflow

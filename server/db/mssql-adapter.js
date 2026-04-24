@@ -309,6 +309,18 @@ class MssqlAdapter extends BaseAdapter {
   }
 
   async _connect() {
+    // Cold-start simulation hook (CS53 / Policy 2). When
+    // GWN_SIMULATE_COLD_START_MS is set to a positive integer, the FIRST
+    // _connect() call after process start sleeps for that duration before
+    // contacting the server. Subsequent connects are unaffected. Off by
+    // default; only enabled by `npm run container:validate` so cold-start
+    // behavior is exercised on every container restart, mimicking Azure SQL
+    // serverless auto-pause resume timing. Never set this in dev/prod.
+    const simulateMs = parseInt(process.env.GWN_SIMULATE_COLD_START_MS, 10);
+    if (Number.isFinite(simulateMs) && simulateMs > 0 && !MssqlAdapter._coldStartConsumed) {
+      MssqlAdapter._coldStartConsumed = true;
+      await new Promise((resolve) => setTimeout(resolve, simulateMs));
+    }
     this._pool = await this._sql.connect(this._connectionString);
   }
 
@@ -384,5 +396,8 @@ class MssqlAdapter extends BaseAdapter {
 // Expose helpers for testing
 MssqlAdapter._rewriteParams = rewriteParams;
 MssqlAdapter._rewriteSql = rewriteSql;
+// Process-lifetime flag — see _connect() above.
+MssqlAdapter._coldStartConsumed = false;
+MssqlAdapter._resetColdStart = () => { MssqlAdapter._coldStartConsumed = false; };
 
 module.exports = MssqlAdapter;
