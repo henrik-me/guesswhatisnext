@@ -548,7 +548,7 @@ function init() {
   // (Policy 1: no DB-waking background work).
   if (authToken) {
     validateStoredAuthToken({
-      apiFetch,
+      apiFetch: (url) => apiFetch(url, { skipAuthHandling: true }),
       throwIfRetryable,
       onUnauthorized: () => {
         authToken = null;
@@ -1496,15 +1496,23 @@ function logout() {
   showScreen('home');
 }
 
-/** Central API fetch wrapper — adds auth header and handles 401 automatically. */
+/** Central API fetch wrapper — adds auth header and handles 401 automatically.
+ *
+ * Set ``options.skipAuthHandling`` to ``true`` to suppress the 401-triggered
+ * ``logout()`` / toast / screen-change side effects. Used by the boot-time
+ * stored-token validator (CS53-4) which must silently clear an invalid token
+ * without dragging the user to the auth screen before any user interaction.
+ */
 async function apiFetch(url, options = {}) {
   const opts = { ...options };
+  const skipAuthHandling = opts.skipAuthHandling === true;
+  delete opts.skipAuthHandling;
   opts.headers = { ...opts.headers };
   if (authToken) {
     opts.headers['Authorization'] = `Bearer ${authToken}`;
   }
   const res = await fetch(url, opts);
-  if (res.status === 401 && authToken) {
+  if (res.status === 401 && authToken && !skipAuthHandling) {
     logout();
     showToast('Session expired — please log in again');
     showScreen('auth');

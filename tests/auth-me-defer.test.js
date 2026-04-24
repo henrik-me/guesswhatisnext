@@ -131,20 +131,39 @@ describe('validateStoredAuthToken — CS53-4 boot defer behavior', () => {
 });
 
 describe('CS53-4 audit guard: no raw fetch(\'/api ... callsites in public/js/', () => {
-  it('public/js/ contains zero raw fetch(\'/api callsites', async () => {
+  it('public/js/**/*.js contains zero raw fetch(\'/api callsites', async () => {
     const fs = await import('node:fs/promises');
     const path = await import('node:path');
-    const dir = path.resolve(__dirname, '../public/js');
-    const entries = await fs.readdir(dir);
+    const root = path.resolve(__dirname, '../public/js');
+
+    /** Recursively walk a directory and return absolute paths of every .js file. */
+    async function walk(dir) {
+      const out = [];
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          out.push(...(await walk(full)));
+        } else if (entry.isFile() && entry.name.endsWith('.js')) {
+          out.push(full);
+        }
+      }
+      return out;
+    }
+
+    const files = await walk(root);
+    // Sanity check: ensure the walker actually found files (guards against
+    // a silent regression where the walker breaks and the audit becomes a no-op).
+    expect(files.length).toBeGreaterThan(0);
+
     const offenders = [];
-    for (const name of entries) {
-      if (!name.endsWith('.js')) continue;
-      const content = await fs.readFile(path.join(dir, name), 'utf8');
+    for (const file of files) {
+      const content = await fs.readFile(file, 'utf8');
       // Match raw fetch('/api... or fetch("/api... or fetch(`/api...
       // — i.e. any direct fetch() call to the API not routed through apiFetch.
       const re = /(^|[^.\w])fetch\(\s*['"`]\/api/g;
       const matches = content.match(re);
-      if (matches) offenders.push({ file: name, count: matches.length });
+      if (matches) offenders.push({ file: path.relative(root, file), count: matches.length });
     }
     expect(offenders).toEqual([]);
   });
