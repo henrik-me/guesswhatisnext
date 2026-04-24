@@ -9,6 +9,7 @@ const http = require('http');
 const pinoHttp = require('pino-http');
 const { config } = require('./config');
 const { isTransientDbError } = require('./lib/transient-db-error');
+const { createInitGuard } = require('./lib/db-init-guard');
 const logger = require('./logger');
 const { getDbAdapter, closeDbAdapter, isAdapterInitialized } = require('./db');
 const migrations = require('./db/migrations');
@@ -89,6 +90,23 @@ function createServer() {
   let draining = false;
   let activeRequests = 0;
   const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
+
+  // CS53-1b: concurrency guard so /api/admin/init-db and the slow-retry
+  // self-init timer cannot run `initializeDatabase()` in parallel. Both
+  // paths coordinate through `runInit()`, but a self-init tick may
+  // reschedule when init is already in flight instead of joining it.
+  const initGuard = createInitGuard(initializeDatabase);
+  async function runInit() {
+    try {
+      await initGuard.runOnce();
+      dbInitialized = true;
+      return { ok: true };
+    } catch (err) {
+      dbInitialized = false;
+      try { await closeDbAdapter(); } catch { /* ignore close errors */ }
+      return { ok: false, err };
+    }
+  }
 
   // Security middleware — HTTPS redirect (production only) and headers
   app.use(httpsRedirect);
@@ -304,18 +322,22 @@ function createServer() {
 
   // Admin: initialize DB connection (for orchestrated deploys)
   app.post('/api/admin/init-db', requireSystem, async (_req, res, _next) => {
-    try {
-      await initializeDatabase();
+    const result = await runInit();
+    if (result.ok) {
+      // Clear `draining` on init success: a successful admin init implies
+      // the operator wants traffic to resume after /api/admin/drain.
+      // Failures must not enable draining; see the failure-path note below.
       draining = false;
-      dbInitialized = true;
       logger.info('Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
-    } catch (err) {
-      try { await closeDbAdapter(); } catch { /* ignore */ }
-      draining = true;
-      dbInitialized = false;
-      logger.error({ err }, 'Database init failed');
-      res.status(500).json({ error: 'Database initialization failed', message: err.message });
+    } else {
+      // CS53-1b: do NOT set `draining = true` on failure. Doing so would
+      // soft-brick the slow-retry self-init loop (which early-returns when
+      // `draining || dbInitialized`), preventing the container from
+      // self-healing at free-tier renewal until someone makes a successful
+      // admin call. Reporting the failure to the caller is enough.
+      logger.error({ err: result.err }, 'Database init failed');
+      res.status(500).json({ error: 'Database initialization failed', message: result.err.message });
     }
   });
 
@@ -371,43 +393,63 @@ function createServer() {
     // Self-initialize DB in the background with retries. The server starts
     // immediately so /healthz responds to Azure health probes. API endpoints
     // return 503 until initialization succeeds.
+    //
+    // Retry policy (CS53):
+    //   • Fast retry every SELF_INIT_INTERVAL_MS while the error looks
+    //     transient (e.g., serverless cold-start) and we are within the
+    //     fast-attempt budget.
+    //   • Slow retry every SELF_INIT_BACKOFF_INTERVAL_MS forever after a
+    //     non-retryable failure or after exhausting the fast budget. This
+    //     guarantees the container self-recovers when the underlying
+    //     condition clears (e.g., Azure SQL Free Tier monthly compute
+    //     allowance renewal on the 1st of the next month, ops fix to
+    //     credentials, networking, etc.) without requiring a manual
+    //     POST /api/admin/init-db. The endpoint remains as a way to
+    //     force an immediate retry.
     const SELF_INIT_INTERVAL_MS = 5000;
-    const SELF_INIT_MAX_ATTEMPTS = 30;
+    const SELF_INIT_BACKOFF_INTERVAL_MS = 60000;
+    const SELF_INIT_MAX_FAST_ATTEMPTS = 30;
     let selfInitAttempt = 0;
 
     const attemptSelfInit = async () => {
       if (draining || dbInitialized) return;
-      selfInitAttempt++;
-      try {
-        await initializeDatabase();
-        draining = false;
-        dbInitialized = true;
-        logger.info({ attempt: selfInitAttempt }, 'Database self-initialized');
-      } catch (err) {
-        dbInitialized = false;
-        const db = isAdapterInitialized() ? await getDbAdapter() : null;
-        const dialect = db ? db.dialect : config.DB_BACKEND;
-        const isRetryable = isTransientDbError(err, dialect);
 
-        if (!isRetryable) {
-          try { await closeDbAdapter(); } catch { /* ignore */ }
-          draining = true;
-          logger.error({ err }, 'Self-init failed with non-retryable error — call POST /api/admin/init-db after fixing the underlying issue');
-        } else if (selfInitAttempt < SELF_INIT_MAX_ATTEMPTS) {
-          logger.warn(
-            { attempt: selfInitAttempt, maxAttempts: SELF_INIT_MAX_ATTEMPTS, err },
-            `Self-init attempt failed, retrying in ${SELF_INIT_INTERVAL_MS / 1000}s`
-          );
-          setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
-        } else {
-          try { await closeDbAdapter(); } catch { /* ignore */ }
-          draining = true;
-          logger.error(
-            { attempts: SELF_INIT_MAX_ATTEMPTS },
-            'Self-init failed after max attempts — call POST /api/admin/init-db to initialize manually'
-          );
-        }
+      // CS53-1b: if /api/admin/init-db is currently running an init, skip
+      // this tick and check again shortly. Avoids two concurrent
+      // initializeDatabase() calls fighting over the singleton adapter.
+      if (initGuard.isInFlight()) {
+        setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
+        return;
       }
+
+      selfInitAttempt++;
+      const result = await runInit();
+      if (result.ok) {
+        logger.info({ attempt: selfInitAttempt }, 'Database self-initialized');
+        return;
+      }
+
+      const err = result.err;
+      const db = isAdapterInitialized() ? await getDbAdapter().catch(() => null) : null;
+      const dialect = db ? db.dialect : config.DB_BACKEND;
+      const isRetryable = isTransientDbError(err, dialect);
+
+      let nextIntervalMs;
+      if (isRetryable && selfInitAttempt < SELF_INIT_MAX_FAST_ATTEMPTS) {
+        nextIntervalMs = SELF_INIT_INTERVAL_MS;
+        logger.warn(
+          { attempt: selfInitAttempt, maxFastAttempts: SELF_INIT_MAX_FAST_ATTEMPTS, err },
+          `Self-init attempt failed (transient), retrying in ${nextIntervalMs / 1000}s`
+        );
+      } else {
+        nextIntervalMs = SELF_INIT_BACKOFF_INTERVAL_MS;
+        const reason = isRetryable ? 'max fast attempts exhausted' : 'non-retryable error';
+        logger.error(
+          { attempt: selfInitAttempt, retryable: isRetryable, err },
+          `Self-init failed (${reason}); backing off to ${nextIntervalMs / 1000}s slow-retry. POST /api/admin/init-db to force an immediate retry.`
+        );
+      }
+      setTimeout(attemptSelfInit, nextIntervalMs);
     };
 
     setTimeout(attemptSelfInit, 2000);
