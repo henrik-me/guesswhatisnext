@@ -3158,10 +3158,11 @@ let mySubmissionsCache = [];
 // ── Notification state ──────────────────────────────────────────────
 //
 // CS53: We deliberately do NOT poll on a timer. The unread-count query
-// (GET /api/notifications/count → SELECT COUNT FROM notifications) hits
-// the DB and resets Azure SQL serverless's auto-pause idle timer; a
-// single open tab polling on a timer would prevent the DB from ever
-// pausing and exhaust the Free Tier monthly compute allowance.
+// (GET /api/notifications/count → SELECT COUNT(*) FROM notifications
+//  WHERE user_id = ? AND is_read = 0) hits the DB and resets Azure SQL
+// serverless's auto-pause idle timer; a single open tab polling on a
+// timer would prevent the DB from ever pausing and exhaust the Free Tier
+// monthly compute allowance.
 //
 // Instead the badge is refreshed at three legitimate moments:
 //   1. Once on login (refreshNotificationBadge below).
