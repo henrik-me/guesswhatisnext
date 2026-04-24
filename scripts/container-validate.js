@@ -10,13 +10,15 @@
  *
  * What this script asserts:
  *   1. Container starts and /healthz becomes reachable.
- *   2. Hitting a DB-touching endpoint (/api/puzzles) during cold-start
- *      yields at least one 503 + Retry-After response (proves the warmup
- *      retry path was exercised, i.e. the lazy init guard fired and the
- *      simulated cold-start sleep was actually applied).
- *   3. Within WARMUP_CAP_MS + 30s the same endpoint responds 200 (proves
- *      the recovery path completes and the lazy request-driven init
- *      pattern actually heals without operator intervention).
+ *   2. Hitting a DB-touching endpoint (/api/scores/leaderboard) during
+ *      cold-start yields at least one 503 + Retry-After response (proves
+ *      the warmup retry path was exercised, i.e. the lazy init guard fired
+ *      and the simulated cold-start sleep was actually applied).
+ *   3. Within WARMUP_CAP_MS + 30s + COLD_START_MS the same endpoint responds
+ *      200 (proves the recovery path completes and the lazy request-driven
+ *      init pattern actually heals without operator intervention). The
+ *      COLD_START_MS term accounts for the simulated server-side delay on
+ *      top of the SPA-side warmup budget.
  *
  * Exits non-zero on any assertion failure.
  *
@@ -33,6 +35,7 @@
 'use strict';
 
 const { execSync, spawnSync } = require('child_process');
+const crypto = require('crypto');
 const https = require('https');
 const path = require('path');
 
@@ -41,7 +44,11 @@ const COMPOSE_FILE = 'docker-compose.mssql.yml';
 const COLD_START_MS = parseInt(process.env.COLD_START_MS, 10) || 30000;
 const HTTPS_PORT = process.env.HTTPS_PORT || '8443';
 const HTTP_PORT = process.env.HTTP_PORT || '3001';
-const PROJECT_NAME = process.env.COMPOSE_PROJECT || `gwn-validate-${path.basename(ROOT)}`;
+// Project name must be unique across worktrees/clones on this host so a
+// concurrent `down -v` from one worktree never tears down another's stack.
+// Default = "gwn-validate-<basename>-<8-char hash of full absolute path>".
+const ROOT_HASH = crypto.createHash('sha1').update(ROOT.toLowerCase()).digest('hex').slice(0, 8);
+const PROJECT_NAME = process.env.COMPOSE_PROJECT || `gwn-validate-${path.basename(ROOT)}-${ROOT_HASH}`;
 const BASE_URL = HTTPS_PORT === '443' ? 'https://localhost' : `https://localhost:${HTTPS_PORT}`;
 // Mirrors public/js/progressive-loader.js WARMUP_CAP_MS.
 const WARMUP_CAP_MS = 30000;

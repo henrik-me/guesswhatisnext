@@ -98,6 +98,17 @@ function createServer() {
   // would otherwise keep the SPA's progressive loader cycling forever.
   // Cleared on the next successful init.
   let dbUnavailability = null;
+  // CS53-9: when init fails with a "permanent unavailability" descriptor
+  // (e.g. Azure SQL Free Tier capacity_exhausted), the gate returns 503 with
+  // no Retry-After so the SPA stops retrying. But the underlying condition
+  // can clear later (capacity renews, secret rotates), and this PR removed
+  // the timer-based self-init loop. To preserve self-healing without
+  // reintroducing background DB pings, allow a real inbound request to
+  // re-attempt init at most once per `unavailabilityRetryBackoffMs`. The
+  // current request still gets the no-retry 503 (banner stays up); the next
+  // request after the backoff window may flip the state on success.
+  let lastUnavailabilityRetryAt = 0;
+  const unavailabilityRetryBackoffMs = 30000;
 
   // Centralised builder for the "permanent DB unavailability" 503 response
   // (CS53 Bug B). Used by both the request gate (when init has failed) and
@@ -233,6 +244,15 @@ function createServer() {
 
     if (!dbInitialized && req.path.startsWith('/api/')) {
       if (dbUnavailability) {
+        // Backoff-gated retry: a permanent-unavailability state may clear
+        // later (capacity renews). Allow a real request to trigger one
+        // re-attempt per backoff window without changing the response shape
+        // — the SPA still stops retrying for this request.
+        if (isAzure && !initGuard.isInFlight()
+            && Date.now() - lastUnavailabilityRetryAt >= unavailabilityRetryBackoffMs) {
+          lastUnavailabilityRetryAt = Date.now();
+          runInit().catch(() => { /* errors already logged inside runInit */ });
+        }
         return sendDbUnavailable(res, dbUnavailability);
       }
       // Lazy init — only kick off when in Azure mode (production/staging).
