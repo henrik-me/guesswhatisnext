@@ -148,6 +148,10 @@ function createServer() {
       const db = isAdapterInitialized() ? await getDbAdapter().catch(() => null) : null;
       const dialect = db ? db.dialect : config.DB_BACKEND;
       dbUnavailability = getDbUnavailability(err, dialect);
+      // Stamp the backoff timer NOW so the very next request after the
+      // failure does not immediately re-attempt; the gate's backoff window
+      // (`unavailabilityRetryBackoffMs`) is measured from this point.
+      if (dbUnavailability) lastUnavailabilityRetryAt = Date.now();
       return { ok: false, err };
     }
   }

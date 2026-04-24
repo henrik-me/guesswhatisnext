@@ -168,6 +168,19 @@ async function main() {
   // Step 1: tear down any existing instance with the same project name.
   log('Stopping any existing validation stack…');
   compose('down -v', { silent: true });
+  // Best-effort: also tear down any stack from the legacy default project
+  // name (pre-hash) when the caller did not set COMPOSE_PROJECT explicitly.
+  // This prevents an old stack on the same fixed ports from blocking the
+  // fresh `up` after upgrading to the hashed default name.
+  if (!process.env.COMPOSE_PROJECT) {
+    const legacyProject = `gwn-validate-${path.basename(ROOT)}`;
+    if (legacyProject !== PROJECT_NAME) {
+      log(`Also tearing down legacy project name ${legacyProject} (best-effort)…`);
+      spawnSync(`docker compose -f ${COMPOSE_FILE} -p ${legacyProject} down -v`, {
+        cwd: ROOT, stdio: 'pipe', shell: true, env: process.env,
+      });
+    }
+  }
 
   // Step 2: bring up fresh stack with cold-start sim enabled.
   const env = {
