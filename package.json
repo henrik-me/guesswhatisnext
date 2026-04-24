@@ -21,6 +21,7 @@
     "dev:mssql:coldstart": "node scripts/check-compose-v2.js && docker compose -f docker-compose.mssql.yml -f docker-compose.mssql.delay.yml up -d --build",
     "dev:mssql:down": "docker compose -f docker-compose.mssql.yml down",
     "test:e2e:mssql": "node scripts/test-e2e-mssql.js",
+    "container:validate": "node scripts/container-validate.js",
     "test:all": "vitest run && playwright test",
     "build:sw": "node scripts/build-sw.js",
     "check:sw-cache-fresh": "node scripts/build-sw.js --check",

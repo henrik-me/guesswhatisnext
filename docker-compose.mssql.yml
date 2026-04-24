@@ -34,6 +34,14 @@ services:
       TRUST_PROXY: "2"
       DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=${MSSQL_SA_PASSWORD:-GwnTest1!};Encrypt=false;TrustServerCertificate=true"
       PORT: "3000"
+      # Cold-start simulation hook (CS53 / Policy 2). When set to a positive
+      # integer (ms), the FIRST mssql-adapter _connect() after process start
+      # sleeps for that duration before contacting the server, mimicking
+      # Azure SQL serverless auto-pause resume timing. Off by default; set
+      # by `npm run container:validate` to exercise the warmup path on
+      # every container restart. Only for local container validation; never
+      # set in real dev/staging/prod environments.
+      GWN_SIMULATE_COLD_START_MS: "${GWN_SIMULATE_COLD_START_MS:-}"
       # OTLP exporter — sends traces to the local collector (no Azure conn string
       # so telemetry.js uses the OTLP HTTP fallback path)
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"

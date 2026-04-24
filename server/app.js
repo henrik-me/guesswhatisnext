@@ -98,6 +98,17 @@ function createServer() {
   // would otherwise keep the SPA's progressive loader cycling forever.
   // Cleared on the next successful init.
   let dbUnavailability = null;
+  // CS53-9: when init fails with a "permanent unavailability" descriptor
+  // (e.g. Azure SQL Free Tier capacity_exhausted), the gate returns 503 with
+  // no Retry-After so the SPA stops retrying. But the underlying condition
+  // can clear later (capacity renews, secret rotates), and this PR removed
+  // the timer-based self-init loop. To preserve self-healing without
+  // reintroducing background DB pings, allow a real inbound request to
+  // re-attempt init at most once per `unavailabilityRetryBackoffMs`. The
+  // current request still gets the no-retry 503 (banner stays up); the next
+  // request after the backoff window may flip the state on success.
+  let lastUnavailabilityRetryAt = 0;
+  const unavailabilityRetryBackoffMs = 30000;
 
   // Centralised builder for the "permanent DB unavailability" 503 response
   // (CS53 Bug B). Used by both the request gate (when init has failed) and
@@ -116,19 +127,40 @@ function createServer() {
 
   const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 
-  // CS53-1b: concurrency guard so /api/admin/init-db and the slow-retry
-  // self-init timer cannot run `initializeDatabase()` in parallel. Both
-  // paths coordinate through `runInit()`, but a self-init tick may
-  // reschedule when init is already in flight instead of joining it.
+  // CS53-9 / Policy 1: concurrency guard so /api/admin/init-db and the
+  // request-driven lazy init path cannot run `initializeDatabase()` in
+  // parallel. Both paths coordinate through `runInit()`; concurrent callers
+  // share the in-flight promise instead of starting their own.
   const initGuard = createInitGuard(initializeDatabase);
   async function runInit() {
     try {
       await initGuard.runOnce();
       dbInitialized = true;
+      dbUnavailability = null;
       return { ok: true };
     } catch (err) {
       dbInitialized = false;
+      // Capture dialect BEFORE closing the adapter — closeDbAdapter() nulls
+      // the singleton, which would make the post-close getDbAdapter() path
+      // unreachable. Falling back to config.DB_BACKEND when no adapter has
+      // been initialized yet (e.g. very-first-request init failure).
+      const dialect = isAdapterInitialized()
+        ? (await getDbAdapter().catch(() => null))?.dialect ?? config.DB_BACKEND
+        : config.DB_BACKEND;
       try { await closeDbAdapter(); } catch { /* ignore close errors */ }
+      // Refresh dbUnavailability so the request gate reflects the latest
+      // known state (e.g., flips to capacity_exhausted on Azure SQL Free
+      // Tier exhaustion; clears stale value on a transient failure that
+      // follows a previous unavailability).
+      dbUnavailability = getDbUnavailability(err, dialect);
+      // Stamp the backoff timer NOW so the very next request after the
+      // failure does not immediately re-attempt; the gate's backoff window
+      // (`unavailabilityRetryBackoffMs`) is measured from this point.
+      if (dbUnavailability) lastUnavailabilityRetryAt = Date.now();
+      // Log here so fire-and-forget callers (the request gate) don't need
+      // to handle the resolved `{ ok: false }` themselves; the comment on
+      // `runInit().catch(...)` at the call sites refers to this log.
+      logger.error({ err, dbUnavailability }, 'runInit failed');
       return { ok: false, err };
     }
   }
@@ -208,7 +240,14 @@ function createServer() {
   // Serve static files from public/
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
-  // Request tracking middleware — gates API access on DB readiness
+  // Request tracking middleware — gates API access on DB readiness.
+  // CS53-9 / Policy 1: when the DB is not yet initialized, kick off a
+  // request-driven lazy init via the init guard (fire-and-forget), then
+  // immediately return 503 + Retry-After so the client retries. Concurrent
+  // requests during init see `isInFlight()` and do not start a second
+  // attempt. There is NO timer/poller/watchdog issuing DB queries on its
+  // own — DB contact only happens in response to real traffic, an operator
+  // POST /api/admin/init-db, or the eager non-Azure boot path below.
   app.use((req, res, next) => {
     if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/') || req.path.startsWith('/api/telemetry/')) return next();
 
@@ -218,7 +257,25 @@ function createServer() {
 
     if (!dbInitialized && req.path.startsWith('/api/')) {
       if (dbUnavailability) {
+        // Backoff-gated retry: a permanent-unavailability state may clear
+        // later (capacity renews). Allow a real request to trigger one
+        // re-attempt per backoff window without changing the response shape
+        // — the SPA still stops retrying for this request.
+        if (isAzure && !initGuard.isInFlight()
+            && Date.now() - lastUnavailabilityRetryAt >= unavailabilityRetryBackoffMs) {
+          lastUnavailabilityRetryAt = Date.now();
+          runInit().catch(() => { /* errors already logged inside runInit */ });
+        }
         return sendDbUnavailable(res, dbUnavailability);
+      }
+      // Lazy init — only kick off when in Azure mode (production/staging).
+      // Non-Azure environments init eagerly via the IIFE below; if init
+      // failed there the process has already exited.
+      if (isAzure && !initGuard.isInFlight()) {
+        // Fire-and-forget; runInit() catches its own errors. The current
+        // request still gets 503 + Retry-After — the next retry from the
+        // client will land after init either completes or fails.
+        runInit().catch(() => { /* errors already logged inside runInit */ });
       }
       return res.set('Retry-After', '5').status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
     }
@@ -348,7 +405,9 @@ function createServer() {
     poll();
   });
 
-  // Admin: initialize DB connection (for orchestrated deploys)
+  // Admin: initialize DB connection (for orchestrated deploys and for
+  // forcing an immediate retry when the lazy request-driven init path is
+  // not exercising fast enough).
   app.post('/api/admin/init-db', requireSystem, async (_req, res, _next) => {
     const result = await runInit();
     if (result.ok) {
@@ -356,21 +415,16 @@ function createServer() {
       // the operator wants traffic to resume after /api/admin/drain.
       // Failures must not enable draining; see the failure-path note below.
       draining = false;
-      dbUnavailability = null;
       logger.info('Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
     } else {
       // CS53-1b: do NOT set `draining = true` on failure. Doing so would
-      // soft-brick the slow-retry self-init loop (which early-returns when
-      // `draining || dbInitialized`), preventing the container from
+      // soft-brick the request-driven lazy init path (which relies on
+      // !draining to even attempt init), preventing the container from
       // self-healing at free-tier renewal until someone makes a successful
       // admin call. Reporting the failure to the caller is enough.
-      // CS53 Bug B: refresh dbUnavailability so the request gate reflects
-      // the latest known state (clears stale value on a transient failure
-      // that follows a previous unavailability, sets it on a fresh
-      // free-tier exhaustion).
-      dbUnavailability = getDbUnavailability(result.err, config.DB_BACKEND);
-      logger.error({ err: result.err }, 'Database init failed');
+      // dbUnavailability is refreshed inside runInit() itself, and runInit()
+      // logs the init failure so this endpoint does not duplicate the error log.
       res.status(500).json({ error: 'Database initialization failed', message: result.err.message });
     }
   });
@@ -444,78 +498,16 @@ function createServer() {
   let dbReadyPromise;
 
   if (isAzure) {
-    // Self-initialize DB in the background with retries. The server starts
-    // immediately so /healthz responds to Azure health probes. API endpoints
-    // return 503 until initialization succeeds.
-    //
-    // Retry policy (CS53):
-    //   • Fast retry every SELF_INIT_INTERVAL_MS while the error looks
-    //     transient (e.g., serverless cold-start) and we are within the
-    //     fast-attempt budget.
-    //   • Slow retry every SELF_INIT_BACKOFF_INTERVAL_MS forever after a
-    //     non-retryable failure or after exhausting the fast budget. This
-    //     guarantees the container self-recovers when the underlying
-    //     condition clears (e.g., Azure SQL Free Tier monthly compute
-    //     allowance renewal on the 1st of the next month, ops fix to
-    //     credentials, networking, etc.) without requiring a manual
-    //     POST /api/admin/init-db. The endpoint remains as a way to
-    //     force an immediate retry.
-    const SELF_INIT_INTERVAL_MS = 5000;
-    const SELF_INIT_BACKOFF_INTERVAL_MS = 60000;
-    const SELF_INIT_MAX_FAST_ATTEMPTS = 30;
-    let selfInitAttempt = 0;
-
-    const attemptSelfInit = async () => {
-      if (draining || dbInitialized) return;
-
-      // CS53-1b: if /api/admin/init-db is currently running an init, skip
-      // this tick and check again shortly. Avoids two concurrent
-      // initializeDatabase() calls fighting over the singleton adapter.
-      if (initGuard.isInFlight()) {
-        setTimeout(attemptSelfInit, SELF_INIT_INTERVAL_MS);
-        return;
-      }
-
-      selfInitAttempt++;
-      const result = await runInit();
-      if (result.ok) {
-        dbUnavailability = null;
-        logger.info({ attempt: selfInitAttempt }, 'Database self-initialized');
-        return;
-      }
-
-      const err = result.err;
-      const db = isAdapterInitialized() ? await getDbAdapter().catch(() => null) : null;
-      const dialect = db ? db.dialect : config.DB_BACKEND;
-      // CS53 Bug B: detect permanent unavailability (e.g. Free Tier
-      // capacity exhausted) so the request gate can return the no-retry
-      // unavailable shape instead of the generic "Database not yet
-      // initialized" + Retry-After response.
-      dbUnavailability = getDbUnavailability(err, dialect);
-      const isRetryable = !dbUnavailability && isTransientDbError(err, dialect);
-
-      let nextIntervalMs;
-      if (isRetryable && selfInitAttempt < SELF_INIT_MAX_FAST_ATTEMPTS) {
-        nextIntervalMs = SELF_INIT_INTERVAL_MS;
-        logger.warn(
-          { attempt: selfInitAttempt, maxFastAttempts: SELF_INIT_MAX_FAST_ATTEMPTS, err },
-          `Self-init attempt failed (transient), retrying in ${nextIntervalMs / 1000}s`
-        );
-      } else {
-        nextIntervalMs = SELF_INIT_BACKOFF_INTERVAL_MS;
-        const reason = isRetryable ? 'max fast attempts exhausted' : 'non-retryable error';
-        logger.error(
-          { attempt: selfInitAttempt, retryable: isRetryable, err },
-          `Self-init failed (${reason}); backing off to ${nextIntervalMs / 1000}s slow-retry. POST /api/admin/init-db to force an immediate retry.`
-        );
-      }
-      setTimeout(attemptSelfInit, nextIntervalMs);
-    };
-
-    setTimeout(attemptSelfInit, 2000);
-    dbReadyPromise = null; // Azure: no single promise to wait on
+    // CS53-9 / Policy 1: NO timer/scheduler/poller. The DB is contacted
+    // lazily on the first inbound /api/* request — see the gating
+    // middleware above. The server starts immediately so /healthz responds
+    // to Azure health probes; /api/* returns 503 + Retry-After until the
+    // first request-driven init completes (or returns the no-retry
+    // unavailable shape if the underlying condition is permanent).
+    // Operators can force an immediate retry via POST /api/admin/init-db.
+    dbReadyPromise = null;
   } else {
-    // Non-Azure: initialize via an async IIFE, expose promise for tests
+    // Non-Azure: initialize eagerly via an async IIFE, expose promise for tests
     dbReadyPromise = (async () => {
       try {
         await initializeDatabase();
