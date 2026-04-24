@@ -34,7 +34,7 @@
 
 'use strict';
 
-const { execSync, spawnSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const crypto = require('crypto');
 const https = require('https');
 const path = require('path');
@@ -46,9 +46,19 @@ const HTTPS_PORT = process.env.HTTPS_PORT || '8443';
 const HTTP_PORT = process.env.HTTP_PORT || '3001';
 // Project name must be unique across worktrees/clones on this host so a
 // concurrent `down -v` from one worktree never tears down another's stack.
-// Default = "gwn-validate-<basename>-<8-char hash of full absolute path>".
+// Default = "gwn-validate-<sanitized-basename>-<8-char hash of full
+// absolute path>". Sanitize basename to satisfy Docker Compose's project
+// name rules (lowercase letters, digits, dashes, underscores).
+function sanitizeProjectFragment(s) {
+  return String(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^[^a-z0-9]+/, '')
+    .replace(/[^a-z0-9]+$/, '') || 'wt';
+}
 const ROOT_HASH = crypto.createHash('sha1').update(ROOT.toLowerCase()).digest('hex').slice(0, 8);
-const PROJECT_NAME = process.env.COMPOSE_PROJECT || `gwn-validate-${path.basename(ROOT)}-${ROOT_HASH}`;
+const PROJECT_NAME = process.env.COMPOSE_PROJECT
+  || `gwn-validate-${sanitizeProjectFragment(path.basename(ROOT))}-${ROOT_HASH}`;
 const BASE_URL = HTTPS_PORT === '443' ? 'https://localhost' : `https://localhost:${HTTPS_PORT}`;
 // Mirrors public/js/progressive-loader.js WARMUP_CAP_MS.
 const WARMUP_CAP_MS = 30000;
@@ -173,7 +183,7 @@ async function main() {
   // This prevents an old stack on the same fixed ports from blocking the
   // fresh `up` after upgrading to the hashed default name.
   if (!process.env.COMPOSE_PROJECT) {
-    const legacyProject = `gwn-validate-${path.basename(ROOT)}`;
+    const legacyProject = sanitizeProjectFragment(`gwn-validate-${path.basename(ROOT)}`);
     if (legacyProject !== PROJECT_NAME) {
       log(`Also tearing down legacy project name ${legacyProject} (best-effort)…`);
       spawnSync(`docker compose -f ${COMPOSE_FILE} -p ${legacyProject} down -v`, {

@@ -10,8 +10,11 @@
  *      fired the schema migration or the seed) until a request arrives.
  *   2. The first /api/* request returns 503 + Retry-After AND triggers a
  *      single in-flight init.
- *   3. Concurrent requests during init do NOT trigger a second init —
- *      they share the same in-flight promise via the init guard.
+ *   3. Once init has completed, follow-up /api/* requests return 200.
+ *
+ * The "concurrent requests share a single in-flight init" invariant is
+ * proven separately in tests/db-init-guard.test.js — the gate middleware
+ * delegates to that guard via `initGuard.isInFlight()` and `runOnce()`.
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
@@ -87,7 +90,7 @@ describe('lazy request-driven init (CS53-9 / Policy 1)', () => {
     expect(initSpy.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
-  it('concurrent requests during init share a single in-flight init', async () => {
+  it('subsequent /api/* request after init succeeds returns 200', async () => {
     // Wait for any in-flight init from the previous test to settle, then
     // probe again. With SQLite the init is fast so by now dbInitialized
     // is true and /api/features should be 200.

@@ -152,6 +152,10 @@ function createServer() {
       // failure does not immediately re-attempt; the gate's backoff window
       // (`unavailabilityRetryBackoffMs`) is measured from this point.
       if (dbUnavailability) lastUnavailabilityRetryAt = Date.now();
+      // Log here so fire-and-forget callers (the request gate) don't need
+      // to handle the resolved `{ ok: false }` themselves; the comment on
+      // `runInit().catch(...)` at the call sites refers to this log.
+      logger.error({ err, dbUnavailability }, 'runInit failed');
       return { ok: false, err };
     }
   }
