@@ -24,7 +24,6 @@ CS44-3 schema upgrade.
 
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
-| CS53-3+6 | CS53 adaptive warmup cap + 5s mssql connectTimeout | implementing | yoga-gwn | C:\src\gwn-worktrees\wt-1 (port 3001) | cs53-3-adaptive-cap-and-server-timeout | (pending) | 2026-04-24T08:45Z | Sub-agent (Opus 4.7) implementing | — |
-| CS53-4 | CS53 raw-fetch callsite audit (route through apiFetch) | implementing | yoga-gwn | C:\src\gwn-worktrees\wt-2 (port 3002) | cs53-4-fetch-callsite-audit | (pending) | 2026-04-24T08:45Z | Sub-agent (Opus 4.7) implementing | — |
+| CS53-4 | CS53 raw-fetch callsite audit (route through apiFetch) | implementing | yoga-gwn | C:\src\gwn-worktrees\wt-2 (port 3002) | cs53-4-fetch-callsite-audit | (pending) | 2026-04-24T09:25Z | Sub-agent (Opus 4.7) iterating; tool_calls=71 at 42min | — |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
