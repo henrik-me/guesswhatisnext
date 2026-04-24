@@ -93,7 +93,8 @@ function createServer() {
 
   // CS53-1b: concurrency guard so /api/admin/init-db and the slow-retry
   // self-init timer cannot run `initializeDatabase()` in parallel. Both
-  // paths funnel through `runInit()`; the loser awaits the winner's result.
+  // paths coordinate through `runInit()`, but a self-init tick may
+  // reschedule when init is already in flight instead of joining it.
   const initGuard = createInitGuard(initializeDatabase);
   async function runInit() {
     try {
@@ -323,9 +324,9 @@ function createServer() {
   app.post('/api/admin/init-db', requireSystem, async (_req, res, _next) => {
     const result = await runInit();
     if (result.ok) {
-      // Note: we deliberately do NOT touch `draining` here. `draining` is
-      // only set by /api/admin/drain; an init success implicitly means the
-      // operator wants traffic again, so clear it.
+      // Clear `draining` on init success: a successful admin init implies
+      // the operator wants traffic to resume after /api/admin/drain.
+      // Failures must not enable draining; see the failure-path note below.
       draining = false;
       logger.info('Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
