@@ -74,7 +74,7 @@ function isTransientDbError(err, dialect) {
  * self-init retry loop, and the request gate (whose dialect detection
  * after a failed init has historically been brittle).
  *
- * @param {Error} err
+ * @param {Error|null|undefined} err - DB error to classify; null/undefined returns null.
  * @param {'mssql'|'sqlite'|string|undefined} _dialect - retained for
  *   backwards-compat with callers; ignored by current matching rules.
  * @returns {{ reason: string, message: string } | null}

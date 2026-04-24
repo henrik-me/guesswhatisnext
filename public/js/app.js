@@ -21,21 +21,24 @@ import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError, queueS
 async function throwIfRetryable(res) {
   if (res.status !== 503) return;
 
-  // Inspect the body once for the unavailable/retryAfter fields.
-  let body = null;
-  try { body = await res.clone().json(); } catch { /* not JSON */ }
-
-  if (body && body.unavailable === true) {
-    const message = body.message || 'This data is temporarily unavailable.';
-    throw new UnavailableError(message, body.reason);
-  }
-
+  // Fast path: Retry-After header alone is a sufficient retry signal — avoid
+  // parsing the JSON body for the common warmup case. Server contract
+  // guarantees the unavailable shape never sets Retry-After.
   const headerVal = res.headers.get('Retry-After');
   if (headerVal) {
     const seconds = parseInt(headerVal, 10);
     if (!isNaN(seconds) && seconds >= 0) {
       throw new RetryableError('Server warming up', seconds * 1000);
     }
+  }
+
+  // No Retry-After header: inspect body for unavailable signal or fallback retryAfter.
+  let body = null;
+  try { body = await res.clone().json(); } catch { /* not JSON */ }
+
+  if (body && body.unavailable === true) {
+    const message = body.message || 'This data is temporarily unavailable.';
+    throw new UnavailableError(message, body.reason);
   }
   if (body && typeof body.retryAfter === 'number' && body.retryAfter >= 0) {
     throw new RetryableError('Server warming up', body.retryAfter * 1000);
