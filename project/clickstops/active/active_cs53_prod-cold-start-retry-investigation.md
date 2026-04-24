@@ -378,6 +378,18 @@ ContainerAppConsoleLogs_CL
 - **CS42** — closed; this CS picks up the loose thread from CS42-5c without reopening it.
 - **CS48** — already centralized transient-error → 503 conversion. CS53-2 verifies that classifier covers the prod-observed errors; gaps get fixed inside CS48's surface.
 - **CS47 (planned)** — adds *forward-looking* ProgressiveLoader telemetry + alerting. CS53 is *backward-looking* (read existing logs from a known incident). The two are complementary: CS53 likely produces requirements that strengthen the CS47 schema.
+- **CS54 (planned)** — App Insights enablement; prerequisite for proper KQL across HTTP/DB/exception layers.
+- **CS55 (planned)** — Real-time notifications via WebSocket + server-side unread-count cache, replacing the polling path that CS53-2 disabled. Restores real-time UX without re-introducing DB-keepalive polling.
+- **CS56 (planned)** — General server-side response cache + stale-while-revalidate. Two motivations rooted in CS53: (a) reduce DB read rate / keepalive pressure; (b) mask cold-DB / brief-unavailable windows by serving stale-with-revalidate instead of 503.
+
+## CS53-2 PRs landed
+
+- **PR #233** (`cs53-1-classifier-and-selfinit-resilience`) — Bug A: classify Azure SQL Free Tier exhaustion (`ELOGIN` + free-amount message) as **non-transient**. Self-init: never permanently stop; switch to 60s slow-retry so the container self-heals at free-tier renewal without manual `/api/admin/init-db`.
+- **PR #(next)** (`cs53-2-permanent-unavailable-and-poller`) — Bug B + DB-keepalive fix:
+  - Server: new `getDbUnavailability()` helper; central error handler returns 503 with `{ unavailable: true, reason, message }` and **no** `Retry-After` for permanent conditions. SPA recognises this signal and renders an informational banner instead of cycling the warmup loader.
+  - Client: new `UnavailableError` in `progressive-loader.js`; bails out of both the first-attempt path and the warmup retry loop; renders a non-retry banner. `fetchProfile` promotes any sub-`UnavailableError` to a top-level one.
+  - **Notification poller killed entirely** (Option 1). Was hitting `/api/notifications/count` every 60s, single-handedly keeping Azure SQL serverless awake and exhausting the Free Tier monthly compute allowance. Now: one-shot fetch on login + refresh as a side effect of opening My Submissions. Real-time freshness is restored separately by CS55.
+  - Server-side audit confirmed **no DB-keepalive timers exist** (only WS heartbeat and room cleanup, both in-memory).
 
 ## Will not be done as part of this clickstop
 

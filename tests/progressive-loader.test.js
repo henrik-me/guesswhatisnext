@@ -259,6 +259,51 @@ describe('RetryableError and 503 auto-retry', () => {
     expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 
+  it('UnavailableError shows banner and bails out (no retry, no Retry button)', async () => {
+    const { progressiveLoad, UnavailableError, MESSAGE_SETS } = await loadModule();
+    const fetchFn = vi.fn().mockRejectedValue(
+      new UnavailableError('The database has reached its monthly free capacity allowance.', 'capacity-exhausted')
+    );
+    const container = { innerHTML: '', querySelector: vi.fn().mockReturnValue(null) };
+
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = await promise;
+    expect(result).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(1); // no retry
+    expect(container.innerHTML).toContain('progressive-unavailable');
+    expect(container.innerHTML).toContain('monthly free capacity');
+    expect(container.innerHTML).not.toContain('progressive-retry-btn');
+  });
+
+  it('UnavailableError mid-warmup-loop bails out and shows banner', async () => {
+    const { progressiveLoad, RetryableError, UnavailableError, MESSAGE_SETS } = await loadModule();
+    let callCount = 0;
+    const fetchFn = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) return Promise.reject(new RetryableError('warming up', 2000));
+      return Promise.reject(new UnavailableError('Capacity exhausted.', 'capacity-exhausted'));
+    });
+    const container = { innerHTML: '', querySelector: vi.fn().mockReturnValue(null) };
+
+    const promise = progressiveLoad(fetchFn, container, MESSAGE_SETS.leaderboard, {
+      timeout: 15000,
+    });
+
+    // First attempt fails Retryable; advance the 2s retry delay so the loop re-fetches
+    await vi.advanceTimersByTimeAsync(2100);
+
+    const result = await promise;
+    expect(result).toBeNull();
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(container.innerHTML).toContain('progressive-unavailable');
+    expect(container.innerHTML).not.toContain('progressive-retry-btn');
+  });
+
   it('AbortError still terminates the loader immediately', async () => {
     const { progressiveLoad, MESSAGE_SETS } = await loadModule();
     const abortErr = new Error('The operation was aborted');

@@ -30,6 +30,27 @@ export class RetryableError extends Error {
 }
 
 /**
+ * Typed error for *permanent* 503 responses where retrying is futile
+ * (e.g., Azure SQL Free Tier monthly capacity exhausted; CS53 Bug B).
+ * Server signals this with a 503 body containing `unavailable: true`
+ * and NO Retry-After header.
+ *
+ * The loader catches this and renders an informational banner instead
+ * of cycling the warmup messages forever.
+ */
+export class UnavailableError extends Error {
+  /**
+   * @param {string} message - human-readable explanation to display
+   * @param {string} [reason] - stable machine-readable reason code
+   */
+  constructor(message, reason) {
+    super(message);
+    this.name = 'UnavailableError';
+    this.reason = reason || 'unavailable';
+  }
+}
+
+/**
  * Run an async fetch with timed message escalation and user-initiated retry.
  *
  * @param {Function} fetchFn - async function that receives an AbortSignal and returns data
@@ -80,6 +101,14 @@ export async function progressiveLoad(fetchFn, containerEl, messageSet, options 
         // Preserve escalation timers — they persist across retries
         const result = await retryLoop(fetchFn, containerEl, escalationTimers, err, timeout, onRetry, messageSet, options, warmupStart);
         return result;
+      }
+
+      // UnavailableError — server signalled permanent unavailability;
+      // do not retry, render a banner instead (CS53 Bug B).
+      if (err instanceof UnavailableError) {
+        clearTimers(escalationTimers);
+        showUnavailableBanner(containerEl, err.message);
+        return null;
       }
 
       // AbortError terminates immediately (existing behavior)
@@ -166,6 +195,13 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
       if (retryErr instanceof RetryableError) {
         lastErr = retryErr;
         continue;
+      }
+
+      // UnavailableError mid-retry-loop — bail out of warmup and show banner.
+      if (retryErr instanceof UnavailableError) {
+        clearTimers(escalationTimers);
+        showUnavailableBanner(containerEl, retryErr.message);
+        return null;
       }
 
       // AbortError or other non-retryable error — terminate
@@ -340,6 +376,29 @@ function showRetryButton(el, onRetry) {
   </div>`;
   const btn = el.querySelector('.progressive-retry-btn');
   if (btn) btn.addEventListener('click', onRetry);
+}
+
+/**
+ * Render a non-retryable banner for permanent unavailability (CS53 Bug B).
+ * No Retry button — retrying will not help until the underlying
+ * condition clears (e.g., free-tier monthly renewal).
+ */
+function showUnavailableBanner(el, message) {
+  if (!el) return;
+  const text = message || 'This data is temporarily unavailable.';
+  el.innerHTML = `<div class="progressive-message progressive-unavailable" role="alert" aria-live="assertive">
+    <p>${escapeHtml(text)}</p>
+    <p class="progressive-unavailable-hint">Please check back later.</p>
+  </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function startMessageEscalation(el, messageSet, timers) {
