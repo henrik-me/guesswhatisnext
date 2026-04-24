@@ -319,7 +319,13 @@ class MssqlAdapter extends BaseAdapter {
     // staging/production deployments — local container validation runs the
     // app with NODE_ENV=production by design, so the gate is "not in real
     // prod", not "not in production-mode locally".
-    const simulateMs = parseInt(process.env.GWN_SIMULATE_COLD_START_MS, 10);
+    const simulateRaw = process.env.GWN_SIMULATE_COLD_START_MS;
+    // Strict numeric parsing — accept only "digits-only" so misconfigured
+    // values like "30s" or "5000ms" fail closed (no delay) instead of being
+    // silently truncated by parseInt().
+    const simulateMs = typeof simulateRaw === 'string' && /^\d+$/.test(simulateRaw)
+      ? Number(simulateRaw)
+      : Number.NaN;
     if (Number.isFinite(simulateMs) && simulateMs > 0 && !MssqlAdapter._coldStartConsumed) {
       MssqlAdapter._coldStartConsumed = true;
       await new Promise((resolve) => setTimeout(resolve, simulateMs));
