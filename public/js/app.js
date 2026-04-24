@@ -7,15 +7,29 @@ import { Game, shuffle } from './game.js';
 import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
-import { progressiveLoad, MESSAGE_SETS, RetryableError, queueScoreForSync, syncQueuedScores } from './progressive-loader.js';
+import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError, queueScoreForSync, syncQueuedScores } from './progressive-loader.js';
 
 /**
  * Check a fetch Response for a retryable 503 signal and throw RetryableError if present.
  * Retry signal: Retry-After HTTP header (preferred) or retryAfter JSON body field (fallback).
  * SW-synthesised offline 503s lack both signals and are NOT retried.
+ *
+ * Permanent unavailability signal (CS53 Bug B): 503 body with `unavailable: true`
+ * (no Retry-After header). Throws UnavailableError so callers/loader stop retrying
+ * and render a banner instead of cycling the warmup loader forever.
  */
 async function throwIfRetryable(res) {
   if (res.status !== 503) return;
+
+  // Inspect the body once for the unavailable/retryAfter fields.
+  let body = null;
+  try { body = await res.clone().json(); } catch { /* not JSON */ }
+
+  if (body && body.unavailable === true) {
+    const message = body.message || 'This data is temporarily unavailable.';
+    throw new UnavailableError(message, body.reason);
+  }
+
   const headerVal = res.headers.get('Retry-After');
   if (headerVal) {
     const seconds = parseInt(headerVal, 10);
@@ -23,15 +37,8 @@ async function throwIfRetryable(res) {
       throw new RetryableError('Server warming up', seconds * 1000);
     }
   }
-  // Fallback: check JSON body for retryAfter field
-  try {
-    const body = await res.clone().json();
-    if (body && typeof body.retryAfter === 'number' && body.retryAfter >= 0) {
-      throw new RetryableError('Server warming up', body.retryAfter * 1000);
-    }
-  } catch (e) {
-    if (e instanceof RetryableError) throw e;
-    // JSON parse failed or no retryAfter — not retryable
+  if (body && typeof body.retryAfter === 'number' && body.retryAfter >= 0) {
+    throw new RetryableError('Server warming up', body.retryAfter * 1000);
   }
 }
 
@@ -2840,6 +2847,15 @@ async function fetchProfile() {
       const anyAuth401 = settledResults.some(r => r.status === 'fulfilled' && r.value === null);
       if (anyAuth401) return null;
 
+      // If any sub-request rejected with UnavailableError, promote the whole
+      // batch to UnavailableError so the loader renders a banner (no retry).
+      const unavailables = settledResults
+        .filter(r => r.status === 'rejected' && r.reason instanceof UnavailableError);
+      if (unavailables.length > 0) {
+        const u = unavailables[0].reason;
+        throw new UnavailableError(u.message, u.reason);
+      }
+
       // If any sub-request rejected with RetryableError, promote the whole batch
       const retryables = settledResults
         .filter(r => r.status === 'rejected' && r.reason instanceof RetryableError);
@@ -3138,8 +3154,22 @@ function renderSubmissionCard(submission) {
 let mySubmissionsCache = [];
 
 // ── Notification state ──────────────────────────────────────────────
-let notificationPollTimer = null;
-const NOTIFICATION_POLL_INTERVAL = 60000;
+//
+// CS53: We deliberately do NOT poll on a timer. The unread-count query
+// (GET /api/notifications/count → SELECT COUNT FROM notifications) hits
+// the DB and resets Azure SQL serverless's auto-pause idle timer; a
+// single open tab polling on a timer would prevent the DB from ever
+// pausing and exhaust the Free Tier monthly compute allowance.
+//
+// Instead the badge is refreshed at three legitimate moments:
+//   1. Once on login (refreshNotificationBadge below).
+//   2. Whenever the user opens the My Submissions screen — loadNotifications()
+//      calls GET /api/notifications and updates the badge as a side effect.
+//   3. After mark-read / mark-all-read actions (already wired locally).
+//
+// Real-time freshness is intentionally out of scope here; planned CS55
+// (WebSocket-pushed notifications + server-side caching) will add
+// real-time updates without adding any DB-keepalive polling.
 
 /** Update the notification badge on the My Submissions button. */
 function updateNotificationBadge(count) {
@@ -3159,7 +3189,7 @@ function updateNotificationBadge(count) {
   }
 }
 
-/** Poll for unread notification count and update badge. */
+/** Fetch unread notification count and update badge (one-shot, no timer). */
 async function pollNotificationCount() {
   if (!isLoggedIn()) return;
   try {
@@ -3168,22 +3198,17 @@ async function pollNotificationCount() {
       const data = await res.json();
       updateNotificationBadge(data.unread_count || 0);
     }
-  } catch { /* ignore polling errors */ }
+  } catch { /* ignore badge-refresh errors */ }
 }
 
-/** Start the notification polling interval. */
+/** One-shot refresh of the notification badge (called on login). */
 function startNotificationPolling() {
-  stopNotificationPolling();
   pollNotificationCount();
-  notificationPollTimer = setInterval(pollNotificationCount, NOTIFICATION_POLL_INTERVAL);
 }
 
-/** Stop the notification polling interval. */
+/** Clear the notification badge (called on logout). */
 function stopNotificationPolling() {
-  if (notificationPollTimer) {
-    clearInterval(notificationPollTimer);
-    notificationPollTimer = null;
-  }
+  updateNotificationBadge(0);
 }
 
 /** Render a single notification item. */

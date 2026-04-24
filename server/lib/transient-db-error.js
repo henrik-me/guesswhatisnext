@@ -57,4 +57,37 @@ function isTransientDbError(err, dialect) {
     err.code === 'SQLITE_BUSY_SNAPSHOT';
 }
 
-module.exports = { isTransientDbError };
+/**
+ * Detects whether a database error is a *permanent* (non-transient)
+ * unavailability that the client cannot recover by retrying — e.g., the
+ * Azure SQL Free Tier monthly compute allowance has been exhausted and
+ * the DB is paused by Azure until the 1st of next month.
+ *
+ * Returns a structured descriptor when matched (so the central error
+ * handler can produce a stable 503 body for the SPA to render a banner
+ * instead of cycling the warmup loader), or null otherwise.
+ *
+ * @param {Error} err
+ * @param {'mssql'|'sqlite'|string|undefined} dialect
+ * @returns {{ reason: string, message: string } | null}
+ */
+function getDbUnavailability(err, dialect) {
+  if (!err) return null;
+  if (dialect !== 'mssql') return null;
+
+  const combinedMessage = [
+    err.message,
+    err.originalError && err.originalError.message,
+  ].filter(Boolean).join(' ');
+
+  if (/free (amount )?allowance|paused for the remainder of the month/i.test(combinedMessage)) {
+    return {
+      reason: 'capacity-exhausted',
+      message: 'The database has reached its monthly free capacity allowance and is paused until the start of next month.',
+    };
+  }
+
+  return null;
+}
+
+module.exports = { isTransientDbError, getDbUnavailability };

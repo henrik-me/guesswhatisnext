@@ -1,6 +1,6 @@
 'use strict';
 
-const { isTransientDbError } = require('../server/lib/transient-db-error');
+const { isTransientDbError, getDbUnavailability } = require('../server/lib/transient-db-error');
 
 describe('isTransientDbError (mssql dialect)', () => {
   test('detects ConnectionError name (Azure SQL cold-start timeout)', () => {
@@ -119,5 +119,46 @@ describe('isTransientDbError (defensive)', () => {
     const err = new Error('busy');
     err.code = 'SQLITE_BUSY';
     expect(isTransientDbError(err, undefined)).toBe(true);
+  });
+});
+
+describe('getDbUnavailability (mssql)', () => {
+  test('detects free amount allowance message → capacity-exhausted', () => {
+    const err = new Error(
+      'This database has reached the monthly free amount allowance for the month of April 2026 and is paused for the remainder of the month.'
+    );
+    err.name = 'ConnectionError';
+    err.code = 'ELOGIN';
+    const result = getDbUnavailability(err, 'mssql');
+    expect(result).not.toBeNull();
+    expect(result.reason).toBe('capacity-exhausted');
+    expect(typeof result.message).toBe('string');
+    expect(result.message.length).toBeGreaterThan(0);
+  });
+
+  test('detects message wrapped in originalError', () => {
+    const err = new Error('Login failed');
+    err.originalError = {
+      message: 'free amount allowance reached; paused for the remainder of the month',
+    };
+    expect(getDbUnavailability(err, 'mssql')).not.toBeNull();
+  });
+
+  test('returns null for normal cold-start ETIMEOUT', () => {
+    const err = new Error('Failed to connect to gwn-sqldb in 15000ms');
+    err.code = 'ETIMEOUT';
+    err.name = 'ConnectionError';
+    expect(getDbUnavailability(err, 'mssql')).toBeNull();
+  });
+
+  test('returns null for non-mssql dialects', () => {
+    const err = new Error('free amount allowance');
+    expect(getDbUnavailability(err, 'sqlite')).toBeNull();
+    expect(getDbUnavailability(err, undefined)).toBeNull();
+  });
+
+  test('returns null for null/undefined error', () => {
+    expect(getDbUnavailability(null, 'mssql')).toBeNull();
+    expect(getDbUnavailability(undefined, 'mssql')).toBeNull();
   });
 });

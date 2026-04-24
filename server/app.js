@@ -8,7 +8,7 @@ const path = require('path');
 const http = require('http');
 const pinoHttp = require('pino-http');
 const { config } = require('./config');
-const { isTransientDbError } = require('./lib/transient-db-error');
+const { isTransientDbError, getDbUnavailability } = require('./lib/transient-db-error');
 const { createInitGuard } = require('./lib/db-init-guard');
 const logger = require('./logger');
 const { getDbAdapter, closeDbAdapter, isAdapterInitialized } = require('./db');
@@ -351,14 +351,25 @@ function createServer() {
   app.use((err, req, res, next) => {
     let status = err.status || err.statusCode || 500;
 
+    // Permanent DB unavailability (e.g., Azure SQL Free Tier monthly allowance
+    // exhausted, DB paused by Azure until the 1st of next month) — return 503
+    // with a structured body and NO Retry-After. The SPA recognises this shape
+    // and renders a banner instead of cycling the warmup loader (CS53 Bug B).
+    let unavailability = null;
+    if (status >= 500) {
+      unavailability = getDbUnavailability(err, config.DB_BACKEND);
+    }
+
     // Convert transient/cold-start DB errors into 503 with Retry-After so the
     // client's CS42-3 ProgressiveLoader can retry, instead of surfacing a
     // generic "Internal server error" (CS45). This matters most for Azure SQL
     // serverless, which auto-pauses while the server still believes the pool
     // is initialized; the next query then times out mid-request.
     let isTransient = false;
-    if (status >= 500 && isTransientDbError(err, config.DB_BACKEND)) {
+    if (!unavailability && status >= 500 && isTransientDbError(err, config.DB_BACKEND)) {
       isTransient = true;
+      status = 503;
+    } else if (unavailability) {
       status = 503;
     }
 
@@ -368,15 +379,29 @@ function createServer() {
         err,
         status,
         transient: isTransient || undefined,
+        unavailable: unavailability ? unavailability.reason : undefined,
         method: req.method,
         url: req.originalUrl || req.url,
         requestId: req.id,
         remoteAddress: req.ip || (req.socket && req.socket.remoteAddress),
       },
-      isTransient ? 'Transient DB error — responded 503' : 'Unhandled request error'
+      unavailability
+        ? 'Database unavailable — responded 503 (no retry)'
+        : isTransient
+          ? 'Transient DB error — responded 503'
+          : 'Unhandled request error'
     );
     if (res.headersSent) {
       return next(err);
+    }
+    if (unavailability) {
+      // No Retry-After: this is the SPA's signal to stop retrying.
+      return res.status(503).json({
+        error: 'Database temporarily unavailable',
+        message: unavailability.message,
+        unavailable: true,
+        reason: unavailability.reason,
+      });
     }
     if (isTransient) {
       return res
