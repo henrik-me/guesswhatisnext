@@ -5,8 +5,9 @@
  * Restarts the local MSSQL Docker stack with GWN_SIMULATE_COLD_START_MS=30000
  * so the FIRST mssql-adapter connect after process start sleeps 30s before
  * contacting the database. This makes the local container behave like Azure
- * SQL serverless after auto-pause: the first 1-3 inbound /api/* requests
- * exercise the warmup/retry path before succeeding.
+ * SQL serverless after auto-pause: the first several inbound /api/* requests
+ * exercise the warmup/retry path before succeeding (the exact count depends
+ * on the probe interval and Retry-After value).
  *
  * What this script asserts:
  *   1. Container starts and /healthz becomes reachable.
@@ -26,9 +27,9 @@
  *   npm run container:validate
  *
  * Override (env vars):
- *   COLD_START_MS=20000              # default 30000
- *   HTTPS_PORT=8443 HTTP_PORT=3001    # if 443/3001 are taken
- *   COMPOSE_PROJECT=gwn-validate-wt1  # default derived from cwd
+ *   COLD_START_MS=20000               # default 30000
+ *   HTTPS_PORT=9443 HTTP_PORT=3002    # only if default 8443/3001 are taken
+ *   COMPOSE_PROJECT=gwn-validate-wt1  # default derived from cwd basename + path hash
  *   KEEP_RUNNING=1                    # skip teardown for debugging
  */
 

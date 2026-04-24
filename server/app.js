@@ -140,13 +140,18 @@ function createServer() {
       return { ok: true };
     } catch (err) {
       dbInitialized = false;
+      // Capture dialect BEFORE closing the adapter — closeDbAdapter() nulls
+      // the singleton, which would make the post-close getDbAdapter() path
+      // unreachable. Falling back to config.DB_BACKEND when no adapter has
+      // been initialized yet (e.g. very-first-request init failure).
+      const dialect = isAdapterInitialized()
+        ? (await getDbAdapter().catch(() => null))?.dialect ?? config.DB_BACKEND
+        : config.DB_BACKEND;
       try { await closeDbAdapter(); } catch { /* ignore close errors */ }
       // Refresh dbUnavailability so the request gate reflects the latest
       // known state (e.g., flips to capacity_exhausted on Azure SQL Free
       // Tier exhaustion; clears stale value on a transient failure that
       // follows a previous unavailability).
-      const db = isAdapterInitialized() ? await getDbAdapter().catch(() => null) : null;
-      const dialect = db ? db.dialect : config.DB_BACKEND;
       dbUnavailability = getDbUnavailability(err, dialect);
       // Stamp the backoff timer NOW so the very next request after the
       // failure does not immediately re-attempt; the gate's backoff window
@@ -418,8 +423,8 @@ function createServer() {
       // !draining to even attempt init), preventing the container from
       // self-healing at free-tier renewal until someone makes a successful
       // admin call. Reporting the failure to the caller is enough.
-      // dbUnavailability is refreshed inside runInit() itself.
-      logger.error({ err: result.err }, 'Database init failed');
+      // dbUnavailability is refreshed inside runInit() itself, and runInit()
+      // logs the init failure so this endpoint does not duplicate the error log.
       res.status(500).json({ error: 'Database initialization failed', message: result.err.message });
     }
   });

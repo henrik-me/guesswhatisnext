@@ -29,9 +29,13 @@ let agent = null;
 let tmpDir = null;
 let initSpy = null;
 let originalNodeEnv;
+let originalTrustProxy;
+let originalCanonicalHost;
 
 beforeAll(async () => {
   originalNodeEnv = process.env.NODE_ENV;
+  originalTrustProxy = process.env.TRUST_PROXY;
+  originalCanonicalHost = process.env.CANONICAL_HOST;
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-lazy-init-'));
   process.env.GWN_DB_PATH = path.join(tmpDir, 'test.db');
   // Force Azure-mode lazy-init path. SQLite under the hood for the test.
@@ -70,6 +74,8 @@ afterAll(async () => {
   }
   delete process.env.GWN_DB_PATH;
   process.env.NODE_ENV = originalNodeEnv;
+  if (originalTrustProxy === undefined) delete process.env.TRUST_PROXY; else process.env.TRUST_PROXY = originalTrustProxy;
+  if (originalCanonicalHost === undefined) delete process.env.CANONICAL_HOST; else process.env.CANONICAL_HOST = originalCanonicalHost;
 });
 
 describe('lazy request-driven init (CS53-9 / Policy 1)', () => {
