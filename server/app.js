@@ -98,6 +98,22 @@ function createServer() {
   // would otherwise keep the SPA's progressive loader cycling forever.
   // Cleared on the next successful init.
   let dbUnavailability = null;
+
+  // Centralised builder for the "permanent DB unavailability" 503 response
+  // (CS53 Bug B). Used by both the request gate (when init has failed) and
+  // the central error handler (when a request-time DB op fails). Keeping
+  // the shape in one place prevents the two sites from drifting apart over
+  // time. NOTE: no Retry-After header — its absence is the SPA's signal to
+  // stop retrying and render the unavailable banner.
+  function sendDbUnavailable(res, descriptor) {
+    return res.status(503).json({
+      error: 'Database temporarily unavailable',
+      message: descriptor.message,
+      unavailable: true,
+      reason: descriptor.reason,
+    });
+  }
+
   const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 
   // CS53-1b: concurrency guard so /api/admin/init-db and the slow-retry
@@ -202,15 +218,7 @@ function createServer() {
 
     if (!dbInitialized && req.path.startsWith('/api/')) {
       if (dbUnavailability) {
-        // No Retry-After: matches the central error handler's permanent
-        // unavailability response shape (CS53 Bug B). The SPA recognises
-        // this and renders a banner instead of cycling the warmup loader.
-        return res.status(503).json({
-          error: 'Database temporarily unavailable',
-          message: dbUnavailability.message,
-          unavailable: true,
-          reason: dbUnavailability.reason,
-        });
+        return sendDbUnavailable(res, dbUnavailability);
       }
       return res.set('Retry-After', '5').status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
     }
@@ -422,13 +430,7 @@ function createServer() {
       return next(err);
     }
     if (unavailability) {
-      // No Retry-After: this is the SPA's signal to stop retrying.
-      return res.status(503).json({
-        error: 'Database temporarily unavailable',
-        message: unavailability.message,
-        unavailable: true,
-        reason: unavailability.reason,
-      });
+      return sendDbUnavailable(res, unavailability);
     }
     if (isTransient) {
       return res

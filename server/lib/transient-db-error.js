@@ -1,5 +1,26 @@
 'use strict';
 
+// Azure SQL Free Tier surfaces monthly compute exhaustion with a message
+// containing "free amount allowance" and/or "paused for the remainder of
+// the month". Both isTransientDbError() and getDbUnavailability() must agree
+// on the exact pattern, so it lives here as a shared constant.
+const AZURE_FREE_TIER_EXHAUSTED_RE = /free (amount )?allowance|paused for the remainder of the month/i;
+
+/**
+ * Build a single string from an Error's `message` and `originalError.message`
+ * (tedious/mssql commonly wrap the underlying driver error). Returns '' if
+ * neither is present.
+ *
+ * @param {Error|null|undefined} err
+ * @returns {string}
+ */
+function getCombinedMessage(err) {
+  if (!err) return '';
+  return [err.message, err.originalError && err.originalError.message]
+    .filter(Boolean)
+    .join(' ');
+}
+
 /**
  * Detects whether a database error is a transient/retryable failure such as
  * an Azure SQL serverless cold-start timeout, a connection reset, or a known
@@ -20,11 +41,7 @@ function isTransientDbError(err, dialect) {
   if (!err) return false;
 
   if (dialect === 'mssql') {
-    // Combined message string for pattern matching (covers wrapped errors).
-    const combinedMessage = [
-      err.message,
-      err.originalError && err.originalError.message,
-    ].filter(Boolean).join(' ');
+    const combinedMessage = getCombinedMessage(err);
 
     // Explicit NON-transient cases (must be checked before the broad
     // ConnectionError/RequestError catch-all below).
@@ -36,7 +53,7 @@ function isTransientDbError(err, dialect) {
     // The error surfaces with err.code === 'ELOGIN' and a message
     // containing "free amount allowance" / "paused for the remainder of
     // the month".
-    if (/free (amount )?allowance|paused for the remainder of the month/i.test(combinedMessage)) {
+    if (AZURE_FREE_TIER_EXHAUSTED_RE.test(combinedMessage)) {
       return false;
     }
 
@@ -82,12 +99,9 @@ function isTransientDbError(err, dialect) {
 function getDbUnavailability(err, _dialect) {
   if (!err) return null;
 
-  const combinedMessage = [
-    err.message,
-    err.originalError && err.originalError.message,
-  ].filter(Boolean).join(' ');
+  const combinedMessage = getCombinedMessage(err);
 
-  if (/free (amount )?allowance|paused for the remainder of the month/i.test(combinedMessage)) {
+  if (AZURE_FREE_TIER_EXHAUSTED_RE.test(combinedMessage)) {
     return {
       reason: 'capacity-exhausted',
       message: 'The database has reached its monthly free capacity allowance and is paused until the start of next month.',
