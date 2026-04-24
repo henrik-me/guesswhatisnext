@@ -118,7 +118,11 @@ async function waitForHealthz(timeoutMs = 180000) {
 }
 
 async function probeColdStart() {
-  const url = new URL('/api/puzzles', BASE_URL).href;
+  // Choose an unauthenticated, DB-touching endpoint so we observe the real
+  // 503-then-200 transition without auth noise. /api/scores/leaderboard
+  // uses optionalAuth and reads from the puzzles/scores tables, so it
+  // exercises the pool just like a real user request.
+  const url = new URL('/api/scores/leaderboard', BASE_URL).href;
   log(`Probing ${url} — expecting at least one 503+Retry-After then a 200 within ${Math.round(RECOVERY_BUDGET_MS / 1000)}s.`);
 
   const start = Date.now();
