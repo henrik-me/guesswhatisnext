@@ -49,18 +49,19 @@ On every heartbeat (still ≤ 10 min cadence per the idle-poll floor above), if 
 
 1. **Sub-agent runtime signal.** `read_agent` returns `tool_calls_completed` and `current_intent`. If `tool_calls_completed` is increasing turn-over-turn, the agent is alive and working — even if it hasn't said `STATE:` yet.
 2. **Git branch activity.** `git fetch origin <branch> && git --no-pager log --oneline origin/<branch> -10` reveals new commits the sub-agent has pushed. **Each new commit is a real progress signal — far stronger than a missing `STATE:` line.**
-3. **PR state on GitHub.** `gh pr view <num> --json updatedAt,statusCheckRollup,reviews,comments` reveals new CI runs, new reviews (including local-review and Copilot turns), and new comments. `updatedAt` advancing is a heartbeat by itself.
+3. **PR state on GitHub.** `gh pr view <num> --json updatedAt,statusCheckRollup,reviews,comments,body` reveals new CI runs, new Copilot review turns, new comments, and updates the sub-agent has made to the PR body (which is where local-review findings are recorded per [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop-gpt-54-or-higher)). `updatedAt` advancing is a heartbeat by itself.
 4. **CI workflow runs.** `gh run list --branch <branch> --limit 5` shows new workflow runs being triggered by the sub-agent's pushes (a separate signal from PR `statusCheckRollup`, useful when CI is queued or just started).
-5. **Working-tree file mtimes.** Recent edits the agent hasn't yet committed:
+5. **Working-tree file mtimes.** Recent edits the agent hasn't yet committed (substitute the worktree path for `$worktreePath`):
 
    ```powershell
-   Get-ChildItem <worktree-path> -Recurse -File |
+   $worktreePath = 'C:\src\gwn-worktrees\wt-N'
+   Get-ChildItem $worktreePath -Recurse -File |
      Where-Object { $_.LastWriteTime -gt (Get-Date).AddMinutes(-15) -and $_.FullName -notmatch 'node_modules|\\.git\\' } |
      Sort-Object LastWriteTime -Descending |
      Select-Object -First 10
    ```
 
-   On Unix-like hosts the equivalent is `find <worktree-path> -type f -mmin -15 -not -path '*/node_modules/*' -not -path '*/.git/*' | head`.
+   On Unix-like hosts the equivalent is `find "$worktreePath" -type f -mmin -15 -not -path '*/node_modules/*' -not -path '*/.git/*' | head`.
 
 **Heartbeat protocol.** On every heartbeat:
 
