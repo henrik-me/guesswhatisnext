@@ -198,8 +198,10 @@ describe('CS53-4 audit guard: no raw fetch(\'/api ... callsites in public/js/', 
     for (const file of files) {
       const content = await fs.readFile(file, 'utf8');
       // Match raw fetch('/api... or fetch("/api... or fetch(`/api...
-      // — i.e. any direct fetch() call to the API not routed through apiFetch.
-      const re = /(^|[^.\w])fetch\(\s*['"`]\/api/g;
+      // including qualified callsites like window.fetch('/api...') and
+      // globalThis.fetch('/api...') — i.e. any direct fetch() call to the
+      // API not routed through apiFetch.
+      const re = /(^|[^\w])(?:[\w$]+\.)*fetch\(\s*['"`]\/api/g;
       const matches = content.match(re);
       if (matches) offenders.push({ file: path.relative(root, file), count: matches.length });
     }

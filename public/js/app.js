@@ -567,7 +567,13 @@ function init() {
       onValidated: (data) => {
         if (data && data.user && data.user.role) {
           authRole = data.user.role;
-          localStorage.setItem('gwn_auth_role', authRole);
+          // localStorage.setItem can throw (quota / storage-unavailable).
+          // Isolate the failure so score sync still runs on success.
+          try {
+            localStorage.setItem('gwn_auth_role', authRole);
+          } catch {
+            // Storage unavailable — role survives in-memory; will retry on next login.
+          }
           updateHomeAuthDisplay();
           if (currentScreen === 'community') updateCommunityAuthDisplay();
         }
