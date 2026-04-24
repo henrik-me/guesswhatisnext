@@ -40,9 +40,24 @@ const crypto = require('crypto');
 const https = require('https');
 const path = require('path');
 
+function parseNonNegativeIntEnv(name, defaultValue) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return defaultValue;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${name} must be a non-negative integer, got: ${raw}`);
+  }
+  return Number(raw);
+}
+
+function validateComposeProjectName(name) {
+  // Docker Compose project-name regex: lowercase letters, digits, dashes,
+  // underscores; must start with a letter or digit.
+  return /^[a-z0-9][a-z0-9_-]*$/.test(name);
+}
+
 const ROOT = path.resolve(__dirname, '..');
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
-const COLD_START_MS = parseInt(process.env.COLD_START_MS, 10) || 30000;
+const COLD_START_MS = parseNonNegativeIntEnv('COLD_START_MS', 30000);
 const HTTPS_PORT = process.env.HTTPS_PORT || '8443';
 const HTTP_PORT = process.env.HTTP_PORT || '3001';
 // Project name must be unique across worktrees/clones on this host so a
@@ -58,8 +73,14 @@ function sanitizeProjectFragment(s) {
     .replace(/[^a-z0-9]+$/, '') || 'wt';
 }
 const ROOT_HASH = crypto.createHash('sha1').update(ROOT.toLowerCase()).digest('hex').slice(0, 8);
-const PROJECT_NAME = process.env.COMPOSE_PROJECT
-  || `gwn-validate-${sanitizeProjectFragment(path.basename(ROOT))}-${ROOT_HASH}`;
+const DEFAULT_PROJECT_NAME = `gwn-validate-${sanitizeProjectFragment(path.basename(ROOT))}-${ROOT_HASH}`;
+const PROJECT_NAME = process.env.COMPOSE_PROJECT || DEFAULT_PROJECT_NAME;
+if (!validateComposeProjectName(PROJECT_NAME)) {
+  throw new Error(
+    `Invalid COMPOSE_PROJECT '${PROJECT_NAME}': must match /^[a-z0-9][a-z0-9_-]*$/. ` +
+    `If you set COMPOSE_PROJECT explicitly, sanitize it; otherwise this is a bug in the default-name generator.`,
+  );
+}
 const BASE_URL = HTTPS_PORT === '443' ? 'https://localhost' : `https://localhost:${HTTPS_PORT}`;
 // Mirrors public/js/progressive-loader.js WARMUP_CAP_MS.
 const WARMUP_CAP_MS = 30000;

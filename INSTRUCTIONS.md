@@ -173,7 +173,7 @@ $env:GWN_DB_DELAY_PATTERN = "45000,15000,0,0,0,0"  # cycling: cold → warm → 
 $env:GWN_DB_DELAY_MS = "20000"               # fixed 20s delay
 ```
 
-**Cold-start MSSQL connect simulation (`GWN_SIMULATE_COLD_START_MS`):** Used by `npm run container:validate` (CS53 / Policy 2). When set to a positive integer (ms), the FIRST `mssql-adapter._connect()` after process start sleeps that many ms before contacting the server, then proceeds normally. Subsequent connects are not delayed (process-lifetime one-shot). Off by default; never set in dev/prod. Combined with the lazy request-driven init in `server/app.js`, this exercises the warmup/retry path on every container restart so cold-start behavior is regression-protected.
+**Cold-start MSSQL connect simulation (`GWN_SIMULATE_COLD_START_MS`):** Used by `npm run container:validate` (CS53 / Policy 2). When set to a positive integer (ms), the FIRST `mssql-adapter._connect()` after process start sleeps that many ms before contacting the server, then proceeds normally. Subsequent connects are not delayed (process-lifetime one-shot). Off by default; only for local container validation — never set in real staging/production deployments (the local validation stack runs with `NODE_ENV=production` by design, so the gate is "not in real prod", not "not in production-mode locally"). Combined with the lazy request-driven init in `server/app.js`, this exercises the warmup/retry path on every container restart so cold-start behavior is regression-protected.
 
 ### MSSQL Local Development
 

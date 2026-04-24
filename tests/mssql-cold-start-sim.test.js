@@ -43,24 +43,40 @@ describe('GWN_SIMULATE_COLD_START_MS', () => {
   });
 
   it('delays the FIRST _connect() by ~configured ms then does not delay subsequent connects', async () => {
-    // Use a small but non-trivial delay to keep the test fast and tolerant
-    // of CI clock jitter; the assertion is "first connect waits at least
-    // ~most-of the configured ms; second connect does not wait".
-    process.env.GWN_SIMULATE_COLD_START_MS = '50';
+    // Use fake timers so we can deterministically advance through the
+    // simulated sleep (avoids real wall-clock waits in the unit suite).
+    vi.useFakeTimers();
+    try {
+      process.env.GWN_SIMULATE_COLD_START_MS = '50';
 
-    const a1 = new MssqlAdapter('Server=test', { mssql: makeMockSql() });
-    const t1 = Date.now();
-    await a1._connect();
-    const elapsed1 = Date.now() - t1;
-    expect(elapsed1).toBeGreaterThanOrEqual(40);
+      const a1 = new MssqlAdapter('Server=test', { mssql: makeMockSql() });
+      let firstResolved = false;
+      const firstConnect = a1._connect().then(() => { firstResolved = true; });
 
-    // Second connect on a fresh adapter — same process, flag is consumed.
-    const a2 = new MssqlAdapter('Server=test', { mssql: makeMockSql() });
-    const t2 = Date.now();
-    await a2._connect();
-    const elapsed2 = Date.now() - t2;
-    // Allow a generous ceiling well under 50ms to keep this deterministic
-    // across loaded CI runners while still proving "no ~50ms wait happened".
-    expect(elapsed2).toBeLessThan(40);
+      // Yield once so the await inside _connect schedules its setTimeout.
+      await Promise.resolve();
+      expect(firstResolved).toBe(false);
+
+      // Advance just under the threshold; first connect must still be pending.
+      await vi.advanceTimersByTimeAsync(49);
+      expect(firstResolved).toBe(false);
+
+      // Cross the threshold; first connect resolves.
+      await vi.advanceTimersByTimeAsync(1);
+      await firstConnect;
+      expect(firstResolved).toBe(true);
+
+      // Second connect on a fresh adapter — same process, flag is consumed.
+      const a2 = new MssqlAdapter('Server=test', { mssql: makeMockSql() });
+      let secondResolved = false;
+      const secondConnect = a2._connect().then(() => { secondResolved = true; });
+
+      // Yield microtasks; without a sleep being scheduled the promise resolves.
+      await vi.advanceTimersByTimeAsync(0);
+      await secondConnect;
+      expect(secondResolved).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

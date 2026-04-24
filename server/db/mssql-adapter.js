@@ -315,7 +315,10 @@ class MssqlAdapter extends BaseAdapter {
     // contacting the server. Subsequent connects are unaffected. Off by
     // default; only enabled by `npm run container:validate` so cold-start
     // behavior is exercised on every container restart, mimicking Azure SQL
-    // serverless auto-pause resume timing. Never set this in dev/prod.
+    // serverless auto-pause resume timing. Never set this in real
+    // staging/production deployments — local container validation runs the
+    // app with NODE_ENV=production by design, so the gate is "not in real
+    // prod", not "not in production-mode locally".
     const simulateMs = parseInt(process.env.GWN_SIMULATE_COLD_START_MS, 10);
     if (Number.isFinite(simulateMs) && simulateMs > 0 && !MssqlAdapter._coldStartConsumed) {
       MssqlAdapter._coldStartConsumed = true;
