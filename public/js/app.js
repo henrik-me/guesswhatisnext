@@ -3199,6 +3199,10 @@ async function refreshNotificationBadge() {
     const res = await apiFetch('/api/notifications/count');
     if (res.ok) {
       const data = await res.json();
+      // Logout may have happened while the request was in flight;
+      // skip the DOM update so a stale unread count can't render on
+      // the logged-out UI.
+      if (!isLoggedIn()) return;
       updateNotificationBadge(data.unread_count || 0);
     }
   } catch { /* ignore badge-refresh errors */ }
