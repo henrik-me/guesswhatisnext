@@ -64,7 +64,11 @@ export async function validateStoredAuthToken({
   }
 
   if (res.status === 401 || res.status === 403) {
-    onUnauthorized();
+    try {
+      onUnauthorized();
+    } catch (err) {
+      if (onDeferred) onDeferred(err);
+    }
     return;
   }
 
@@ -76,7 +80,14 @@ export async function validateStoredAuthToken({
       if (onDeferred) onDeferred(err);
       return;
     }
-    onValidated(data);
+    try {
+      onValidated(data);
+    } catch (err) {
+      // A callback failure (e.g., localStorage quota exceeded) must not
+      // surface as an unhandledrejection at boot. Treat as deferred so
+      // the next real user action re-validates.
+      if (onDeferred) onDeferred(err);
+    }
     return;
   }
 

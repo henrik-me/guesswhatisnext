@@ -128,6 +128,44 @@ describe('validateStoredAuthToken — CS53-4 boot defer behavior', () => {
     expect(deps.onValidated).not.toHaveBeenCalled();
     expect(deps.onDeferred).toHaveBeenCalledTimes(1);
   });
+
+  it('onValidated callback throwing (e.g., localStorage quota) does not reject the promise', async () => {
+    const data = { user: { role: 'admin' } };
+    const res = { status: 200, ok: true, json: () => Promise.resolve(data) };
+    const apiFetch = vi.fn().mockResolvedValue(res);
+    const throwIfRetryable = vi.fn().mockResolvedValue(undefined);
+    const onValidated = vi.fn(() => { throw new Error('QuotaExceeded'); });
+    const onDeferred = vi.fn();
+
+    await expect(validateStoredAuthToken({
+      apiFetch,
+      throwIfRetryable,
+      onUnauthorized: vi.fn(),
+      onValidated,
+      onDeferred,
+    })).resolves.toBeUndefined();
+
+    expect(onValidated).toHaveBeenCalledTimes(1);
+    expect(onDeferred).toHaveBeenCalledTimes(1);
+  });
+
+  it('onUnauthorized callback throwing does not reject the promise', async () => {
+    const apiFetch = vi.fn().mockResolvedValue({ status: 401, ok: false });
+    const throwIfRetryable = vi.fn().mockResolvedValue(undefined);
+    const onUnauthorized = vi.fn(() => { throw new Error('boom'); });
+    const onDeferred = vi.fn();
+
+    await expect(validateStoredAuthToken({
+      apiFetch,
+      throwIfRetryable,
+      onUnauthorized,
+      onValidated: vi.fn(),
+      onDeferred,
+    })).resolves.toBeUndefined();
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(onDeferred).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('CS53-4 audit guard: no raw fetch(\'/api ... callsites in public/js/', () => {

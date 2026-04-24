@@ -579,6 +579,9 @@ function init() {
         });
       },
       // onDeferred intentionally omitted — silent defer per CS53-4 / Policy 1.
+    }).catch(() => {
+      // Belt-and-suspenders: match the prior boot path's terminal `.catch(() => {})`
+      // so any unexpected error never surfaces as an unhandledrejection.
     });
   }
 
