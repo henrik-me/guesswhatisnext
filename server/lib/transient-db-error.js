@@ -67,13 +67,20 @@ function isTransientDbError(err, dialect) {
  * handler can produce a stable 503 body for the SPA to render a banner
  * instead of cycling the warmup loader), or null otherwise.
  *
+ * Dialect-agnostic: the matched message patterns ("free amount allowance",
+ * "paused for the remainder of the month") are specific to Azure SQL and
+ * cannot be produced by SQLite, so we don't gate on the dialect. This
+ * lets the helper work uniformly from the central error handler, the
+ * self-init retry loop, and the request gate (whose dialect detection
+ * after a failed init has historically been brittle).
+ *
  * @param {Error} err
- * @param {'mssql'|'sqlite'|string|undefined} dialect
+ * @param {'mssql'|'sqlite'|string|undefined} _dialect - retained for
+ *   backwards-compat with callers; ignored by current matching rules.
  * @returns {{ reason: string, message: string } | null}
  */
-function getDbUnavailability(err, dialect) {
+function getDbUnavailability(err, _dialect) {
   if (!err) return null;
-  if (dialect !== 'mssql') return null;
 
   const combinedMessage = [
     err.message,

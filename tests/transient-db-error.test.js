@@ -122,7 +122,7 @@ describe('isTransientDbError (defensive)', () => {
   });
 });
 
-describe('getDbUnavailability (mssql)', () => {
+describe('getDbUnavailability', () => {
   test('detects free amount allowance message → capacity-exhausted', () => {
     const err = new Error(
       'This database has reached the monthly free amount allowance for the month of April 2026 and is paused for the remainder of the month.'
@@ -151,10 +151,18 @@ describe('getDbUnavailability (mssql)', () => {
     expect(getDbUnavailability(err, 'mssql')).toBeNull();
   });
 
-  test('returns null for non-mssql dialects', () => {
-    const err = new Error('free amount allowance');
-    expect(getDbUnavailability(err, 'sqlite')).toBeNull();
-    expect(getDbUnavailability(err, undefined)).toBeNull();
+  test('is dialect-agnostic: matches the free-tier message regardless of dialect', () => {
+    // CS53-2 (Sonnet review P2 follow-up): the helper used to require
+    // dialect === 'mssql', which made the request gate's startup-failure
+    // path miss the unavailable shape because dialect detection after a
+    // failed init is brittle. The matched messages are unmistakably Azure
+    // SQL and cannot be produced by SQLite, so we no longer gate on it.
+    const err = new Error(
+      'Database has reached its free amount allowance and is paused for the remainder of the month.'
+    );
+    expect(getDbUnavailability(err, 'sqlite')).not.toBeNull();
+    expect(getDbUnavailability(err, undefined)).not.toBeNull();
+    expect(getDbUnavailability(err, 'mssql')).not.toBeNull();
   });
 
   test('returns null for null/undefined error', () => {

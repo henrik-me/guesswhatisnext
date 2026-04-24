@@ -89,6 +89,15 @@ function createServer() {
   let dbInitialized = false;
   let draining = false;
   let activeRequests = 0;
+  // CS53 Bug B: when the most recent init attempt failed with a permanent
+  // unavailability (e.g. Azure SQL Free Tier monthly compute allowance
+  // exhausted), capture the descriptor here so the request gate below can
+  // surface the same { unavailable: true, reason, message } 503 (no
+  // Retry-After) that the central error handler emits — instead of the
+  // generic "Database not yet initialized" + Retry-After: 5 response that
+  // would otherwise keep the SPA's progressive loader cycling forever.
+  // Cleared on the next successful init.
+  let dbUnavailability = null;
   const isAzure = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging';
 
   // CS53-1b: concurrency guard so /api/admin/init-db and the slow-retry
@@ -192,6 +201,17 @@ function createServer() {
     }
 
     if (!dbInitialized && req.path.startsWith('/api/')) {
+      if (dbUnavailability) {
+        // No Retry-After: matches the central error handler's permanent
+        // unavailability response shape (CS53 Bug B). The SPA recognises
+        // this and renders a banner instead of cycling the warmup loader.
+        return res.status(503).json({
+          error: 'Database temporarily unavailable',
+          message: dbUnavailability.message,
+          unavailable: true,
+          reason: dbUnavailability.reason,
+        });
+      }
       return res.set('Retry-After', '5').status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
     }
 
@@ -328,6 +348,7 @@ function createServer() {
       // the operator wants traffic to resume after /api/admin/drain.
       // Failures must not enable draining; see the failure-path note below.
       draining = false;
+      dbUnavailability = null;
       logger.info('Database initialized (via admin endpoint)');
       res.json({ status: 'initialized' });
     } else {
@@ -336,6 +357,11 @@ function createServer() {
       // `draining || dbInitialized`), preventing the container from
       // self-healing at free-tier renewal until someone makes a successful
       // admin call. Reporting the failure to the caller is enough.
+      // CS53 Bug B: refresh dbUnavailability so the request gate reflects
+      // the latest known state (clears stale value on a transient failure
+      // that follows a previous unavailability, sets it on a fresh
+      // free-tier exhaustion).
+      dbUnavailability = getDbUnavailability(result.err, config.DB_BACKEND);
       logger.error({ err: result.err }, 'Database init failed');
       res.status(500).json({ error: 'Database initialization failed', message: result.err.message });
     }
@@ -450,6 +476,7 @@ function createServer() {
       selfInitAttempt++;
       const result = await runInit();
       if (result.ok) {
+        dbUnavailability = null;
         logger.info({ attempt: selfInitAttempt }, 'Database self-initialized');
         return;
       }
@@ -457,7 +484,12 @@ function createServer() {
       const err = result.err;
       const db = isAdapterInitialized() ? await getDbAdapter().catch(() => null) : null;
       const dialect = db ? db.dialect : config.DB_BACKEND;
-      const isRetryable = isTransientDbError(err, dialect);
+      // CS53 Bug B: detect permanent unavailability (e.g. Free Tier
+      // capacity exhausted) so the request gate can return the no-retry
+      // unavailable shape instead of the generic "Database not yet
+      // initialized" + Retry-After response.
+      dbUnavailability = getDbUnavailability(err, dialect);
+      const isRetryable = !dbUnavailability && isTransientDbError(err, dialect);
 
       let nextIntervalMs;
       if (isRetryable && selfInitAttempt < SELF_INIT_MAX_FAST_ATTEMPTS) {
