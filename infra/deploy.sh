@@ -146,13 +146,28 @@ get_app_image() {
 
 ensure_appinsights_secret_present() {
   local app_name="$1"
-  local found
-  found="$(az containerapp secret list \
+  local cli_output
+  local cli_status
+  set +e
+  cli_output="$(az containerapp secret list \
     --name "$app_name" \
     --resource-group "$RESOURCE_GROUP" \
     --query "[?name=='appinsights-connection-string'].name" \
-    -o tsv 2>/dev/null || true)"
-  if [ -z "$(sanitize_tsv_value "$found")" ]; then
+    -o tsv 2>&1)"
+  cli_status=$?
+  set -e
+
+  if [ "$cli_status" -ne 0 ]; then
+    echo "Error: failed to query ACA secrets on $app_name (az exit=$cli_status)." >&2
+    if [ -n "$cli_output" ]; then
+      echo "       Azure CLI reported: $cli_output" >&2
+    fi
+    echo "       Common causes: not logged in (run 'az login'), wrong subscription," >&2
+    echo "       missing 'containerapp' extension, or insufficient RBAC on $RESOURCE_GROUP." >&2
+    exit 1
+  fi
+
+  if [ -z "$(sanitize_tsv_value "$cli_output")" ]; then
     echo "Error: ACA secret 'appinsights-connection-string' is not registered on $app_name." >&2
     echo "       Run the CS54-1 + CS54-2 operator steps first — see" >&2
     echo "       project/clickstops/active/active_cs54_enable-app-insights-in-prod.md" >&2

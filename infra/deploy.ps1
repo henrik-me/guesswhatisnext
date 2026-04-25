@@ -165,15 +165,25 @@ function Get-AppImage {
 function Assert-AppInsightsSecretPresent {
     param([string]$AppName)
 
-    $found = az containerapp secret list `
+    $secretListOutput = az containerapp secret list `
         --name $AppName `
         --resource-group $ResourceGroup `
         --query "[?name=='appinsights-connection-string'].name" `
-        -o tsv 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        $found = ''
+        -o tsv 2>&1
+    $azExitCode = $LASTEXITCODE
+
+    if ($azExitCode -ne 0) {
+        $azError = ($secretListOutput | Out-String).Trim()
+        Write-Host "Error: failed to query ACA secrets on $AppName (az exit=$azExitCode)." -ForegroundColor Red
+        if ($azError) {
+            Write-Host "       Azure CLI reported: $azError" -ForegroundColor Red
+        }
+        Write-Host "       Common causes: not logged in (run 'az login'), wrong subscription," -ForegroundColor Red
+        Write-Host "       missing 'containerapp' extension, or insufficient RBAC on $ResourceGroup." -ForegroundColor Red
+        throw "Failed to query ACA secrets for $AppName"
     }
-    if (-not (Normalize-TsvValue $found)) {
+
+    if (-not (Normalize-TsvValue ($secretListOutput | Out-String))) {
         Write-Host "Error: ACA secret 'appinsights-connection-string' is not registered on $AppName." -ForegroundColor Red
         Write-Host "       Run the CS54-1 + CS54-2 operator steps first — see" -ForegroundColor Red
         Write-Host "       project/clickstops/active/active_cs54_enable-app-insights-in-prod.md" -ForegroundColor Red
