@@ -1626,6 +1626,11 @@ const AUTH_PROGRESSIVE_MESSAGES = {
 };
 
 const AUTH_TIMEOUT_MS = 45000;
+// CS53-17: cold-start retry loop deadline. Aligned with progressive-loader
+// MAX_WARMUP_BUDGET_MS so a single auth click can succeed across an Azure
+// SQL serverless cold-start (~30-90s). AUTH_TIMEOUT_MS still bounds each
+// individual fetch attempt; the retry loop terminates whichever fires first.
+const AUTH_WARMUP_DEADLINE_MS = 120000;
 let authSubmitting = false;
 let authProgressiveTimers = [];
 
@@ -1718,15 +1723,13 @@ async function authAction(action) {
   lockAuthForm(action);
 
   const endpoint = action === 'login' ? '/api/auth/login' : '/api/auth/register';
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
-  const deadline = Date.now() + AUTH_TIMEOUT_MS;
+  const warmupDeadline = Date.now() + AUTH_WARMUP_DEADLINE_MS;
 
   // CS53-17: cold-start aware retry. On 503 + Retry-After (server warming up),
-  // sleep and retry inside AUTH_TIMEOUT_MS instead of leaking the raw
-  // "Database not yet initialized" message to the user. Bounded by the
-  // overall auth deadline and the abort controller, so behavior on real
-  // timeouts / aborts / non-warmup errors is unchanged.
+  // sleep and retry inside AUTH_WARMUP_DEADLINE_MS instead of leaking the raw
+  // "Database not yet initialized" message to the user. Each fetch attempt
+  // gets its own AbortController bounded by AUTH_TIMEOUT_MS so individual
+  // hangs still fail fast; the warmup deadline bounds the overall loop.
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const parseRetryAfterMs = (res, body) => {
     const header = res.headers.get('Retry-After');
@@ -1740,32 +1743,63 @@ async function authAction(action) {
     return null;
   };
 
-  try {
-    let res, data;
-    while (true) {
-      res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-        signal: controller.signal,
-      });
-      data = await res.json().catch(() => ({}));
+  let activeController = null;
+  let activeTimeoutId = null;
+  const cancelActive = () => {
+    if (activeTimeoutId) { clearTimeout(activeTimeoutId); activeTimeoutId = null; }
+    activeController = null;
+  };
 
-      if (res.status !== 503) break;
-      const retryAfterMs = parseRetryAfterMs(res, data);
-      if (retryAfterMs === null) break; // 503 without retry signal — treat as terminal
-      const remaining = deadline - Date.now();
-      // Clamp the wait so we always have time for at least one more attempt.
-      const wait = Math.min(Math.max(retryAfterMs, 1000), 10000);
+  try {
+    let res, data, lastError;
+    while (true) {
+      activeController = new AbortController();
+      activeTimeoutId = setTimeout(() => activeController.abort(), AUTH_TIMEOUT_MS);
+      try {
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+          signal: activeController.signal,
+        });
+        data = await res.json().catch(() => ({}));
+        lastError = null;
+      } catch (err) {
+        lastError = err;
+        res = null;
+        data = null;
+      } finally {
+        if (activeTimeoutId) { clearTimeout(activeTimeoutId); activeTimeoutId = null; }
+      }
+
+      // Non-503 success or definitive failure → exit loop and let downstream
+      // logic handle the response/error.
+      if (res && res.status !== 503) break;
+      if (lastError && lastError.name !== 'AbortError') break;
+
+      // From here on we have either a 503 response or an AbortError (per-attempt
+      // timeout). Decide whether we have budget for another retry.
+      const retryAfterMs = res ? parseRetryAfterMs(res, data) : 5000;
+      if (res && retryAfterMs === null) break; // 503 without retry signal — terminal
+      const wait = Math.min(Math.max(retryAfterMs || 5000, 1000), 10000);
+      const remaining = warmupDeadline - Date.now();
       if (remaining <= wait + 500) {
-        // Not enough time for another attempt — surface a friendly warmup message.
         unlockAuthForm(action);
         bindText('auth-error', 'Server is warming up — please try again in a moment');
         return;
       }
-      bindText('auth-error', 'Server is starting up — retrying…');
+      // Progressive messaging during retry is handled by lockAuthForm's
+      // in-button text escalation (AUTH_PROGRESSIVE_MESSAGES). We deliberately
+      // do NOT touch the auth-error slot here — it should only show terminal
+      // errors, never transient progress.
       await sleep(wait);
-      if (controller.signal.aborted) break;
+    }
+    cancelActive();
+
+    if (lastError) {
+      // Re-throw to the outer catch which preserves the existing AbortError /
+      // network-error UX for non-warmup failures.
+      throw lastError;
     }
 
     if (!res.ok) {
