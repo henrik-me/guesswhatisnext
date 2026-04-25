@@ -129,7 +129,17 @@ router.put('/:id/read', requireAuth, async (req, res, next) => {
   }
 });
 
-/** PUT /api/notifications/read-all — mark all of user's notifications as read. */
+/**
+ * PUT /api/notifications/read-all — mark all of user's notifications as read.
+ *
+ * Note: we INVALIDATE the cache rather than `set(req.user.id, 0)`. A naive
+ * `set(0)` here would lose a concurrent insert: if `createReviewNotification`
+ * fires for this user between our `db.run` and our cache write, its
+ * `invalidate()` would be overwritten by our zero, pinning a stale 0 in the
+ * cache for the rest of the process lifetime (CS53-23 GPT-5.4 R4 finding).
+ * The next user-activity read will recompute from DB and store the truthful
+ * value — losing only one cache hit in exchange for correctness.
+ */
 router.put('/read-all', requireAuth, async (req, res, next) => {
   try {
     const db = await getDbAdapter();
@@ -137,7 +147,7 @@ router.put('/read-all', requireAuth, async (req, res, next) => {
       'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
       [req.user.id]
     );
-    unreadCountCache.set(req.user.id, 0);
+    unreadCountCache.invalidate(req.user.id);
     res.json({ updated: result.changes || 0 });
   } catch (err) {
     next(err);

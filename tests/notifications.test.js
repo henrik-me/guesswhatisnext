@@ -374,7 +374,9 @@ describe('GET /api/notifications/count', () => {
     expect(r1.headers['x-cache']).toBe('MISS');
     expect(r1.body.unread_count).toBeGreaterThanOrEqual(1);
 
-    // Cache is now warm; mark-all-read should reset to 0 without going stale
+    // Cache is now warm; mark-all-read INVALIDATES (not set-0) to avoid
+    // overwriting a concurrent invalidate from createReviewNotification.
+    // The next user-activity read recomputes from DB.
     await getAgent()
       .put('/api/notifications/read-all')
       .set('Authorization', `Bearer ${userToken}`)
@@ -383,8 +385,7 @@ describe('GET /api/notifications/count', () => {
       .get('/api/notifications/count')
       .set('Authorization', `Bearer ${userToken}`)
       .set('X-User-Activity', '1');
-    // mark-all-read writes 0 directly into cache (no DB needed on next read)
-    expect(r2.headers['x-cache']).toBe('HIT');
+    expect(r2.headers['x-cache']).toBe('MISS');
     expect(r2.body.unread_count).toBe(0);
 
     // mark-single-read: create + read one, expect cache invalidated
