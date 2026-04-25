@@ -93,6 +93,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Guard rail — APPLICATIONINSIGHTS env var present in BOTH templates
+        run: |
+          COUNT=$(grep -c "APPLICATIONINSIGHTS_CONNECTION_STRING" .github/workflows/prod-deploy.yml || true)
+          if [ "$COUNT" -lt 2 ]; then
+            echo "::error::APPLICATIONINSIGHTS_CONNECTION_STRING must appear in BOTH happy-path and rollback templates (found $COUNT)."
+            exit 1
+          fi
+          echo "Guard pass: APPLICATIONINSIGHTS_CONNECTION_STRING appears $COUNT times."
+
       - name: Resolve commit SHA from image tag
         id: resolve
         run: |
@@ -196,6 +205,8 @@ jobs:
                         value: "${SYSTEM_API_KEY}"
                       - name: GWN_DB_PATH
                         value: /tmp/game.db
+                      - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+                        secretRef: appinsights-connection-string
                       - name: DATABASE_URL
                         value: "${DATABASE_URL}"
                       - name: CANONICAL_HOST
@@ -340,6 +351,8 @@ jobs:
                         value: "${SYSTEM_API_KEY}"
                       - name: GWN_DB_PATH
                         value: /tmp/game.db
+                      - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+                        secretRef: appinsights-connection-string
                       - name: DATABASE_URL
                         value: "${DATABASE_URL}"
                       - name: CANONICAL_HOST
