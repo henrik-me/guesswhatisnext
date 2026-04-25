@@ -53,3 +53,6 @@ playwright-report/
 logs/
 *.log
 .playwright/
+
+# HAR captures (DevTools Network exports — may contain JWTs / cookies)
+*.har
