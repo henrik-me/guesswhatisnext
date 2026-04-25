@@ -93,6 +93,7 @@ describe('lazy request-driven init (CS53-9 / Policy 1)', () => {
     expect(res.status).toBe(503);
     expect(res.headers['retry-after']).toBe('5');
     expect(res.body.error).toBe('Database not yet initialized');
+    expect(res.body.phase).toBe('cold-start');
     // Allow the fire-and-forget runInit() to start.
     await new Promise((r) => setTimeout(r, 20));
     expect(initSpy.mock.calls.length).toBeGreaterThan(callsBefore);

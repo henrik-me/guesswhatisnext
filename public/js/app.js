@@ -1626,6 +1626,16 @@ const AUTH_PROGRESSIVE_MESSAGES = {
 };
 
 const AUTH_TIMEOUT_MS = 45000;
+// CS53-17: cold-start retry loop deadline. Aligned with progressive-loader
+// MAX_WARMUP_BUDGET_MS so a single auth click can succeed across an Azure
+// SQL serverless cold-start (~30-90s). AUTH_TIMEOUT_MS still bounds each
+// individual fetch attempt; the retry loop terminates whichever fires first.
+const AUTH_WARMUP_DEADLINE_MS = 120000;
+// CS53-17 v3 (rubber-duck #3): minimum time we'll allocate to a fresh fetch
+// attempt. If less than this remains in the warmup budget after a sleep, bail
+// out cleanly instead of starting a near-zero-timeout attempt that will almost
+// certainly abort and surface a misleading "Request timed out" error.
+const AUTH_MIN_ATTEMPT_MS = 1500;
 let authSubmitting = false;
 let authProgressiveTimers = [];
 
@@ -1718,21 +1728,189 @@ async function authAction(action) {
   lockAuthForm(action);
 
   const endpoint = action === 'login' ? '/api/auth/login' : '/api/auth/register';
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
+  const warmupDeadline = Date.now() + AUTH_WARMUP_DEADLINE_MS;
+
+  // CS53-17: cold-start aware retry. On 503 + Retry-After (server warming up),
+  // sleep and retry inside AUTH_WARMUP_DEADLINE_MS instead of leaking the raw
+  // "Database not yet initialized" message to the user. Each fetch attempt
+  // gets its own AbortController bounded by AUTH_TIMEOUT_MS so individual
+  // hangs still fail fast; the warmup deadline bounds the overall loop.
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const parseRetryAfterMs = (res, body) => {
+    const header = res.headers.get('Retry-After');
+    if (header) {
+      const s = parseInt(header, 10);
+      if (!isNaN(s) && s >= 0) return s * 1000;
+    }
+    if (body && typeof body.retryAfter === 'number' && body.retryAfter >= 0) {
+      return body.retryAfter * 1000;
+    }
+    return null;
+  };
+
+  // CS53-17 v3 (rubber-duck #1): for register, terminal warmup-class failures
+  // are ambiguous — POST /api/auth/register can have already inserted the
+  // user even if we saw a 502/504/AbortError. Nudging the user to "try again"
+  // would risk a misleading "username taken" on the next attempt. Steer them
+  // toward login instead.
+  const authWarmupExhaustedMessage = (act) => act === 'register'
+    ? 'Service temporarily unavailable. If your account may already have been created, try logging in.'
+    : 'Server is warming up — please try again in a moment';
+  const authGatewayMessage = (act) => act === 'register'
+    ? 'Service temporarily unavailable. If your account may already have been created, try logging in.'
+    : 'Service temporarily unavailable — please try again';
+
+  let activeController = null;
+  let activeTimeoutId = null;
+  // Clears the per-attempt timeout and drops the controller reference. Does
+  // NOT call activeController.abort() — by the time we call this, either the
+  // fetch already settled (so abort is a no-op) or we deliberately want to
+  // let an in-flight retry sleep complete cleanly. Named to match behavior
+  // (Copilot review round 2, 2026-04-25).
+  const clearActiveTimeout = () => {
+    if (activeTimeoutId) { clearTimeout(activeTimeoutId); activeTimeoutId = null; }
+    activeController = null;
+  };
 
   try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-      signal: controller.signal,
-    });
-    const data = await res.json();
+    let res, data, lastError;
+    while (true) {
+      // Cap per-attempt timeout by remaining warmup budget so total wall-clock
+      // never overshoots AUTH_WARMUP_DEADLINE_MS by up to 45s (rubber-duck #1).
+      const remainingBudget = warmupDeadline - Date.now();
+      if (remainingBudget <= 0) {
+        unlockAuthForm(action);
+        bindText('auth-error', authWarmupExhaustedMessage(action));
+        return;
+      }
+      const attemptTimeout = Math.min(AUTH_TIMEOUT_MS, remainingBudget);
+      activeController = new AbortController();
+      activeTimeoutId = setTimeout(() => activeController.abort(), attemptTimeout);
+      try {
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+          signal: activeController.signal,
+        });
+        data = await res.json().catch(() => ({}));
+        lastError = null;
+      } catch (err) {
+        lastError = err;
+        res = null;
+        data = null;
+      } finally {
+        if (activeTimeoutId) { clearTimeout(activeTimeoutId); activeTimeoutId = null; }
+      }
+
+      // Non-warmup success or definitive failure → exit loop and let downstream
+      // logic handle the response/error. Warmup-retryable statuses are
+      // 503 (origin warming up) and 502/504 (gateway/proxy can't reach origin
+      // — common during App Service cold-start swaps). For 502/504 we may not
+      // get a Retry-After header (Caddy/Azure FD don't always send one), so
+      // fall back to a 5s default.
+      const isWarmupRetryable = res && (res.status === 503 || res.status === 502 || res.status === 504);
+      if (res && !isWarmupRetryable) break;
+
+      // 503 from the cold-start gate is safe to retry for register because
+      // the gate runs BEFORE the route handler — the request did NOT hit any
+      // state-mutating code. The gate is identified by `phase:'cold-start'`
+      // in the response body. A 503 from the central error handler (e.g.
+      // transient DB error during the INSERT inside POST /api/auth/register)
+      // does NOT carry that field — and the request may have actually
+      // succeeded server-side, so retrying could surface a misleading
+      // "username taken" on the next attempt (code-review finding,
+      // 2026-04-25). 502/504 (gateway) and AbortError have the same
+      // ambiguity. Login is idempotent (no server-side state change on
+      // failure) so all warmup-class statuses retry.
+      if (action !== 'login') {
+        if (lastError) break;                                // AbortError on register
+        if (res && res.status !== 503) break;                // 502/504 on register
+        if (res && res.status === 503 && (!data || data.phase !== 'cold-start')) break;
+      } else if (lastError && lastError.name !== 'AbortError') {
+        break;                                               // non-Abort error on login
+      }
+
+      // From here on we have either a warmup-retryable response or an
+      // AbortError on login. Compute wait: prefer Retry-After header, else
+      // server-supplied retryAfter body field, else default (5s for 503 to
+      // match the server's gate; 5s for 502/504 since gateway has no signal).
+      // Rubber-duck #2: server-provided Retry-After is authoritative — only
+      // clamp the fallback path. Cap header-derived values at the remaining
+      // warmup budget instead of an arbitrary 10s ceiling.
+      let retryAfterMs;
+      let waitFromServer = false;
+      if (res) {
+        retryAfterMs = parseRetryAfterMs(res, data);
+        if (retryAfterMs === null) {
+          // 503 without retry signal is terminal (likely not our warmup gate),
+          // but 502/504 are inherently retryable so use a default.
+          if (res.status === 503) break;
+          retryAfterMs = 5000;
+        } else {
+          waitFromServer = true;
+        }
+      } else {
+        retryAfterMs = 5000;
+      }
+      const wait = waitFromServer
+        ? Math.max(retryAfterMs, 1000)
+        : Math.min(Math.max(retryAfterMs, 1000), 10000);
+      const remaining = warmupDeadline - Date.now();
+      // Rubber-duck #3: bail if a post-sleep attempt would have less than
+      // MIN_ATTEMPT_MS to actually run. Otherwise the final attempt aborts
+      // immediately and surfaces a misleading "Request timed out" error.
+      if (remaining <= wait + AUTH_MIN_ATTEMPT_MS) {
+        unlockAuthForm(action);
+        bindText('auth-error', authWarmupExhaustedMessage(action));
+        return;
+      }
+      // Progressive messaging during retry is handled by lockAuthForm's
+      // in-button text escalation (AUTH_PROGRESSIVE_MESSAGES). We deliberately
+      // do NOT touch the auth-error slot here — it should only show terminal
+      // errors, never transient progress.
+      await sleep(wait);
+    }
+    clearActiveTimeout();
+
+    if (lastError) {
+      // Re-throw to the outer catch which preserves the existing AbortError /
+      // network-error UX for non-warmup failures.
+      throw lastError;
+    }
 
     if (!res.ok) {
       unlockAuthForm(action);
-      bindText('auth-error', data.error || 'Something went wrong');
+      // CS53-17: don't leak internal server prose for warmup-class statuses
+      // that fall through here (e.g. retry budget exhausted, or register
+      // hitting 502/504 which we don't auto-retry for idempotency reasons).
+      // 503 is the server's own gate; 502/504 are gateway/proxy errors.
+      if (res.status === 503) {
+        let friendly;
+        const hasWarmupSignal =
+          (typeof res.headers?.get === 'function' && res.headers.get('Retry-After')) ||
+          (data && typeof data.retryAfter === 'number');
+        if (data && data.unavailable && data.message) {
+          // Permanent unavailability with server-supplied user-facing message.
+          friendly = data.message;
+        } else if (hasWarmupSignal) {
+          // Our cold-start gate sends Retry-After + retryAfter. Trust it.
+          friendly = authWarmupExhaustedMessage(action);
+        } else {
+          // Generic 503 (no warmup signal): don't pretend it's warmup.
+          friendly = authGatewayMessage(action);
+        }
+        bindText('auth-error', friendly);
+      } else if (res.status === 502 || res.status === 504) {
+        // Gateway/proxy errors: response body is typically text/html from the
+        // proxy, not actionable for the user. Show the same warmup-style
+        // message as 503 since the cause is the same class of problem
+        // (origin not reachable). For register, message also nudges toward
+        // login because the request may have reached origin (rubber-duck #1).
+        bindText('auth-error', authGatewayMessage(action));
+      } else {
+        bindText('auth-error', (data && data.error) || 'Something went wrong');
+      }
       return;
     }
 
@@ -1777,12 +1955,17 @@ async function authAction(action) {
   } catch (err) {
     unlockAuthForm(action);
     if (err && err.name === 'AbortError') {
-      bindText('auth-error', 'Request timed out — please try again');
+      // Rubber-duck #1: register's terminal AbortError is ambiguous (the
+      // request may have reached origin and created the user). Steer them
+      // toward login instead of "try again".
+      bindText('auth-error', action === 'register'
+        ? 'Request timed out. If your account may already have been created, try logging in.'
+        : 'Request timed out — please try again');
     } else {
       bindText('auth-error', 'Network error — is the server running?');
     }
   } finally {
-    clearTimeout(timeoutId);
+    clearActiveTimeout();
   }
 }
 
