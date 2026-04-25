@@ -18,6 +18,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const db = await getDbAdapter();
     const userId = req.user.id;
     const unreadOnly = req.query.unread === 'true' || req.query.unread === '1';
+    const userActivity = req.get('X-User-Activity') === '1';
 
     let query = 'SELECT id, user_id, type, message, data, is_read, created_at FROM notifications WHERE user_id = ?';
     const params = [userId];
@@ -33,12 +34,26 @@ router.get('/', requireAuth, async (req, res, next) => {
       query += ' LIMIT 50';
     }
 
+    // Capture cache generation BEFORE the count query so we can race-safely
+    // seed the cache from this request's authoritative count.
+    const token = unreadCountCache.beginRead(userId);
     const notifications = await db.all(query, params);
 
     const countRow = await db.get(
       'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0',
       [userId]
     );
+    // Same MSSQL-safe coercion as /count (Copilot R5 finding) — single helper.
+    const unreadCount = coerceUnreadCount(countRow ? countRow.count : 0);
+
+    // Seed the unread-count cache from this fresh DB read so a follow-up
+    // /api/notifications/count request — including a header-less boot/focus
+    // poll on a different page load — gets a HIT instead of MISS-NO-ACTIVITY.
+    // Only seed when the request was a user gesture or operator call;
+    // otherwise we'd let an unrelated background fetch populate the cache.
+    if (userActivity || req.user.role === 'system') {
+      unreadCountCache.setIfFresh(userId, unreadCount, token);
+    }
 
     res.json({
       notifications: notifications.map(n => {
@@ -55,7 +70,7 @@ router.get('/', requireAuth, async (req, res, next) => {
           created_at: n.created_at,
         };
       }),
-      unread_count: countRow ? countRow.count : 0,
+      unread_count: unreadCount,
     });
   } catch (err) {
     next(err);
