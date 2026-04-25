@@ -67,6 +67,10 @@
     "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
     "artillery": "^2.0.30"
   },
+  "overrides": {
+    "postcss": "^8.5.10",
+    "uuid": "^14.0.0"
+  },
   "engines": {
     "node": ">=20"
   }
