@@ -1,7 +1,7 @@
 # CS54 — Enable Azure Application Insights in production
 
-**Status:** ⬜ Planned
-**Owner:** unassigned (planning by yoga-gwn-c2)
+**Status:** 🔄 In Progress
+**Owner:** yoga-gwn-c2 (claimed 2026-04-25T17:07Z)
 **Origin:** Discovered during CS53-1 (2026-04-23). When pulling logs to investigate the cold-start retry hiccup, we found that the production Container App has no `APPLICATIONINSIGHTS_CONNECTION_STRING` env var set. The OTel SDK is wired and ready ([`server/telemetry.js`](../../../server/telemetry.js)) — it just falls back to no-export. As a result, neither `traces` nor `requests` tables exist for the prod resource in Application Insights; we can only query Container Apps console stdout via Log Analytics (`ContainerAppConsoleLogs_CL`).
 
 ## Goal

@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main — no PR required.
 
-> **Last updated:** 2026-04-25T16:45Z
+> **Last updated:** 2026-04-25T17:07Z
 
 ## Orchestrators
 
@@ -14,7 +14,7 @@ CS44-3 schema upgrade.
 | Agent ID | Machine | Repo Folder | Status | Last Seen |
 |----------|---------|-------------|--------|-----------|
 | yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active | 2026-04-25T16:20Z |
-| yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-25T16:45Z |
+| yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-25T17:07Z |
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active | unknown |
 | yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | unknown |
 | omni-gwn | HENRIKM-OMNI | C:\src\guesswhatisnext | ⚪ Offline | 2026-04-22T00:55Z |
@@ -26,6 +26,6 @@ CS44-3 schema upgrade.
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
 | CS53-17-validate | CS53 | ✅ Done — staging on `cceedac` healthy | yoga-gwn | C:\src\guesswhatisnext | main | #245 | 2026-04-25T16:42Z | Optional: capture prod cold-start HAR, then decide on prod deploy of `cceedac` | None — complete |
 | CS53-19 | CS53 | 🔒 Blocked on CS55-2 v2 — P2 | yoga-gwn | C:\src\guesswhatisnext | — | — | 2026-04-25T16:42Z | Phase A (boot/focus/refresh HAR inventory) can start now in parallel; Phases C–G need CS55-2.G/H/J | Waiting on CS55-2.G (`X-User-Activity` header contract), CS55-2.H (server helper), CS55-2.J (no-header response shape) |
-| —       | —         | claimed | yoga-gwn-c2 | —    | —      | —  | 2026-04-25T16:42Z | CS57 plan landed (`planned_cs57_int-to-uuid-migration.md`); awaiting user go-ahead to claim CS57-1 and dispatch to wt-1 | — |
+| CS54-1 | CS54 | claimed | yoga-gwn-c2 | — | — | — | 2026-04-25T17:07Z | Operator step: provision `gwn-ai-staging` + `gwn-ai-production` via `az monitor app-insights component create` (per CS54-1 detail in `active_cs54_*.md`). After CS54-1+CS54-2 land, dispatch CS54-3 to wt-1 on branch `yoga-gwn-c2/cs54-3-staging-deploy-wiring` (port 4021). | — |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
