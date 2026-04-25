@@ -61,3 +61,7 @@ logs/
 # user PII in screenshots, internal URLs). Working artifacts, not source.
 shots/
 cost*.json
+
+# CS53-11 validation script screenshots
+.cs53-11-shots/
+

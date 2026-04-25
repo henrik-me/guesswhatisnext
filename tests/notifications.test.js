@@ -207,6 +207,96 @@ describe('GET /api/notifications/count', () => {
     expect(res.status).toBe(200);
     expect(res.body.unread_count).toBe(1);
   });
+
+  test('caches result so repeated polls do not hit DB', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    unreadCountCache.clear();
+
+    // Mark all as read so count is deterministic
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    // Create one notification → invalidates cache
+    const subId = await createSubmission(userToken);
+    await reviewSubmission(subId, 'approved');
+
+    const before = unreadCountCache.snapshot();
+
+    // First call: cache miss → DB hit
+    const r1 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(r1.status).toBe(200);
+    expect(r1.headers['x-cache']).toBe('MISS');
+    expect(r1.body.unread_count).toBe(1);
+
+    // 5 more calls: all cache hits → no DB
+    for (let i = 0; i < 5; i++) {
+      const r = await getAgent()
+        .get('/api/notifications/count')
+        .set('Authorization', `Bearer ${userToken}`);
+      expect(r.status).toBe(200);
+      expect(r.headers['x-cache']).toBe('HIT');
+      expect(r.body.unread_count).toBe(1);
+    }
+
+    const after = unreadCountCache.snapshot();
+    expect(after.misses - before.misses).toBe(1);
+    expect(after.hits - before.hits).toBe(5);
+  });
+
+  test('write paths invalidate cache (mark-read, mark-all-read, new notification)', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+
+    // Seed cache by hitting count
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`);
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    // New notification should invalidate
+    const subId = await createSubmission(userToken);
+    await reviewSubmission(subId, 'approved');
+    const r1 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(r1.headers['x-cache']).toBe('MISS');
+    expect(r1.body.unread_count).toBeGreaterThanOrEqual(1);
+
+    // Cache is now warm; mark-all-read should reset to 0 without going stale
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`);
+    const r2 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    // mark-all-read writes 0 directly into cache (no DB needed on next read)
+    expect(r2.headers['x-cache']).toBe('HIT');
+    expect(r2.body.unread_count).toBe(0);
+
+    // mark-single-read: create + read one, expect cache invalidated
+    const subId2 = await createSubmission(userToken);
+    await reviewSubmission(subId2, 'approved');
+    const list = await getAgent()
+      .get('/api/notifications?unread=true')
+      .set('Authorization', `Bearer ${userToken}`);
+    const id = list.body.notifications[0].id;
+    // Warm cache before mark-read
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    await getAgent()
+      .put(`/api/notifications/${id}/read`)
+      .set('Authorization', `Bearer ${userToken}`);
+    const r3 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(r3.headers['x-cache']).toBe('MISS');
+    unreadCountCache.clear();
+  });
 });
 
 describe('Review → Notification creation', () => {
