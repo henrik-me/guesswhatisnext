@@ -233,29 +233,79 @@ jobs:
 
       - name: Verify production deployment
         id: healthcheck
+        # CS53-22: Two-phase verify that respects Policy 1 (do not require eager DB init)
+        # and supports deploys when Azure SQL is in capacity-exhausted (unavailable) mode.
+        #
+        # Phase 1 (loop): probe /api/features to trigger lazy DB init OR confirm
+        # intentional-unavailable handling. Outcomes:
+        #   - 200                            → init_triggered (DB warm; assert db=ok in phase 2)
+        #   - 503 + unavailable=true + no Retry-After → intentional_unavailable (assert app=ok only)
+        #   - 503 + Retry-After present     → transient cold-start, keep retrying
+        #   - anything else                  → unexpected, keep retrying within budget
+        #
+        # Phase 2: authoritative /api/health probe gated on the phase-1 verdict.
         run: |
+          set -u
+          PROD_URL="${{ secrets.PROD_URL }}"
+          STATE="never_probed"
+          BODY_FILE=$(mktemp)
+          HDR_FILE=$(mktemp)
           for i in 1 2 3 4 5 6 7 8; do
-            RESPONSE=$(curl -sf --max-time 30 \
-              -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
-              "${{ secrets.PROD_URL }}/api/health" 2>/dev/null) || true
+            : > "$BODY_FILE"; : > "$HDR_FILE"
+            HTTP_STATUS=$(curl -sS -o "$BODY_FILE" -D "$HDR_FILE" -w '%{http_code}' \
+              --max-time 35 "$PROD_URL/api/features" 2>/dev/null || echo "000")
 
-            HEALTH_STATUS="unreachable"
-            DB_STATUS="unknown"
-            if [ -n "$RESPONSE" ]; then
-              HEALTH_STATUS=$(echo "$RESPONSE" | jq -r '.status // "error"' 2>/dev/null || echo "error")
-              DB_STATUS=$(echo "$RESPONSE" | jq -r '.checks.database.status // "unknown"' 2>/dev/null || echo "unknown")
+            UNAVAILABLE=$(jq -r '.unavailable // false' "$BODY_FILE" 2>/dev/null || echo "false")
+            REASON=$(jq -r '.reason // ""' "$BODY_FILE" 2>/dev/null || echo "")
+            HAS_RETRY_AFTER=$(grep -i '^retry-after:' "$HDR_FILE" >/dev/null 2>&1 && echo "yes" || echo "no")
+
+            echo "Probe attempt $i: /api/features http=$HTTP_STATUS unavailable=$UNAVAILABLE reason='$REASON' retry_after=$HAS_RETRY_AFTER"
+
+            if [ "$HTTP_STATUS" = "200" ]; then
+              STATE="init_triggered"
+              break
             fi
-
-            echo "Health check attempt $i: status=$HEALTH_STATUS db=$DB_STATUS"
-            if [ "$HEALTH_STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ]; then
-              echo "✅ Production deployment healthy (status ok, database connected)!"
-              echo "healthy=true" >> "$GITHUB_OUTPUT"
-              exit 0
+            if [ "$HTTP_STATUS" = "503" ] && [ "$UNAVAILABLE" = "true" ] && [ "$HAS_RETRY_AFTER" = "no" ]; then
+              STATE="intentional_unavailable"
+              break
+            fi
+            if [ "$HTTP_STATUS" = "503" ] && [ "$HAS_RETRY_AFTER" = "yes" ]; then
+              STATE="transient_cold_start"
+            else
+              STATE="unexpected_$HTTP_STATUS"
             fi
             sleep 30
           done
-          echo "healthy=false" >> "$GITHUB_OUTPUT"
-          echo "::warning::Health check failed after 8 attempts (last db=$DB_STATUS)"
+          rm -f "$BODY_FILE" "$HDR_FILE"
+
+          if [ "$STATE" != "init_triggered" ] && [ "$STATE" != "intentional_unavailable" ]; then
+            echo "::warning::Phase 1 failed: final state='$STATE' (never reached a terminal verdict)"
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Phase 2: authoritative /api/health probe.
+          HEALTH_RESPONSE=$(curl -sf --max-time 30 \
+            -H "X-API-Key: ${{ secrets.SYSTEM_API_KEY }}" \
+            "$PROD_URL/api/health" 2>/dev/null) || HEALTH_RESPONSE=""
+          HEALTH_STATUS=$(echo "$HEALTH_RESPONSE" | jq -r '.status // "error"' 2>/dev/null || echo "error")
+          DB_STATUS=$(echo "$HEALTH_RESPONSE" | jq -r '.checks.database.status // "unknown"' 2>/dev/null || echo "unknown")
+          echo "Authoritative /api/health: status=$HEALTH_STATUS db=$DB_STATUS"
+
+          if [ "$HEALTH_STATUS" != "ok" ]; then
+            echo "::warning::Phase 2 failed: /api/health status=$HEALTH_STATUS (need 'ok')"
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$STATE" = "init_triggered" ] && [ "$DB_STATUS" != "ok" ]; then
+            echo "::warning::Phase 2 failed: /api/features returned 200 but /api/health reports db=$DB_STATUS (expected 'ok')"
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "✅ Production deployment healthy (phase1=$STATE, health.status=ok, db=$DB_STATUS)"
+          echo "healthy=true" >> "$GITHUB_OUTPUT"
 
       - name: Rollback on failure
         if: steps.healthcheck.outputs.healthy != 'true'
