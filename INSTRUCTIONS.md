@@ -29,6 +29,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - The process applies to all changes regardless of size — there is no "too small for a PR" threshold
 - **No DB-waking background work**: no timer/watchdog/scheduler/poller may issue a DB query (incl. `SELECT 1`) on its own — the DB is touched only in response to real user requests, operator curl, or operator-invoked batch jobs (see [§ Database & Data in INSTRUCTIONS.md](#database--data))
 - **Cold-start container validation gates check-in**: any PR touching server/client runtime or DB-touching code must run `npm run container:validate` (full restart + smoke probe) before each review request and after each fix push, and record the result in `## Container Validation` in the PR body (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation))
+- **Investigation artifacts → `shots/`** (gitignored): screenshots, repro captures, HAR-supplementary images go in top-level `shots/` named `[<orchestrator-id>][<CS-ID>-<TASK-ID>] <desc>.<ext>` (see [§ Investigation artifacts](#investigation-artifacts))
 
 ---
 
@@ -308,6 +309,25 @@ Commit locally after every meaningful, working change — each commit should be 
 
 - **No DB-waking background work.** The database must only be touched in response to actual application usage: real user requests, operator-initiated health probes (curl), or batch jobs explicitly invoked by an operator. **Forbidden**: any timer, watchdog, scheduler, polling loop, or recurring mechanism that issues a DB query (including `SELECT 1`) on its own. This applies equally to pool health watchdogs, periodic warm-up pings, SPA pollers that hit DB-backed endpoints, and recovery loops that re-attempt initialization on a timer. If you need to detect a dead pool, do it lazily on the next real request. If you need a `/api/db-status` endpoint, it must read in-memory state ONLY (`dbInitialized` flag, init-guard `isInFlight()`, `getDbUnavailability` cached last-error) and never issue a DB query. Rationale: an idle DB (e.g. Azure SQL serverless on its way to auto-pause, or Free Tier with a finite monthly compute allowance) must be allowed to stay idle so it can pause cleanly; background DB-keepalive activity has historically caused both unnecessary cost and stuck-state failure modes (CS53).
 - **Cold-start container validation gates every check-in.** For any PR that changes server-side code, client-side runtime code, or DB-touching code (i.e., everything except docs/markdown/CI-config-only changes), the author must run a "cold-start container validation" cycle (`npm run container:validate`) before requesting local review, after local-review fixes are pushed, and after each Copilot review iteration's fixes are pushed. Capture pass/fail per cycle in the PR body under `## Container Validation`. The container restarts cleanly with `GWN_SIMULATE_COLD_START_MS=30000` so the warmup retry path is exercised on every restart, mimicking Azure SQL serverless cold-start behavior. See [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation) for the procedure.
+
+---
+
+## Investigation artifacts
+
+Transient visual artifacts produced while investigating bugs or validating clickstops — screenshots, repro captures, HAR-supplementary images, container-state snapshots — live in a top-level `shots/` directory.
+
+**Location:** `shots/` at the repo root. Gitignored (see [`.gitignore`](.gitignore)). These files routinely contain JWTs in URLs, user PII visible in UI screenshots, and internal/staging URLs — they must never be committed. They are working artifacts, not source.
+
+**Naming convention:** `[<orchestrator-id>][<CS-ID>-<TASK-ID>] <short-description>.<ext>`
+
+Examples:
+- `[yoga-gwn][CS53-11] 01-loaded.png`
+- `[yoga-gwn-c2][CS53-5] profile-direct.png`
+- `[yoga-gwn][CS53-19] warm-boot-network.har`
+
+The `<orchestrator-id>` matches the `<machine>-gwn[-cN]` format in [WORKBOARD.md](WORKBOARD.md)'s Orchestrators table. The `[CS-ID-TASK-ID]` prefix mirrors how clickstop+task IDs already prefix branches and PRs, so artifacts are searchable and attributable in cross-agent worktree setups.
+
+**Lifecycle:** delete shots once the underlying CS task is closed, unless they're cited from a doc that needs them. They are working artifacts — do not let them accumulate indefinitely.
 
 ---
 
