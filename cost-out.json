@@ -1,0 +1,57 @@
+{
+  "eTag": null,
+  "id": "subscriptions/59fa8de9-d89c-42bc-8b8d-ee7bfab00270/resourcegroups/gwn-rg/providers/Microsoft.CostManagement/query/42b285b1-31d6-4d08-855a-3b01db691c11",
+  "location": null,
+  "name": "42b285b1-31d6-4d08-855a-3b01db691c11",
+  "properties": {
+    "columns": [
+      {
+        "name": "Cost",
+        "type": "Number"
+      },
+      {
+        "name": "ResourceId",
+        "type": "String"
+      },
+      {
+        "name": "Currency",
+        "type": "String"
+      }
+    ],
+    "nextLink": null,
+    "rows": [
+      [
+        37.340883,
+        "/subscriptions/59fa8de9-d89c-42bc-8b8d-ee7bfab00270/resourcegroups/gwn-rg/providers/microsoft.app/containerapps/gwn-production",
+        "DKK"
+      ],
+      [
+        51.823084,
+        "/subscriptions/59fa8de9-d89c-42bc-8b8d-ee7bfab00270/resourcegroups/gwn-rg/providers/microsoft.app/containerapps/gwn-staging",
+        "DKK"
+      ],
+      [
+        0.761832836067374,
+        "/subscriptions/59fa8de9-d89c-42bc-8b8d-ee7bfab00270/resourcegroups/gwn-rg/providers/microsoft.operationalinsights/workspaces/workspace-gwnrg6bxt",
+        "DKK"
+      ],
+      [
+        0.0,
+        "/subscriptions/59fa8de9-d89c-42bc-8b8d-ee7bfab00270/resourcegroups/gwn-rg/providers/microsoft.sql/servers/gwn-sqldb/databases/gwn-production",
+        "DKK"
+      ],
+      [
+        2.65142e-05,
+        "/subscriptions/59fa8de9-d89c-42bc-8b8d-ee7bfab00270/resourcegroups/gwn-rg/providers/microsoft.storage/storageaccounts/gwnstorage177467635",
+        "DKK"
+      ],
+      [
+        0.217424996164,
+        "/subscriptions/59fa8de9-d89c-42bc-8b8d-ee7bfab00270/resourcegroups/gwn-rg/providers/microsoft.storage/storageaccounts/gwnstorage177475548",
+        "DKK"
+      ]
+    ]
+  },
+  "sku": null,
+  "type": "Microsoft.CostManagement/query"
+}

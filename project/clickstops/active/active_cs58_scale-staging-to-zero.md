@@ -1,6 +1,6 @@
 # CS58 — Scale `gwn-staging` Container App to zero (cost optimization)
 
-**Status:** ⬜ Planned
+**Status:** 🟢 Active (claimed by yoga-gwn-c3 on 2026-04-25T17:46Z)
 **Origin:** Discovered 2026-04-25 while reviewing whether to remove the staging environment entirely. Cost Management meter-level data showed that the always-on `gwn-staging` Container App is the single most expensive resource in `gwn-rg` — and **99.5% of its bill is "Idle Usage"**, i.e. Azure billing for keeping a replica warm under `minReplicas=1` while it serves no traffic. Setting `minReplicas=0` captures essentially the full cost saving of a full deletion (~$7.30/month) while preserving staging as an on-demand validation surface.
 
 ## Goal
