@@ -285,6 +285,19 @@ function createServer() {
     const decrement = () => {
       if (!decremented) { decremented = true; activeRequests = Math.max(0, activeRequests - 1); }
     };
+    // CS53-12: bump per-response listener limit to silence
+    // MaxListenersExceededWarning. @opentelemetry/instrumentation-express
+    // attaches `res.once('finish', ...)` per Express layer that ends the
+    // response asynchronously (see node_modules/@opentelemetry/
+    // instrumentation-express/build/src/instrumentation.js:251). With our
+    // middleware stack (pino-http + json parser + static + request-gate +
+    // auth + route + error handler) plus this module's two listeners, a
+    // single response can briefly hold 11+ finish listeners — exceeding
+    // Node's default cap of 10 and emitting a per-response warning. The
+    // OTel listeners are `.once` and self-remove on the layer's `next()`,
+    // so this is a false-positive leak. 32 gives ample headroom while
+    // still catching real unbounded leaks (test asserts ≤ 32 under load).
+    res.setMaxListeners(32);
     res.on('finish', decrement);
     res.on('close', decrement);
     next();
