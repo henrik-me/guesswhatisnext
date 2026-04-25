@@ -1,6 +1,7 @@
 # CS52 — Server-Authoritative Scoring with Offline-First Local Mode
 
-**Status:** ⬜ Planned
+**Status:** 🔄 In Progress (design session)
+**Owner:** yoga-gwn-c5 (claimed 2026-04-25T18:45Z for CS52-1 design lock-down)
 **Goal:** Address [issue #198](https://github.com/henrik-me/guesswhatisnext/issues/198) finding F2 / Recommendation 1 / Roadmap B — make scoring server-authoritative for ranked play — while preserving offline play as a first-class capability and treating offline scores as **personal data synced across the player's devices** rather than as second-class leaderboard entries.
 
 **Origin:** Issue #198 architecture review and a planning conversation on 2026-04-22 with rubber-duck critique. The reframing insight (gameplay-mode split rather than scoring-layer fix) came out of the user observing that you cannot meaningfully separate "scoring" from "gameplay loop" — offline play and server-validated play are different game shapes, not the same loop with different submit endpoints.
