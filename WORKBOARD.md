@@ -3,11 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main -- no PR required.
 
-<<<<<<< Updated upstream
 > **Last updated:** 2026-04-25T18:18Z
-=======
-> **Last updated:** 2026-04-25T18:15Z
->>>>>>> Stashed changes
 
 ## Orchestrators
 
