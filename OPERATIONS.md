@@ -277,14 +277,16 @@ For deployment environments, CI/CD pipeline, and rollback policy, see [CONTEXT.m
 
 ## Staging environment (scale-to-zero)
 
-The Azure `gwn-staging` Container App runs at `minReplicas: 0` so it pays only for active usage. It is **not** the enforced pre-prod gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local [`npm run container:validate`](#cold-start-container-validation) cycles. See [active_cs58_scale-staging-to-zero.md](project/clickstops/active/active_cs58_scale-staging-to-zero.md) for the rationale, cost evidence, and rollback procedure.
+The Azure `gwn-staging` Container App is being moved to `minReplicas: 0` so it pays only for active usage (see [CS58](project/clickstops/active/active_cs58_scale-staging-to-zero.md) for the rollout plan, cost evidence, and rollback procedure — the live config tracks CS58-1/CS58-2). Staging is **not** the enforced pre-prod gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local [`npm run container:validate`](#cold-start-container-validation) cycles.
 
 ### Waking staging for ad-hoc validation
 
 Staging exists for ad-hoc operator probing (smoke-checking a fix in a real Azure environment, reproducing a cold-start path against managed Azure SQL, etc.). To wake it:
 
 ```powershell
-curl https://gwn-staging.blackbay-…azurecontainerapps.io/healthz
+$fqdn = az containerapp show --name gwn-staging --resource-group gwn-rg `
+  --query "properties.configuration.ingress.fqdn" -o tsv
+curl "https://$fqdn/healthz"
 # wait ~60s for the first 200
 ```
 
@@ -293,7 +295,7 @@ Cold-start budget on the first request after idle:
 - ~10–30s for the Container App replica to be allocated (`minReplicas: 0` → 1).
 - ~30s for the lazy DB init in `server/app.js` to complete its first connection (request-driven, see [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data)).
 
-Cooldown: after 300s of zero traffic the replica is deallocated again, so a probe followed by ~5 min of silence returns staging to its $0 idle state. The exact FQDN, the `minReplicas: 0` value, and the cooldown live authoritatively in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) and the live `az containerapp show` output — do not paraphrase them elsewhere.
+Cooldown: after the Container Apps idle window of zero traffic, the replica is deallocated again, so a probe followed by a few minutes of silence returns staging to its $0 idle state. The exact FQDN, the `minReplicas` value, and the cooldown live authoritatively in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) and the live `az containerapp show` output — do not paraphrase them elsewhere. Until [CS58-1/CS58-2](project/clickstops/active/active_cs58_scale-staging-to-zero.md) land, the live `minReplicas` may still be `1`; check the CS task table for current state.
 
 ### Querying Azure cost
 
