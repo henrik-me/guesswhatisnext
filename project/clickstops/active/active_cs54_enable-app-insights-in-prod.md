@@ -43,14 +43,16 @@ This eliminates the need for ad-hoc `parse_json(Log_s)` extraction over Containe
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| CS54-1 | Provision AI resources (staging + prod) in `gwn-rg`, workspace-based against the existing Container Apps Log Analytics workspace. Capture both connection strings. | ⬜ Pending | Manual `az` commands documented in PR body; no Bicep/Terraform in this repo today, so we don't introduce IaC just for this. |
-| CS54-2 | Add `APPLICATIONINSIGHTS_CONNECTION_STRING_STAGING` + `APPLICATIONINSIGHTS_CONNECTION_STRING_PROD` GitHub secrets (via `gh secret set`). Verify each is masked in workflow logs. | ⬜ Pending | Operator-only step (requires repo admin). Must be done before CS54-3. |
-| CS54-3 | Wire `APPLICATIONINSIGHTS_CONNECTION_STRING` into `staging-deploy.yml`: deploy template env enumeration (~L464) + workflow `env:` block (~L496). | ⬜ Pending | First — we want staging to prove the wiring. PR includes container-validation cycle (env-only change to runtime path is borderline; treat as runtime-affecting and validate). |
-| CS54-4 | Wire `APPLICATIONINSIGHTS_CONNECTION_STRING` into `prod-deploy.yml`: deploy template env enumeration (~L186) + rollback template env enumeration (~L280) + workflow `env:` blocks (~L211 + ~L322). **Both happy and rollback paths must be updated identically — easy to miss the rollback.** | ⬜ Pending | Depends on CS54-3 verified in staging. |
-| CS54-5 | Update `infra/deploy.sh` and `infra/deploy.ps1` to set the env var when (re-)provisioning the container app, so the wiring isn't only in the GH Actions path. Also update `infra/setup-github.sh` / `setup-github.ps1` to register the new secret name in their checklists. | ⬜ Pending | Completeness — these scripts are the documented provisioning path. Pure docs/CI per REVIEWS.md (no app code change). |
-| CS54-6 | Deploy + verify end-to-end: trigger staging deploy, hit `/api/health` then `/api/scores/leaderboard?mode=freeplay&period=alltime`, confirm a `requests` row + a `traces` row + an mssql `dependencies` row appear in `gwn-ai-staging` within 5 min. Then trigger prod deploy and repeat. Capture KQL+screenshots in PR body. | ⬜ Pending | This is the CS gate — if any table doesn't populate, troubleshoot before closing. |
-| CS54-7 | Document common KQL queries in `OPERATIONS.md` (or a new `docs/observability.md`): cold-start dependency latency, request error rate, exception aggregation, log search by `trace_id`. Include staging-vs-prod filtering note. | ⬜ Pending | Replaces the ad-hoc `parse_json(Log_s)` queries used during CS53. |
-| CS54-8 | Close clickstop: move file to `done/`, update WORKBOARD, summarize CS54 + link to first prod KQL screenshot in CONTEXT.md if relevant. | ⬜ Pending | Standard close-out. |
+| CS54-1 | Provision AI resources (staging + prod) in `gwn-rg`, workspace-bound to the workspace backing the Container Apps Environment (resolved via `appLogsConfiguration.logAnalyticsConfiguration.customerId`, NOT `[0].id` of the RG-level list). Capture both connection strings. Region must match the Container App's region; fail closed otherwise. | 🔄 In Progress | Manual `az` commands; operator-driven. |
+| CS54-2 | For each Container App, register the connection string as a Container App `secret` via `az containerapp secret set` (`appinsights-connection-string`). Must be done before CS54-3 / CS54-4 redeploy with `secretRef:`. | ⬜ Pending | Operator-driven (Azure-side). No GitHub secret involved. |
+| CS54-3 | Wire `APPLICATIONINSIGHTS_CONNECTION_STRING` into `staging-deploy.yml` via `secretRef:`: deploy template env enumeration (~L464) only. **Do NOT** add the var to the ephemeral smoke-test container env block (~L60–L100). | ⬜ Pending | First sub-agent task — wt-1, branch `yoga-gwn-c2/cs54-3-staging-deploy-wiring`, port 4021. Container-validation cycle required. |
+| CS54-4 | Wire `APPLICATIONINSIGHTS_CONNECTION_STRING` into `prod-deploy.yml` via `secretRef:`: deploy template env enumeration (~L186) AND rollback template env enumeration (~L280). Add a CI grep guard that fails if `APPLICATIONINSIGHTS` appears only once in `prod-deploy.yml`. | ⬜ Pending | Depends on CS54-3 verified in staging. |
+| CS54-5 | Update `infra/deploy.sh` and `infra/deploy.ps1` to set the secret + secretRef env wiring. **Ships in the same PR as CS54-4** so a later bootstrap re-run cannot silently revert the wiring. | ⬜ Pending | Pulled forward from "follow-up completeness" per rubber-duck finding #5. |
+| CS54-6 | Deploy + verify end-to-end: trigger staging deploy, hit `/api/health` then `/api/scores/leaderboard?mode=freeplay&period=alltime` ≥3 times, confirm a `requests` row appears in `gwn-ai-staging` within 5 min. Then trigger prod deploy and repeat. **Do NOT assert on `dependencies`, `traces`, or `exceptions` tables — those are evaluated in CS54-9.** | ⬜ Pending | This is the CS gate. |
+| CS54-7 | Document common KQL queries in `OPERATIONS.md` (or `docs/observability.md`): error rate by route, p50/p95/p99 latency, distributed-trace bridge to `ContainerAppConsoleLogs_CL` via `operation_Id`. Include the dev/operator note about not exporting the conn string locally. | ⬜ Pending | Replaces ad-hoc `parse_json(Log_s)` queries from CS53 — for HTTP shape only. |
+| CS54-8 | Post-enable measurement at +24h, +7d, +30d: capture App Insights ingest volume per resource. Record actuals in CS54 closing note. **Replaces up-front cost guess.** | ⬜ Pending | Per rubber-duck finding #9. |
+| CS54-9 | Evaluate deferred observability gaps — append a "Deferred Work Evaluation" appendix to this CS54 file. For each gap (mssql instrumentation, Pino→AI log forwarding, exceptions table), document: what's needed, ≥2 implementation options with trade-offs, dependencies, rough effort, recommended approach, and what data from CS54-6/CS54-8 would change the recommendation. **Do NOT file a follow-up CS yet** — defer that decision until production measurement data is in hand and a future orchestrator has full context to decide one-CS-vs-many, priority, and possible folding into adjacent clickstops (CS47, CS56). | ⬜ Pending | Replaces prior "file CS58 stub" approach. Evaluate-first deferral pattern. |
+| CS54-10 | Close clickstop: move file to `done/`, update WORKBOARD, summarize CS54 + reference the Deferred Work Evaluation appendix in the closing note so future orchestrators can find it. | ⬜ Pending | Standard close-out. |
 
 ## Per-task implementation detail
 
@@ -227,7 +229,7 @@ Add a `## Observability — App Insights query examples (HTTP request shape)` su
 - Note the staging-vs-prod filter: pick the right AI resource in the portal (resources are not joined cross-environment).
 - Operator/dev note: do NOT export `APPLICATIONINSIGHTS_CONNECTION_STRING` in your local shell when running the real server, or your local dev traffic will appear in the staging AI resource. The variable belongs in deploy-time only.
 
-Cross-link CS58 (when filed in CS54-9) for full-coverage queries that need `dependencies`, `exceptions`, and `traces`.
+Cross-link the CS54-9 Deferred Work Evaluation appendix (added below) for full-coverage queries that need `dependencies`, `exceptions`, and `traces` — those are explicitly out of CS54 scope and are evaluated, not delivered, in CS54-9.
 
 ### CS54-8 — Post-enable measurement (replaces up-front cost guess)
 
@@ -244,16 +246,33 @@ SystemEvents
 
 Record actuals in the CS54 closing note (CS54-10). If actuals approach the 5GB/month free-tier ceiling for either resource, file a follow-up to add sampling or daily cap. Don't pre-set a cap — measure first.
 
-### CS54-9 — File CS58 (deferred-work clickstop)
+### CS54-9 — Evaluate deferred observability gaps (no new CS yet)
 
-Create `project/clickstops/planned/planned_cs58_full-app-insights-instrumentation.md` covering:
+Append a `## Deferred Work Evaluation` section to this CS54 file (kept in `active/` until CS54-10 closes it; then it travels to `done/` with the rest of the audit trail). For each of the three gaps the rubber-duck pass (`cs54-plan-review`, findings #1 and #2) carved out, document the following structure:
 
-- Enable mssql auto-instrumentation in `server/telemetry.js` (extend `ENABLED_INSTRUMENTATIONS`); verify `dependencies` table populates on the next deploy.
-- Add a Pino → AI log forwarder so `traces` table populates with structured Pino output (e.g. `pino-applicationinsights` transport, or a thin Pino destination that calls `appInsights.defaultClient.trackTrace`). Decide between Pino transport vs OTel logs SDK.
-- Add an intentional error probe so `exceptions` table is exercised on every deploy.
-- Update `OPERATIONS.md` KQL examples to include the new tables.
+```
+### Gap N: <name>
+**What's missing.** <one paragraph — what user-facing capability or KQL query is unavailable>
+**Why CS54 does not deliver it.** <link to telemetry.js line range / explanation>
+**Options considered.**
+  Option A: <approach> — pros / cons / rough effort
+  Option B: <approach> — pros / cons / rough effort
+  (≥ 2 options; prefer "do nothing" / "defer further" as one of them where realistic)
+**Recommendation.** <one of the options, or "decide later — needs CS54-8 data to choose">
+**Dependencies / blockers.** <other CS, infra, decisions>
+**What data from CS54-6 / CS54-8 would change this.** <specific signal that would shift the recommendation>
+**Suggested follow-up shape.** <"file dedicated CS" / "fold into CS47" / "fold into CS56" / "no follow-up needed">
+```
 
-Per TRACKING.md "Deferred work policy" — must be filed before CS54 can close.
+The three gaps to evaluate:
+
+1. **`dependencies` table — mssql auto-instrumentation.** Today `server/telemetry.js:12-15` filters to `instrumentation-http` + `instrumentation-express`. Options include enabling `@opentelemetry/instrumentation-mssql` (or whatever the current OTel mssql package is named — verify availability and version compatibility with the pinned `@opentelemetry/sdk-node`).
+2. **`traces` table — Pino → App Insights log forwarding.** Today Pino → stdout → `ContainerAppConsoleLogs_CL`. Options include a Pino transport (`pino-applicationinsights` or similar), the OTel logs SDK + Azure Monitor logs exporter, or accepting the cross-table KQL bridge added in CS54-7 as the long-term answer.
+3. **`exceptions` table — typed stack traces.** Today only failed `requests` (with `success: false`) appear, not full stack traces. Options include explicit `appInsights.defaultClient.trackException` calls in `server/error-handler.js`, an `unhandledRejection`/`uncaughtException` global handler that calls into the AI SDK directly, or accepting that error correlation via Pino's `err` field in the new `traces` table (option #2 above) is sufficient.
+
+**Explicit non-goal of CS54-9:** do not create a new `planned_csN_*.md` file. The decision on whether the follow-up is one CS, many CSs, or folded into an adjacent clickstop is deferred to a future orchestrator working with measured production data from CS54-6 and CS54-8. The evaluation appendix in this CS54 file is the durable record of what was deferred and why — that satisfies "never silently drop" without committing to a CS shape prematurely.
+
+When CS54 moves to `done/`, the evaluation appendix moves with it; future orchestrators discover it via `git log --diff-filter=A -- project/clickstops/done/done_cs54_*.md` or by browsing `done/`.
 
 ## Risks & mitigations
 
@@ -278,16 +297,16 @@ Per TRACKING.md "Deferred work policy" — must be filed before CS54 can close.
 - [ ] No regression in `npm test` (especially `tests/opentelemetry.test.js`).
 - [ ] No regression in `npm run container:validate` cold-start cycle.
 - [ ] Both happy-path and rollback paths in `prod-deploy.yml` reference the ACA secret identically; CI grep guard active.
-- [ ] CS58 plan filed in `project/clickstops/planned/planned_cs58_*.md` capturing the deferred mssql/log/exceptions work.
+- [ ] Deferred Work Evaluation appendix added to this CS54 file with ≥2 options + recommendation per gap (mssql instrumentation, Pino→AI log forwarding, exceptions). **No new clickstop file is required by CS54** — see CS54-9 for the rationale. Future CS-creation decision lives with whoever next picks this up after CS54-8 measurements are in.
 - [ ] Post-enable measurement (CS54-8) recorded in the CS54 closing note for at least +24h.
 
 **Explicitly NOT in acceptance** (deferred to CS58): `dependencies` table populating, `traces` table populating with Pino logs, `exceptions` table populating.
 
 ## Will not be done as part of this clickstop
 
-- **`dependencies` table population** — requires enabling mssql auto-instrumentation in [`server/telemetry.js`](../../../server/telemetry.js); deferred to CS58.
-- **`traces` table population from Pino logs** — requires a log-export path (Pino transport or OTel logs SDK); deferred to CS58.
-- **`exceptions` table population** — requires either an intentional error probe or uncaught-exception traffic; deferred to CS58.
+- **`dependencies` table population** — requires enabling mssql auto-instrumentation in [`server/telemetry.js`](../../../server/telemetry.js); deferred — CS54-9 evaluates options and records a recommendation, but does not file a follow-up clickstop. Decision on whether/when/how to follow up is left to a future orchestrator with CS54-8 data in hand.
+- **`traces` table population from Pino logs** — requires a log-export path (Pino transport or OTel logs SDK); deferred — see CS54-9.
+- **`exceptions` table population** — requires either an intentional error probe or uncaught-exception traffic with stack-trace forwarding; deferred — see CS54-9.
 - Custom metrics or alerts beyond what the request-span exporter provides — that's CS47's scope (ProgressiveLoader telemetry & alerting).
 - Reworking [`server/telemetry.js`](../../../server/telemetry.js) — it already supports App Insights export via the connection string; only env-var wiring is missing for spans.
 - Backfilling historical incident data — App Insights only sees forward from when it's enabled.
@@ -306,7 +325,7 @@ Each task is independently revertable:
 | CS54-3, CS54-4 | Revert PR; redeploy. The container will revert to no-export (current behavior). No data lost; AI tables stop receiving new rows. |
 | CS54-5 | Revert PR. Provisioning scripts return to current state. |
 | CS54-6, CS54-7, CS54-8 | Pure verification / docs / measurement — nothing to roll back. |
-| CS54-9, CS54-10 | Revert PR; CS58 plan file goes away (or stays, harmlessly). |
+| CS54-9, CS54-10 | Pure docs (evaluation appendix appended in-file). Revert PR if needed; no Azure or DB state to undo. |
 
 ## Observability deliverables (meta — for the CS itself)
 
@@ -338,9 +357,9 @@ Realistic worktree usage: 1 sub-agent for CS54-3+CS54-4+CS54-6 (one PR each, seq
 - [x] CS54 number verified free across `planned/`, `active/`, `done/`, and WORKBOARD.md.
 - [x] Investigation complete (telemetry.js, config.js, both deploy YAMLs, infra/ scripts, tests).
 - [x] Plan reviewed by rubber-duck pass `cs54-plan-review` (10 findings, all adopted — narrowed scope to `requests` only; switched to `secretRef:`; hardened workspace discovery; pulled `infra/` updates into rollout).
+- [x] Plan revised again (2026-04-25) to use evaluate-first deferral pattern (CS54-9 documents options and a recommendation per gap; does not file a stub follow-up CS). Prevents speculative CS proliferation; CS-creation decision waits for measured rollout data.
 - [ ] After dispatch decision: move file to `active/`, claim CS54-1 in WORKBOARD, prompt user `/rename`.
 - [ ] CS54-1 + CS54-2 are operator-driven (Azure CLI); confirm operator has Azure subscription contributor access on `gwn-rg` before claiming.
-- [ ] CS58 number reserved for the deferred-work clickstop (next free number — verify before CS54-9).
 
 ## Open questions (to resolve during CS54-1 or before dispatch)
 
