@@ -42,6 +42,12 @@ The free managed TLS cert is issued automatically after DNS validation and renew
 
 Re-running `infra/deploy.sh` / `infra/deploy.ps1` resets the `PROD_URL` GitHub secret back to the Azure FQDN. After re-bootstrap, manually restore `PROD_URL` to `https://gwn.metzger.dk` (or whatever your custom domain is) so GitHub Actions keep targeting the custom hostname. `PRODUCTION_CANONICAL_HOST` only affects the container app's `CANONICAL_HOST` env var, not the secret.
 
+## App Insights provisioning
+
+The `APPLICATIONINSIGHTS_CONNECTION_STRING` env var on each Container App is wired via an ACA `secretRef:` (see [`prod-deploy.yml`](../.github/workflows/prod-deploy.yml), [`staging-deploy.yml`](../.github/workflows/staging-deploy.yml), [`infra/deploy.sh`](deploy.sh), [`infra/deploy.ps1`](deploy.ps1)). The deploy scripts and workflows do **not** create the AI resource or register the secret — they assume both already exist and **fail closed** if the `appinsights-connection-string` ACA secret is missing on the target Container App.
+
+The one-time operator runbook for provisioning the AI resources and registering the secrets lives in the CS54 clickstop file — see [`active_cs54_enable-app-insights-in-prod.md`](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md) (look for tasks **CS54-1** and **CS54-2** under "Per-task implementation detail"). Once CS54 closes, the same content travels to `project/clickstops/done/done_cs54_*.md`.
+
 ## Operational troubleshooting
 
 When prod is misbehaving, these are the `az` commands to reach for. For workflow context (what the pipeline did, which image tag is live, what the verify step checked) see [`prod-deploy.yml`](../.github/workflows/prod-deploy.yml) and [`health-monitor.yml`](../.github/workflows/health-monitor.yml).

@@ -162,6 +162,36 @@ function Get-AppImage {
     return Get-AppQuery $AppName 'properties.template.containers[0].image'
 }
 
+function Assert-AppInsightsSecretPresent {
+    param([string]$AppName)
+
+    $secretListOutput = az containerapp secret list `
+        --name $AppName `
+        --resource-group $ResourceGroup `
+        --query "[?name=='appinsights-connection-string'].name" `
+        -o tsv 2>&1
+    $azExitCode = $LASTEXITCODE
+
+    if ($azExitCode -ne 0) {
+        $azError = ($secretListOutput | Out-String).Trim()
+        Write-Host "Error: failed to query ACA secrets on $AppName (az exit=$azExitCode)." -ForegroundColor Red
+        if ($azError) {
+            Write-Host "       Azure CLI reported: $azError" -ForegroundColor Red
+        }
+        Write-Host "       Common causes: not logged in (run 'az login'), wrong subscription," -ForegroundColor Red
+        Write-Host "       missing 'containerapp' extension, or insufficient RBAC on $ResourceGroup." -ForegroundColor Red
+        throw "Failed to query ACA secrets for $AppName"
+    }
+
+    if (-not (Normalize-TsvValue ($secretListOutput | Out-String))) {
+        Write-Host "Error: ACA secret 'appinsights-connection-string' is not registered on $AppName." -ForegroundColor Red
+        Write-Host "       Run the CS54-1 + CS54-2 operator steps first — see" -ForegroundColor Red
+        Write-Host "       project/clickstops/active/active_cs54_enable-app-insights-in-prod.md" -ForegroundColor Red
+        Write-Host "       (or done/done_cs54_*.md once the clickstop is closed)." -ForegroundColor Red
+        throw "Missing ACA secret 'appinsights-connection-string' on $AppName"
+    }
+}
+
 function Get-AppFqdn {
     param([string]$AppName)
 
@@ -418,7 +448,8 @@ function Update-ContainerAppRuntime {
         'PORT=3000',
         'GWN_DB_PATH=/tmp/game.db',
         "JWT_SECRET=$($script:JwtSecret)",
-        "SYSTEM_API_KEY=$($script:SystemApiKey)"
+        "SYSTEM_API_KEY=$($script:SystemApiKey)",
+        'APPLICATIONINSIGHTS_CONNECTION_STRING=secretref:appinsights-connection-string'
     )
     if ($CanonicalHost) {
         $envVars += "CANONICAL_HOST=$CanonicalHost"
@@ -580,12 +611,14 @@ Write-Step "Configuring $StagingAppName..."
 if (-not $StagingHost) {
     Write-WarnMessage "Could not determine staging CANONICAL_HOST; updating runtime without changing it"
 }
+Assert-AppInsightsSecretPresent -AppName $StagingAppName
 Update-ContainerAppRuntime -AppName $StagingAppName -NodeEnv 'staging' -CanonicalHost $StagingHost -Image $StagingImage
 
 Write-Step "Configuring $ProductionAppName..."
 if (-not $ProductionHost) {
     Write-WarnMessage "Could not determine production CANONICAL_HOST; updating runtime without changing it"
 }
+Assert-AppInsightsSecretPresent -AppName $ProductionAppName
 Update-ContainerAppRuntime -AppName $ProductionAppName -NodeEnv 'production' -CanonicalHost $ProductionHost -Image $ProductionImage
 
 Write-Step 'Configuring GitHub repository settings...'

@@ -144,6 +144,38 @@ get_app_image() {
   get_app_query "$app_name" "properties.template.containers[0].image"
 }
 
+ensure_appinsights_secret_present() {
+  local app_name="$1"
+  local cli_output
+  local cli_status
+  set +e
+  cli_output="$(az containerapp secret list \
+    --name "$app_name" \
+    --resource-group "$RESOURCE_GROUP" \
+    --query "[?name=='appinsights-connection-string'].name" \
+    -o tsv 2>&1)"
+  cli_status=$?
+  set -e
+
+  if [ "$cli_status" -ne 0 ]; then
+    echo "Error: failed to query ACA secrets on $app_name (az exit=$cli_status)." >&2
+    if [ -n "$cli_output" ]; then
+      echo "       Azure CLI reported: $cli_output" >&2
+    fi
+    echo "       Common causes: not logged in (run 'az login'), wrong subscription," >&2
+    echo "       missing 'containerapp' extension, or insufficient RBAC on $RESOURCE_GROUP." >&2
+    exit 1
+  fi
+
+  if [ -z "$(sanitize_tsv_value "$cli_output")" ]; then
+    echo "Error: ACA secret 'appinsights-connection-string' is not registered on $app_name." >&2
+    echo "       Run the CS54-1 + CS54-2 operator steps first — see" >&2
+    echo "       project/clickstops/active/active_cs54_enable-app-insights-in-prod.md" >&2
+    echo "       (or done/done_cs54_*.md once the clickstop is closed)." >&2
+    exit 1
+  fi
+}
+
 get_app_fqdn() {
   local app_name="$1"
   get_app_query "$app_name" "properties.configuration.ingress.fqdn"
@@ -338,6 +370,7 @@ update_container_app_runtime() {
     "GWN_DB_PATH=/tmp/game.db"
     "JWT_SECRET=$JWT_SECRET"
     "SYSTEM_API_KEY=$SYSTEM_API_KEY"
+    "APPLICATIONINSIGHTS_CONNECTION_STRING=secretref:appinsights-connection-string"
   )
   if [ -n "$canonical_host" ]; then
     env_vars+=("CANONICAL_HOST=$canonical_host")
@@ -486,12 +519,14 @@ log_step "Configuring $STAGING_APP_NAME..."
 if [ -z "$STAGING_HOST" ]; then
   log_warn "Could not determine staging CANONICAL_HOST; updating runtime without changing it"
 fi
+ensure_appinsights_secret_present "$STAGING_APP_NAME"
 update_container_app_runtime "$STAGING_APP_NAME" staging "$STAGING_HOST" "$STAGING_IMAGE"
 
 log_step "Configuring $PRODUCTION_APP_NAME..."
 if [ -z "$PRODUCTION_HOST" ]; then
   log_warn "Could not determine production CANONICAL_HOST; updating runtime without changing it"
 fi
+ensure_appinsights_secret_present "$PRODUCTION_APP_NAME"
 update_container_app_runtime "$PRODUCTION_APP_NAME" production "$PRODUCTION_HOST" "$PRODUCTION_IMAGE"
 
 log_step "Configuring GitHub repository settings..."
