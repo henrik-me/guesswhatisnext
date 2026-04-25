@@ -27,7 +27,7 @@ Both AI resources are **workspace-bound** to the same Log Analytics workspace (`
 
 ### A.2 `az monitor log-analytics query` (CLI alternative)
 
-For scripted use or when you don't want to leave the terminal. The CLI accepts either an App Insights `appId` or a Log Analytics `customer-id` (a GUID) — the AI tables (`requests`, `dependencies`, etc.) are queryable via the AI app, while cross-table queries that touch `ContainerAppConsoleLogs_CL` need the underlying workspace.
+For scripted use or when you don't want to leave the terminal. The CLI accepts either an App Insights `appId` (for AI tables: `requests`, `dependencies`, etc. — and for cross-table queries that bridge to `ContainerAppConsoleLogs_CL` via the `workspace(...)` function, see § B.5) or a Log Analytics `customer-id` (a GUID, for queries whose primary table is a workspace table such as `ContainerAppConsoleLogs_CL`).
 
 ```powershell
 # Sanity check: 'requests' table in the staging AI resource
@@ -42,10 +42,10 @@ az monitor app-insights query `
   --analytics-query 'requests | where timestamp > ago(15m) | take 5' `
   -o table
 
-# Cross-table query that joins 'requests' with 'ContainerAppConsoleLogs_CL'
-# must run against the workspace, not the AI app
-az monitor log-analytics query `
-  --workspace <workspace-customer-id> `
+# Cross-table query that bridges 'requests' (AI) with 'ContainerAppConsoleLogs_CL'
+# (workspace) — runs in AI scope; the workspace(...) function reaches the bound workspace
+az monitor app-insights query `
+  --app gwn-ai-staging --resource-group gwn-rg `
   --analytics-query '<kql from § B.5>' `
   -o table
 ```
@@ -129,7 +129,7 @@ Grab an `operation_Id` from this query and feed it into § B.5 to see what the s
 
 Until [CS54-9](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#cs54-9--evaluate-deferred-observability-gaps-no-new-cs-yet) lands a Pino → AI log forwarder, the `traces` table is empty. To correlate a request span with the Pino log lines it produced, bridge the AI `requests` table to the workspace's `ContainerAppConsoleLogs_CL` via `operation_Id` ↔ `trace_id` (Pino logger injects `trace_id` from the active OTel span — see [`server/logger.js`](../server/logger.js)).
 
-The query below runs **against the workspace** (not the AI app), and uses the `workspace(...)` KQL function to reach across — needed because the editor's default scope when invoked from the AI resource is the AI app, but `ContainerAppConsoleLogs_CL` is a workspace table.
+The query below runs **in AI scope** (against `gwn-ai-staging` or `gwn-ai-production`), so `requests` resolves natively. It uses the `workspace(...)` KQL function on the Pino branch to reach across to the bound Log Analytics workspace for `ContainerAppConsoleLogs_CL` — the same workspace both AI resources are bound to (see the resource table above). Equivalent CLI invocation: `az monitor app-insights query --app gwn-ai-{staging,production} --analytics-query '<below>'`.
 
 ```kusto
 let opId = "<paste operation_Id from a requests row>";
@@ -141,7 +141,7 @@ union
 | order by timestamp asc
 ```
 
-Run from the **AI resource's** Logs blade (or `az monitor app-insights query --app gwn-ai-staging`) — the AI scope makes `requests` available natively, and `workspace(...)` reaches across to the bound workspace for `ContainerAppConsoleLogs_CL`. The `extend timestamp=TimeGenerated` step normalizes the Pino branch's time column so the final `order by timestamp asc` sorts both halves of the union together.
+The `extend timestamp=TimeGenerated` step on the Pino branch normalizes the time column so the final `order by timestamp asc` sorts both halves of the union together (the AI `requests` table uses `timestamp`; the workspace `ContainerAppConsoleLogs_CL` table uses `TimeGenerated`).
 
 Replace the workspace resource ID if it ever changes — re-discover via:
 
