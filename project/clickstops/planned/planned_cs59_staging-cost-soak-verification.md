@@ -28,6 +28,35 @@ az containerapp revision list --name gwn-staging --resource-group gwn-rg `
 # Expected: 1 row, traffic=100, minReplicas=0
 ```
 
+### Cold-wake `/healthz` probe (folded in from CS58-5)
+
+This was originally CS58-5 acceptance criterion (c) but could not be reliably tested at CS58 close-out because concurrent CS54 staging activity was keeping the replica warm. After 7 days of soak, staging should be deallocated; this is the natural cold-state verification window.
+
+Before any other CS59 query, confirm staging actually went cold and wakes correctly:
+
+```powershell
+# Confirm cold state — replicas should be 0
+az containerapp revision list --name gwn-staging --resource-group gwn-rg `
+  --query "[?properties.active] | [0].properties.replicas" -o tsv
+# Expected: 0 (if not, something kept it warm — investigate before continuing)
+
+# Cold probe
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
+$r = Invoke-WebRequest "https://gwn-staging.blackbay-4189fc2a.eastus.azurecontainerapps.io/healthz" `
+  -TimeoutSec 90 -UseBasicParsing
+"Cold response: $($r.StatusCode) in $([math]::Round($sw.Elapsed.TotalSeconds,1))s"
+# Expected: 200, ~10–60s (replica spin-up + DB lazy init)
+
+# Warm probe (immediately after)
+$sw.Restart()
+$r2 = Invoke-WebRequest "https://gwn-staging.blackbay-4189fc2a.eastus.azurecontainerapps.io/healthz" `
+  -TimeoutSec 30 -UseBasicParsing
+"Warm response: $($r2.StatusCode) in $([math]::Round($sw.Elapsed.TotalSeconds,2))s"
+# Expected: 200, <1s
+```
+
+If cold response > 90s or non-200, the cold-start UX is broken — open a new CS to investigate, do not just close CS59.
+
 ## Cost analysis procedure
 
 The canonical query lives in [`OPERATIONS.md` § Querying Azure cost](../../../OPERATIONS.md#querying-azure-cost). Run it and capture the meter-level breakdown for `gwn-staging` over the last 7 days (the soak window):
@@ -94,7 +123,7 @@ If staging is still accumulating significant idle hours, check (in this order):
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| CS59-1 | Run pre-flight checks (above). If `minReplicas != 0` or there are multiple active revisions, halt and document. | ⬜ Pending | Earliest: 2026-05-02. |
+| CS59-1 | Run pre-flight checks (above), **including the cold-wake `/healthz` probe** (folded in from CS58-5(c)). If `minReplicas != 0`, multiple active revisions, or cold probe non-200/>90s, halt and document. | ⬜ Pending | Earliest: 2026-05-02. |
 | CS59-2 | Run the 7-day post-change cost meter query and capture the result. | ⬜ Pending | Depends on CS59-1 passing. |
 | CS59-3 | Run the prior-7-day baseline cost meter query and capture the result. | ⬜ Pending | Depends on CS59-1 passing. |
 | CS59-4 | Compare meter quantities; produce the post/pre table; classify as ✅ confirmed (>95% drop) or ❌ regressed (<80% drop) or 🟡 partial (80–95%). | ⬜ Pending | Depends on CS59-2 + CS59-3. |
