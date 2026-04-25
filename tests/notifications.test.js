@@ -8,12 +8,14 @@ const SYSTEM_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
 const ENABLED_SUBMISSIONS_PATH = '/api/submissions?ff_submit_puzzle=1';
 
 let userToken;
+let userId;
 let user2Token;
 
 beforeAll(async () => {
   await setup();
-  const { token } = await registerUser('notifuser1');
-  userToken = token;
+  const reg1 = await registerUser('notifuser1');
+  userToken = reg1.token;
+  userId = reg1.user.id;
   const { token: t2 } = await registerUser('notifuser2');
   user2Token = t2;
 });
@@ -169,18 +171,21 @@ describe('PUT /api/notifications/read-all', () => {
 
     const countBefore = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(countBefore.body.unread_count).toBeGreaterThan(0);
 
     const res = await getAgent()
       .put('/api/notifications/read-all')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(res.status).toBe(200);
     expect(res.body.updated).toBeGreaterThanOrEqual(0);
 
     const countAfter = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(countAfter.body.unread_count).toBe(0);
   });
 });
@@ -191,11 +196,12 @@ describe('GET /api/notifications/count', () => {
     expect(res.status).toBe(401);
   });
 
-  test('returns correct unread count', async () => {
+  test('returns correct unread count (with X-User-Activity)', async () => {
     // Mark all as read first
     await getAgent()
       .put('/api/notifications/read-all')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
 
     // Create new notification
     const subId = await createSubmission(userToken);
@@ -203,19 +209,102 @@ describe('GET /api/notifications/count', () => {
 
     const res = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(res.status).toBe(200);
     expect(res.body.unread_count).toBe(1);
   });
 
-  test('caches result so repeated polls do not hit DB', async () => {
+  test('boot-quiet: no X-User-Activity + cache miss → returns 0 and does NOT touch DB', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const { getDbAdapter } = require('../server/db');
+    unreadCountCache.clear();
+
+    const db = await getDbAdapter();
+    const spy = vi.spyOn(db, 'get');
+
+    const res = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.unread_count).toBe(0);
+    expect(res.headers['x-cache']).toBe('MISS-NO-ACTIVITY');
+    expect(spy).not.toHaveBeenCalled();
+
+    spy.mockRestore();
+  });
+
+  test('boot-quiet: no X-User-Activity + cache hit → returns cached value, no DB', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const { getDbAdapter } = require('../server/db');
+    unreadCountCache.clear();
+    unreadCountCache.set(userId, 7);
+
+    const db = await getDbAdapter();
+    const spy = vi.spyOn(db, 'get');
+
+    const res = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.unread_count).toBe(7);
+    expect(res.headers['x-cache']).toBe('HIT');
+    expect(spy).not.toHaveBeenCalled();
+
+    spy.mockRestore();
+    unreadCountCache.clear();
+  });
+
+  test('with X-User-Activity: 1 + cache miss → exactly one DB query and seeds cache', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const { getDbAdapter } = require('../server/db');
+    unreadCountCache.clear();
+
+    // Make sure there is one unread to count (note: review path also uses db.get internally)
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    const subId = await createSubmission(userToken);
+    await reviewSubmission(subId, 'approved');
+
+    unreadCountCache.invalidate(userId);
+    const db = await getDbAdapter();
+    const spy = vi.spyOn(db, 'get');
+    spy.mockClear();
+
+    const r1 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r1.status).toBe(200);
+    expect(r1.headers['x-cache']).toBe('MISS');
+    expect(r1.body.unread_count).toBeGreaterThanOrEqual(1);
+    // The /count endpoint issues exactly one db.get for the COUNT(*) query.
+    const countCalls = spy.mock.calls.filter(args => /COUNT\(\*\)\s+AS\s+count\s+FROM\s+notifications/i.test(args[0])).length;
+    expect(countCalls).toBe(1);
+
+    // Second call: served from cache, no DB.
+    spy.mockClear();
+    const r2 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r2.headers['x-cache']).toBe('HIT');
+    expect(spy).not.toHaveBeenCalled();
+
+    spy.mockRestore();
+  });
+
+  test('caches result so repeated user-activity polls do not hit DB', async () => {
     const { unreadCountCache } = require('../server/services/unread-count-cache');
     unreadCountCache.clear();
 
     // Mark all as read so count is deterministic
     await getAgent()
       .put('/api/notifications/read-all')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
 
     // Create one notification → invalidates cache
     const subId = await createSubmission(userToken);
@@ -223,10 +312,11 @@ describe('GET /api/notifications/count', () => {
 
     const before = unreadCountCache.snapshot();
 
-    // First call: cache miss → DB hit
+    // First call: cache miss → DB hit (header present allows it)
     const r1 = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(r1.status).toBe(200);
     expect(r1.headers['x-cache']).toBe('MISS');
     expect(r1.body.unread_count).toBe(1);
@@ -235,7 +325,8 @@ describe('GET /api/notifications/count', () => {
     for (let i = 0; i < 5; i++) {
       const r = await getAgent()
         .get('/api/notifications/count')
-        .set('Authorization', `Bearer ${userToken}`);
+        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-User-Activity', '1');
       expect(r.status).toBe(200);
       expect(r.headers['x-cache']).toBe('HIT');
       expect(r.body.unread_count).toBe(1);
@@ -252,27 +343,32 @@ describe('GET /api/notifications/count', () => {
     // Seed cache by hitting count
     await getAgent()
       .put('/api/notifications/read-all')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
 
     // New notification should invalidate
     const subId = await createSubmission(userToken);
     await reviewSubmission(subId, 'approved');
     const r1 = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(r1.headers['x-cache']).toBe('MISS');
     expect(r1.body.unread_count).toBeGreaterThanOrEqual(1);
 
     // Cache is now warm; mark-all-read should reset to 0 without going stale
     await getAgent()
       .put('/api/notifications/read-all')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     const r2 = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     // mark-all-read writes 0 directly into cache (no DB needed on next read)
     expect(r2.headers['x-cache']).toBe('HIT');
     expect(r2.body.unread_count).toBe(0);
@@ -282,18 +378,22 @@ describe('GET /api/notifications/count', () => {
     await reviewSubmission(subId2, 'approved');
     const list = await getAgent()
       .get('/api/notifications?unread=true')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     const id = list.body.notifications[0].id;
     // Warm cache before mark-read
     await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     await getAgent()
       .put(`/api/notifications/${id}/read`)
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     const r3 = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(r3.headers['x-cache']).toBe('MISS');
     unreadCountCache.clear();
   });
