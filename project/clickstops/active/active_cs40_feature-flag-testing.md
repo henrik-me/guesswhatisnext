@@ -63,8 +63,8 @@ remaining work.
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS40-1 | Audit & verification | ⬜ Pending | Run `az containerapp show --name gwn-staging --resource-group gwn-rg --query "properties.template.containers[0].env"` and confirm no `FEATURE_FLAG_ALLOW_OVERRIDE=true`. Confirm no `FEATURE_SUBMIT_PUZZLE_PERCENTAGE=100` in any config file. Confirm `prod-deploy.yml` does not set the override. Confirm MSSQL E2E currently uses overrides successfully (sample one passing run). Append audit evidence to this CS file as a §Evidence subsection. |
-| CS40-2 | Document option (A) decision (no code change) | ⬜ Pending | Per resolved decision #1. Captured here + reflected in the INSTRUCTIONS.md update in CS40-4. |
+| CS40-1 | Audit & verification | ✅ Done | See §Evidence below. Live `gwn-staging` ACA env (rev `gwn-staging--deploy-1777143570`): 7 env vars, none FEATURE-related. No `=100` workaround anywhere. `prod-deploy.yml` + `infra/` clean. Latest staging-deploy run #237 (HEAD `6b368de`) green. |
+| CS40-2 | Document option (A) decision (no code change) | ✅ Done | Decision captured in this file (Resolved decisions table) + will be reflected in INSTRUCTIONS.md via CS40-4. Per resolved decision #1; CS40-1 §Evidence confirms the precondition (live ACA app does not have the override on). |
 | CS40-3 | Direct prod-mode override coverage | ⬜ Pending | New `tests/feature-flags-env-gate.test.js` using `vi.resetModules()` + per-case `process.env` mutation to require `server/feature-flags.js` fresh under: (prod, no env var → denied), (staging, no env var → denied), (prod, `FEATURE_FLAG_ALLOW_OVERRIDE=true`, query → allowed), (prod, env var, header → allowed), (development, no env var → allowed). Vitest's per-file forked isolation (`vitest.config.mjs:1-13`) contains the env mutation. |
 | CS40-4 | Documentation | ⬜ Pending | Add "Feature flag testing across environments" subsection under INSTRUCTIONS.md `### Feature Flag Rollouts` (around line 62-69) covering: where overrides are allowed (dev/test by default; staging-CI smoke service via opt-in env var; never on prod-deploy or live `gwn-staging` ACA app); how E2E tests should toggle flags (`?ff_<key>=true` browser, `X-Gwn-Feature-<Key>` backend); explicit prohibition of `=100` percentage workaround in test configs; explicit allowance of legitimate non-zero rollout values in prod-deploy assets. |
 | CS40-5 | Regression guard (Node policy script) | ⬜ Pending | Add `scripts/check-feature-flag-policy.js` (Node, no deps) + `npm run check:feature-flag-policy` script chained into `npm test`. Forbid `FEATURE_FLAG_ALLOW_OVERRIDE` truthy in `prod-deploy.yml`, `infra/deploy.sh`, `infra/deploy.ps1`, `infra/**/*.bicep`, `infra/**/*.json`. Forbid literal `FEATURE_SUBMIT_PUZZLE_PERCENTAGE=100` (or `: "100"`) in `tests/**`, `docker-compose*.yml`, `.github/workflows/**`. Each violation prints `file:line` + remediation message + this CS reference. **Do NOT** ban legitimate non-zero rollout values in live-deploy assets. |
@@ -93,4 +93,62 @@ remaining work.
   `check-feature-flag-policy` script.
 - `npm run check:docs:strict` — INSTRUCTIONS.md + this CS file consistency.
 - No server-runtime code changes (option A).
+
+---
+
+## §Evidence (CS40-1 audit, 2026-04-25 by yoga-gwn-c4)
+
+### A. Live `gwn-staging` ACA app environment
+
+```powershell
+az containerapp show --name gwn-staging --resource-group gwn-rg -o json | ...
+```
+
+Revision: `gwn-staging--deploy-1777143570`. Total env vars on the live app
+container = **7**, namely:
+
+```
+APPLICATIONINSIGHTS_CONNECTION_STRING
+CANONICAL_HOST
+GWN_DB_PATH
+JWT_SECRET
+NODE_ENV
+PORT
+SYSTEM_API_KEY
+```
+
+Neither `FEATURE_FLAG_ALLOW_OVERRIDE` nor `FEATURE_SUBMIT_PUZZLE_PERCENTAGE`
+is present. ✅ Confirms the file-structure analysis (smoke service !=
+deployed app) matches reality on the live app. Lookup performed against
+revision `gwn-staging--deploy-1777143570` corresponding to `release/staging`
+HEAD `6b368de`.
+
+### B. `=100` percentage workaround
+
+Repo-wide grep for `FEATURE_SUBMIT_PUZZLE_PERCENTAGE\s*[=:]\s*"?100`
+returned **0 matches** in any code or config file. Only references to the
+literal string `FEATURE_SUBMIT_PUZZLE_PERCENTAGE=100` are inside this CS
+file (describing the historical workaround). ✅
+
+### C. `prod-deploy.yml` and `infra/deploy.{sh,ps1}` cleanliness
+
+Grep for `FEATURE_FLAG_ALLOW_OVERRIDE` across `.github/workflows/prod-deploy.yml`
+and `infra/` returned **0 matches**. ✅
+
+### D. MSSQL E2E uses overrides successfully (sample passing run)
+
+Latest staging-deploy.yml run on `main` (HEAD `6b368de`):
+- run_id `24938066927`, run_number 237, event `workflow_dispatch`,
+  conclusion **success**.
+- This run uses the in-CI smoke service with `FEATURE_FLAG_ALLOW_OVERRIDE=true`
+  (`.github/workflows/staging-deploy.yml:100`) and exercises the E2E specs
+  that depend on `?ff_submit_puzzle=true` (`tests/e2e/community.spec.mjs`,
+  `my-submissions.spec.mjs`, `moderation.spec.mjs`). ✅
+
+### E. Conclusion
+
+The premise of CS40-2's option (A) — "live `gwn-staging` ACA app does not
+have the override flag on" — is **verified**. The override mechanism works
+as designed in the in-CI smoke service. The `=100` workaround is gone.
+Remaining work (CS40-3 through CS40-6) can proceed safely.
 

@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main -- no PR required.
 
-> **Last updated:** 2026-04-25T23:20Z
+> **Last updated:** 2026-04-25T23:45Z
 
 ## Orchestrators
 
@@ -16,7 +16,7 @@ CS44-3 schema upgrade.
 | yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active | 2026-04-25T18:15Z |
 | yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-25T22:42Z |
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active | 2026-04-25T19:18Z |
-| yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | 2026-04-25T22:13Z |
+| yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | 2026-04-25T23:45Z |
 | yoga-gwn-c5 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot5 | 🟢 Active | 2026-04-25T18:13Z |
 | omni-gwn | HENRIKM-OMNI| C:\src\guesswhatisnext | ⚪ Offline | 2026-04-22T00:55Z |
 | omni-gwn-c2 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot2 | ⚪ Offline | 2026-04-21T22:38Z |
@@ -29,4 +29,5 @@ CS44-3 schema upgrade.
 | CS53-19 | CS53 | blocked | yoga-gwn | C:\src\guesswhatisnext | -- | -- | 2026-04-25T22:10Z | Phase A (boot/focus/refresh HAR inventory) can start now in parallel; Phases C-G now depend on CS53-23 (was CS55-2.G/H/J before the absorption). | Waiting on CS53-23 (boot-quiet contract foundation) |
 
 | CS52-1 | CS52 | designing | yoga-gwn-c5 | C:\src\guesswhatisnext_copilot5 | -- | -- | 2026-04-25T18:45Z | Design lock-down session with user. Adding guest/disconnected-auth offline play unified design (localStorage-only while not connected; user-action-triggered single-flight background sync; ack-driven local cache update). Walking open questions one-by-one with user. No code in this task. | -- |
+| CS40 | Feature Flag Testing Infrastructure | implementing | yoga-gwn-c4 | C:\src\guesswhatisnext_copilot4 | yoga-gwn-c4/cs40-feature-flag-testing | -- | 2026-04-25T23:45Z | CS40-1 audit ✅ (live `gwn-staging` ACA has 0 FEATURE env vars; `=100` workaround absent; `prod-deploy.yml`/`infra/` clean; staging-deploy run #237 green). CS40-2 ✅ (option A documented). Starting CS40-3 (prod-mode env-gate test) → CS40-4 (INSTRUCTIONS.md docs) → CS40-5 (Node policy script) → CS40-6 (closure). No runtime code changes. | -- |
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
