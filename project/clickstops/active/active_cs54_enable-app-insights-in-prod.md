@@ -1,7 +1,34 @@
 # CS54 — Enable Azure Application Insights in production
 
-**Status:** 🔄 In Progress
+**Status:** 🔄 In Progress — execution phase
 **Owner:** yoga-gwn-c2 (claimed 2026-04-25T17:07Z)
+
+## Current execution state (2026-04-25T22:11Z)
+
+Implementation tasks (CS54-1 through CS54-5, CS54-7) are complete and merged. The CS is now in its verification + close-out phase.
+
+| Task | Status | Live state |
+|------|--------|-----------|
+| CS54-1 (provision AI) | ✅ Done | `gwn-ai-staging` + `gwn-ai-production` exist in `gwn-rg`/`eastus`, workspace-bound to `workspace-gwnrg6bXt`. |
+| CS54-2 (ACA secrets) | ✅ Done | `appinsights-connection-string` registered on both `gwn-staging` and `gwn-production`. |
+| CS54-3 (staging-deploy.yml wiring) | ✅ Done | PR #251 merged. Verified live: `az containerapp show --name gwn-staging` env contains `APPLICATIONINSIGHTS_CONNECTION_STRING` → secretRef `appinsights-connection-string`. Active staging revision `gwn-staging--deploy-1777143570` (image `6b368de`, 18:59Z). |
+| CS54-4 (prod-deploy.yml wiring) | ✅ Done (code) / ⏸️ awaiting deploy | PR #253 merged as `a436b06`. Prod deploy run [24938590966](https://github.com/henrik-me/guesswhatisnext/actions/runs/24938590966) dispatched 19:16Z, **WAITING ON USER APPROVAL** since (~3h). Earlier attempt 24938579240 failed at image-validate due to short-SHA bug — workflow now requires full 40-char SHA. |
+| CS54-5 (infra/deploy scripts) | ✅ Done | Shipped in PR #253. Fail-closed precondition added. |
+| CS54-7 (KQL runbook) | ✅ Done | [`docs/observability.md`](../../../docs/observability.md), PR #250. |
+| **CS54-6 (verify)** | 🟡 In progress | **Staging side**: wiring verified live, but `az monitor app-insights query --app gwn-ai-staging` returns 0 rows for last 24h — staging has 0 replicas (CS58 scale-to-zero) and has not received any `/api/*` traffic since the wiring landed. Need to wake + probe + re-query. **Prod side**: blocked on user approval click for run 24938590966; once approved, will probe and verify `gwn-ai-production`. |
+| CS54-8 (cost watch) | ⬜ Pending | Will record +24h/+7d/+30d ingest volume in CS54 closing note (dates pinned once first traffic lands). |
+| CS54-9 (Deferred Work Eval appendix) | ⬜ Pending | In-file appendix; no follow-up CS filed today. |
+| CS54-10 (close) | ⬜ Pending | Move file to `done/`, update WORKBOARD, summarize. |
+
+**Plan to close today:**
+1. Wake `gwn-staging` (`/healthz`), probe `/api/health` + `/api/scores/leaderboard?mode=freeplay&period=alltime` ×3, wait 5 min, query `requests` table in `gwn-ai-staging` → expect ≥4 rows. Tick CS54-6 staging half.
+2. Once user approves prod deploy 24938590966, watch deploy, then repeat probes against prod, query `gwn-ai-production`. Tick CS54-6 prod half.
+3. Append CS54-9 Deferred Work Evaluation appendix (mssql instrumentation, Pino→AI log forwarding, exceptions table — ≥2 options + recommendation each, per the "Will not be done" template already in this file).
+4. Pin CS54-8 measurement schedule (just dates + KQL — actual measurement happens later, recorded back into the done file).
+5. CS54-10: move file to `done/`, update WORKBOARD, write closing summary.
+
+---
+
 **Origin:** Discovered during CS53-1 (2026-04-23). When pulling logs to investigate the cold-start retry hiccup, we found that the production Container App has no `APPLICATIONINSIGHTS_CONNECTION_STRING` env var set. The OTel SDK is wired and ready ([`server/telemetry.js`](../../../server/telemetry.js)) — it just falls back to no-export. As a result, neither `traces` nor `requests` tables exist for the prod resource in Application Insights; we can only query Container Apps console stdout via Log Analytics (`ContainerAppConsoleLogs_CL`).
 
 ## Goal
