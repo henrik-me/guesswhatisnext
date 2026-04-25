@@ -21,13 +21,16 @@ describe('UnreadCountCache', () => {
     expect(cache.snapshot().hits).toBe(1);
   });
 
-  test('cache lifetime is process lifetime — no TTL re-read', async () => {
-    // Process-lifetime cache: even after a long sleep, get() still hits.
+  test('cache lifetime is process lifetime — no TTL re-read', () => {
+    // Process-lifetime cache: repeated get() always hits, never expires.
+    // The class has no TTL/timer machinery, so a tight-loop assertion is
+    // sufficient — there is no time-based code path that could evict the entry.
     // (Replaces the v1 5-min-TTL test removed for Policy 1 compliance — CS53-23.A.)
     cache.set(1, 5);
-    await new Promise(r => setTimeout(r, 30));
     expect(cache.get(1)).toBe(5);
-    expect(cache.snapshot().hits).toBe(1);
+    expect(cache.get(1)).toBe(5);
+    expect(cache.get(1)).toBe(5);
+    expect(cache.snapshot().hits).toBe(3);
     expect(cache.snapshot().misses).toBe(0);
   });
 

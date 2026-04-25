@@ -121,4 +121,5 @@ const singleton = new UnreadCountCache();
 module.exports = {
   UnreadCountCache,
   unreadCountCache: singleton,
+  coerceUnreadCount: _coerceCount,
 };

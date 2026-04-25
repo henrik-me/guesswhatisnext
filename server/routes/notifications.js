@@ -8,7 +8,7 @@
 const express = require('express');
 const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { unreadCountCache } = require('../services/unread-count-cache');
+const { unreadCountCache, coerceUnreadCount } = require('../services/unread-count-cache');
 
 const router = express.Router();
 
@@ -68,12 +68,17 @@ router.get('/', requireAuth, async (req, res, next) => {
  * Boot-quiet contract (CS53-23): the DB is touched ONLY when the request
  * carries `X-User-Activity: 1` AND the cache misses. Boot/focus/poller traffic
  * (no header) gets the cached value or `{ unread_count: 0 }` — never a DB query.
+ * System-key (operator) requests are exempt from the contract per
+ * INSTRUCTIONS.md § Database & Data and may always read the DB on cache miss.
  * See INSTRUCTIONS.md § Database & Data (Boot-quiet rule).
  */
 router.get('/count', requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
     const userActivity = req.get('X-User-Activity') === '1';
+    // System-key callers bypass the boot-quiet header gate (operator/system-key
+    // is explicitly excluded from the contract — INSTRUCTIONS.md § Database & Data).
+    const isSystem = req.user.role === 'system';
 
     const cached = unreadCountCache.get(userId);
     if (cached !== null) {
@@ -81,9 +86,10 @@ router.get('/count', requireAuth, async (req, res, next) => {
       return res.json({ unread_count: cached });
     }
 
-    if (!userActivity) {
-      // Cache miss + no user-activity marker → MUST NOT touch the DB.
-      // Returns the empty default; any in-flight writer will seed the cache.
+    if (!userActivity && !isSystem) {
+      // Cache miss + no user-activity marker + not a system caller → MUST NOT
+      // touch the DB. Returns the empty default; any in-flight writer will
+      // seed the cache.
       res.set('X-Cache', 'MISS-NO-ACTIVITY');
       return res.json({ unread_count: 0 });
     }
@@ -95,11 +101,11 @@ router.get('/count', requireAuth, async (req, res, next) => {
       'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0',
       [userId]
     );
-    // Coerce the DB result to a safe non-negative integer. MSSQL COUNT(*) can
-    // return BigInt or string depending on driver path; res.json() throws on
-    // BigInt and HIT vs MISS would otherwise return inconsistent types.
-    const raw = row ? Number(row.count) : 0;
-    const count = Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : 0;
+    // Coerce to a safe non-negative integer. MSSQL COUNT(*) can return BigInt
+    // or string depending on driver path; res.json() throws on BigInt and
+    // HIT vs MISS would otherwise return inconsistent types. Single source of
+    // truth lives in unread-count-cache.js to avoid drift.
+    const count = coerceUnreadCount(row ? row.count : 0);
     const stored = unreadCountCache.setIfFresh(userId, count, token);
     res.set('X-Cache', stored ? 'MISS' : 'STALE-DROP');
     res.json({ unread_count: count });

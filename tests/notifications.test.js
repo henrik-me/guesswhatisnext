@@ -268,6 +268,27 @@ describe('GET /api/notifications/count', () => {
   
   });
 
+  test('boot-quiet bypass: system-key auth + cache miss → DB read allowed (no header needed)', async () => {
+    // INSTRUCTIONS.md § Database & Data: the boot-quiet contract does NOT
+    // apply to operator/system-key requests. CS53-23 R4 finding.
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const { getDbAdapter } = require('../server/db');
+    unreadCountCache.clear();
+
+    const db = await getDbAdapter();
+    const getSpy = vi.spyOn(db, 'get');
+
+    const res = await getAgent()
+      .get('/api/notifications/count')
+      .set('X-API-Key', SYSTEM_KEY); // no X-User-Activity header
+    expect(res.status).toBe(200);
+    // System user (id=0) has no notifications in the seed, so count is 0,
+    // but the key assertion is that we DID hit the DB on cache miss.
+    expect(res.headers['x-cache']).toBe('MISS');
+    expect(getSpy).toHaveBeenCalled();
+    expect(typeof res.body.unread_count).toBe('number');
+  });
+
   test('with X-User-Activity: 1 + cache miss → exactly one DB query and seeds cache', async () => {
     const { unreadCountCache } = require('../server/services/unread-count-cache');
     const { getDbAdapter } = require('../server/db');
