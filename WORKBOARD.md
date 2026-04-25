@@ -3,7 +3,11 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main -- no PR required.
 
+<<<<<<< Updated upstream
 > **Last updated:** 2026-04-25T18:18Z
+=======
+> **Last updated:** 2026-04-25T18:15Z
+>>>>>>> Stashed changes
 
 ## Orchestrators
 
@@ -13,7 +17,7 @@ CS44-3 schema upgrade.
 
 | Agent ID | Machine | Repo Folder | Status | Last Seen |
 |----------|---------|-------------|--------|-----------|
-| yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active | 2026-04-25T17:30Z |
+| yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active | 2026-04-25T18:15Z |
 | yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-25T17:58Z |
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active | 2026-04-25T18:18Z |
 | yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | 2026-04-25T17:59Z |
@@ -24,7 +28,8 @@ CS44-3 schema upgrade.
 
 | Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
-| CS53-19 | CS53 | blocked | yoga-gwn | C:\src\guesswhatisnext | -- | -- | 2026-04-25T17:30Z | Phase A (boot/focus/refresh HAR inventory) can start now in parallel; Phases C-G need CS55-2.G/H/J | Waiting on CS55-2.G (X-User-Activity header contract), CS55-2.H (server helper), CS55-2.J (no-header response shape) |
+| CS53-23 | CS53 | claimed | yoga-gwn | -- | cs55-2-unread-count-cache | #241 | 2026-04-25T18:15Z | Boot-quiet contract foundation (absorbed from CS55-2 v2). P0. About to dispatch sub-agent to a fresh worktree under c4 to take over PR #241 and rework v1 (5-min TTL, violates Policy 1) into v2 per CS53-23.A-L sub-tasks. Unblocks CS53-19 + all of CS55. | -- |
+| CS53-19 | CS53 | blocked | yoga-gwn | C:\src\guesswhatisnext | -- | -- | 2026-04-25T18:15Z | Phase A (boot/focus/refresh HAR inventory) can start now in parallel; Phases C-G now depend on CS53-23 (was CS55-2.G/H/J before the absorption). | Waiting on CS53-23 (boot-quiet contract foundation) |
 | CS54-3 | CS54 | implementing | yoga-gwn-c2 | wt-1 | yoga-gwn-c2/cs54-3-staging-deploy-wiring | -- | 2026-04-25T17:58Z | Wire APPLICATIONINSIGHTS_CONNECTION_STRING into staging-deploy.yml via secretRef. CS54-1+CS54-2 done (operator log in CS54 file). | -- |
 | CS54-7 | CS54 | implementing | yoga-gwn-c2 | wt-2 | yoga-gwn-c2/cs54-7-observability-docs | -- | 2026-04-25T17:58Z | Document KQL queries for AI requests table + Pino bridge to ContainerAppConsoleLogs_CL; covers user-prioritized "how to get / what to look for in logs". Parallel with CS54-3. | -- |
 | CS58-1 | CS58 | copilot_review | yoga-gwn-c3 | wt-1 | yoga-gwn-c3/cs58-1-min-replicas-zero | #248 | 2026-04-25T18:18Z | PR #248: CI green, Copilot first-pass left 1 nit (PR-link in CS file) — fixed and re-pushed; awaiting Copilot re-review. CS58-3 already merged (#249). CS58-2 (live az containerapp update) gated on #248 merge. | -- |
