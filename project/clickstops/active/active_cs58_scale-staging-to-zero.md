@@ -1,6 +1,6 @@
 # CS58 — Scale `gwn-staging` Container App to zero (cost optimization)
 
-**Status:** ✅ Complete (closed by yoga-gwn-c3 on 2026-04-25T18:55Z; cost-soak verification split to **[CS59](../planned/planned_cs59_staging-cost-soak-verification.md)**)
+**Status:** 🟢 Active — validating (re-opened by yoga-gwn-c3 on 2026-04-25T18:58Z; CS58-5 functional E2E validation pending)
 **Origin:** Discovered 2026-04-25 while reviewing whether to remove the staging environment entirely. Cost Management meter-level data showed that the always-on `gwn-staging` Container App is the single most expensive resource in `gwn-rg` — and **99.5% of its bill is "Idle Usage"**, i.e. Azure billing for keeping a replica warm under `minReplicas=1` while it serves no traffic. Setting `minReplicas=0` captures essentially the full cost saving of a full deletion (~$7.30/month) while preserving staging as an on-demand validation surface.
 
 ## Goal
@@ -48,26 +48,42 @@ Snapshot only — see [§ Re-running the cost query](#re-running-the-cost-query)
 | CS58-2 | Apply `minReplicas=0` to the live `gwn-staging` Container App: `az containerapp update --name gwn-staging --resource-group gwn-rg --min-replicas 0`. Confirm via `az containerapp show`. | ✅ Done (orchestrator-applied 2026-04-25T18:30Z) | CS58-1 (so live config doesn't drift from what next deploy would set) | Reversible in one command. Executed: `az containerapp update --min-replicas 0` created revision `gwn-staging--0000025` (min=0). Then switched 100% traffic to the new revision and deactivated the old `deploy-1777134427` (which still had min=1) — both steps required, otherwise old revision keeps running and we double-bill. Final state verified: single active revision `gwn-staging--0000025`, traffic=100, minReplicas=0. |
 | CS58-3 | Documentation update — apply "link, don't restate." Update `INSTRUCTIONS.md`, `OPERATIONS.md`, `CONTEXT.md`, `infra/README.md` to describe staging as scale-to-zero with cold-start on first request. Update [`prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) header comment from "validated in staging" → "validated by Ephemeral Smoke Test job + local container:validate." Audit the GH `staging` environment secrets — confirm still needed. Add a short OPERATIONS section: "How to wake staging for a quick validation." | ✅ Done ([PR #249](https://github.com/henrik-me/guesswhatisnext/pull/249)) | — | Independent of CS58-1/2; can ship in parallel. Health-monitor audit: confirmed `.github/workflows/health-monitor.yml` does not ping `gwn-staging` (only targets `gwn-production`). Staging-secrets audit: GHCR_PAT, AZURE_CREDENTIALS, JWT_SECRET, SYSTEM_API_KEY all still required by `staging-deploy.yml`. |
 | CS58-4 | Cost verification soak. Wait ~7 days post-CS58-2, re-run the Cost Management meter query, document actual idle-meter drop and total saving. Confirm meters show near-zero idle on staging. | ⏭️ Split out → [CS59](../planned/planned_cs59_staging-cost-soak-verification.md) | CS58-2 (+ ~7 days soak) | Detached so the soak gets picked up at the right time (≥ 2026-05-02) as a fresh claim, with explicit pre-flight, query procedure, pass/fail thresholds, and investigation runbook. The verdict will be appended back to this file under § CS59 cost-soak verification once CS59 closes. |
+| CS58-5 | **End-to-end functional validation via `staging-deploy.yml workflow_dispatch`.** This is the unaddressed half of CS58-1's acceptance criterion ("Validate via `workflow_dispatch` that smoke + E2E still pass with extra cold-start slack") and the closure step CS58-2 missed. Verify that a fresh `staging-deploy.yml` run, executed against `main` (which contains the CS58-1 YAML change), (a) completes successfully end-to-end, (b) creates an active revision with `minReplicas=0`, and (c) the new revision serves a healthy `/healthz` after wake-from-cold. | 🔄 In progress | CS58-1 (merged) | Lucky alignment: yoga-gwn-c2's CS54-6 staging deploy run [24938066927](https://github.com/henrik-me/guesswhatisnext/actions/runs/24938066927) is doubling as this validation — it was triggered on `main` after CS58-1 merged, so the deploy YAML in effect uses `minReplicas: 0`. Watcher `watch-deploy-24938066927` is polling for terminal state + revision shape. If c2's run fails for CS54-related reasons (not CS58), CS58-5 must be re-run with an independent `workflow_dispatch`. |
 
 ### Dependency graph
 
 ```
-CS58-1 ──→ CS58-2 ──→ (split out as CS59 — 7-day cost-soak verification)
+CS58-1 ──→ CS58-2 ──→ CS58-5 (E2E validation) ──→ (close CS58)
 CS58-3 (independent)
+CS59 (cost soak, scheduled ≥ 2026-05-02 — independent of CS58 closure)
 ```
 
-## Closure notes (2026-04-25T18:55Z)
+## Closure preconditions
 
-- **CS58-1** merged via [PR #248](https://github.com/henrik-me/guesswhatisnext/pull/248). YAML template change for `staging-deploy.yml` so future deploys never reintroduce `minReplicas: 1`.
-- **CS58-2** orchestrator-applied via `az containerapp update --min-replicas 0` followed by traffic switch + old-revision deactivation. Single active revision `gwn-staging--0000025`, traffic=100%, `minReplicas=0`. **Live functional validation:** unintended end-to-end test arrived via CS54-6's `staging-deploy.yml workflow_dispatch` (run [24938066927](https://github.com/henrik-me/guesswhatisnext/actions/runs/24938066927)) right after CS58-1 merged — it deploys a fresh revision using the new YAML template, so the post-deploy revision shape (replicas, minReplicas) is the real verification. Verdict captured in CS59 pre-flight rather than re-asserted here to avoid drift.
-- **CS58-3** merged via [PR #249](https://github.com/henrik-me/guesswhatisnext/pull/249). Docs updated, audits clean (health-monitor.yml does not target staging; all 5 staging secrets still required).
-- **CS58-4** intentionally split out as **[CS59](../planned/planned_cs59_staging-cost-soak-verification.md)** so it gets picked up as a fresh claim at the right time (≥ 2026-05-02) with explicit pre-flight, query procedure, pass/fail thresholds, and investigation runbook. CS59 will append its verdict back to this file under a new `## CS59 cost-soak verification` section once it closes.
+CS58 cannot be closed until **all** of:
+
+1. CS58-1 ✅ merged (PR #248)
+2. CS58-2 ✅ live `az` update applied
+3. CS58-3 ✅ merged (PR #249)
+4. **CS58-5 functional E2E validation green** — i.e. a real `staging-deploy.yml workflow_dispatch` against `main` produces a healthy revision with `minReplicas=0`. This is the criterion I missed when I first marked CS58 done.
+
+CS59 (7-day cost soak) appends results back to this file post-closure but does NOT block closure — it's a deferred verification of the cost projection, not an acceptance criterion of CS58 itself.
+
+## In-flight notes (2026-04-25T18:58Z)
+
+- **CS58-1** merged via [PR #248](https://github.com/henrik-me/guesswhatisnext/pull/248).
+- **CS58-2** orchestrator-applied via `az containerapp update --min-replicas 0` followed by traffic switch + old-revision deactivation. Single active revision `gwn-staging--0000025`, traffic=100%, `minReplicas=0`. Note: this manually-applied revision will be **superseded** when CS58-5's deploy completes — the new workflow-deployed revision becomes the long-term live state.
+- **CS58-3** merged via [PR #249](https://github.com/henrik-me/guesswhatisnext/pull/249). Docs updated, audits clean.
+- **CS58-5** in flight. Watcher `watch-deploy-24938066927` (background sub-agent) polling c2's CS54-6 staging deploy. Verdict criteria + reporting protocol documented in CS58-5 row above.
+- **Earlier transparency miss:** I closed CS58 prematurely (commit `fdc5181`), believing CS58-2 alone was sufficient functional validation. User correctly flagged that I never proved CS58-1 end-to-end via the workflow path — that's CS58-5. Reopening here, file moved back to `active/`.
 
 ## Lessons captured (added to repo memory)
 
 - `az containerapp update --min-replicas 0` creates a **new** revision with the new spec but does NOT shift traffic. Must follow with `az containerapp ingress traffic set --revision-weight <new>=100` and `az containerapp revision deactivate --revision <old>`, otherwise both revisions stay active and double-bill.
 - WORKBOARD State column has a strict canonical vocabulary (8 values per [TRACKING.md § WORKBOARD State Machine](../../../TRACKING.md#workboard-state-machine)). Non-canonical strings break `npm run check:docs:strict` on every subsequent PR until cleaned up.
-- For multi-day soak / verification work, do not park the wait inside the original CS as a `blocked` row — split it out as its own clickstop with explicit "earliest claim date" so it gets picked up properly.
+- For multi-day soak / verification work, do not park the wait inside the original CS as a `blocked` row — split it out as its own clickstop with explicit "earliest claim date" so it gets picked up properly. (See CS59.)
+- "Live `az` update applied" is **not** the same as "deployed via workflow." A CS that touches a deploy workflow YAML must include a real `workflow_dispatch` validation step before closing — running the orchestrator's preferred path (direct CLI) does not prove the workflow path. (See CS58-5.)
+
 
 
 ## Acceptance Criteria
