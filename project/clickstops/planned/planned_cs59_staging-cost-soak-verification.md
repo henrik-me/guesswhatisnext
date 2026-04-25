@@ -8,6 +8,23 @@
 
 Verify, ~7 days after CS58-2 took effect, that the live `gwn-staging` cost has dropped as projected — specifically that the **Idle Usage** meters (vCPU + memory) have dropped >95% week-over-week. Document the result and either close CS58's hypothesis as confirmed or open a follow-up CS if it missed.
 
+## Notes & gotchas carried forward from CS58
+
+These are operational facts the CS58 author (yoga-gwn-c3, 2026-04-25 session) hit firsthand and that CS59 needs in order to interpret pre-flight results correctly. They live inline here so this CS is self-contained and doesn't depend on a `LEARNINGS.md` entry that may or may not exist when CS59 is picked up. CS59-7 lifts these into `LEARNINGS.md` as part of the closure work.
+
+1. **`az containerapp update --min-replicas 0` does NOT shift traffic on its own.** It creates a *new* revision with the new spec but leaves the *old* revision still serving 100% of traffic. The cost win only materializes after the operator additionally runs:
+
+   ```powershell
+   az containerapp ingress traffic set --name gwn-staging --resource-group gwn-rg `
+     --revision-weight <new-revision-name>=100
+   az containerapp revision deactivate --name gwn-staging --resource-group gwn-rg `
+     --revision <old-revision-name>
+   ```
+
+   This actually happened during CS58-2: revision `gwn-staging--0000025` was created with `minReplicas: 0` but received 0% traffic, while the prior `gwn-staging--deploy-1777134427` (with `minReplicas: 1`) kept 100% traffic and kept billing. Mitigation steps above were applied, but if the CS59 pre-flight finds *two active revisions*, the most likely cause is that a subsequent `az containerapp update` regressed this — re-apply the traffic shift before continuing the cost analysis.
+
+2. **Cold-state assertions about `gwn-staging` are unreliable while ANY other agent is touching staging.** Concurrent CS work that hits staging (e.g. CS54-style App Insights verification, hand-deploys, soak probes, even a casual `curl` on the staging URL) keeps the replica warm and silently invalidates "cold" measurements. This is why CS58-5(c) had to be folded into CS59 in the first place — c2's CS54 verification activity was keeping staging warm at CS58 close-out. CS59-1 must explicitly check WORKBOARD for any concurrent staging activity *before* doing the cold probe (see pre-flight step 3).
+
 ## Pre-flight (before doing anything)
 
 Confirm the change is actually still in effect — somebody could have flipped it back during the soak:
@@ -20,13 +37,24 @@ az containerapp show --name gwn-staging --resource-group gwn-rg `
 
 If `minReplicas` is no longer 0, **stop**. Document why in the CS, do not proceed with cost analysis (it would be invalid), and either reapply the change or close CS59 as superseded with a new clickstop.
 
-Also confirm there is exactly one active revision serving traffic (not two — see [LEARNINGS.md](../../../LEARNINGS.md) for the CS58-2 gotcha):
+Also confirm there is exactly one active revision serving traffic (not two — see § Notes & gotchas item 1 above for the CS58-2 traffic-shift gotcha and the remediation commands if this check fails):
 
 ```powershell
 az containerapp revision list --name gwn-staging --resource-group gwn-rg `
   --query "[?properties.active].{name:name, replicas:properties.replicas, traffic:properties.trafficWeight, minReplicas:properties.template.scale.minReplicas}" -o table
 # Expected: 1 row, traffic=100, minReplicas=0
 ```
+
+### Cross-agent quiescence check (do this BEFORE the cold-wake probe)
+
+Per § Notes & gotchas item 2, the cold-wake probe is meaningless if another agent is concurrently touching staging. Before probing:
+
+1. Read `WORKBOARD.md` Active Work and grep for `staging`, `gwn-staging`, `CS54`, `CS59`, and any deploy-related rows. If any other agent has an active row that could plausibly hit staging, **do not probe yet**.
+2. Post a `workboard:` quiescence-window note in WORKBOARD ahead of the probe, e.g.: *"🤫 CS59 cold-wake probe in ~10 min — please don't `curl`/deploy/probe `gwn-staging` between HH:MM and HH:MM UTC."* Commit + push.
+3. Wait ≥10 min after posting (gives other agents a chance to see it and stop) before running the probe block below.
+4. After the probe, remove the quiescence note from WORKBOARD.
+
+If you skip this and the cold probe shows replicas != 0, you cannot tell whether scale-to-zero is broken or whether someone just woke staging — the result is unactionable.
 
 ### Cold-wake `/healthz` probe (folded in from CS58-5)
 
@@ -123,19 +151,21 @@ If staging is still accumulating significant idle hours, check (in this order):
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| CS59-1 | Run pre-flight checks (above), **including the cold-wake `/healthz` probe** (folded in from CS58-5(c)). If `minReplicas != 0`, multiple active revisions, or cold probe non-200/>90s, halt and document. | ⬜ Pending | Earliest: 2026-05-02. |
+| CS59-1 | Run pre-flight checks (above): minReplicas==0, single active revision, cross-agent quiescence check + WORKBOARD note, and the cold-wake `/healthz` probe (folded in from CS58-5(c)). If `minReplicas != 0`, multiple active revisions, or cold probe non-200/>90s, halt and document. | ⬜ Pending | Earliest: 2026-05-02. |
 | CS59-2 | Run the 7-day post-change cost meter query and capture the result. | ⬜ Pending | Depends on CS59-1 passing. |
 | CS59-3 | Run the prior-7-day baseline cost meter query and capture the result. | ⬜ Pending | Depends on CS59-1 passing. |
 | CS59-4 | Compare meter quantities; produce the post/pre table; classify as ✅ confirmed (>95% drop) or ❌ regressed (<80% drop) or 🟡 partial (80–95%). | ⬜ Pending | Depends on CS59-2 + CS59-3. |
 | CS59-5 | Append the result table + verdict to `done_cs58_scale-staging-to-zero.md` under a new `## CS59 cost-soak verification` section so the CS58 audit trail is complete. | ⬜ Pending | Depends on CS59-4. Edit done file in place — do not move CS58. |
 | CS59-6 | If ❌ regressed: open a new investigation CS (suggested name `cs60_staging-cost-regression-investigation`), referencing the failure modes in § Investigation. If ✅ confirmed: close CS59 (move file to `done/`). If 🟡 partial: document the gap and decide with the user before closing. | ⬜ Pending | Depends on CS59-4. |
+| CS59-7 | Lift the two operational facts in § Notes & gotchas (the `az containerapp update` traffic-shift gotcha and the cross-agent warm-staging rule) into `LEARNINGS.md` so they're discoverable outside this CS. Cite the CS58-2 revision names (`gwn-staging--0000025` vs `gwn-staging--deploy-1777134427`) and the CS58-5 deferral as the evidence trail. Also add a one-liner to `OPERATIONS.md § Waking staging for ad-hoc validation` reminding operators to check WORKBOARD before probing staging when another agent's cold-state CS is in flight. | ⬜ Pending | Depends on CS59-4 (do this as part of closure regardless of verdict — the lessons hold either way). |
 
 ## Acceptance criteria
 
-- Pre-flight ran and passed (or the CS halted cleanly with the failure documented).
+- Pre-flight ran and passed (or the CS halted cleanly with the failure documented), **including the cross-agent quiescence step** (WORKBOARD note posted ahead of the cold probe and removed afterward).
 - Both 7-day windows queried and recorded.
 - Verdict (✅ / 🟡 / ❌) classified per the thresholds above.
 - CS58 done file updated with the verification table and verdict.
+- `LEARNINGS.md` updated with the two § Notes & gotchas items, and `OPERATIONS.md § Waking staging for ad-hoc validation` carries the WORKBOARD-quiescence reminder (CS59-7).
 - CS59 file moved to `project/clickstops/done/done_cs59_*.md` with `Status: ✅ Complete` and the same verdict appended at the top.
 - WORKBOARD reflects the closure (row removed if added).
 
