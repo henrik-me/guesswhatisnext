@@ -29,6 +29,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - The process applies to all changes regardless of size — there is no "too small for a PR" threshold
 - **No DB-waking background work**: no timer/watchdog/scheduler/poller may issue a DB query (incl. `SELECT 1`) on its own — the DB is touched only in response to real user requests, operator curl, or operator-invoked batch jobs (see [§ Database & Data in INSTRUCTIONS.md](#database--data))
 - **Cold-start container validation gates check-in**: any PR touching server/client runtime or DB-touching code must run `npm run container:validate` (full restart + smoke probe) before each review request and after each fix push, and record the result in `## Container Validation` in the PR body (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation))
+- **Pre-prod validation gate is in CI, not Azure staging**: the enforced gate before a production deploy is the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local `npm run container:validate` cycles per [§ Database & Data](#database--data). The Azure `gwn-staging` Container App is scale-to-zero and exists only for ad-hoc operator probing — it is not a release gate. See [active_cs58_scale-staging-to-zero.md](project/clickstops/active/active_cs58_scale-staging-to-zero.md) and [§ Waking staging for ad-hoc validation in OPERATIONS.md](OPERATIONS.md#waking-staging-for-ad-hoc-validation).
 - **Investigation artifacts → `shots/`** (gitignored): screenshots, repro captures, HAR-supplementary images go in top-level `shots/` named `[<orchestrator-id>][<CS-ID>-<TASK-ID>] <desc>.<ext>` (see [§ Investigation artifacts](#investigation-artifacts))
 
 ---
@@ -343,7 +344,7 @@ The `<orchestrator-id>` matches the `<machine>-gwn[-cN]` format in [WORKBOARD.md
 
 Do not bury the approval link inside a status table. Do not assume the user is watching the Actions tab. The deploy is blocked on them, and the orchestrator's job is to make that blocking state unmissable.
 
-Staging deploys have no such gate (they auto-run when `vars.STAGING_AUTO_DEPLOY == 'true'` *or* when triggered via `workflow_dispatch`), so this rule is production-only.
+Staging deploys have no such gate (they auto-run when `vars.STAGING_AUTO_DEPLOY == 'true'` *or* when triggered via `workflow_dispatch`), so this rule is production-only. Note that Azure `gwn-staging` runs at `minReplicas: 0` (scale-to-zero) and is not a pre-prod release gate — the enforced gate is the in-CI Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local `npm run container:validate` cycles. See [active_cs58_scale-staging-to-zero.md](project/clickstops/active/active_cs58_scale-staging-to-zero.md) and [§ Waking staging for ad-hoc validation in OPERATIONS.md](OPERATIONS.md#waking-staging-for-ad-hoc-validation).
 
 ---
 

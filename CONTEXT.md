@@ -102,6 +102,7 @@ public/
 
 ## Blockers / Open Questions
 
+- **Staging is scale-to-zero, on-demand cold-start**: Azure `gwn-staging` runs at `minReplicas: 0`. First request after idle pays a cold-start (~10–30s replica + ~30s DB lazy init); 300s of zero traffic returns it to $0. It is not a pre-prod release gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local `npm run container:validate`. See [active_cs58_scale-staging-to-zero.md](project/clickstops/active/active_cs58_scale-staging-to-zero.md) for cost figures and rationale, and [§ Waking staging for ad-hoc validation in OPERATIONS.md](OPERATIONS.md#waking-staging-for-ad-hoc-validation) for the operator probe procedure.
 - **Azure Files storage cleanup**: ✅ Done (PR #49). Azure storage resources (`gwn-storage-staging`, `gwn-storage-production`) still exist in Azure and should be deleted manually.
 - **Staging auto-deploy disabled**: Must manually trigger `workflow_dispatch` after merging to main. Re-enable once stable.
 - **Production deployed**: ✅ Running on Azure SQL (serverless free tier) at [gwn.metzger.dk](https://gwn.metzger.dk). All migrations applied, 504 puzzles seeded.

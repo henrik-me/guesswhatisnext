@@ -46,7 +46,7 @@ Snapshot only — see [§ Re-running the cost query](#re-running-the-cost-query)
 |---|------|--------|------------|-------|
 | CS58-1 | Update `staging-deploy.yml` deploy YAML template to `minReplicas: 0` so future deploys don't re-introduce always-on. Validate via `workflow_dispatch` that smoke + E2E still pass with extra cold-start slack. | ⬜ Pending | — | One-line YAML change at the `scale:` block in the `deploy-azure-staging` job. |
 | CS58-2 | Apply `minReplicas=0` to the live `gwn-staging` Container App: `az containerapp update --name gwn-staging --resource-group gwn-rg --min-replicas 0`. Confirm via `az containerapp show`. | ⬜ Pending | CS58-1 (so live config doesn't drift from what next deploy would set) | Reversible in one command. |
-| CS58-3 | Documentation update — apply "link, don't restate." Update `INSTRUCTIONS.md`, `OPERATIONS.md`, `CONTEXT.md`, `infra/README.md` to describe staging as scale-to-zero with cold-start on first request. Update [`prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) header comment from "validated in staging" → "validated by Ephemeral Smoke Test job + local container:validate." Audit the GH `staging` environment secrets — confirm still needed. Add a short OPERATIONS section: "How to wake staging for a quick validation." | ⬜ Pending | — | Independent of CS58-1/2; can ship in parallel. |
+| CS58-3 | Documentation update — apply "link, don't restate." Update `INSTRUCTIONS.md`, `OPERATIONS.md`, `CONTEXT.md`, `infra/README.md` to describe staging as scale-to-zero with cold-start on first request. Update [`prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) header comment from "validated in staging" → "validated by Ephemeral Smoke Test job + local container:validate." Audit the GH `staging` environment secrets — confirm still needed. Add a short OPERATIONS section: "How to wake staging for a quick validation." | ✅ Done (PR #TBD) | — | Independent of CS58-1/2; can ship in parallel. Health-monitor audit: confirmed `.github/workflows/health-monitor.yml` does not ping `gwn-staging` (only targets `gwn-production`). Staging-secrets audit: GHCR_PAT, AZURE_CREDENTIALS, JWT_SECRET, SYSTEM_API_KEY all still required by `staging-deploy.yml`. |
 | CS58-4 | Cost verification soak. Wait ~7 days post-CS58-2, re-run the Cost Management meter query, document actual idle-meter drop and total saving in the closing notes. Confirm meters show near-zero idle on staging. | ⬜ Pending | CS58-2 (+ ~7 days soak) | Confirms the projection. |
 
 ### Dependency graph
@@ -81,35 +81,7 @@ CS58-3 (independent)
 
 ## Re-running the cost query
 
-Source of truth for current cost is Azure Cost Management. To regenerate the meter-level breakdown above:
-
-```powershell
-$sub = az account show --query id -o tsv
-$end = (Get-Date).ToString('yyyy-MM-dd')
-$start = (Get-Date).AddDays(-30).ToString('yyyy-MM-dd')
-$body = @{
-  type = 'Usage'; timeframe = 'Custom'
-  timePeriod = @{ from = $start; to = $end }
-  dataset = @{
-    granularity = 'None'
-    aggregation = @{
-      totalCost = @{ name = 'Cost'; function = 'Sum' }
-      totalQty  = @{ name = 'UsageQuantity'; function = 'Sum' }
-    }
-    grouping = @(
-      @{ type = 'Dimension'; name = 'Meter' }
-      @{ type = 'Dimension'; name = 'ResourceId' }
-    )
-    filter = @{ dimensions = @{ name = 'ResourceGroupName'; operator = 'In'; values = @('gwn-rg') } }
-  }
-} | ConvertTo-Json -Depth 12 -Compress
-$body | Out-File cost.json -Encoding ascii
-az rest --method post `
-  --url "https://management.azure.com/subscriptions/$sub/providers/Microsoft.CostManagement/query?api-version=2023-11-01" `
-  --body "@cost.json"
-```
-
-CS58-3 will add the canonical version of this snippet to OPERATIONS.md so future cost analyses don't require digging through CS history.
+Source of truth for current cost is Azure Cost Management. The canonical PowerShell snippet for regenerating the meter-level breakdown above lives in [§ Querying Azure cost in OPERATIONS.md](../../../OPERATIONS.md#querying-azure-cost) — run it from there so future cost analyses use a single source.
 
 ## Relationship to other clickstops
 

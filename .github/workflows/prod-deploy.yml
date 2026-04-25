@@ -6,7 +6,9 @@ on:
       image-tag:
         description: >
           Docker image tag to deploy (short SHA from staging, e.g. "40ef2f8").
-          Must be an image already validated in staging.
+          Must be an image that passed the Ephemeral Smoke Test job (in
+          `.github/workflows/staging-deploy.yml`) and local `npm run container:validate`
+          cycles per [INSTRUCTIONS.md § Database & Data](../../INSTRUCTIONS.md#database--data).
         required: true
         type: string
       confirm:
@@ -80,7 +82,7 @@ jobs:
           fi
 
           if [ "$RESPONSE" = "404" ]; then
-            echo "::error::Image tag '${{ inputs.image-tag }}' not found in GHCR. Deploy only images validated in staging."
+            echo "::error::Image tag '${{ inputs.image-tag }}' not found in GHCR. Deploy only images that passed the Ephemeral Smoke Test job (staging-deploy.yml) and local container:validate cycles."
             exit 1
           fi
 
