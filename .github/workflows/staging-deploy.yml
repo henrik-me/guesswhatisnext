@@ -474,6 +474,8 @@ jobs:
                         value: "${CANONICAL_HOST}"
                       - name: GWN_DB_PATH
                         value: /tmp/game.db
+                      - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+                        secretRef: appinsights-connection-string
                     resources:
                       cpu: 0.5
                       memory: 1Gi
