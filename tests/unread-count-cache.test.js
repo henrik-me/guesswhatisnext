@@ -7,7 +7,7 @@ const { UnreadCountCache } = require('../server/services/unread-count-cache');
 describe('UnreadCountCache', () => {
   let cache;
   beforeEach(() => {
-    cache = new UnreadCountCache({ ttlMs: 1000 });
+    cache = new UnreadCountCache();
   });
 
   test('miss on empty', () => {
@@ -21,11 +21,14 @@ describe('UnreadCountCache', () => {
     expect(cache.snapshot().hits).toBe(1);
   });
 
-  test('TTL expiry returns null', async () => {
-    const c = new UnreadCountCache({ ttlMs: 20 });
-    c.set(1, 5);
+  test('cache lifetime is process lifetime — no TTL re-read', async () => {
+    // Process-lifetime cache: even after a long sleep, get() still hits.
+    // (Replaces the v1 5-min-TTL test removed for Policy 1 compliance — CS53-23.A.)
+    cache.set(1, 5);
     await new Promise(r => setTimeout(r, 30));
-    expect(c.get(1)).toBeNull();
+    expect(cache.get(1)).toBe(5);
+    expect(cache.snapshot().hits).toBe(1);
+    expect(cache.snapshot().misses).toBe(0);
   });
 
   test('invalidate removes entry', () => {

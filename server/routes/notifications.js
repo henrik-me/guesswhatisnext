@@ -65,17 +65,29 @@ router.get('/', requireAuth, async (req, res, next) => {
 /**
  * GET /api/notifications/count — unread count for badge.
  *
- * Cache-first to prevent stale-tab polling from waking the DB.
- * Cache misses recompute from DB; invalidations happen on insert/mark-read.
+ * Boot-quiet contract (CS53-23): the DB is touched ONLY when the request
+ * carries `X-User-Activity: 1` AND the cache misses. Boot/focus/poller traffic
+ * (no header) gets the cached value or `{ unread_count: 0 }` — never a DB query.
+ * See INSTRUCTIONS.md § Database & Data (Boot-quiet rule).
  */
 router.get('/count', requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const userActivity = req.get('X-User-Activity') === '1';
+
     const cached = unreadCountCache.get(userId);
     if (cached !== null) {
       res.set('X-Cache', 'HIT');
       return res.json({ unread_count: cached });
     }
+
+    if (!userActivity) {
+      // Cache miss + no user-activity marker → MUST NOT touch the DB.
+      // Returns the empty default; any in-flight writer will seed the cache.
+      res.set('X-Cache', 'MISS-NO-ACTIVITY');
+      return res.json({ unread_count: 0 });
+    }
+
     // Capture generation BEFORE the DB read so a concurrent writer is detected.
     const token = unreadCountCache.beginRead(userId);
     const db = await getDbAdapter();

@@ -1630,9 +1630,17 @@ async function apiFetch(url, options = {}) {
   const opts = { ...options };
   const skipAuthHandling = opts.skipAuthHandling === true;
   delete opts.skipAuthHandling;
+  // Boot-quiet contract (CS53-23): callers that originate from a real user
+  // gesture pass `userActivity: true` so the server is allowed to wake the
+  // DB on a cache miss. Boot/focus/poller calls omit it.
+  const userActivity = opts.userActivity === true;
+  delete opts.userActivity;
   opts.headers = { ...opts.headers };
   if (authToken) {
     opts.headers['Authorization'] = `Bearer ${authToken}`;
+  }
+  if (userActivity) {
+    opts.headers['X-User-Activity'] = '1';
   }
   const res = await fetch(url, opts);
   if (res.status === 401 && authToken && !skipAuthHandling) {
@@ -3510,7 +3518,7 @@ function updateNotificationBadge(count) {
 async function refreshNotificationBadge() {
   if (!isLoggedIn()) return;
   try {
-    const res = await apiFetch('/api/notifications/count');
+    const res = await apiFetch('/api/notifications/count', { userActivity: true });
     if (res.ok) {
       const data = await res.json();
       // Logout may have happened while the request was in flight;
@@ -3552,7 +3560,7 @@ async function loadNotifications() {
   if (!section || !list) return;
 
   try {
-    const res = await apiFetch('/api/notifications');
+    const res = await apiFetch('/api/notifications', { userActivity: true });
     if (!res.ok) {
       section.style.display = 'none';
       return;
@@ -3578,7 +3586,7 @@ async function loadNotifications() {
 /** Mark a single notification as read via API. */
 async function markNotificationRead(notificationId) {
   try {
-    const res = await apiFetch(`/api/notifications/${notificationId}/read`, { method: 'PUT' });
+    const res = await apiFetch(`/api/notifications/${notificationId}/read`, { method: 'PUT', userActivity: true });
     if (res.ok) {
       const item = document.querySelector(`.notification-item[data-notification-id="${notificationId}"]`);
       if (item) {
@@ -3602,7 +3610,7 @@ async function markNotificationRead(notificationId) {
 /** Mark all notifications as read via API. */
 async function markAllNotificationsRead() {
   try {
-    const res = await apiFetch('/api/notifications/read-all', { method: 'PUT' });
+    const res = await apiFetch('/api/notifications/read-all', { method: 'PUT', userActivity: true });
     if (res.ok) {
       document.querySelectorAll('.notification-item.notification-unread').forEach(item => {
         item.classList.remove('notification-unread');
