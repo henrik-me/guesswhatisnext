@@ -1865,7 +1865,7 @@ async function authAction(action) {
       bindText('auth-error', 'Network error — is the server running?');
     }
   } finally {
-    clearTimeout(timeoutId);
+    cancelActive();
   }
 }
 
