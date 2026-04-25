@@ -1762,7 +1762,12 @@ async function authAction(action) {
 
   let activeController = null;
   let activeTimeoutId = null;
-  const cancelActive = () => {
+  // Clears the per-attempt timeout and drops the controller reference. Does
+  // NOT call activeController.abort() — by the time we call this, either the
+  // fetch already settled (so abort is a no-op) or we deliberately want to
+  // let an in-flight retry sleep complete cleanly. Named to match behavior
+  // (Copilot review round 2, 2026-04-25).
+  const clearActiveTimeout = () => {
     if (activeTimeoutId) { clearTimeout(activeTimeoutId); activeTimeoutId = null; }
     activeController = null;
   };
@@ -1866,7 +1871,7 @@ async function authAction(action) {
       // errors, never transient progress.
       await sleep(wait);
     }
-    cancelActive();
+    clearActiveTimeout();
 
     if (lastError) {
       // Re-throw to the outer catch which preserves the existing AbortError /
@@ -1960,7 +1965,7 @@ async function authAction(action) {
       bindText('auth-error', 'Network error — is the server running?');
     }
   } finally {
-    cancelActive();
+    clearActiveTimeout();
   }
 }
 
