@@ -62,6 +62,16 @@ services:
       - "${HTTP_PORT:-3001}:80"
     volumes:
       - ./infra/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      # CS53-15: persist Caddy local CA + issued certs across container recreates.
+      # Without these, every `docker compose up --force-recreate caddy` (or `app`,
+      # which restarts caddy too via depends_on) regenerates a fresh self-signed
+      # CA. The browser still trusts the OLD CA, so subsequent fetches fail with
+      # ERR_CERT_AUTHORITY_INVALID. Service-Worker background fetches then throw
+      # silently (SW cannot prompt for cert acceptance), the SW catch handler
+      # returns a synthetic 503, and the SPA shows an "infinite retry" banner
+      # despite the server being healthy.
+      - caddy-data:/data
+      - caddy-config:/config
     depends_on:
       - app
     restart: unless-stopped
@@ -78,3 +88,5 @@ services:
 
 volumes:
   otel-data:
+  caddy-data:
+  caddy-config:
