@@ -57,3 +57,6 @@ logs/
 # CS53-11 validation script screenshots
 .cs53-11-shots/
 
+# Investigation/working artifacts (per OPERATIONS.md)
+shots/
+
