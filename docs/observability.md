@@ -137,9 +137,11 @@ union
   (requests | where operation_Id == opId | extend src="requests"),
   (workspace("/subscriptions/59fa8de9-d89c-42bc-8b8d-ee7bfab00270/resourceGroups/gwn-rg/providers/Microsoft.OperationalInsights/workspaces/workspace-gwnrg6bXt").ContainerAppConsoleLogs_CL
      | where parse_json(Log_s).trace_id == opId
-     | extend src="pino")
+     | extend src="pino", timestamp=TimeGenerated)
 | order by timestamp asc
 ```
+
+Run from the **AI resource's** Logs blade (or `az monitor app-insights query --app gwn-ai-staging`) — the AI scope makes `requests` available natively, and `workspace(...)` reaches across to the bound workspace for `ContainerAppConsoleLogs_CL`. The `extend timestamp=TimeGenerated` step normalizes the Pino branch's time column so the final `order by timestamp asc` sorts both halves of the union together.
 
 Replace the workspace resource ID if it ever changes — re-discover via:
 
@@ -152,18 +154,18 @@ Because both AI resources are bound to `workspace-gwnrg6bXt`, the same bridge qu
 
 ### B.6 Cold-start mssql connect latency (until `dependencies` is wired)
 
-The `dependencies` table is not populated — mssql auto-instrumentation is intentionally disabled in [`server/telemetry.js`](../server/telemetry.js) (CS54 scope decision). To inspect mssql connect latency until [CS54-9 option #1](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#cs54-9--evaluate-deferred-observability-gaps-no-new-cs-yet) lands, fall back to Pino's structured logs in `ContainerAppConsoleLogs_CL`:
+The `dependencies` table is not populated — mssql auto-instrumentation is intentionally disabled in [`server/telemetry.js`](../server/telemetry.js) (CS54 scope decision). Until [CS54-9 option #1](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#cs54-9--evaluate-deferred-observability-gaps-no-new-cs-yet) lands, fall back to grepping Pino's structured stdout in `ContainerAppConsoleLogs_CL`. The query below is a **template** — adjust the `where` clause to match whatever string the cold-start retry path actually emits (today the relevant lines come out of the `mssql-adapter` connect/retry code in [`server/db/`](../server/db/); see CS53 for the working queries used during the original investigation):
 
 ```kusto
 ContainerAppConsoleLogs_CL
 | where TimeGenerated > ago(1h)
 | extend pino = parse_json(Log_s)
-| where pino.msg has "mssql" and pino.msg has "connect"
-| project TimeGenerated, container=ContainerName_s, msg=pino.msg, ms=pino.elapsedMs
+| where tostring(pino.msg) has "mssql" or tostring(pino.module) == "mssql-adapter"
+| project TimeGenerated, container=ContainerName_s, level=pino.level, msg=pino.msg, elapsedMs=pino.elapsedMs
 | order by TimeGenerated desc
 ```
 
-This query lives in the workspace, not the AI app — run it from `workspace-gwnrg6bXt`'s Logs blade, or via `az monitor log-analytics query --workspace <customer-id>`.
+Field availability depends on what the server actually logs — `elapsedMs` only shows up on log lines where the adapter measured and emitted it. Treat the `project` list as a starting set and prune to whatever fields are populated for the runs you're investigating. This whole query lives in the workspace, not the AI app — run it from `workspace-gwnrg6bXt`'s Logs blade, or via `az monitor log-analytics query --workspace <customer-id>`.
 
 ## C. Staging vs prod filtering
 
