@@ -60,3 +60,4 @@ logs/
 # Investigation/repro screenshots and visual artifacts (may contain JWTs in URLs,
 # user PII in screenshots, internal URLs). Working artifacts, not source.
 shots/
+cost*.json
