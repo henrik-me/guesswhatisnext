@@ -296,8 +296,13 @@ function createServer() {
     // Node's default cap of 10 and emitting a per-response warning. The
     // OTel listeners are `.once` and self-remove on the layer's `next()`,
     // so this is a false-positive leak. 32 gives ample headroom while
-    // still catching real unbounded leaks (test asserts ≤ 32 under load).
+    // still catching real unbounded leaks. The cap is asserted directly
+    // by tests/response-listener-cap.test.js via the test-only
+    // `X-Test-Max-Listeners` echo header below.
     res.setMaxListeners(32);
+    if (process.env.NODE_ENV === 'test') {
+      res.setHeader('X-Test-Max-Listeners', String(res.getMaxListeners()));
+    }
     res.on('finish', decrement);
     res.on('close', decrement);
     next();

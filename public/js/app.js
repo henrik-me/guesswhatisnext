@@ -1781,24 +1781,47 @@ async function authAction(action) {
         if (activeTimeoutId) { clearTimeout(activeTimeoutId); activeTimeoutId = null; }
       }
 
-      // Non-503 success or definitive failure → exit loop and let downstream
-      // logic handle the response/error.
-      if (res && res.status !== 503) break;
+      // Non-warmup success or definitive failure → exit loop and let downstream
+      // logic handle the response/error. Warmup-retryable statuses are
+      // 503 (origin warming up) and 502/504 (gateway/proxy can't reach origin
+      // — common during App Service cold-start swaps). For 502/504 we may not
+      // get a Retry-After header (Caddy/Azure FD don't always send one), so
+      // fall back to a 5s default.
+      const isWarmupRetryable = res && (res.status === 503 || res.status === 502 || res.status === 504);
+      if (res && !isWarmupRetryable) break;
 
-      // AbortError (per-attempt timeout) is only safe to retry for idempotent
-      // ops. Register is non-idempotent (rubber-duck #2): a timed-out request
-      // may have actually created the account, so retrying would surface a
-      // misleading "username taken" error. Login is idempotent (no
-      // server-side state change on failure), so retrying is safe.
-      if (lastError) {
-        if (lastError.name !== 'AbortError') break;
-        if (action !== 'login') break;
+      // 503 is safe to retry for register because the cold-start gate runs
+      // BEFORE the route handler, so we know the request did NOT hit the
+      // server-side state-mutating code. 502/504 (gateway errors) and
+      // AbortError (per-attempt timeout) are NOT safe to retry for register
+      // because the request may have actually reached the origin and created
+      // the account; retrying would surface a misleading "username taken".
+      // Login is idempotent (no server-side state change on failure) so all
+      // are safe to retry.
+      if (action !== 'login') {
+        if (lastError) break;                       // AbortError on register
+        if (res && res.status !== 503) break;       // 502/504 on register
+      } else if (lastError && lastError.name !== 'AbortError') {
+        break;                                      // non-Abort error on login
       }
 
-      // From here on we have either a 503 response or an AbortError on login.
-      const retryAfterMs = res ? parseRetryAfterMs(res, data) : 5000;
-      if (res && retryAfterMs === null) break; // 503 without retry signal — terminal
-      const wait = Math.min(Math.max(retryAfterMs || 5000, 1000), 10000);
+      // From here on we have either a warmup-retryable response or an
+      // AbortError on login. Compute wait: prefer Retry-After header, else
+      // server-supplied retryAfter body field, else default (5s for 503 to
+      // match the server's gate; 5s for 502/504 since gateway has no signal).
+      let retryAfterMs;
+      if (res) {
+        retryAfterMs = parseRetryAfterMs(res, data);
+        if (retryAfterMs === null) {
+          // 503 without retry signal is terminal (likely not our warmup gate),
+          // but 502/504 are inherently retryable so use a default.
+          if (res.status === 503) break;
+          retryAfterMs = 5000;
+        }
+      } else {
+        retryAfterMs = 5000;
+      }
+      const wait = Math.min(Math.max(retryAfterMs, 1000), 10000);
       const remaining = warmupDeadline - Date.now();
       if (remaining <= wait + 500) {
         unlockAuthForm(action);
@@ -1821,24 +1844,34 @@ async function authAction(action) {
 
     if (!res.ok) {
       unlockAuthForm(action);
-      // CS53-17: don't leak internal server prose for 503s. The retry loop
-      // above handles transient warmup 503s; if we land here on a 503 it's
-      // either a permanent unavailability (unavailable:true with friendly
-      // `message`), an unsignaled warmup 503, or a proxy/gateway 503
-      // (rubber-duck #3 — use a generic message for the unknown case).
+      // CS53-17: don't leak internal server prose for warmup-class statuses
+      // that fall through here (e.g. retry budget exhausted, or register
+      // hitting 502/504 which we don't auto-retry for idempotency reasons).
+      // 503 is the server's own gate; 502/504 are gateway/proxy errors.
       if (res.status === 503) {
         let friendly;
+        const hasWarmupSignal =
+          (typeof res.headers?.get === 'function' && res.headers.get('Retry-After')) ||
+          (data && typeof data.retryAfter === 'number');
         if (data && data.unavailable && data.message) {
+          // Permanent unavailability with server-supplied user-facing message.
           friendly = data.message;
-        } else if (data && (data.error || data.message)) {
-          // Server's own gate signals warmup; trust its retry hint context.
+        } else if (hasWarmupSignal) {
+          // Our cold-start gate sends Retry-After + retryAfter. Trust it.
           friendly = 'Server is warming up — please try again in a moment';
         } else {
+          // Generic 503 (no warmup signal): don't pretend it's warmup.
           friendly = 'Service temporarily unavailable — please try again';
         }
         bindText('auth-error', friendly);
+      } else if (res.status === 502 || res.status === 504) {
+        // Gateway/proxy errors: response body is typically text/html from the
+        // proxy, not actionable for the user. Show the same warmup-style
+        // message as 503 since the cause is the same class of problem
+        // (origin not reachable).
+        bindText('auth-error', 'Service temporarily unavailable — please try again');
       } else {
-        bindText('auth-error', data.error || 'Something went wrong');
+        bindText('auth-error', (data && data.error) || 'Something went wrong');
       }
       return;
     }
