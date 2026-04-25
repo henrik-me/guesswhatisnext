@@ -25,7 +25,7 @@ Both AI resources are **workspace-bound** to the same Log Analytics workspace (`
 3. Open the resource → left nav → **Logs**. The first time, dismiss the example-queries dialog.
 4. Paste a query from § B and run it. The query scope is automatically the AI resource (and its bound workspace), so you don't need to specify a workspace.
 
-### A.2 `az monitor log-analytics query` (CLI alternative)
+### A.2 Azure CLI alternative (`az monitor app-insights query` / `az monitor log-analytics query`)
 
 For scripted use or when you don't want to leave the terminal. The CLI accepts either an App Insights `appId` (for AI tables: `requests`, `dependencies`, etc. — and for cross-table queries that bridge to `ContainerAppConsoleLogs_CL` via the `workspace(...)` function, see § B.5) or a Log Analytics `customer-id` (a GUID, for queries whose primary table is a workspace table such as `ContainerAppConsoleLogs_CL`).
 
