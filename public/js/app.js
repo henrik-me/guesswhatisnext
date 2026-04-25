@@ -3227,18 +3227,23 @@ function updateNotificationBadge(count) {
 /**
  * Fetch unread notification count and update badge (one-shot, no timer).
  *
- * Boot-quiet contract (CS53-23): this function sends `X-User-Activity: 1`,
- * which the server treats as permission to wake the DB on cache miss. It is
- * therefore only safe to call from real user-gesture paths. The current call
- * from `updateHomeAuthDisplay()` also fires after boot-time token validation —
- * that boot-path call is a known follow-up tracked in CS53-19 (apply boot-quiet
- * across every endpoint and dedup the boot fetches). CS53-23 ships the contract;
- * CS53-19 will move the boot-time badge refresh behind a real user gesture.
+ * Boot-quiet contract (CS53-23): this function does NOT send `X-User-Activity`,
+ * because its sole caller is `updateHomeAuthDisplay()` — which fires on boot,
+ * after auth-state changes, and after token validation. Per the contract, none
+ * of those are real user gestures, so the request must not wake the DB. The
+ * server returns the cached count if any, else `{ unread_count: 0 }`. The badge
+ * is then refreshed authoritatively when the user takes a real action that
+ * routes through `loadNotifications()` (My Submissions screen open) or one of
+ * the mark-read paths — all of which DO send `X-User-Activity: 1` and update
+ * the badge from their fresh response.
+ *
+ * CS53-19.C will refactor the call graph so genuine post-login refreshes can
+ * opt back into user-activity without re-introducing the boot-time DB wake.
  */
 async function refreshNotificationBadge() {
   if (!isLoggedIn()) return;
   try {
-    const res = await apiFetch('/api/notifications/count', { userActivity: true });
+    const res = await apiFetch('/api/notifications/count');
     if (res.ok) {
       const data = await res.json();
       // Logout may have happened while the request was in flight;
