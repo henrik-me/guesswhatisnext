@@ -274,3 +274,55 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 - ❌ Never parallelize two tasks that both rewrite the same function
 
 For deployment environments, CI/CD pipeline, and rollback policy, see [CONTEXT.md](CONTEXT.md) and [README.md](README.md).
+
+## Staging environment (scale-to-zero)
+
+The Azure `gwn-staging` Container App runs at `minReplicas: 0` so it pays only for active usage. It is **not** the enforced pre-prod gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local [`npm run container:validate`](#cold-start-container-validation) cycles. See [active_cs58_scale-staging-to-zero.md](project/clickstops/active/active_cs58_scale-staging-to-zero.md) for the rationale, cost evidence, and rollback procedure.
+
+### Waking staging for ad-hoc validation
+
+Staging exists for ad-hoc operator probing (smoke-checking a fix in a real Azure environment, reproducing a cold-start path against managed Azure SQL, etc.). To wake it:
+
+```powershell
+curl https://gwn-staging.blackbay-…azurecontainerapps.io/healthz
+# wait ~60s for the first 200
+```
+
+Cold-start budget on the first request after idle:
+
+- ~10–30s for the Container App replica to be allocated (`minReplicas: 0` → 1).
+- ~30s for the lazy DB init in `server/app.js` to complete its first connection (request-driven, see [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data)).
+
+Cooldown: after 300s of zero traffic the replica is deallocated again, so a probe followed by ~5 min of silence returns staging to its $0 idle state. The exact FQDN, the `minReplicas: 0` value, and the cooldown live authoritatively in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) and the live `az containerapp show` output — do not paraphrase them elsewhere.
+
+### Querying Azure cost
+
+Source of truth for current Azure spend is Azure Cost Management. To regenerate a meter-level breakdown for `gwn-rg` over the last 30 days (used to verify the CS58 idle-meter savings, and reusable for any future cost analysis):
+
+```powershell
+$sub = az account show --query id -o tsv
+$end = (Get-Date).ToString('yyyy-MM-dd')
+$start = (Get-Date).AddDays(-30).ToString('yyyy-MM-dd')
+$body = @{
+  type = 'Usage'; timeframe = 'Custom'
+  timePeriod = @{ from = $start; to = $end }
+  dataset = @{
+    granularity = 'None'
+    aggregation = @{
+      totalCost = @{ name = 'Cost'; function = 'Sum' }
+      totalQty  = @{ name = 'UsageQuantity'; function = 'Sum' }
+    }
+    grouping = @(
+      @{ type = 'Dimension'; name = 'Meter' }
+      @{ type = 'Dimension'; name = 'ResourceId' }
+    )
+    filter = @{ dimensions = @{ name = 'ResourceGroupName'; operator = 'In'; values = @('gwn-rg') } }
+  }
+} | ConvertTo-Json -Depth 12 -Compress
+$body | Out-File cost.json -Encoding ascii
+az rest --method post `
+  --url "https://management.azure.com/subscriptions/$sub/providers/Microsoft.CostManagement/query?api-version=2023-11-01" `
+  --body "@cost.json"
+```
+
+Adjust the `ResourceGroupName` filter, the timeframe, or the grouping dimensions to scope the query (for example, group by `ServiceName` to compare Container Apps vs Azure SQL). The `cost.json` file is a working artifact — delete it after the query runs (it is not committed; see `.gitignore`).
