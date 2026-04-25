@@ -328,3 +328,7 @@ az rest --method post `
 ```
 
 Adjust the `ResourceGroupName` filter, the timeframe, or the grouping dimensions to scope the query (for example, group by `ServiceName` to compare Container Apps vs Azure SQL). The `cost.json` file is a working artifact — delete it after the query runs (it is not committed; see `.gitignore`).
+
+## Observability — App Insights query examples
+
+See [`docs/observability.md`](docs/observability.md) for the full KQL bundle and operator runbook: how to access App Insights logs (portal + `az monitor log-analytics query`), common queries (requests by route, error rate, latency percentiles, slow requests, distributed-trace bridge to Pino logs in `ContainerAppConsoleLogs_CL`, cold-start mssql connect latency), staging-vs-prod filtering, and the dev/operator note about not exporting `APPLICATIONINSIGHTS_CONNECTION_STRING` locally.
