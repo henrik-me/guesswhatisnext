@@ -1753,8 +1753,17 @@ async function authAction(action) {
   try {
     let res, data, lastError;
     while (true) {
+      // Cap per-attempt timeout by remaining warmup budget so total wall-clock
+      // never overshoots AUTH_WARMUP_DEADLINE_MS by up to 45s (rubber-duck #1).
+      const remainingBudget = warmupDeadline - Date.now();
+      if (remainingBudget <= 0) {
+        unlockAuthForm(action);
+        bindText('auth-error', 'Server is warming up — please try again in a moment');
+        return;
+      }
+      const attemptTimeout = Math.min(AUTH_TIMEOUT_MS, remainingBudget);
       activeController = new AbortController();
-      activeTimeoutId = setTimeout(() => activeController.abort(), AUTH_TIMEOUT_MS);
+      activeTimeoutId = setTimeout(() => activeController.abort(), attemptTimeout);
       try {
         res = await fetch(endpoint, {
           method: 'POST',
@@ -1775,10 +1784,18 @@ async function authAction(action) {
       // Non-503 success or definitive failure → exit loop and let downstream
       // logic handle the response/error.
       if (res && res.status !== 503) break;
-      if (lastError && lastError.name !== 'AbortError') break;
 
-      // From here on we have either a 503 response or an AbortError (per-attempt
-      // timeout). Decide whether we have budget for another retry.
+      // AbortError (per-attempt timeout) is only safe to retry for idempotent
+      // ops. Register is non-idempotent (rubber-duck #2): a timed-out request
+      // may have actually created the account, so retrying would surface a
+      // misleading "username taken" error. Login is idempotent (no
+      // server-side state change on failure), so retrying is safe.
+      if (lastError) {
+        if (lastError.name !== 'AbortError') break;
+        if (action !== 'login') break;
+      }
+
+      // From here on we have either a 503 response or an AbortError on login.
       const retryAfterMs = res ? parseRetryAfterMs(res, data) : 5000;
       if (res && retryAfterMs === null) break; // 503 without retry signal — terminal
       const wait = Math.min(Math.max(retryAfterMs || 5000, 1000), 10000);
@@ -1807,11 +1824,18 @@ async function authAction(action) {
       // CS53-17: don't leak internal server prose for 503s. The retry loop
       // above handles transient warmup 503s; if we land here on a 503 it's
       // either a permanent unavailability (unavailable:true with friendly
-      // `message`) or a 503 without a retry signal we can't classify.
+      // `message`), an unsignaled warmup 503, or a proxy/gateway 503
+      // (rubber-duck #3 — use a generic message for the unknown case).
       if (res.status === 503) {
-        const friendly = (data && data.unavailable && data.message)
-          ? data.message
-          : 'Server is warming up — please try again in a moment';
+        let friendly;
+        if (data && data.unavailable && data.message) {
+          friendly = data.message;
+        } else if (data && (data.error || data.message)) {
+          // Server's own gate signals warmup; trust its retry hint context.
+          friendly = 'Server is warming up — please try again in a moment';
+        } else {
+          friendly = 'Service temporarily unavailable — please try again';
+        }
         bindText('auth-error', friendly);
       } else {
         bindText('auth-error', data.error || 'Something went wrong');
