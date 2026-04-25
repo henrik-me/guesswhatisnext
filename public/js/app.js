@@ -1720,19 +1720,68 @@ async function authAction(action) {
   const endpoint = action === 'login' ? '/api/auth/login' : '/api/auth/register';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
+  const deadline = Date.now() + AUTH_TIMEOUT_MS;
+
+  // CS53-17: cold-start aware retry. On 503 + Retry-After (server warming up),
+  // sleep and retry inside AUTH_TIMEOUT_MS instead of leaking the raw
+  // "Database not yet initialized" message to the user. Bounded by the
+  // overall auth deadline and the abort controller, so behavior on real
+  // timeouts / aborts / non-warmup errors is unchanged.
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const parseRetryAfterMs = (res, body) => {
+    const header = res.headers.get('Retry-After');
+    if (header) {
+      const s = parseInt(header, 10);
+      if (!isNaN(s) && s >= 0) return s * 1000;
+    }
+    if (body && typeof body.retryAfter === 'number' && body.retryAfter >= 0) {
+      return body.retryAfter * 1000;
+    }
+    return null;
+  };
 
   try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-      signal: controller.signal,
-    });
-    const data = await res.json();
+    let res, data;
+    while (true) {
+      res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+        signal: controller.signal,
+      });
+      data = await res.json().catch(() => ({}));
+
+      if (res.status !== 503) break;
+      const retryAfterMs = parseRetryAfterMs(res, data);
+      if (retryAfterMs === null) break; // 503 without retry signal — treat as terminal
+      const remaining = deadline - Date.now();
+      // Clamp the wait so we always have time for at least one more attempt.
+      const wait = Math.min(Math.max(retryAfterMs, 1000), 10000);
+      if (remaining <= wait + 500) {
+        // Not enough time for another attempt — surface a friendly warmup message.
+        unlockAuthForm(action);
+        bindText('auth-error', 'Server is warming up — please try again in a moment');
+        return;
+      }
+      bindText('auth-error', 'Server is starting up — retrying…');
+      await sleep(wait);
+      if (controller.signal.aborted) break;
+    }
 
     if (!res.ok) {
       unlockAuthForm(action);
-      bindText('auth-error', data.error || 'Something went wrong');
+      // CS53-17: don't leak internal server prose for 503s. The retry loop
+      // above handles transient warmup 503s; if we land here on a 503 it's
+      // either a permanent unavailability (unavailable:true with friendly
+      // `message`) or a 503 without a retry signal we can't classify.
+      if (res.status === 503) {
+        const friendly = (data && data.unavailable && data.message)
+          ? data.message
+          : 'Server is warming up — please try again in a moment';
+        bindText('auth-error', friendly);
+      } else {
+        bindText('auth-error', data.error || 'Something went wrong');
+      }
       return;
     }
 
