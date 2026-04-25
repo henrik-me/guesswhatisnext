@@ -30,9 +30,11 @@ describe('CS53-12: ServerResponse finish-listener cap', () => {
   test('per-response max listeners is raised to 32', async () => {
     const agent = getAgent();
     const res = await agent.get('/api/scores/me').set('Authorization', 'Bearer invalid');
-    // /api/scores/me requires auth — accepting 200 here would mask an auth-bypass
-    // bug (Copilot R3). 503 is allowed because cold-start gate runs before auth.
-    expect([401, 503]).toContain(res.status);
+    // tests/helper.js sets NODE_ENV=test and awaits dbReady, so the Azure
+    // cold-start gate should never fire here. Strict 401 ensures middleware
+    // chain ran AND no DB-init/transient-DB 503 leaked into the unit env
+    // (Copilot R3 + R4). Accepting 200 would mask an auth-bypass regression.
+    expect(res.status).toBe(401);
     expect(res.headers['x-test-max-listeners']).toBe('32');
   });
 
@@ -50,9 +52,10 @@ describe('CS53-12: ServerResponse finish-listener cap', () => {
           agent.get('/api/scores/me').set('Authorization', 'Bearer invalid')
         )
       );
-      // All should reach the auth layer — confirms middleware chain ran.
-      // /api/scores/me requires auth; 200 would be an auth bypass (Copilot R3).
-      for (const r of results) expect([401, 503]).toContain(r.status);
+      // All should hit auth layer with strict 401 — confirms middleware chain
+      // ran without DB-init/503 leakage (NODE_ENV=test + dbReady awaited).
+      // 200 would be an auth bypass (Copilot R3 + R4).
+      for (const r of results) expect(r.status).toBe(401);
     } finally {
       process.removeListener('warning', onWarning);
     }
