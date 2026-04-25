@@ -95,12 +95,15 @@ jobs:
 
       - name: Guard rail — APPLICATIONINSIGHTS env var present in BOTH templates
         run: |
-          COUNT=$(grep -c "APPLICATIONINSIGHTS_CONNECTION_STRING" .github/workflows/prod-deploy.yml || true)
-          if [ "$COUNT" -lt 2 ]; then
-            echo "::error::APPLICATIONINSIGHTS_CONNECTION_STRING must appear in BOTH happy-path and rollback templates (found $COUNT)."
+          # Count only the env-entry form so the guard step's own message text
+          # cannot satisfy the threshold. Must appear exactly twice (happy-path
+          # deploy template + rollback deploy template).
+          COUNT=$(grep -c "^[[:space:]]*- name: APPLICATIONINSIGHTS_CONNECTION_STRING$" .github/workflows/prod-deploy.yml || true)
+          if [ "$COUNT" -ne 2 ]; then
+            echo "::error::Expected APPLICATIONINSIGHTS_CONNECTION_STRING env entry in BOTH happy-path and rollback templates (found $COUNT, expected 2)."
             exit 1
           fi
-          echo "Guard pass: APPLICATIONINSIGHTS_CONNECTION_STRING appears $COUNT times."
+          echo "Guard pass: APPLICATIONINSIGHTS_CONNECTION_STRING env entry present in both templates ($COUNT occurrences)."
 
       - name: Resolve commit SHA from image tag
         id: resolve
