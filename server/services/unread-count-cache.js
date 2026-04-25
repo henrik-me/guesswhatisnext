@@ -26,6 +26,17 @@
  * cache (Redis) and pub/sub invalidation — out of scope here.
  */
 
+/**
+ * Coerce an unread-count value to a safe non-negative integer.
+ * Avoids `count | 0` which truncates to int32 and silently wraps values
+ * above 2^31-1 to negative (then clamped to 0) — Copilot review finding.
+ */
+function _coerceCount(count) {
+  const n = Number(count);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.trunc(n);
+}
+
 class UnreadCountCache {
   constructor() {
     this.entries = new Map(); // userId -> count
@@ -63,7 +74,7 @@ class UnreadCountCache {
       this.stats.staleSetsRejected++;
       return false;
     }
-    this.entries.set(userId, Math.max(0, count | 0));
+    this.entries.set(userId, _coerceCount(count));
     return true;
   }
 
@@ -74,7 +85,7 @@ class UnreadCountCache {
    */
   set(userId, count) {
     this._bumpGen(userId);
-    this.entries.set(userId, Math.max(0, count | 0));
+    this.entries.set(userId, _coerceCount(count));
   }
 
   /**
