@@ -191,6 +191,13 @@ describe('PUT /api/notifications/read-all', () => {
 });
 
 describe('GET /api/notifications/count', () => {
+  // Ensure spies set up inside individual tests are restored even if an
+  // assertion throws (Copilot review finding) — prevents spy leakage across
+  // tests in this describe block.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test('returns 401 without auth', async () => {
     const res = await getAgent().get('/api/notifications/count');
     expect(res.status).toBe(401);
