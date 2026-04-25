@@ -95,7 +95,11 @@ router.get('/count', requireAuth, async (req, res, next) => {
       'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0',
       [userId]
     );
-    const count = row ? row.count : 0;
+    // Coerce the DB result to a safe non-negative integer. MSSQL COUNT(*) can
+    // return BigInt or string depending on driver path; res.json() throws on
+    // BigInt and HIT vs MISS would otherwise return inconsistent types.
+    const raw = row ? Number(row.count) : 0;
+    const count = Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : 0;
     const stored = unreadCountCache.setIfFresh(userId, count, token);
     res.set('X-Cache', stored ? 'MISS' : 'STALE-DROP');
     res.json({ unread_count: count });

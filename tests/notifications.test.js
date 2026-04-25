@@ -243,10 +243,6 @@ describe('GET /api/notifications/count', () => {
     expect(getSpy).not.toHaveBeenCalled();
     expect(allSpy).not.toHaveBeenCalled();
     expect(runSpy).not.toHaveBeenCalled();
-
-    getSpy.mockRestore();
-    allSpy.mockRestore();
-    runSpy.mockRestore();
   });
 
   test('boot-quiet: no X-User-Activity + cache hit → returns cached value, no DB', async () => {
@@ -269,11 +265,7 @@ describe('GET /api/notifications/count', () => {
     expect(getSpy).not.toHaveBeenCalled();
     expect(allSpy).not.toHaveBeenCalled();
     expect(runSpy).not.toHaveBeenCalled();
-
-    getSpy.mockRestore();
-    allSpy.mockRestore();
-    runSpy.mockRestore();
-    unreadCountCache.clear();
+  
   });
 
   test('with X-User-Activity: 1 + cache miss → exactly one DB query and seeds cache', async () => {
@@ -313,8 +305,6 @@ describe('GET /api/notifications/count', () => {
       .set('X-User-Activity', '1');
     expect(r2.headers['x-cache']).toBe('HIT');
     expect(spy).not.toHaveBeenCalled();
-
-    spy.mockRestore();
   });
 
   test('caches result so repeated user-activity polls do not hit DB', async () => {
