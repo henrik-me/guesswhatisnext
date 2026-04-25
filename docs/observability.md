@@ -5,7 +5,7 @@ This doc covers two things:
 1. **How to access logs** — operator runbook for getting at App Insights / Log Analytics from the portal and the `az` CLI.
 2. **What to look for** — a starter KQL bundle for the most common incident-investigation patterns: requests-by-route sanity check, error rate, latency percentiles, slow-request hunting, distributed-trace bridge to Pino logs in `ContainerAppConsoleLogs_CL`, and cold-start mssql connect latency.
 
-Scope is intentionally narrow: **HTTP request shape only**. The `dependencies`, `traces`, and `exceptions` tables are not populated yet — that's [CS54-9's deferred work evaluation](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#cs54-9--evaluate-deferred-observability-gaps-no-new-cs-yet). Most of the queries below work around those gaps.
+Scope is intentionally narrow: **HTTP request shape only**. The `dependencies`, `traces`, and `exceptions` tables are not populated yet — that's [CS54-9's deferred work evaluation](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#cs54-9--deferred-work-evaluation-appendix). Most of the queries below work around those gaps.
 
 ## Resources
 
@@ -68,13 +68,13 @@ For the record at the time of writing: staging `appId` = `693575e0-d4e3-47a8-88a
 
 ### A.3 Operator / dev note — do NOT export the connection string locally
 
-`APPLICATIONINSIGHTS_CONNECTION_STRING` lives in deploy-time configuration only (Container Apps `secret` referenced via `secretRef:` in the deploy workflows — see [CS54 design decision #3](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#design-decisions)). **Do not** export it in your local shell when running the real server (`npm start`, `npm run dev:mssql`, etc.) — your local dev traffic will appear in the **staging** AI resource and contaminate real-traffic verification queries.
+`APPLICATIONINSIGHTS_CONNECTION_STRING` lives in deploy-time configuration only (Container Apps `secret` referenced via `secretRef:` in the deploy workflows — see [CS54 design decision #3](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). **Do not** export it in your local shell when running the real server (`npm start`, `npm run dev:mssql`, etc.) — your local dev traffic will appear in the **staging** AI resource and contaminate real-traffic verification queries.
 
 `tests/opentelemetry.test.js` already saves and restores the env var per test, so unit tests are unaffected. The risk is purely from interactive shells that have the var exported (e.g., `$env:APPLICATIONINSIGHTS_CONNECTION_STRING = "..."` left in a profile, or sourced from a `.env` file by accident).
 
 ## B. Common KQL queries
 
-All queries below run against either AI resource (pick the right one for your environment — see § C). They assume the `requests` table is populated; if it isn't, walk back through [CS54-6's verification queries](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#cs54-6--end-to-end-verification-requests-only) first.
+All queries below run against either AI resource (pick the right one for your environment — see § C). They assume the `requests` table is populated; if it isn't, walk back through [CS54-6's verification queries](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#cs54-6--verification-record-2026-04-25t2239z) first.
 
 ### B.1 Recent requests by route (sanity check)
 
@@ -127,7 +127,7 @@ Grab an `operation_Id` from this query and feed it into § B.5 to see what the s
 
 ### B.5 Distributed-trace bridge to Pino logs
 
-Until [CS54-9](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#cs54-9--evaluate-deferred-observability-gaps-no-new-cs-yet) lands a Pino → AI log forwarder, the `traces` table is empty. To correlate a request span with the Pino log lines it produced, bridge the AI `requests` table to the workspace's `ContainerAppConsoleLogs_CL` via `operation_Id` ↔ `trace_id` (Pino logger injects `trace_id` from the active OTel span — see [`server/logger.js`](../server/logger.js)).
+Until [CS54-9](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#cs54-9--deferred-work-evaluation-appendix) lands a Pino → AI log forwarder, the `traces` table is empty. To correlate a request span with the Pino log lines it produced, bridge the AI `requests` table to the workspace's `ContainerAppConsoleLogs_CL` via `operation_Id` ↔ `trace_id` (Pino logger injects `trace_id` from the active OTel span — see [`server/logger.js`](../server/logger.js)).
 
 The query below runs **in AI scope** (against `gwn-ai-staging` or `gwn-ai-production`), so `requests` resolves natively. It uses the `workspace(...)` KQL function on the Pino branch to reach across to the bound Log Analytics workspace for `ContainerAppConsoleLogs_CL` — the same workspace both AI resources are bound to (see the resource table above). Equivalent CLI invocation: `az monitor app-insights query --app gwn-ai-{staging,production} --analytics-query '<below>'`.
 
@@ -154,7 +154,7 @@ Because both AI resources are bound to `workspace-gwnrg6bXt`, the same bridge qu
 
 ### B.6 Cold-start mssql connect latency (until `dependencies` is wired)
 
-The `dependencies` table is not populated — mssql auto-instrumentation is intentionally disabled in [`server/telemetry.js`](../server/telemetry.js) (CS54 scope decision). Until [CS54-9 option #1](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#cs54-9--evaluate-deferred-observability-gaps-no-new-cs-yet) lands, fall back to grepping Pino's structured stdout in `ContainerAppConsoleLogs_CL`. The query below is a **template** — adjust the `where` clause to match whatever string the cold-start retry path actually emits (today the relevant lines come out of the `mssql-adapter` connect/retry code in [`server/db/`](../server/db/); see CS53 for the working queries used during the original investigation):
+The `dependencies` table is not populated — mssql auto-instrumentation is intentionally disabled in [`server/telemetry.js`](../server/telemetry.js) (CS54 scope decision). Until [CS54-9 option #1](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#cs54-9--deferred-work-evaluation-appendix) lands, fall back to grepping Pino's structured stdout in `ContainerAppConsoleLogs_CL`. The query below is a **template** — adjust the `where` clause to match whatever string the cold-start retry path actually emits (today the relevant lines come out of the `mssql-adapter` connect/retry code in [`server/db/`](../server/db/); see CS53 for the working queries used during the original investigation):
 
 ```kusto
 ContainerAppConsoleLogs_CL
@@ -169,7 +169,7 @@ Field availability depends on what the server actually logs — `elapsedMs` only
 
 ## C. Staging vs prod filtering
 
-There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:
+There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:
 
 - **Staging:** `gwn-ai-staging` (portal) or `--app gwn-ai-staging` (CLI).
 - **Production:** `gwn-ai-production` (portal) or `--app gwn-ai-production` (CLI).
@@ -178,7 +178,7 @@ Cross-environment investigations (e.g., "did this regression also reach prod?") 
 
 ## D. Cross-links
 
-- **Why the deferred-work workarounds exist:** [CS54-9 Deferred Work Evaluation](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md#cs54-9--evaluate-deferred-observability-gaps-no-new-cs-yet) — three gaps (mssql instrumentation, Pino → AI log forwarding, exceptions table) that this doc works around with cross-workspace bridges and Pino-log fallbacks. The recommendations there are what would let us delete § B.5 and § B.6 in favor of `dependencies` / `traces` queries.
+- **Why the deferred-work workarounds exist:** [CS54-9 Deferred Work Evaluation](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#cs54-9--deferred-work-evaluation-appendix) — three gaps (mssql instrumentation, Pino → AI log forwarding, exceptions table) that this doc works around with cross-workspace bridges and Pino-log fallbacks. The recommendations there are what would let us delete § B.5 and § B.6 in favor of `dependencies` / `traces` queries.
 - **Cold-start investigation flavor:** [CS53 — prod cold-start retry investigation](../project/clickstops/active/active_cs53_prod-cold-start-retry-investigation.md) is the original incident that motivated CS54. The `ContainerAppConsoleLogs_CL`-only queries used during that investigation become much shorter once the AI `requests` table is in play (compare § B.4 above to the `parse_json(Log_s)` heuristics CS53 had to rely on).
 - **Logger / trace-id injection:** [`server/logger.js`](../server/logger.js) is what makes § B.5's bridge work — Pino log lines carry `trace_id` and `span_id` extracted from the active OTel span.
 - **Telemetry wiring:** [`server/telemetry.js`](../server/telemetry.js) is the AI export path; see CS54 for what it does and doesn't instrument.

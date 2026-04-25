@@ -46,7 +46,7 @@ Re-running `infra/deploy.sh` / `infra/deploy.ps1` resets the `PROD_URL` GitHub s
 
 The `APPLICATIONINSIGHTS_CONNECTION_STRING` env var on each Container App is wired via an ACA `secretRef:` (see [`prod-deploy.yml`](../.github/workflows/prod-deploy.yml), [`staging-deploy.yml`](../.github/workflows/staging-deploy.yml), [`infra/deploy.sh`](deploy.sh), [`infra/deploy.ps1`](deploy.ps1)). The deploy scripts and workflows do **not** create the AI resource or register the secret — they assume both already exist and **fail closed** if the `appinsights-connection-string` ACA secret is missing on the target Container App.
 
-The one-time operator runbook for provisioning the AI resources and registering the secrets lives in the CS54 clickstop file — see [`active_cs54_enable-app-insights-in-prod.md`](../project/clickstops/active/active_cs54_enable-app-insights-in-prod.md) (look for tasks **CS54-1** and **CS54-2** under "Per-task implementation detail"). Once CS54 closes, the same content travels to `project/clickstops/done/done_cs54_*.md`.
+The one-time operator runbook for provisioning the AI resources and registering the secrets lives in the CS54 clickstop file — see [`done_cs54_enable-app-insights-in-prod.md`](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md) (look for tasks **CS54-1** and **CS54-2** under "Per-task implementation detail").
 
 ## Operational troubleshooting
 
