@@ -69,11 +69,25 @@ Every clickstop must satisfy ALL of these before marking complete:
 
 Filled-in checklists are recorded in the clickstop's archive file upon completion.
 
-**Deferred work policy:** When completing a clickstop with deferred tasks, the orchestrator must:
-1. Create a new `planned_` clickstop file for the deferred work, including: what was deferred, why it was deferred, and a link back to the originating clickstop
-2. Inform the user that deferred work has been placed in a new clickstop, with a link and summary
+**Deferred work policy.** Deferred work is never silently dropped. The shape of the deferral depends on whether the deferred work is **related** to the current clickstop or **unrelated**:
 
-A clickstop may be marked complete with deferred tasks only if the deferred work has been captured in a new clickstop. Never silently drop deferred tasks.
+**Unrelated deferred work** (a different feature, area, or concern that happens to surface during the current CS):
+
+1. **Claim the next free CS number immediately** by creating `project/clickstops/planned/planned_csN_<kebab-name>.md` with at least the title, status `⬜ Planned`, origin (link back to the originating clickstop and the moment the deferral was identified), and a one-paragraph problem statement. Detail can be filled in later in that file. Claiming the number immediately prevents drift caused by other orchestrators picking the same number for unrelated work.
+2. Commit + push to `main` directly (clickstop plan files are a documented direct-on-main exception per OPERATIONS.md § Branch Strategy & Merge Model).
+3. Inform the user that the deferred work has been placed in the new CS, with a link and summary.
+
+**Related deferred work** (extension, follow-up, or evaluation of the current clickstop's own scope):
+
+1. **Add an evaluation task to the current CS's task table** (e.g. "CSN-X — Evaluate <gap>"). The task description must include enough detail that **another agent picking it up cold** can:
+   - Understand what is being evaluated and why it is in scope.
+   - Discover the relevant code/files (link them inline).
+   - List ≥ 2 candidate approaches the evaluator should consider, plus what data would change the recommendation.
+   - Decide whether the resulting follow-up should be a new CS, fold into an adjacent CS, or be dropped — without needing access to the original orchestrator.
+2. The evaluation task's deliverable is an in-CS appendix (e.g. `## Deferred Work Evaluation`) appended to the active/done clickstop file, **not** a stub follow-up CS. The follow-up CS is filed only after the evaluation completes and the recommendation calls for one — at which point the unrelated-work flow above applies (claim a number immediately, commit a skeleton, inform user).
+3. This avoids speculative CS proliferation when the eventual scope is unclear; the appendix is the durable record of what was deferred and why.
+
+**Either way, the original CS may only be marked complete after** the deferral has been captured (either as a filed CS for unrelated work or as a completed evaluation appendix for related work). Never silently drop deferred tasks.
 
 ### WORKBOARD.md — Live Coordination
 
