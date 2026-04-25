@@ -43,13 +43,13 @@ This eliminates the need for ad-hoc `parse_json(Log_s)` extraction over Containe
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| CS54-1 | Provision AI resources (staging + prod) in `gwn-rg`, workspace-bound to the workspace backing the Container Apps Environment (resolved via `appLogsConfiguration.logAnalyticsConfiguration.customerId`, NOT `[0].id` of the RG-level list). Capture both connection strings. Region must match the Container App's region; fail closed otherwise. | ✅ Done (2026-04-25T17:55Z) | `gwn-ai-staging` (appId `693575e0-d4e3-47a8-88a4-1012808b6358`) + `gwn-ai-production` (appId `405e1ae4-eff8-4073-8030-06d693b95a60`); both in `gwn-rg`/`eastus`, workspace-bound to `workspace-gwnrg6bXt`. |
-| CS54-2 | For each Container App, register the connection string as a Container App `secret` via `az containerapp secret set` (`appinsights-connection-string`). Must be done before CS54-3 / CS54-4 redeploy with `secretRef:`. | ✅ Done (2026-04-25T17:55Z) | Both `gwn-staging` and `gwn-production` now list `appinsights-connection-string` in `az containerapp secret list`. Apps must restart for changes to take effect (happens automatically on next deploy). |
-| CS54-3 | Wire `APPLICATIONINSIGHTS_CONNECTION_STRING` into `staging-deploy.yml` via `secretRef:`: deploy template env enumeration (~L464) only. **Do NOT** add the var to the ephemeral smoke-test container env block (~L60–L100). | 🔄 In Progress | Sub-agent wt-1, branch `yoga-gwn-c2/cs54-3-staging-deploy-wiring`. |
+| CS54-1 | Provision AI resources (staging + prod) in `gwn-rg`, workspace-bound to the workspace backing the Container Apps Environment (resolved via `appLogsConfiguration.logAnalyticsConfiguration.customerId`, NOT `[0].id` of the RG-level list). Capture both connection strings. Region must match the Container App's region; fail closed otherwise. | 🔄 In Progress | Manual `az` commands; operator-driven. |
+| CS54-2 | For each Container App, register the connection string as a Container App `secret` via `az containerapp secret set` (`appinsights-connection-string`). Must be done before CS54-3 / CS54-4 redeploy with `secretRef:`. | ⬜ Pending | Operator-driven (Azure-side). No GitHub secret involved. |
+| CS54-3 | Wire `APPLICATIONINSIGHTS_CONNECTION_STRING` into `staging-deploy.yml` via `secretRef:`: deploy template env enumeration (~L464) only. **Do NOT** add the var to the ephemeral smoke-test container env block (~L60–L100). | ⬜ Pending | First sub-agent task — wt-1, branch `yoga-gwn-c2/cs54-3-staging-deploy-wiring`, port 4021. Container-validation cycle required. |
 | CS54-4 | Wire `APPLICATIONINSIGHTS_CONNECTION_STRING` into `prod-deploy.yml` via `secretRef:`: deploy template env enumeration (~L186) AND rollback template env enumeration (~L280). Add a CI grep guard that fails if `APPLICATIONINSIGHTS` appears only once in `prod-deploy.yml`. | ⬜ Pending | Depends on CS54-3 verified in staging. |
 | CS54-5 | Update `infra/deploy.sh` and `infra/deploy.ps1` to set the secret + secretRef env wiring. **Ships in the same PR as CS54-4** so a later bootstrap re-run cannot silently revert the wiring. | ⬜ Pending | Pulled forward from "follow-up completeness" per rubber-duck finding #5. |
 | CS54-6 | Deploy + verify end-to-end: trigger staging deploy, hit `/api/health` then `/api/scores/leaderboard?mode=freeplay&period=alltime` ≥3 times, confirm a `requests` row appears in `gwn-ai-staging` within 5 min. Then trigger prod deploy and repeat. **Do NOT assert on `dependencies`, `traces`, or `exceptions` tables — those are evaluated in CS54-9.** | ⬜ Pending | This is the CS gate. |
-| CS54-7 | Document common KQL queries in `OPERATIONS.md` (or `docs/observability.md`): error rate by route, p50/p95/p99 latency, distributed-trace bridge to `ContainerAppConsoleLogs_CL` via `operation_Id`. Include the dev/operator note about not exporting the conn string locally. | 🔄 In Progress | Sub-agent wt-2, branch `yoga-gwn-c2/cs54-7-observability-docs`. Parallelizable with CS54-3 (different files). |
+| CS54-7 | Document common KQL queries in `OPERATIONS.md` (or `docs/observability.md`): error rate by route, p50/p95/p99 latency, distributed-trace bridge to `ContainerAppConsoleLogs_CL` via `operation_Id`. Include the dev/operator note about not exporting the conn string locally. | ✅ Done | Landed as [`docs/observability.md`](../../../docs/observability.md) (linked from [`OPERATIONS.md`](../../../OPERATIONS.md)) — PR #PR_PLACEHOLDER. Replaces ad-hoc `parse_json(Log_s)` queries from CS53 — for HTTP shape only. |
 | CS54-8 | Post-enable measurement at +24h, +7d, +30d: capture App Insights ingest volume per resource. Record actuals in CS54 closing note. **Replaces up-front cost guess.** | ⬜ Pending | Per rubber-duck finding #9. |
 | CS54-9 | Evaluate deferred observability gaps — append a "Deferred Work Evaluation" appendix to this CS54 file. For each gap (mssql instrumentation, Pino→AI log forwarding, exceptions table), document: what's needed, ≥2 implementation options with trade-offs, dependencies, rough effort, recommended approach, and what data from CS54-6/CS54-8 would change the recommendation. **Do NOT file a follow-up CS yet** — defer that decision until production measurement data is in hand and a future orchestrator has full context to decide one-CS-vs-many, priority, and possible folding into adjacent clickstops (CS47, CS56). | ⬜ Pending | Replaces prior "file CS58 stub" approach. Evaluate-first deferral pattern. |
 | CS54-10 | Close clickstop: move file to `done/`, update WORKBOARD, summarize CS54 + reference the Deferred Work Evaluation appendix in the closing note so future orchestrators can find it. | ⬜ Pending | Standard close-out. |
@@ -365,20 +365,3 @@ Realistic worktree usage: 1 sub-agent for CS54-3+CS54-4+CS54-6 (one PR each, seq
 
 - [x] Confirm AI free-tier 5GB/month is sufficient — replaced by post-enable measurement (CS54-8).
 - [ ] Decide whether `OPERATIONS.md` is the right home for KQL examples or whether a new `docs/observability.md` warrants its own file (lean: append to OPERATIONS.md unless the section grows beyond ~100 lines).
-
-## Operator Log
-
-| Timestamp (UTC) | Action | Result |
-|-----------------|--------|--------|
-| 2026-04-25T17:50Z | Subscription verified: Visual Studio Enterprise (`59fa8de9-d89c-42bc-8b8d-ee7bfab00270`) | OK |
-| 2026-04-25T17:50Z | Discovered Container Apps Env `gwn-env` in `gwn-rg` / `eastus`; both `gwn-staging` and `gwn-production` live there | OK |
-| 2026-04-25T17:50Z | Resolved Log Analytics workspace `workspace-gwnrg6bXt` in `gwn-rg` / `eastus` via `appLogsConfiguration.logAnalyticsConfiguration.customerId` (`ca1b90db-504b-4771-bfeb-5e4a6bb62422`) | OK; region match |
-| 2026-04-25T17:55Z | `az monitor app-insights component create gwn-ai-staging --workspace <ws> -g gwn-rg -l eastus` | Created (appId `693575e0-d4e3-47a8-88a4-1012808b6358`) |
-| 2026-04-25T17:55Z | `az monitor app-insights component create gwn-ai-production --workspace <ws> -g gwn-rg -l eastus` | Created (appId `405e1ae4-eff8-4073-8030-06d693b95a60`) |
-| 2026-04-25T17:55Z | `az containerapp secret set --name gwn-staging -g gwn-rg --secrets appinsights-connection-string=<staging cs>` | OK; verified by `az containerapp secret list` |
-| 2026-04-25T17:55Z | `az containerapp secret set --name gwn-production -g gwn-rg --secrets appinsights-connection-string=<prod cs>` | OK; verified by `az containerapp secret list` |
-
-**Resource placement summary:**
-- All four AI/Container-App resources reside in `gwn-rg` / `eastus` (matches existing project layout).
-- Container App `ca-natpuzzle-prod` in `rg-naturalizationpuzzle-prod` is unrelated and untouched.
-- Connection strings are stored only as Container App secrets; never echoed in logs/PRs/chat.
