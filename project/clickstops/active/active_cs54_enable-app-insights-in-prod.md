@@ -13,7 +13,7 @@ Enable Application Insights in production (and staging, for parity) so future in
 
 This eliminates the need for ad-hoc `parse_json(Log_s)` extraction over Container App console logs *for HTTP request shape*, and lays the groundwork for richer instrumentation in a future clickstop.
 
-**Explicitly out of scope (now in CS58 — see "Will not be done"):** the `dependencies` table (requires mssql auto-instrumentation, which is currently disabled in [`server/telemetry.js`](../../../server/telemetry.js)), the `exceptions` table (requires either an intentional error probe or uncaught-exception traffic), and the `traces` table populated by Pino logs (requires a log-export path; today Pino writes to stdout only and `AzureMonitorTraceExporter` exports spans, not logs). CS54 narrows to "request spans only" so the wiring story stays small and verifiable.
+**Explicitly out of scope (evaluated, not delivered, in CS54-9 — see "Will not be done"):** the `dependencies` table (requires mssql auto-instrumentation, which is currently disabled in [`server/telemetry.js`](../../../server/telemetry.js)), the `exceptions` table (requires either an intentional error probe or uncaught-exception traffic), and the `traces` table populated by Pino logs (requires a log-export path; today Pino writes to stdout only and `AzureMonitorTraceExporter` exports spans, not logs). CS54 narrows to "request spans only" so the wiring story stays small and verifiable.
 
 ## Investigation summary (already known — no rediscovery needed)
 
@@ -213,7 +213,7 @@ Add a `## Observability — App Insights query examples (HTTP request shape)` su
 
 - HTTP error rate by route (`requests | summarize errors=countif(resultCode >= 500), total=count() by name`)
 - p50/p95/p99 latency by route (`requests | summarize percentiles(duration, 50, 95, 99) by name`)
-- Distributed-trace lookup bridging spans + Pino logs until CS58:
+- Distributed-trace lookup bridging spans + Pino logs (until the gaps in CS54-9 are addressed by future follow-up):
 
   ```kusto
   let opId = "<operation_Id from requests>";
@@ -300,7 +300,7 @@ When CS54 moves to `done/`, the evaluation appendix moves with it; future orches
 - [ ] Deferred Work Evaluation appendix added to this CS54 file with ≥2 options + recommendation per gap (mssql instrumentation, Pino→AI log forwarding, exceptions). **No new clickstop file is required by CS54** — see CS54-9 for the rationale. Future CS-creation decision lives with whoever next picks this up after CS54-8 measurements are in.
 - [ ] Post-enable measurement (CS54-8) recorded in the CS54 closing note for at least +24h.
 
-**Explicitly NOT in acceptance** (deferred to CS58): `dependencies` table populating, `traces` table populating with Pino logs, `exceptions` table populating.
+**Explicitly NOT in acceptance** (evaluated in CS54-9; not delivered by CS54): `dependencies` table populating, `traces` table populating with Pino logs, `exceptions` table populating.
 
 ## Will not be done as part of this clickstop
 
