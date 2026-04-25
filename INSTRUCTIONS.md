@@ -331,6 +331,22 @@ The `<orchestrator-id>` matches the `<machine>-gwn[-cN]` format in [WORKBOARD.md
 
 ---
 
+## Production deploys — approval gate is on the user
+
+`prod-deploy.yml` uses GitHub Environment `production` with required reviewers. After `gh workflow run prod-deploy.yml ...` is dispatched, the run sits in **`waiting`** state until a human reviewer clicks **Approve** in the GitHub Actions UI. The workflow does **not** progress on its own.
+
+**Orchestrator rule when triggering a prod deploy:** the response that triggers the deploy MUST surface the approval state prominently. Recommended template:
+
+> ⚠️ **Production deploy `<run-id>` is now waiting on YOUR approval.**
+> Approve here: `https://github.com/<owner>/<repo>/actions/runs/<run-id>`
+> Image: `<sha>`. Replaces: `<previous-sha>`. Watcher will resume once you click Approve.
+
+Do not bury the approval link inside a status table. Do not assume the user is watching the Actions tab. The deploy is blocked on them, and the orchestrator's job is to make that blocking state unmissable.
+
+Staging deploys have no such gate (they auto-run when `vars.STAGING_AUTO_DEPLOY == 'true'` *or* when triggered via `workflow_dispatch`), so this rule is production-only.
+
+---
+
 ## 6. Performance & Accessibility
 
 ### Performance
