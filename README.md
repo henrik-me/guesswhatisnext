@@ -366,6 +366,8 @@ guesswhatisnext/
 ```
 
 > **Pipeline sources of truth:** staging triggers and service containers live in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml); production deploy + auto-rollback in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml); health-monitor cron schedule and tier definitions in [`.github/workflows/health-monitor.yml`](.github/workflows/health-monitor.yml).
+>
+> The staging-deploy workflow uses an explicit `paths` allowlist on its push trigger — when adding a new top-level directory consumed by the Dockerfile or smoke test, update the trigger list in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) so changes there actually deploy.
 
 > **Note:** Push to `main` does **not** deploy by default. Deployment runs when triggered
 > manually via `workflow_dispatch`, or automatically on push when `STAGING_AUTO_DEPLOY` is enabled.
