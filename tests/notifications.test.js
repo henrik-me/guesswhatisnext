@@ -221,7 +221,11 @@ describe('GET /api/notifications/count', () => {
     unreadCountCache.clear();
 
     const db = await getDbAdapter();
-    const spy = vi.spyOn(db, 'get');
+    // Spy on every read/write entrypoint so a future regression that switches
+    // the route to db.all / db.run can't slip past silently.
+    const getSpy = vi.spyOn(db, 'get');
+    const allSpy = vi.spyOn(db, 'all');
+    const runSpy = vi.spyOn(db, 'run');
 
     const res = await getAgent()
       .get('/api/notifications/count')
@@ -229,9 +233,13 @@ describe('GET /api/notifications/count', () => {
     expect(res.status).toBe(200);
     expect(res.body.unread_count).toBe(0);
     expect(res.headers['x-cache']).toBe('MISS-NO-ACTIVITY');
-    expect(spy).not.toHaveBeenCalled();
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(allSpy).not.toHaveBeenCalled();
+    expect(runSpy).not.toHaveBeenCalled();
 
-    spy.mockRestore();
+    getSpy.mockRestore();
+    allSpy.mockRestore();
+    runSpy.mockRestore();
   });
 
   test('boot-quiet: no X-User-Activity + cache hit → returns cached value, no DB', async () => {
@@ -241,7 +249,9 @@ describe('GET /api/notifications/count', () => {
     unreadCountCache.set(userId, 7);
 
     const db = await getDbAdapter();
-    const spy = vi.spyOn(db, 'get');
+    const getSpy = vi.spyOn(db, 'get');
+    const allSpy = vi.spyOn(db, 'all');
+    const runSpy = vi.spyOn(db, 'run');
 
     const res = await getAgent()
       .get('/api/notifications/count')
@@ -249,9 +259,13 @@ describe('GET /api/notifications/count', () => {
     expect(res.status).toBe(200);
     expect(res.body.unread_count).toBe(7);
     expect(res.headers['x-cache']).toBe('HIT');
-    expect(spy).not.toHaveBeenCalled();
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(allSpy).not.toHaveBeenCalled();
+    expect(runSpy).not.toHaveBeenCalled();
 
-    spy.mockRestore();
+    getSpy.mockRestore();
+    allSpy.mockRestore();
+    runSpy.mockRestore();
     unreadCountCache.clear();
   });
 

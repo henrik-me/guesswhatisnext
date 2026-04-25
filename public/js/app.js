@@ -3514,7 +3514,17 @@ function updateNotificationBadge(count) {
   }
 }
 
-/** Fetch unread notification count and update badge (one-shot, no timer). */
+/**
+ * Fetch unread notification count and update badge (one-shot, no timer).
+ *
+ * Boot-quiet contract (CS53-23): this function sends `X-User-Activity: 1`,
+ * which the server treats as permission to wake the DB on cache miss. It is
+ * therefore only safe to call from real user-gesture paths. The current call
+ * from `updateHomeAuthDisplay()` also fires after boot-time token validation —
+ * that boot-path call is a known follow-up tracked in CS53-19 (apply boot-quiet
+ * across every endpoint and dedup the boot fetches). CS53-23 ships the contract;
+ * CS53-19 will move the boot-time badge refresh behind a real user gesture.
+ */
 async function refreshNotificationBadge() {
   if (!isLoggedIn()) return;
   try {
