@@ -1807,19 +1807,23 @@ async function authAction(action) {
       const isWarmupRetryable = res && (res.status === 503 || res.status === 502 || res.status === 504);
       if (res && !isWarmupRetryable) break;
 
-      // 503 is safe to retry for register because the cold-start gate runs
-      // BEFORE the route handler, so we know the request did NOT hit the
-      // server-side state-mutating code. 502/504 (gateway errors) and
-      // AbortError (per-attempt timeout) are NOT safe to retry for register
-      // because the request may have actually reached the origin and created
-      // the account; retrying would surface a misleading "username taken".
-      // Login is idempotent (no server-side state change on failure) so all
-      // are safe to retry.
+      // 503 from the cold-start gate is safe to retry for register because
+      // the gate runs BEFORE the route handler — the request did NOT hit any
+      // state-mutating code. The gate is identified by `phase:'cold-start'`
+      // in the response body. A 503 from the central error handler (e.g.
+      // transient DB error during the INSERT inside POST /api/auth/register)
+      // does NOT carry that field — and the request may have actually
+      // succeeded server-side, so retrying could surface a misleading
+      // "username taken" on the next attempt (code-review finding,
+      // 2026-04-25). 502/504 (gateway) and AbortError have the same
+      // ambiguity. Login is idempotent (no server-side state change on
+      // failure) so all warmup-class statuses retry.
       if (action !== 'login') {
-        if (lastError) break;                       // AbortError on register
-        if (res && res.status !== 503) break;       // 502/504 on register
+        if (lastError) break;                                // AbortError on register
+        if (res && res.status !== 503) break;                // 502/504 on register
+        if (res && res.status === 503 && (!data || data.phase !== 'cold-start')) break;
       } else if (lastError && lastError.name !== 'AbortError') {
-        break;                                      // non-Abort error on login
+        break;                                               // non-Abort error on login
       }
 
       // From here on we have either a warmup-retryable response or an

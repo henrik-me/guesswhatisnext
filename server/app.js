@@ -277,7 +277,7 @@ function createServer() {
         // client will land after init either completes or fails.
         runInit().catch(() => { /* errors already logged inside runInit */ });
       }
-      return res.set('Retry-After', '5').status(503).json({ error: 'Database not yet initialized', retryAfter: 5 });
+      return res.set('Retry-After', '5').status(503).json({ error: 'Database not yet initialized', retryAfter: 5, phase: 'cold-start' });
     }
 
     activeRequests++;
