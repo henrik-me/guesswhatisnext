@@ -29,6 +29,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - The process applies to all changes regardless of size — there is no "too small for a PR" threshold
 - **No DB-waking background work**: no timer/watchdog/scheduler/poller may issue a DB query (incl. `SELECT 1`) on its own — the DB is touched only in response to real user requests, operator curl, or operator-invoked batch jobs (see [§ Database & Data in INSTRUCTIONS.md](#database--data))
 - **Cold-start container validation gates check-in**: any PR touching server/client runtime or DB-touching code must run `npm run container:validate` (full restart + smoke probe) before each review request and after each fix push, and record the result in `## Container Validation` in the PR body (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation))
+- **Telemetry & observability gate (mandatory)**: any PR adding/changing a code path, error path, dependency call, or background activity MUST add the matching telemetry signal AND a documented KQL query in [`docs/observability.md`](docs/observability.md) AND validate the signal across local container + staging + production. Record results in `## Telemetry Validation` in the PR body (see [§ 4a Telemetry & Observability in INSTRUCTIONS.md](INSTRUCTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work)). No "too small for telemetry" exemption.
 - **Pre-prod validation gate is in CI, not Azure staging**: the enforced gate before a production deploy is the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local `npm run container:validate` cycles per [§ Database & Data](#database--data). The Azure `gwn-staging` Container App is being moved to scale-to-zero (live state tracks [CS58-1/CS58-2](project/clickstops/active/active_cs58_scale-staging-to-zero.md)) and exists only for ad-hoc operator probing — it is not a release gate. See [§ Waking staging for ad-hoc validation in OPERATIONS.md](OPERATIONS.md#waking-staging-for-ad-hoc-validation).
 - **Investigation artifacts → `shots/`** (gitignored): screenshots, repro captures, HAR-supplementary images go in top-level `shots/` named `[<orchestrator-id>][<CS-ID>-<TASK-ID>] <desc>.<ext>` (see [§ Investigation artifacts](#investigation-artifacts))
 
@@ -231,6 +232,64 @@ logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled reque
 - PII beyond username (no email, no IP addresses persisted to database, etc.)
 
 Pino `redact` config automatically removes `authorization`, `cookie`, `x-api-key`, `x-access-token`, and `set-cookie` headers from logs.
+
+---
+
+## 4a. Telemetry & Observability (mandatory for all new work)
+
+**All new work MUST include relevant telemetry.** "Relevant" is judged at design-review and code-review time, not negotiated after merge. There is no "this change is too small for telemetry" exemption — if a change introduces a new code path, a new failure mode, a new latency-sensitive operation, or a new user-visible behavior, the matching observability must land in the same PR.
+
+This rule exists because every incident-investigation session that has cited [`docs/observability.md`](docs/observability.md) in the past has hit the same wall: the relevant signal was never emitted, so the only recovery was post-incident code archaeology + a follow-up CS to add the missing instrumentation. Catching it at PR time is roughly an order of magnitude cheaper.
+
+### What "relevant telemetry" means
+
+Pick the signals that match what's changing. Most PRs need at least one row from the table below; some need more.
+
+| If the PR adds / changes... | Then the PR must also add... |
+|---|---|
+| A new HTTP route or significant changes to an existing one | Confirm the request span name, status code, and `operation_Id` propagation work — the auto-instrumentation does this for you, but a one-off probe locally + a documented KQL query for the new route is required. |
+| A new outbound dependency (DB query path, HTTP call to another service, file I/O hot path) | A span that covers the operation (or confirmation that auto-instrumentation already covers it — verify by inspecting `traces.json` from the local OTLP collector, not by assuming). The span must carry attributes that let an investigator filter on the failure case (e.g. `db.statement` excerpt for queries, `http.url` for outbound calls). |
+| A new error path or guarded fallback (early-return on capacity exhaustion, rate-limit denial, feature-flag short-circuit, etc.) | A structured Pino log line at the appropriate level (`warn` for guarded fallbacks, `error` for unhandled failures), with a context object that names the gate (`{ gate: 'capacity-exhausted', userId, route }`). Plus a KQL query that surfaces it (`requests | where customDimensions.gate == "..."` or `traces | where ...` once the traces table is wired). |
+| A new background activity that is permitted (operator-invoked batch jobs only — DB-waking timers/watchdogs/pollers remain forbidden per [§ Database & Data](#database--data)) | A start/end log pair plus a `runId` correlation field, and a KQL query that reports the most recent run's outcome. |
+| A new metric-shaped concern (success rate, latency budget, error budget, capacity headroom) | A KQL query that materializes the metric. If the metric needs alerting, the alert is filed as a follow-up CS — but the query must exist before the PR merges. |
+
+### What "outline relevant queries" means
+
+For every signal added, the PR must add (or update) at least one entry in [`docs/observability.md`](docs/observability.md) under § B (or a new sub-section if a new domain warrants it). The query entry must include:
+
+1. The KQL query itself, runnable as-is in App Insights' Logs blade with no edits.
+2. Which AI resource(s) it applies to (staging, prod, or both — and if both, why filtering by environment is not needed in the query body).
+3. What the investigator is supposed to see when the system is healthy vs unhealthy ("expect ≥1 row per minute under normal load; an empty result for >15 min means X is broken").
+4. Cross-links to the code path the query is observing (so future readers can navigate from query → code without grep).
+
+If the change exposes a workflow that needs a different query shape against the staging-vs-prod split (per [`docs/observability.md` § C](docs/observability.md)), document both.
+
+### What "validate across local, staging, and production" means
+
+Each new telemetry signal must be confirmed working in three environments before the PR is considered complete:
+
+1. **Local container (`npm run dev:mssql`).** Spans flow to the local `otel-collector` and land in `/data/traces.json` inside that container. Pull the file out (`docker cp <collector-container>:/data/traces.json <local-path>`) and confirm the new span name (or the new attribute) appears. This is the cheapest validation and catches "exporter not loaded", "auto-instrumentation filtered out", and "span name typo'd" regressions immediately.
+2. **Staging (`gwn-ai-staging`).** Wake `gwn-staging` if scale-to-zero (per [CS58](project/clickstops/done/done_cs58_scale-staging-to-zero.md) the live state is `minReplicas=0`), hit the new code path with at least one real request, wait ~5 min, run the documented KQL query, confirm rows appear with the expected shape. Use `az monitor app-insights query --app gwn-ai-staging -g gwn-rg --analytics-query '<kql>'` for scripted runs.
+3. **Production (`gwn-ai-production`).** Same as staging, against `gwn-ai-production`. Production validation can lag the PR merge if the change is gated behind a feature flag — but it must happen before the change is enabled in prod, and the validation result must be recorded somewhere durable (PR description follow-up comment, or a workboard note that points back to the PR).
+
+Capture the validation in the PR body under a `## Telemetry Validation` section that mirrors the existing `## Container Validation` section. Format:
+
+```markdown
+## Telemetry Validation
+
+- [x] Local (`npm run dev:mssql` + traces.json inspection): saw N spans for `<span-name>`, expected attrs present.
+- [x] Staging (`gwn-ai-staging`): KQL `<one-liner or link to docs/observability.md anchor>` returned N rows within 5 min of probe.
+- [x] Production (`gwn-ai-production`): same query returned N rows within 5 min of probe. (Or: deferred to feature-flag enablement; tracking in <CS-link or PR comment>.)
+```
+
+If any of the three is "not applicable" (e.g. a backend-only change with no client-facing trigger means production validation has to wait for real user traffic), say so explicitly and explain — the empty checkbox is the point. Skipping the section entirely fails the PR review gate.
+
+### How this interacts with existing rules
+
+- The cold-start container validation gate ([§ Database & Data](#database--data)) and this telemetry gate are independent — both must pass for code-touching PRs. `npm run container:validate` does NOT exercise the telemetry path beyond confirming the bootstrap doesn't crash; a separate `dev:mssql` cycle with `traces.json` inspection is required for the telemetry side.
+- For docs-only PRs (no server/client/DB code touched), this section is N/A — the review gate is the existing docs-consistency check (`npm run check:docs`).
+- For PRs that ONLY add telemetry (no behavior change), the local validation is sufficient if the PR body explains why staging/prod validation is deferred to the next normal deploy.
+- Telemetry changes count as code changes for purposes of the cold-start container validation gate even when they're just `server/telemetry.js` edits — the failure mode of "broke OTel SDK init" is exactly what `npm run container:validate` catches, so the gate applies.
 
 ---
 
