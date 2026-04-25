@@ -30,7 +30,9 @@ describe('CS53-12: ServerResponse finish-listener cap', () => {
   test('per-response max listeners is raised to 32', async () => {
     const agent = getAgent();
     const res = await agent.get('/api/scores/me').set('Authorization', 'Bearer invalid');
-    expect([200, 401, 503]).toContain(res.status);
+    // /api/scores/me requires auth — accepting 200 here would mask an auth-bypass
+    // bug (Copilot R3). 503 is allowed because cold-start gate runs before auth.
+    expect([401, 503]).toContain(res.status);
     expect(res.headers['x-test-max-listeners']).toBe('32');
   });
 
@@ -49,7 +51,8 @@ describe('CS53-12: ServerResponse finish-listener cap', () => {
         )
       );
       // All should reach the auth layer — confirms middleware chain ran.
-      for (const r of results) expect([200, 401, 503]).toContain(r.status);
+      // /api/scores/me requires auth; 200 would be an auth bypass (Copilot R3).
+      for (const r of results) expect([401, 503]).toContain(r.status);
     } finally {
       process.removeListener('warning', onWarning);
     }
