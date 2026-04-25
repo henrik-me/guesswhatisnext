@@ -8,6 +8,7 @@
 const express = require('express');
 const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { unreadCountCache } = require('../services/unread-count-cache');
 
 const router = express.Router();
 
@@ -61,15 +62,31 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
-/** GET /api/notifications/count — lightweight unread count for badge polling. */
+/**
+ * GET /api/notifications/count — unread count for badge.
+ *
+ * Cache-first to prevent stale-tab polling from waking the DB.
+ * Cache misses recompute from DB; invalidations happen on insert/mark-read.
+ */
 router.get('/count', requireAuth, async (req, res, next) => {
   try {
+    const userId = req.user.id;
+    const cached = unreadCountCache.get(userId);
+    if (cached !== null) {
+      res.set('X-Cache', 'HIT');
+      return res.json({ unread_count: cached });
+    }
+    // Capture generation BEFORE the DB read so a concurrent writer is detected.
+    const token = unreadCountCache.beginRead(userId);
     const db = await getDbAdapter();
     const row = await db.get(
       'SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0',
-      [req.user.id]
+      [userId]
     );
-    res.json({ unread_count: row ? row.count : 0 });
+    const count = row ? row.count : 0;
+    const stored = unreadCountCache.setIfFresh(userId, count, token);
+    res.set('X-Cache', stored ? 'MISS' : 'STALE-DROP');
+    res.json({ unread_count: count });
   } catch (err) {
     next(err);
   }
@@ -93,6 +110,7 @@ router.put('/:id/read', requireAuth, async (req, res, next) => {
     }
 
     await db.run('UPDATE notifications SET is_read = 1 WHERE id = ?', [id]);
+    unreadCountCache.invalidate(req.user.id);
     res.json({ id, read: true });
   } catch (err) {
     next(err);
@@ -107,6 +125,7 @@ router.put('/read-all', requireAuth, async (req, res, next) => {
       'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
       [req.user.id]
     );
+    unreadCountCache.set(req.user.id, 0);
     res.json({ updated: result.changes || 0 });
   } catch (err) {
     next(err);

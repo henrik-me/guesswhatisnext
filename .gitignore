@@ -53,3 +53,7 @@ playwright-report/
 logs/
 *.log
 .playwright/
+
+# CS53-11 validation script screenshots
+.cs53-11-shots/
+
