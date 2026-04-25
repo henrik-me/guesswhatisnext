@@ -69,25 +69,26 @@ Every clickstop must satisfy ALL of these before marking complete:
 
 Filled-in checklists are recorded in the clickstop's archive file upon completion.
 
-**Deferred work policy.** Deferred work is never silently dropped. The shape of the deferral depends on whether the deferred work is **related** to the current clickstop or **unrelated**:
+**Deferred work policy.** Every deferred item must end up in a CS where it is discoverable as actionable work — never silently dropped, never left as a free-floating note in a done file or a chat message. A CS may only be marked complete once every deferred item has one of the four dispositions below recorded.
 
-**Unrelated deferred work** (a different feature, area, or concern that happens to surface during the current CS):
+**The four allowed dispositions** (pick exactly one per deferred item):
 
-1. **Claim the next free CS number immediately** by creating `project/clickstops/planned/planned_csN_<kebab-name>.md` with at least the title, status `⬜ Planned`, origin (link back to the originating clickstop and the moment the deferral was identified), and a one-paragraph problem statement. Detail can be filled in later in that file. Claiming the number immediately prevents drift caused by other orchestrators picking the same number for unrelated work.
-2. Commit + push to `main` directly (clickstop plan files are a documented direct-on-main exception per OPERATIONS.md § Branch Strategy & Merge Model).
-3. Inform the user that the deferred work has been placed in the new CS, with a link and summary.
+1. **Add as a task to the current CS** — only if the work is actually doable in the current CS's scope (i.e., no new investigation needed, no waiting on external data, no separate review cycle that doesn't fit the current PR train). Recorded as a row in the current CS's task table with status, owner, and acceptance criteria. This is the simplest disposition and is preferred when it fits.
+2. **File a new `planned_` CS** — claim the next free CS number immediately (via `ls project/clickstops/{planned,active,done}/` to find it), create `project/clickstops/planned/planned_csN_<kebab-name>.md` with at least the title, `⬜ Planned` status, origin (link back to the originating clickstop), and a one-paragraph problem statement. Direct-commit to `main`. The new CS may carry one item or many — folding multiple related deferrals into one CS is fine and often correct, especially when they share a decision dependency.
+3. **Add as a task to an existing planned/active CS** — only when the deferred item is a clean scope-fit for that CS (i.e., a future maintainer reading that CS would expect to find this work there). Update the target CS's task table directly; cross-link from the originating CS. **Do not** retrofit work into a `done_` CS — done is done.
+4. **Cancel** — record as a row in the current CS's task table with status `❌ Cancelled` and a one-line reason ("not worth the complexity", "subsumed by CSN-M", "evidence from production showed this is a non-issue", etc.). Cancellation is a valid disposition and is preferable to filing speculative work.
 
-**Related deferred work** (extension, follow-up, or evaluation of the current clickstop's own scope):
+**Insufficient — DO NOT do this:**
 
-1. **Add an evaluation task to the current CS's task table** (e.g. "CSN-X — Evaluate <gap>"). The task description must include enough detail that **another agent picking it up cold** can:
-   - Understand what is being evaluated and why it is in scope.
-   - Discover the relevant code/files (link them inline).
-   - List ≥ 2 candidate approaches the evaluator should consider, plus what data would change the recommendation.
-   - Decide whether the resulting follow-up should be a new CS, fold into an adjacent CS, or be dropped — without needing access to the original orchestrator.
-2. The evaluation task's deliverable is an in-CS appendix (e.g. `## Deferred Work Evaluation`) appended to the active/done clickstop file, **not** a stub follow-up CS. The follow-up CS is filed only after the evaluation completes and the recommendation calls for one — at which point the unrelated-work flow above applies (claim a number immediately, commit a skeleton, inform user).
-3. This avoids speculative CS proliferation when the eventual scope is unclear; the appendix is the durable record of what was deferred and why.
+- Burying the deferred item in a `## Deferred Work Evaluation` appendix in a `done_` CS file as the *only* tracking mechanism. Appendices are fine as a *design record* that a CS task reads from, but the live status of the work must live in a CS file that's discoverable from `project/clickstops/{planned,active}/` browse. **Pattern that is OK:** an appendix in the done CS that documents the qualitative analysis (options, trade-offs, recommendation), paired with a `planned_` CS whose task table cross-links back to the appendix as the design record. **Pattern that is NOT OK:** the appendix alone, with no corresponding CS file.
+- Leaving the item as a TODO in code, a comment in a PR description, or a line item in a chat transcript. None of those surface in the planned/ browse that future orchestrators use to pick up work.
 
-**Either way, the original CS may only be marked complete after** the deferral has been captured (either as a filed CS for unrelated work or as a completed evaluation appendix for related work). Never silently drop deferred tasks.
+**Decision flow at close-out time:** for each deferred item, ask in order: (a) Can I do it in the current CS now? → Disposition 1. (b) Is there an existing CS this fits cleanly into? → Disposition 3. (c) Is it concrete enough to file a CS for? → Disposition 2. (d) None of the above? → Disposition 4 (cancel with reason). If you can't answer (a)-(c) yes and won't commit to (d), the CS is not ready to close.
+
+**Examples in this repo:**
+
+- [CS54](project/clickstops/done/done_cs54_enable-app-insights-in-prod.md) closed with deferred observability gaps. The qualitative analysis lived in a `## CS54-9 Deferred Work Evaluation` appendix; the live tracking went into [CS60](project/clickstops/planned/planned_cs60_post-cs54-observability-followup.md) (Disposition 2, single CS folding multiple items). CS54's appendix cross-links forward to CS60; CS60's tasks cross-link backward to the appendix. This is the pattern.
+- A simpler case where Disposition 1 (just do it in this CS) or Disposition 4 (cancel with reason) would have been preferred is when the deferred item is a one-line documentation fix or a clearly-out-of-scope concern that won't ever justify its own CS.
 
 ### WORKBOARD.md — Live Coordination
 
