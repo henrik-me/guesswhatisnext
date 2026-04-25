@@ -458,6 +458,46 @@ CS55-2.G ── CS53-19.G (parallel doc update)
   - **Notification poller killed entirely** (Option 1). Was hitting `/api/notifications/count` every 60s, single-handedly keeping Azure SQL serverless awake and exhausting the Free Tier monthly compute allowance. Now: one-shot fetch on login + refresh as a side effect of opening My Submissions. Real-time freshness is restored separately by CS55.
   - Server-side audit confirmed **no DB-keepalive timers exist** (only WS heartbeat and room cleanup, both in-memory).
 
+## Prod observations — 2026-04-25 (post `cceedac` deploy)
+
+Empirical evidence from prod immediately after `cceedac` shipped to revision `gwn-production--0000018`. Lock these in as the canonical reference inputs for **CS53-10** (capacity-exhausted regression test) so the test fixtures match what the real backend emits.
+
+**`/api/features` while Azure SQL Free Tier is exhausted:**
+
+```http
+HTTP/1.1 503 Service Unavailable
+Content-Type: application/json; charset=utf-8
+(no Retry-After header)
+
+{
+  "error": "Database temporarily unavailable",
+  "message": "The database has reached its monthly free capacity allowance and is paused until the start of next month.",
+  "unavailable": true,
+  "reason": "capacity-exhausted"
+}
+```
+
+Source: `sendDbUnavailable()` in `server/app.js:119-126`.
+
+**`/api/health` in the same state (Policy 1 working):**
+
+```json
+{
+  "status": "ok",
+  "checks": { "database": { "status": "not_initialized" } }
+}
+```
+
+i.e. the app boots and reports healthy without ever waking the DB. Verified by the CS53-22 two-phase verify step on run `24936344788`.
+
+**Implications for CS53-10:** the unit/container regression must assert (a) status `503`, (b) **no** `Retry-After` (this is what disambiguates capacity-exhausted from cold-start), (c) body keys `unavailable: true` + `reason: "capacity-exhausted"`. The client treats this exact shape as `UnavailableError` and renders the banner — any drift breaks the contract.
+
+## Process learnings (not blocking, candidates for separate follow-up clickstops)
+
+- **Strict docs-check (CS43-7) only runs on PRs.** Pushes to `main` (admin override) bypass CI entirely, so violations of canonical state vocabulary or broken cross-doc links accumulate silently and don't surface until the next PR. Possible mitigation: post-push `docs-check` job on `main` that opens an issue (or a self-PR) when it finds violations, so they're caught at landing time rather than at next-PR time. Not yet a clickstop.
+- **Path depth from `project/clickstops/{planned,active,done}/*.md` to repo root is three `..`s, not two** — multiple files had this bug. Could be a `check-docs-consistency.js` rule.
+- **Prod-deploy approval gate** is now codified in `INSTRUCTIONS.md` ("Production deploys — approval gate is on the user", commit `ee4725f`). Any future agent that triggers a prod deploy must surface the approval URL prominently in their next response, not bury it in a status table.
+
 ## Will not be done as part of this clickstop
 
 - General "make Azure SQL faster" infra work — separate concern.
