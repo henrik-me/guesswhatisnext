@@ -43,14 +43,51 @@ CS55 scope decision (to be confirmed during planning):
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | CS55-1 | Add a `notification` event type to the existing `/ws` connection. Server pushes `{ type: 'notification', notification: {...}, unread_count: N }` to the affected user when `INSERT INTO notifications` runs. Refactor `createReviewNotification` (`server/routes/submissions.js`) to push after insert. | ⬜ Pending | WS already authenticated and per-user routed; reuse existing send path. |
-| CS55-2 | Add server-side in-process unread-count cache keyed by `user_id` (e.g., `lru-cache` or a simple `Map` with TTL). Cache invalidation: bump on insert, decrement on mark-read, recompute lazily on cache miss with a single SELECT. `GET /api/notifications/count` reads from cache; only on cold cache or explicit refresh does it hit the DB. | ⬜ Pending | TTL ~5 min as a safety net; primary correctness comes from invalidation. Single-instance only — document that scale-out requires Redis. |
+| CS55-2 | Add server-side in-process unread-count cache keyed by `user_id` (e.g., `lru-cache` or a simple `Map` with TTL). Cache invalidation: bump on insert, decrement on mark-read, recompute lazily on cache miss with a single SELECT. `GET /api/notifications/count` reads from cache; only on cold cache or explicit refresh does it hit the DB. | 🟡 Partial — PR #241 (does not yet comply with Policy 1) | Early implementation by another agent. CI green, GPT-5.4 R2 clean against the *original* design (5-min TTL). **Gap discovered post-author**: the 5-min TTL still wakes the DB once per stale-tab user every 5 min, violating the "no idle source touches the DB" rule in [INSTRUCTIONS.md § Database & Data](../../../INSTRUCTIONS.md#database--data). See sub-tasks CS55-2.A..L below. |
 | CS55-3 | Client: listen for `notification` events on the existing WS connection, update badge and (if My Submissions is open) prepend the notification to the list. Remove the one-shot `pollNotificationCount()` on login in favor of a WS `unread_count` push immediately after auth. Keep the HTTP fallback for the case where WS is unavailable. | ⬜ Pending | Hook into existing `ws.onmessage` switch in `public/js/app.js`. |
 | CS55-4 | Add achievement-unlocked notifications: when `user_achievements` insert succeeds, also insert a notification row and push via WS. Update achievement type set in `renderNotificationItem` (icon, message). | ⬜ Pending | Re-uses CS55-1/2/3 pipeline. |
 | CS55-5 | Add admin-announcement notifications: new `POST /api/admin/announcements { message, dismissible }` (requires admin role). Inserts a notification row for every active user (or a single global row clients filter on) and broadcasts via WS. UI: persistent dismissible banner above the top bar. | ⬜ Pending | Bounded scope — text only, no scheduling, no targeting. |
 | CS55-6 | E2E test: create a submission, approve it from a second client, assert the first client's badge updates within ~1s without any HTTP poll observed in the network log. | ⬜ Pending | Use Playwright network inspection to assert no `/api/notifications/count` requests fired. |
 | CS55-7 | Documentation: update `INSTRUCTIONS.md` notifications section with the "no polling, WS push + server cache" rule so future contributors don't regress. | ⬜ Pending | Cite this CS. |
 
-## Acceptance criteria
+## CS55-2 follow-ups — Policy 1 compliance gap (post PR #241 v1)
+
+PR #241 ("CS55-2 (early)") landed an in-process unread-count cache in front of `GET /api/notifications/count` with a 5-min TTL. CI is green, GPT-5.4 R2 was clean, and bandwidth/CPU dropped 60→1 per user-hour. **However**, against [INSTRUCTIONS.md § Database & Data](../../../INSTRUCTIONS.md#database--data) the design still violates Policy 1:
+
+> "if anything is called from client to server we need to ensure an active otherwise idle tab doesn't hit the db. only regular usage should touch the database."
+
+Concretely:
+1. **TTL re-read still wakes the DB.** Every 5 min per stale-tab user, the next request misses and runs a SELECT against the auto-paused Azure SQL Free Tier instance. Wake-rate is non-zero, and stale tabs / mobile / bookmarks / old cached SPAs have no upper bound.
+2. **Boot-time JWT validation (`/api/auth/me`) is not covered.** Any tab opened with a valid 7-day JWT immediately reads the user row from the DB even if the user only glances and closes the tab.
+3. **No contract distinguishes "real user activity" from "background poll".** The server must be the guard, but it can't tell them apart today.
+
+The current SPA does not poll on a timer (CS53-2 killed it; verified at `public/js/app.js:3367`), so the *current* code paths are safe. CS55-2 exists precisely to defend against **untrusted/legacy clients** the server does not control.
+
+### Sub-tasks for CS55-2 v2 (true Policy 1 compliance)
+
+| # | Task | Notes |
+|---|------|-------|
+| CS55-2.A | Remove TTL-driven re-read. Cache lifetime = process lifetime. Invalidated **only** by writers (insert / mark-read / mark-all-read). | Eliminates the per-5-min wake. Current 13 unit tests + 4 race tests still apply; TTL test removed/repurposed. |
+| CS55-2.B | Decide cold-cache miss policy: (a) return `0`/`null` until first writer seeds it, or (b) lazy DB read only when request is marked as "real user activity" (CS55-2.C). Document the choice in PR body and CS file. | Trade-off: (a) is strictly zero-DB-from-reads but can undercount briefly after process restart; (b) keeps correctness but adds the activity-header dependency. |
+| CS55-2.C | Add `X-User-Activity: 1` request-header contract. Missing/false → server **never** issues a DB query on cache miss; serves cached or empty. Genuine user-driven calls set it explicitly. | The single mechanism that lets the server act as the guard against untrusted clients without heuristics. |
+| CS55-2.D | Wire SPA's `refreshNotificationBadge()` (`public/js/app.js:3403`), submission-screen open, mark-read, and mark-all-read paths to send `X-User-Activity: 1`. Every other client (legacy SPA, bookmarks, third-party) gets the header-absent treatment. | Backwards-compatible: legacy clients keep working but cannot wake the DB. |
+| CS55-2.E | Apply the same contract to `/api/auth/me` (boot JWT validation). Either: verify HMAC signature + expiry **without** DB lookup and trust the token's claims until expiry, or: cache the user row with the same write-invalidation discipline. | Closes the second-largest stale-tab DB-wake source. |
+| CS55-2.F | Audit and gate the rest of the "called by clients on tab boot/focus" set: `/api/features`, `/api/notifications` (list), `/api/scores/me`, `/api/achievements`, `/api/matches/history`. Each must be either (a) DB-free, (b) cached + write-invalidated, or (c) explicitly require `X-User-Activity: 1`. | Multi-PR scope likely; track each fix separately. |
+| CS55-2.G | Update [INSTRUCTIONS.md § Database & Data](../../../INSTRUCTIONS.md#database--data) with: (i) the active-vs-idle classification rule, (ii) the `X-User-Activity` header contract semantics, (iii) the rule "reads never seed cache from a non-active call". Cross-link from CS53 and CS55. | Future contributors must not regress this. |
+| CS55-2.H | Tests: assert `X-User-Activity` absence → zero DB queries. Use a mock adapter call counter / spy on `db.get`. Add to both unit + integration suites. | Regression guard. |
+| CS55-2.I | Add `## Container Validation` section to PR #241 body and run `npm run container:validate` before each review request and after each fix push. Required by [Policy 2](../../../INSTRUCTIONS.md#quick-reference-checklist) (touches server runtime + DB code). | Currently absent from PR body. |
+| CS55-2.J | Re-run GPT-5.4 local review (R3+) on the policy-compliant design (R2 was clean against the original 5-min-TTL design only). | Per [REVIEWS.md](../../../REVIEWS.md). |
+| CS55-2.K | Request Copilot review (`gh pr edit 241 --add-reviewer "@copilot"`); address findings; re-validate after each fix push. | Code PR — Copilot review is required. |
+| CS55-2.L | Merge once container-validate, GPT-5.4, and Copilot are all clean. | Then strike PR #241 → CS55-2 ✅ Done. |
+
+### Acceptance for CS55-2 v2 (supersedes the row above)
+
+- A stale browser tab open for 24h, polling `/api/notifications/count` every 60s, causes **zero** DB queries past the first one (or zero total if CS55-2.B option (a) is chosen).
+- A tab opened with a 7-day JWT but immediately closed causes **zero** DB queries.
+- `X-User-Activity: 1` is present on exactly the legitimate user-activity-driven SPA calls and absent everywhere else; verified by an integration test that fails if a future change strips or spuriously adds the header.
+- `INSTRUCTIONS.md § Database & Data` documents the contract.
+
+
 
 - A logged-in tab open for 24h triggers **zero** `/api/notifications/count` requests after the initial login fetch.
 - An admin approving a submission causes the submitter's badge to update within ≤1s, with no client-side polling.
