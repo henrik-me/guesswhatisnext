@@ -30,7 +30,8 @@
     "check:docs:strict": "node scripts/check-docs-consistency.js --strict",
     "check:feature-flag-policy": "node scripts/check-feature-flag-policy.js",
     "dev:full": "node scripts/dev-server.js",
-    "dev:log": "node scripts/dev-server.js --no-https"
+    "dev:log": "node scripts/dev-server.js --no-https",
+    "seed:ranked-puzzles": "node scripts/seed-ranked-puzzles.js"
   },
   "keywords": [
     "game",
