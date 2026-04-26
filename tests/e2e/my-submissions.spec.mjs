@@ -320,18 +320,28 @@ test.describe('My Submissions Dashboard', () => {
     await page.goto('/?ff_submit_puzzle=true');
     await goToCommunity(page, { flagOn: true });
 
-    // Badge should be visible
-    await expect(page.locator('[data-bind="notification-badge"]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('[data-bind="notification-badge"]')).toHaveText(/[1-9]/);
-
-    // Navigate to my-submissions
+    // Boot-quiet contract (CS53-23): the badge does NOT pull a fresh count on
+    // page load (refreshNotificationBadge omits X-User-Activity to avoid
+    // waking the DB). The first authoritative read happens on a real user
+    // gesture — clicking the My Submissions button — which calls
+    // loadNotifications() with X-User-Activity: 1 and seeds the cache +
+    // updates the badge from the response.
     await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
 
-    // Notifications section should be visible with the approval notification
+    // Notifications section should be visible with the approval notification.
     await expect(page.locator('[data-bind="notifications-section"]')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('.notification-item')).toHaveCount(1, { timeout: 5000 });
     await expect(page.locator('.notification-message')).toContainText('approved');
+
+    // The badge lives inside the My Submissions button on the community
+    // screen — that button is hidden while we're ON the my-submissions
+    // screen. Navigate back home and re-enter community to verify the badge
+    // reflects the count that loadNotifications() just seeded into the cache.
+    await page.goto('/?ff_submit_puzzle=true');
+    await goToCommunity(page, { flagOn: true });
+    await expect(page.locator('[data-bind="notification-badge"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-bind="notification-badge"]')).toHaveText(/[1-9]/);
   });
 
   test('mark all notifications as read updates badge count', async ({ page, request }) => {
@@ -374,8 +384,14 @@ test.describe('My Submissions Dashboard', () => {
 
     await page.goto('/?ff_submit_puzzle=true');
     await goToCommunity(page, { flagOn: true });
-    await expect(page.locator('[data-bind="notification-badge"]')).toBeVisible({ timeout: 10000 });
 
+    // Boot-quiet contract (CS53-23): badge does not refresh from DB on page
+    // load. Click My Submissions first — that's the user gesture that calls
+    // loadNotifications() with X-User-Activity, seeds the cache, and updates
+    // the badge. The badge itself is hidden while we're on the my-submissions
+    // screen (the button containing it is hidden), so we just confirm the
+    // notifications loaded; the badge-hidden assertion below verifies the
+    // mark-all-read behavior on the community screen.
     await page.click('[data-bind="my-submissions-btn"]');
     await expect(page.locator('[data-screen="my-submissions"]')).toHaveClass(/active/, { timeout: 5000 });
     await expect(page.locator('.notification-item')).toHaveCount(1, { timeout: 5000 });
