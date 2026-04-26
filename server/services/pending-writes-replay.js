@@ -266,11 +266,12 @@ async function replayMpMatch(record) {
   }
 
   const matchId = record.concrete_route.match_id;
+  const roomCode = record.concrete_route.room_code || null;
   let existing;
   try {
     existing = await db.get(
       `SELECT id FROM ranked_sessions WHERE match_id = ?`,
-      [matchId]
+      [String(matchId)]
     );
   } catch (err) {
     throw tagTransientIfDbUnavailable(err);
@@ -284,19 +285,41 @@ async function replayMpMatch(record) {
 
   try {
     await db.transaction(async (tx) => {
+      // CS52-7d: keep legacy matches/match_players in sync alongside the
+      // new ranked_sessions rows (the live MP path also writes both inside
+      // a single transaction). Without this, `/api/match-history` and the
+      // legacy MP leaderboard would not see the replayed match.
+      // CS52-7d (Copilot R3): mirror the live MP path — use DB-side
+      // CURRENT_TIMESTAMP for legacy `matches`/`match_players` DATETIME
+      // columns instead of binding an ISO-Z string. The replay timestamp
+      // (when DB came back) is the most useful value here anyway, and we
+      // avoid the implicit string→DATETIME conversion path that has been
+      // brittle on Azure SQL (done_cs18_mssql-production-fixes.md). The
+      // ranked_sessions row below still takes `finishedAt` (the original
+      // captured value) so the started_at/finished_at/expires_at columns
+      // remain mutually consistent for that row.
+      await tx.run(
+        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [matchId]
+      );
       for (const p of record.payload.participants) {
         if (!p || !p.ranked_session_id || typeof p.user_id !== 'number') {
           throw new Error(`Variant C participant missing ranked_session_id/user_id`);
         }
         await tx.run(
+          `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`,
+          [p.score || 0, matchId, p.user_id]
+        );
+        await tx.run(
           `INSERT INTO ranked_sessions
-             (id, user_id, mode, match_id, config_snapshot, status,
+             (id, user_id, mode, match_id, room_code, config_snapshot, status,
               score, correct_count, best_streak, started_at, finished_at, expires_at)
-           VALUES (?, ?, 'multiplayer', ?, ?, 'finished', ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, 'multiplayer', ?, ?, ?, 'finished', ?, ?, ?, ?, ?, ?)`,
           [
             p.ranked_session_id,
             p.user_id,
-            matchId,
+            String(matchId),
+            roomCode,
             configJson,
             p.score || 0,
             p.correct_count || 0,
@@ -331,6 +354,17 @@ async function replayMpMatch(record) {
   } catch (err) {
     throw tagTransientIfDbUnavailable(err);
   }
+
+  logger.info(
+    {
+      event: 'multiplayer_match_replayed',
+      match_id: matchId,
+      room_code: roomCode,
+      participant_count: record.payload.participants.length,
+      drain_request_id: record.request_id || null,
+    },
+    'multiplayer match replayed from pending_writes Variant C'
+  );
 }
 
 const REPLAY_HANDLERS = {

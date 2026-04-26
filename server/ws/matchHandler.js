@@ -3,6 +3,7 @@
  * Manages rooms, puzzle sync, round scoring, reconnection, and rematch.
  */
 
+const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth');
@@ -10,6 +11,13 @@ const { getDbAdapter } = require('../db');
 const { checkAndUnlockAchievements } = require('../achievements');
 const { getConfig } = require('../services/gameConfigLoader');
 const { GAME_CONFIG_DEFAULTS } = require('../services/gameConfigDefaults');
+const { computeFinalScore, computeRoundScore } = require('../services/scoringService');
+const { getDbUnavailability } = require('../lib/transient-db-error');
+const {
+  getDbUnavailabilityState,
+  setDbUnavailabilityState,
+} = require('../lib/db-unavailability-state');
+const pendingWrites = require('../lib/pending-writes');
 const logger = require('../logger');
 
 /** Active rooms: Map<roomCode, RoomState> */
@@ -56,12 +64,23 @@ async function selectRandomPuzzles(count) {
   }));
 }
 
-/** Calculate score for an answer. */
-function calculateScore(correct, timeMs) {
-  if (!correct) return 0;
-  const base = 100;
-  const speedBonus = Math.max(0, 100 * (1 - timeMs / 15000));
-  return Math.round(base + speedBonus);
+/**
+ * CS52-7d — per-round scoring routes through the shared scoring service so
+ * MP and single-player Ranked produce identical scores for identical
+ * (correct, elapsed_ms, streak, round_timer_ms) tuples. The legacy
+ * MP-specific `calculateScore(correct, timeMs)` was removed in favour of
+ * `computeRoundScore` from `services/scoringService.js`.
+ */
+function scoreRoundForUser(room, userId, correct, elapsedMs) {
+  const streak = room.streaks[userId] || 0;
+  const result = computeRoundScore({
+    correct,
+    elapsedMs,
+    streak,
+    roundTimerMs: room.roundTimerMs,
+  });
+  room.streaks[userId] = result.newStreak;
+  return result.pointsEarned;
 }
 
 /**
@@ -234,6 +253,12 @@ async function handleJoin(ws, roomCode) {
       interRoundDelayMs: mpDefaults.inter_round_delay_ms,
       configSource: 'code_default',
       scores: {},
+      streaks: {},
+      rankedSessionIds: {},
+      roundsMeta: {},
+      matchId: null,
+      startedAtIso: null,
+      configSnapshot: null,
       started: false,
       puzzles: [],
       answers: {},
@@ -478,6 +503,31 @@ async function startMatch(roomCode) {
     logger.warn({ err, roomCode }, 'Failed to load multiplayer config; using room defaults');
   }
 
+  // CS52-7d: snapshot the canonical config shape used by the shared scoring
+  // service / pending-writes Variant C / ranked_sessions.config_snapshot. We
+  // freeze the shape at match-start so admin edits mid-match cannot retro-
+  // actively change scoring or persisted shape.
+  room.configSnapshot = {
+    rounds: room.totalRounds,
+    round_timer_ms: room.roundTimerMs,
+    inter_round_delay_ms: room.interRoundDelayMs,
+  };
+
+  // CS52-7d: pre-allocate one ranked_sessions UUID per joined participant.
+  // These IDs become the row PKs whether the match is persisted live (via
+  // the shared scoring service) or replayed from a Variant C pending_writes
+  // file when the DB is unavailable at match-end. Pre-allocation here means
+  // the on-disk queue file carries deterministic IDs from the moment of
+  // match-end, so re-drains stay idempotent on `match_id` regardless of
+  // when the live DB write succeeds vs. when the drain runs.
+  room.rankedSessionIds = {};
+  room.streaks = {};
+  room.roundsMeta = {};
+  room.players.forEach((_ws, userId) => {
+    room.rankedSessionIds[userId] = crypto.randomUUID();
+    room.streaks[userId] = 0;
+  });
+
   try {
     room.puzzles = await selectRandomPuzzles(room.totalRounds);
   } catch (err) {
@@ -497,6 +547,8 @@ async function startMatch(roomCode) {
     const m = await db.get('SELECT id FROM matches WHERE room_code = ?', [roomCode]);
     if (m) matchId = m.id;
   } catch { /* non-fatal */ }
+  room.matchId = matchId;
+  room.startedAtIso = new Date().toISOString();
 
   // CS52-7b telemetry signal: structured config-snapshot at match start.
   // Cross-references docs/observability.md § B.11 (matches per config shape).
@@ -583,7 +635,17 @@ async function sendRound(roomCode) {
     totalRounds: room.totalRounds,
   });
 
-  room.roundStartedAt = Date.now();
+  const startedAtMs = Date.now();
+  room.roundStartedAt = startedAtMs;
+  // CS52-7d: capture per-round metadata (puzzle_id + server-side
+  // round_started_at) so endMatch can build per-participant
+  // ranked_session_events with server-derived elapsed_ms.
+  room.roundsMeta[roundNum] = {
+    puzzle_id: puzzle.id,
+    round_started_at_ms: startedAtMs,
+    round_started_at_iso: new Date(startedAtMs).toISOString(),
+    answer_key: puzzle.answer,
+  };
 
   // CS52-7b: round timeout from snapshotted config (loader → game_configs).
   room.roundTimer = setTimeout(() => {
@@ -608,7 +670,10 @@ function handleAnswer(ws, msg) {
 
   roundAnswers[ws.user.id] = {
     answerId: msg.answerId,
-    timeMs: typeof msg.timeMs === 'number' ? msg.timeMs : room.roundTimerMs,
+    // `timeMs` is the legacy client-supplied value, kept for telemetry only
+    // (CS52-7d: scoring uses server-derived elapsed_ms — see resolveRound).
+    timeMs: typeof msg.timeMs === 'number' ? msg.timeMs : null,
+    receivedAtMs: Date.now(),
     userId: ws.user.id,
     username: ws.user.username,
   };
@@ -639,11 +704,22 @@ function resolveRound(roomCode) {
 
   // Build scores for this round
   const scores = {};
+  const roundMeta = room.roundsMeta[roundNum];
+  const roundTimerMs = room.roundTimerMs;
   room.players.forEach((ws, userId) => {
     const answer = roundAnswers[userId];
     const correct = answer ? answer.answerId === puzzle.answer : false;
-    const timeMs = answer ? answer.timeMs : room.roundTimerMs;
-    const points = calculateScore(correct, timeMs);
+    // CS52-7d: server-derived elapsed_ms drives scoring. The client's
+    // `timeMs` is telemetry only (matches the CS52-3 anti-cheat invariant).
+    let elapsedMs;
+    if (answer && roundMeta) {
+      elapsedMs = Math.max(0, answer.receivedAtMs - roundMeta.round_started_at_ms);
+    } else {
+      // No answer received before timeout — treat as full-timer elapsed so
+      // speedBonus = 0 (and correct=0 means points=0 anyway).
+      elapsedMs = roundTimerMs;
+    }
+    const points = scoreRoundForUser(room, userId, correct, elapsedMs);
 
     room.scores[userId] = (room.scores[userId] || 0) + points;
 
@@ -684,6 +760,367 @@ function assignRanks(sortedEntries) {
     currentRank++;
   }
   return sortedEntries;
+}
+
+/**
+ * CS52-7d — build one `{ ranked_session_id, user_id, score, correct_count,
+ * best_streak, events: [...] }` payload per pre-allocated participant.
+ *
+ * Drops users who never had a ranked_session_id pre-allocated (defensive —
+ * pre-allocation happens once at startMatch over `room.players`). For each
+ * participant, emits **one event per round** so the recomputed
+ * `computeFinalScore()` walk sees the same correctness/streak sequence the
+ * live `endRound` produced (which calls `scoreRoundForUser` for every
+ * participant — answered or not — to reset streaks on misses). Unanswered
+ * rounds are written with `correct=0`, `answer=''`, `elapsed_ms=roundTimerMs`,
+ * `client_time_ms=null`, and `received_at = round_started_at + roundTimerMs`,
+ * which mirrors the live timeout handling at line ~720.
+ *
+ * Server-derived `elapsed_ms = received_at_ms − round_started_at_ms` is
+ * the only value used by the shared scoring service; the client's `timeMs`
+ * survives only as `client_time_ms` for telemetry parity with single-
+ * player Ranked.
+ */
+function buildParticipantPayloads(room) {
+  const configSnapshot = room.configSnapshot;
+  const roundTimerMs = room.roundTimerMs;
+  const participants = [];
+  const userIds = Object.keys(room.rankedSessionIds || {});
+  for (const userIdStr of userIds) {
+    const userId = Number(userIdStr);
+    const rankedSessionId = room.rankedSessionIds[userIdStr];
+    // CS52-7d (Copilot R7): dropped/forfeited players see score=0 in the
+    // live `gameOver` payload (endMatch hardcodes ``total: 0`` for users
+    // in ``room.droppedPlayers``). Mirror that semantics in persistence
+    // so the persisted ``ranked_sessions.score`` and
+    // ``match_players.score`` match what the user actually saw — write a
+    // 0-score row with no events rather than recomputing a non-zero
+    // score from earlier rounds' answers. Keeps the
+    // "persisted score == live UI total" contract for forfeits and
+    // keeps ``/api/matches/history`` + the multiplayer leaderboard
+    // consistent with the gameOver clients received.
+    if (room.droppedPlayers && room.droppedPlayers.has(userId)) {
+      participants.push({
+        user_id: userId,
+        ranked_session_id: rankedSessionId,
+        score: 0,
+        correct_count: 0,
+        best_streak: 0,
+        events: [],
+      });
+      continue;
+    }
+    const events = [];
+    for (let r = 0; r < room.totalRounds; r++) {
+      const meta = room.roundsMeta[r];
+      if (!meta) {
+        // Defensive (Copilot R2): emit a visible structured error and drop
+        // the round rather than silently shortening `events`. A missing
+        // `roundsMeta[r]` here would mean the live `endRound` never ran for
+        // that round, which should never happen on a normal completion path
+        // — but if it ever does, the discrepancy must be observable in logs
+        // rather than buried as a 0-event gap.
+        logger.error(
+          {
+            event: 'multiplayer_match_persist_meta_missing',
+            user_id: userId,
+            round_num: r,
+            total_rounds: room.totalRounds,
+            match_id: room.matchId,
+          },
+          'multiplayer: roundsMeta[r] missing while building participant payload — round dropped'
+        );
+        continue;
+      }
+      const answer = room.answers[r] && room.answers[r][userId];
+      if (answer) {
+        const correct = answer.answerId === meta.answer_key ? 1 : 0;
+        const elapsedMs = Math.max(0, answer.receivedAtMs - meta.round_started_at_ms);
+        events.push({
+          round_num: r,
+          puzzle_id: meta.puzzle_id,
+          answer: String(answer.answerId == null ? '' : answer.answerId),
+          correct,
+          round_started_at: meta.round_started_at_iso,
+          received_at: new Date(answer.receivedAtMs).toISOString(),
+          elapsed_ms: elapsedMs,
+          client_time_ms:
+            typeof answer.timeMs === 'number' && Number.isFinite(answer.timeMs)
+              ? Math.trunc(answer.timeMs)
+              : null,
+        });
+      } else {
+        // Unanswered round — emit a zero-points event so streak is reset
+        // when computeFinalScore replays the sequence (parity with live
+        // endRound's per-participant scoreRoundForUser call).
+        const timeoutAtMs = meta.round_started_at_ms + roundTimerMs;
+        events.push({
+          round_num: r,
+          puzzle_id: meta.puzzle_id,
+          answer: '',
+          correct: 0,
+          round_started_at: meta.round_started_at_iso,
+          received_at: new Date(timeoutAtMs).toISOString(),
+          elapsed_ms: roundTimerMs,
+          client_time_ms: null,
+        });
+      }
+    }
+    const final = computeFinalScore(events, configSnapshot);
+    participants.push({
+      user_id: userId,
+      ranked_session_id: rankedSessionId,
+      score: final.score,
+      correct_count: final.correctCount,
+      best_streak: final.bestStreak,
+      events,
+    });
+  }
+  return participants;
+}
+
+/**
+ * CS52-7d — write one `ranked_sessions` row per participant + N
+ * `ranked_session_events` rows per participant in a single transaction.
+ * Caller decides whether `db` is the live adapter or a transaction
+ * scope; this helper just runs the inserts.
+ */
+async function insertMatchRows(tx, { matchId, roomCode, configSnapshot,
+                                       startedAtIso, finishedAtIso, participants }) {
+  const configJson = JSON.stringify(configSnapshot);
+  // CS52-7d (Copilot R4): `ranked_sessions.match_id` is NVARCHAR(255) on
+  // MSSQL / TEXT on SQLite (migration 008). `matches.id` is INT on MSSQL,
+  // so the driver would otherwise bind `matchId` as INT here, forcing an
+  // implicit INT→NVARCHAR conversion on the column and degrading the
+  // partial index `idx_ranked_sessions_match_id`. Coerce to string at
+  // every ranked_sessions bind site (writes here, reads in
+  // pending-writes-replay) while keeping INT for legacy `matches`/
+  // `match_players` updates which use the native INT `id`/`match_id`.
+  const matchIdStr = String(matchId);
+  for (const p of participants) {
+    await tx.run(
+      `INSERT INTO ranked_sessions
+         (id, user_id, mode, match_id, room_code, config_snapshot, status,
+          score, correct_count, best_streak, started_at, finished_at, expires_at)
+       VALUES (?, ?, 'multiplayer', ?, ?, ?, 'finished', ?, ?, ?, ?, ?, ?)`,
+      [
+        p.ranked_session_id,
+        p.user_id,
+        matchIdStr,
+        roomCode,
+        configJson,
+        p.score,
+        p.correct_count,
+        p.best_streak,
+        startedAtIso,
+        finishedAtIso,
+        finishedAtIso,
+      ]
+    );
+    for (const ev of p.events) {
+      await tx.run(
+        `INSERT INTO ranked_session_events
+           (session_id, round_num, puzzle_id, answer, correct,
+            round_started_at, received_at, elapsed_ms, client_time_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          p.ranked_session_id,
+          ev.round_num,
+          ev.puzzle_id,
+          ev.answer,
+          ev.correct,
+          ev.round_started_at,
+          ev.received_at,
+          ev.elapsed_ms,
+          ev.client_time_ms,
+        ]
+      );
+    }
+  }
+}
+
+/**
+ * CS52-7d — orchestrate the unified MP persist.
+ *
+ * Live path: single transaction inserting ranked_sessions + events for all
+ * participants, plus the legacy matches/match_players UPDATE so existing
+ * leaderboard / history endpoints keep working.
+ *
+ * DB-unavailable path (Variant C of CS52-7e): when `getDbUnavailability()`
+ * returns a descriptor (cold-start, free-tier exhaustion), the planned
+ * rows are serialised to a single pending_writes file. The drain replays
+ * idempotently on `match_id` once the DB recovers. The match is not
+ * declared "saved" to players until the queue file is fsynced — that
+ * preserves the existing match-finished = score-recorded UX contract
+ * even during a DB blip.
+ */
+async function persistCompletedMatch(room, roomCode, _userScores) {
+  const finishedAtIso = new Date().toISOString();
+  const startedAtIso = room.startedAtIso || finishedAtIso;
+  const configSnapshot = room.configSnapshot;
+  const participants = buildParticipantPayloads(room);
+
+  // Pre-flight: if the unavailability state is already non-null, skip the
+  // live attempt and queue Variant C directly. This mirrors the
+  // /api/sessions/:id/finish route's preflight short-circuit.
+  const preState = getDbUnavailabilityState();
+  if (preState) {
+    // Best-effort matchId rehydration before short-circuiting (Copilot R2 —
+    // ensure the Variant C file has its idempotency key even if startMatch
+    // didn't manage to populate `room.matchId`). The DB is known unavailable
+    // here so the lookup is unlikely to succeed, but it costs little and
+    // helps in the narrow window where preState was set by a peer route
+    // while this room's DB connection might still answer.
+    if (!room.matchId) {
+      try {
+        const db = await getDbAdapter();
+        const m = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
+        if (m) room.matchId = m.id;
+      } catch { /* expected while DB unavailable; enqueueVariantC will log loudly */ }
+    }
+    await enqueueVariantC(room, roomCode, {
+      configSnapshot, startedAtIso, finishedAtIso, participants,
+    }, preState);
+    return;
+  }
+
+  let matchId = room.matchId;
+  try {
+    const db = await getDbAdapter();
+    if (!matchId) {
+      const m = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
+      if (m) {
+        matchId = m.id;
+        room.matchId = matchId;
+      }
+    }
+    if (!matchId) {
+      // No `matches` row — the match was never registered (test fixture or
+      // DB write failure at room create). Without an id we cannot link the
+      // ranked_sessions rows; log + skip silently rather than dead-letter.
+      logger.warn({ roomCode },
+        'multiplayer: persist skipped — no matches row for room_code');
+      return;
+    }
+    await db.transaction(async (tx) => {
+      // CS52-7d (Copilot R3): use DB-side CURRENT_TIMESTAMP for the legacy
+      // `matches`/`match_players` DATETIME columns rather than binding an
+      // ISO-Z string. The mssql-adapter passes CURRENT_TIMESTAMP through to
+      // T-SQL unchanged (it's a valid SQL Server keyword), avoiding the
+      // implicit string→DATETIME conversion path that has been brittle in
+      // production (see done_cs18_mssql-production-fixes.md). The new
+      // ranked_sessions rows still take the ISO timestamp so all four
+      // timestamp columns (started_at/finished_at/expires_at) on a single
+      // row are written consistently in one transaction.
+      await tx.run(
+        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [matchId]
+      );
+      // CS52-7d (Copilot R6): derive legacy `match_players.score` from the
+      // canonical `participants` payload (which holds the
+      // `computeFinalScore`-derived score from the persisted events) rather
+      // than from `userScores`. This guarantees live and replay paths write
+      // the same legacy score and keeps the legacy + new tables internally
+      // consistent — `userScores` can diverge for dropped players (endMatch
+      // assigns them `total: 0` while `buildParticipantPayloads` may compute
+      // a non-zero score from earlier rounds' events).
+      for (const p of participants) {
+        await tx.run(
+          `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`,
+          [p.score, matchId, p.user_id]
+        );
+      }
+      await insertMatchRows(tx, {
+        matchId, roomCode, configSnapshot, startedAtIso, finishedAtIso, participants,
+      });
+    });
+    logger.info(
+      {
+        event: 'multiplayer_match_persisted',
+        match_id: matchId,
+        room_code: roomCode,
+        participant_count: participants.length,
+        persistence_path: 'live',
+      },
+      'multiplayer match persisted (live)'
+    );
+  } catch (err) {
+    const u = getDbUnavailability(err);
+    if (u) {
+      setDbUnavailabilityState(u);
+      try {
+        await enqueueVariantC(room, roomCode, {
+          configSnapshot, startedAtIso, finishedAtIso, participants,
+        }, u, matchId);
+        return;
+      } catch (enqueueErr) {
+        logger.error(
+          { err: enqueueErr, roomCode, matchId },
+          'multiplayer: Variant C enqueue failed — match persist lost'
+        );
+        throw enqueueErr;
+      }
+    }
+    throw err;
+  }
+}
+
+async function enqueueVariantC(room, roomCode, planned, descriptor, matchIdHint) {
+  const matchId = matchIdHint || room.matchId;
+  if (!matchId) {
+    // Without a match_id the Variant C row would have no idempotency key.
+    // Log + drop loudly rather than queueing a malformed file. Emit the
+    // structured `multiplayer_match_persist_dropped` event (Copilot R2 —
+    // make the loss observable in App Insights so on-call can grep) so
+    // missing-matchId is symmetric with the queue-full drop path below.
+    logger.error(
+      {
+        event: 'multiplayer_match_persist_dropped',
+        reason: 'missing_match_id',
+        room_code: roomCode,
+        participant_count: planned && planned.participants && planned.participants.length,
+        descriptor_reason: descriptor && descriptor.reason,
+      },
+      'multiplayer: Variant C enqueue skipped — no match_id available'
+    );
+    return;
+  }
+  try {
+    const { request_id } = await pendingWrites.enqueue({
+      endpoint: 'INTERNAL multiplayer-match-completion',
+      concrete_route: { match_id: matchId, room_code: roomCode },
+      user_id: null,
+      payload: {
+        config_snapshot: planned.configSnapshot,
+        started_at: planned.startedAtIso,
+        finished_at: planned.finishedAtIso,
+        participants: planned.participants,
+      },
+    });
+    logger.info(
+      {
+        event: 'multiplayer_match_persisted',
+        match_id: matchId,
+        room_code: roomCode,
+        participant_count: planned.participants.length,
+        persistence_path: 'pending_writes_variant_c',
+        request_id,
+        reason: descriptor && descriptor.reason,
+      },
+      'multiplayer match persisted (pending_writes Variant C)'
+    );
+  } catch (err) {
+    if (err && err.code === 'PENDING_WRITES_QUEUE_FULL') {
+      logger.error(
+        { roomCode, matchId, depth: err.depth, max: err.max,
+          event: 'multiplayer_match_persist_dropped',
+          reason: 'pending_writes_queue_full' },
+        'multiplayer: Variant C enqueue rejected (queue full) — match lost'
+      );
+      return;
+    }
+    throw err;
+  }
 }
 
 /** End the match: determine winner, persist to DB, broadcast results, keep room for rematch. */
@@ -743,26 +1180,21 @@ async function endMatch(roomCode) {
     });
   }
 
-  // Persist to database
-  try {
-    const db = await getDbAdapter();
-    const match = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
-    if (match) {
-      await db.run(
-        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [match.id]
-      );
-
-      for (const { userId, total } of userScores) {
-        await db.run(
-          `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`,
-          [total, match.id, userId]
-        );
-      }
-    }
-  } catch {
-    // Non-fatal
-  }
+  // CS52-7d: persist completed match through the unified storage + scoring
+  // path. One `ranked_sessions` row per (match, player) + N
+  // `ranked_session_events` rows per participant, written in a single
+  // transaction. Score is recomputed from per-event server-derived
+  // elapsed_ms via the shared scoring service so the persisted value is
+  // the canonical algorithm — no MP-specific scoring code touches the row.
+  //
+  // When `getDbUnavailability()` is non-null at match-end (cold-start, free-
+  // tier exhaustion, etc.) the planned rows are serialised to a single
+  // pending_writes Variant C file (CS52-7e); the drain replays them
+  // idempotently on `match_id` once the DB returns.
+  await persistCompletedMatch(room, roomCode, userScores).catch((err) => {
+    logger.error({ err, roomCode, matchId: room.matchId },
+      'multiplayer: unified persist failed (non-fatal to UX, may dead-letter)');
+  });
 
   // Check achievements for all players (CS52-7: MP match-end is a
   // server-validated outcome — achievement evaluation is allowed here.)
@@ -1232,7 +1664,6 @@ async function handleRematchStartConfirm(ws) {
   }
 
   // Create a new room with same settings
-  const crypto = require('crypto');
   let newCode = crypto.randomBytes(3).toString('hex').toUpperCase();
 
   // CS52-7b: re-fetch live multiplayer config for the rematch — an admin
@@ -1280,6 +1711,12 @@ async function handleRematchStartConfirm(ws) {
     interRoundDelayMs: rematchConfig.inter_round_delay_ms,
     configSource: rematchConfig.source,
     scores: {},
+    streaks: {},
+    rankedSessionIds: {},
+    roundsMeta: {},
+    matchId: null,
+    startedAtIso: null,
+    configSnapshot: null,
     started: false,
     puzzles: [],
     answers: {},
