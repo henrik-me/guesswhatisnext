@@ -36,6 +36,12 @@ const {
   computeFinalScore,
   validateAnswerEvent,
 } = require('../services/scoringService');
+const { getDbUnavailability } = require('../lib/transient-db-error');
+const {
+  getDbUnavailabilityState,
+  setDbUnavailabilityState,
+} = require('../lib/db-unavailability-state');
+const pendingWrites = require('../lib/pending-writes');
 
 const router = express.Router();
 
@@ -580,7 +586,26 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
   const sessionId = req.params.id;
   return withSessionLock(sessionId, async () => {
     try {
-      const db = await getDbAdapter();
+      // CS52-7e — preflight DB-unavailable check. If a previous request
+      // (or the cold-start init) flagged the DB as unavailable, persist a
+      // Variant A pending_writes file and return 202. Replay drains when
+      // the DB is back; idempotency is handled by the replay handler.
+      const preState = getDbUnavailabilityState();
+      if (preState) {
+        return await enqueueFinishAndRespond(req, res, sessionId, preState);
+      }
+
+      let db;
+      try {
+        db = await getDbAdapter();
+      } catch (err) {
+        const u = getDbUnavailability(err);
+        if (u) {
+          setDbUnavailabilityState(u);
+          return await enqueueFinishAndRespond(req, res, sessionId, u);
+        }
+        throw err;
+      }
       const nowMs = Date.now();
       const userId = req.user.id;
 
@@ -702,9 +727,6 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
         'ranked-session finished'
       );
 
-      // TODO(CS52-7e): when getDbUnavailability() is non-null, persist to
-      // the pending_writes queue and return 202. For now the request gate's
-      // 503 covers this case.
       return res.status(200).json({
         score: final.score,
         correctCount: final.correctCount,
@@ -712,11 +734,103 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
         fastestAnswerMs: final.fastestAnswerMs,
       });
     } catch (err) {
+      // CS52-7e — if a DB op inside the handler surfaces a permanent
+      // unavailability descriptor, set the shared state and enqueue a
+      // Variant A file (matches the preflight 202 path so the client
+      // sees a single response shape regardless of when the DB went
+      // down). Any other error continues to the central handler.
+      const u = getDbUnavailability(err);
+      if (u) {
+        setDbUnavailabilityState(u);
+        try {
+          return await enqueueFinishAndRespond(req, res, sessionId, u);
+        } catch (enqueueErr) {
+          next(enqueueErr);
+          return undefined;
+        }
+      }
       next(err);
       return undefined;
     }
   });
 });
+
+/**
+ * CS52-7e — enqueue a Variant A `pending_writes` file and return 202.
+ *
+ * The 202 carries `queuedRequestId` and `retryAfterMs: 5000`. No score /
+ * correctCount / bestStreak fields — the client will surface the result
+ * once a subsequent /api/sync (or another GET) returns a finalised state.
+ *
+ * Validates `sessionId` shape before enqueueing so an authenticated
+ * client cannot inflate the on-disk queue with arbitrary garbage IDs
+ * during an outage. If the queue is already full (per
+ * `PENDING_WRITES_MAX_DEPTH`), responds 503 Retry-After instead of 202.
+ */
+// UUID v1–v5 shape (matches `crypto.randomUUID()`'s v4 output and any
+// pre-existing v1 IDs that may be in flight). We only care about shape
+// here — the synchronous `/finish` path further validates ownership/
+// existence against the DB; the queue is just a deferred replay tube.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function enqueueFinishAndRespond(req, res, sessionId, descriptor) {
+  if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) {
+    logger.warn(
+      {
+        event: 'finish_request_queued_rejected',
+        reason: 'invalid-session-id',
+        sessionIdSample: typeof sessionId === 'string' ? sessionId.slice(0, 64) : typeof sessionId,
+        user_id: req.user && req.user.id,
+      },
+      'POST /api/sessions/:id/finish 400 — invalid session id (db-unavailable enqueue path)'
+    );
+    return res.status(400).json({ error: 'invalid session id' });
+  }
+  let request_id;
+  try {
+    ({ request_id } = await pendingWrites.enqueue({
+      endpoint: 'POST /api/sessions/:id/finish',
+      concrete_route: { session_id: sessionId },
+      user_id: req.user.id,
+      payload: {},
+    }));
+  } catch (err) {
+    if (err && err.code === 'PENDING_WRITES_QUEUE_FULL') {
+      logger.error(
+        {
+          event: 'finish_request_queued_rejected',
+          reason: 'queue-full',
+          depth: err.depth,
+          max: err.max,
+          sessionId,
+          user_id: req.user.id,
+        },
+        'POST /api/sessions/:id/finish 503 — pending_writes queue full'
+      );
+      return res
+        .set('Retry-After', '30')
+        .status(503)
+        .json({ error: 'Server is overloaded; please retry later', retryAfter: 30 });
+    }
+    throw err;
+  }
+  logger.info(
+    {
+      event: 'finish_request_queued_202',
+      sessionId,
+      user_id: req.user.id,
+      request_id,
+      reason: descriptor.reason,
+    },
+    'POST /api/sessions/:id/finish 202 — queued for replay (db-unavailable)'
+  );
+  return res.status(202).json({
+    queuedRequestId: request_id,
+    retryAfterMs: 5000,
+    unavailable: true,
+    reason: descriptor.reason,
+  });
+}
 
 /**
  * POST /api/sessions/:id/finish (legacy duplicate removed in local-review fix R1)
