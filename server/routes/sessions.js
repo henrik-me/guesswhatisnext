@@ -63,6 +63,13 @@ const EXPIRY_SLACK_MS = 30000;
 // the session is effectively expired (acceptable per CS52-3 plan — session
 // expiry handles it; abandoned sessions don't count against quotas).
 //
+// **Multi-process / horizontal-scale caveat (documented design limitation):**
+// only one process can correctly serve `/answer` and `/next-round` for a
+// given session, because the round-dispatch state lives only here. The
+// existing deploy is single-instance, and CS52-7d reuses this service from
+// the WS handler in the same process. If/when we go horizontal, this map
+// must move to shared storage (Redis or a `ranked_dispatched_rounds` row).
+//
 // Shape per entry:
 //   { round_num, puzzle_id, puzzle: { id, prompt, options, answer },
 //     round_started_at_ms, last_answer_received_at_ms }
@@ -72,6 +79,28 @@ const EXPIRY_SLACK_MS = 30000;
 // `puzzle.answer` lives only in this map — never persisted in a way the
 // client can see, never returned through an HTTP response.
 const dispatchedRounds = new Map();
+
+// ── Per-session mutex ────────────────────────────────────────────────────
+//
+// The four endpoints (/answer, /next-round, /finish) all read-modify-write
+// the same in-process dispatched-round entry plus the same DB row. To prevent
+// double-tap races (two simultaneous /answer requests for the same round
+// both inserting an event row, two simultaneous /next-round both dispatching
+// round N+1, etc.), each session-scoped mutating handler runs inside a
+// per-session promise chain. This is correct for a single process; it is
+// the same process-local assumption that `dispatchedRounds` already lives
+// under. See the multi-process caveat above.
+const sessionLocks = new Map();
+function withSessionLock(sessionId, fn) {
+  const prev = sessionLocks.get(sessionId) || Promise.resolve();
+  const next = prev.catch(() => {}).then(() => fn());
+  sessionLocks.set(sessionId, next);
+  // Keep map bounded: drop the entry once nothing else is queued behind it.
+  next.finally(() => {
+    if (sessionLocks.get(sessionId) === next) sessionLocks.delete(sessionId);
+  });
+  return next;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -137,9 +166,24 @@ async function loadConfig(db, mode) {
  * has expired is flipped to 'abandoned'. Runs at the top of every
  * session-mutating endpoint (per CS52 § Server-side in-band reconciliation).
  * No background sweeper — reconciliation rides on the next user request.
+ *
+ * Also evicts any in-process dispatched-round entries belonging to the now-
+ * abandoned sessions so the `dispatchedRounds` Map doesn't leak (caps memory
+ * at "live in-progress sessions on this process" instead of "all sessions
+ * this process has ever served").
  */
 async function reconcileExpiredSessions(db, userId, nowMs) {
   const nowS = nowIso(nowMs);
+  // Snapshot the about-to-be-reconciled session ids first so we can evict
+  // their in-process state. The two queries are not transactional with
+  // each other; that's OK — even if a session expires between SELECT and
+  // UPDATE, the next reconciliation call will catch it. Worst case: a
+  // dispatched-round entry briefly survives a process-local race.
+  const stale = await db.all(
+    `SELECT id FROM ranked_sessions
+       WHERE user_id = ? AND status = 'in_progress' AND expires_at < ?`,
+    [userId, nowS]
+  );
   const result = await db.run(
     `UPDATE ranked_sessions
         SET status = 'abandoned', finished_at = ?
@@ -148,6 +192,7 @@ async function reconcileExpiredSessions(db, userId, nowMs) {
         AND expires_at < ?`,
     [nowS, userId, nowS]
   );
+  for (const row of stale) dispatchedRounds.delete(row.id);
   if (result && result.changes > 0) {
     logger.info(
       { userId, reconciledCount: result.changes },
@@ -341,305 +386,341 @@ router.post('/', requireAuth, async (req, res, next) => {
  * POST /api/sessions/:id/answer
  */
 router.post('/:id/answer', requireAuth, async (req, res, next) => {
-  try {
-    const sessionId = req.params.id;
-    const { round_num, puzzle_id, answer, client_time_ms } = req.body || {};
-    if (round_num == null || !puzzle_id || answer == null) {
-      return res.status(400).json({ error: 'round_num, puzzle_id, answer required' });
-    }
-    const db = await getDbAdapter();
-    const nowMs = Date.now();
-    const userId = req.user.id;
+  const sessionId = req.params.id;
+  return withSessionLock(sessionId, async () => {
+    try {
+      const { round_num, puzzle_id, answer, client_time_ms } = req.body || {};
+      if (round_num == null || !puzzle_id || answer == null) {
+        return res.status(400).json({ error: 'round_num, puzzle_id, answer required' });
+      }
+      const db = await getDbAdapter();
+      const nowMs = Date.now();
+      const userId = req.user.id;
 
-    await reconcileExpiredSessions(db, userId, nowMs);
+      await reconcileExpiredSessions(db, userId, nowMs);
 
-    const session = await loadSessionForUser(db, sessionId, userId);
-    if (!session) return res.status(404).json({ error: 'session not found' });
+      const session = await loadSessionForUser(db, sessionId, userId);
+      if (!session) return res.status(404).json({ error: 'session not found' });
 
-    const dispatched = dispatchedRounds.get(sessionId);
-    const validation = validateAnswerEvent({
-      session,
-      dispatchedRound: dispatched,
-      roundNum: round_num,
-      puzzleId: puzzle_id,
-      submittedAnswer: answer,
-      receivedAtMs: nowMs,
-      configSnapshot: session.config_snapshot,
-    });
-    if (!validation.ok) {
-      logAntiCheat(sessionId, validation.error, {
-        userId,
+      const dispatched = dispatchedRounds.get(sessionId);
+      const validation = validateAnswerEvent({
+        session,
+        dispatchedRound: dispatched,
         roundNum: round_num,
         puzzleId: puzzle_id,
+        submittedAnswer: answer,
+        receivedAtMs: nowMs,
+        configSnapshot: session.config_snapshot,
       });
-      const status = validation.error === 'expired' ? 410 : 400;
-      return res.status(status).json({ error: validation.error });
+      if (!validation.ok) {
+        logAntiCheat(sessionId, validation.error, {
+          userId,
+          roundNum: round_num,
+          puzzleId: puzzle_id,
+        });
+        const status = validation.error === 'expired' ? 410 : 400;
+        return res.status(status).json({ error: validation.error });
+      }
+
+      const { correct, elapsedMs } = validation;
+      const clientMs =
+        client_time_ms == null || Number.isNaN(Number(client_time_ms))
+          ? null
+          : Math.trunc(Number(client_time_ms));
+
+      // Insert with PK (session_id, round_num) — if a duplicate slips through
+      // the per-session lock (e.g. inside a multi-process deploy), the unique
+      // PK will fire and we map it to the same anti-cheat 409 path.
+      try {
+        await db.run(
+          `INSERT INTO ranked_session_events
+             (session_id, round_num, puzzle_id, answer, correct,
+              round_started_at, received_at, elapsed_ms, client_time_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            sessionId,
+            round_num,
+            puzzle_id,
+            String(answer),
+            correct,
+            nowIso(dispatched.round_started_at_ms),
+            nowIso(nowMs),
+            elapsedMs,
+            clientMs,
+          ]
+        );
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          logAntiCheat(sessionId, 'duplicate-answer', { userId, roundNum: round_num });
+          return res.status(409).json({ error: 'answer already recorded for this round' });
+        }
+        throw err;
+      }
+      dispatched.last_answer_received_at_ms = nowMs;
+
+      // Recompute running score from all events so far (cheap — at most
+      // `rounds` events). Also derives newStreak for the response.
+      const events = await getSessionEvents(db, sessionId);
+      const { score: runningScore } = computeFinalScore(events, session.config_snapshot);
+
+      logger.info(
+        {
+          sessionId,
+          userId,
+          roundNum: round_num,
+          correct,
+          elapsedMs,
+          clientTimeMs: clientMs,
+          clientTimeMsDiff: clientMs == null ? null : clientMs - elapsedMs,
+        },
+        'ranked-session answer-received'
+      );
+
+      return res.status(200).json({
+        correct: !!correct,
+        runningScore,
+        elapsed_ms: elapsedMs,
+      });
+    } catch (err) {
+      next(err);
+      return undefined;
     }
-    // Defence-in-depth: refuse to overwrite an existing event row.
-    const existing = await db.get(
-      `SELECT round_num FROM ranked_session_events
-        WHERE session_id = ? AND round_num = ?`,
-      [sessionId, round_num]
-    );
-    if (existing) {
-      logAntiCheat(sessionId, 'duplicate-answer', { userId, roundNum: round_num });
-      return res.status(409).json({ error: 'answer already recorded for this round' });
-    }
-
-    const { correct, elapsedMs } = validation;
-    const clientMs =
-      client_time_ms == null || Number.isNaN(Number(client_time_ms))
-        ? null
-        : Math.trunc(Number(client_time_ms));
-
-    await db.run(
-      `INSERT INTO ranked_session_events
-         (session_id, round_num, puzzle_id, answer, correct,
-          round_started_at, received_at, elapsed_ms, client_time_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        sessionId,
-        round_num,
-        puzzle_id,
-        String(answer),
-        correct,
-        nowIso(dispatched.round_started_at_ms),
-        nowIso(nowMs),
-        elapsedMs,
-        clientMs,
-      ]
-    );
-    dispatched.last_answer_received_at_ms = nowMs;
-
-    // Recompute running score from all events so far (cheap — at most
-    // `rounds` events). Also derives newStreak for the response.
-    const events = await getSessionEvents(db, sessionId);
-    const { score: runningScore } = computeFinalScore(events, session.config_snapshot);
-
-    logger.info(
-      {
-        sessionId,
-        userId,
-        roundNum: round_num,
-        correct,
-        elapsedMs,
-        clientTimeMs: clientMs,
-        clientTimeMsDiff: clientMs == null ? null : clientMs - elapsedMs,
-      },
-      'ranked-session answer-received'
-    );
-
-    return res.status(200).json({
-      correct: !!correct,
-      runningScore,
-      elapsed_ms: elapsedMs,
-    });
-  } catch (err) {
-    next(err);
-  }
+  });
 });
 
 /**
  * POST /api/sessions/:id/next-round
  */
 router.post('/:id/next-round', requireAuth, async (req, res, next) => {
-  try {
-    const sessionId = req.params.id;
-    const db = await getDbAdapter();
-    const nowMs = Date.now();
-    const userId = req.user.id;
+  const sessionId = req.params.id;
+  return withSessionLock(sessionId, async () => {
+    try {
+      const db = await getDbAdapter();
+      const nowMs = Date.now();
+      const userId = req.user.id;
 
-    await reconcileExpiredSessions(db, userId, nowMs);
+      await reconcileExpiredSessions(db, userId, nowMs);
 
-    const session = await loadSessionForUser(db, sessionId, userId);
-    if (!session) return res.status(404).json({ error: 'session not found' });
-    if (session.status !== 'in_progress') {
-      return res.status(409).json({ error: `session is ${session.status}` });
-    }
-    if (Date.parse(session.expires_at) <= nowMs) {
-      return res.status(410).json({ error: 'expired' });
-    }
+      const session = await loadSessionForUser(db, sessionId, userId);
+      if (!session) return res.status(404).json({ error: 'session not found' });
+      if (session.status !== 'in_progress') {
+        return res.status(409).json({ error: `session is ${session.status}` });
+      }
+      if (Date.parse(session.expires_at) <= nowMs) {
+        return res.status(410).json({ error: 'expired' });
+      }
 
-    const events = await getSessionEvents(db, sessionId);
-    const dispatched = dispatchedRounds.get(sessionId);
+      const events = await getSessionEvents(db, sessionId);
+      const dispatched = dispatchedRounds.get(sessionId);
 
-    // Must have answered the current round before advancing.
-    if (!dispatched || dispatched.last_answer_received_at_ms == null) {
-      return res.status(409).json({ error: 'no current answer to advance from' });
-    }
+      // Must have answered the current round before advancing.
+      if (!dispatched || dispatched.last_answer_received_at_ms == null) {
+        return res.status(409).json({ error: 'no current answer to advance from' });
+      }
 
-    // All rounds answered → can't dispatch another.
-    if (events.length >= session.config_snapshot.rounds) {
-      return res.status(409).json({ error: 'session already finished' });
-    }
+      // Atomic "advance once" guard: the dispatched round_num must equal
+      // the most recently answered round (events.length - 1). If a parallel
+      // /next-round already advanced (concurrent double-tap that slipped past
+      // the lock in a multi-process deploy), this returns 409 instead of
+      // dispatching round N+2 over the top of round N+1.
+      const expectedDispatchedRound = events.length - 1;
+      if (dispatched.round_num !== expectedDispatchedRound) {
+        return res.status(409).json({ error: 'next round already dispatched' });
+      }
 
-    const interDelayMs = session.config_snapshot.inter_round_delay_ms || 0;
-    const earliestNextMs = dispatched.last_answer_received_at_ms + interDelayMs;
-    if (nowMs < earliestNextMs) {
-      const retryMs = earliestNextMs - nowMs;
-      res.set('Retry-After', String(Math.max(1, Math.ceil(retryMs / 1000))));
-      return res.status(425).json({
-        error: 'too early',
-        retryAfterMs: retryMs,
+      // All rounds answered → can't dispatch another.
+      if (events.length >= session.config_snapshot.rounds) {
+        return res.status(409).json({ error: 'session already finished' });
+      }
+
+      const interDelayMs = session.config_snapshot.inter_round_delay_ms || 0;
+      const earliestNextMs = dispatched.last_answer_received_at_ms + interDelayMs;
+      if (nowMs < earliestNextMs) {
+        const retryMs = earliestNextMs - nowMs;
+        res.set('Retry-After', String(Math.max(1, Math.ceil(retryMs / 1000))));
+        return res.status(425).json({
+          error: 'too early',
+          retryAfterMs: retryMs,
+        });
+      }
+
+      const servedIds = events.map((e) => e.puzzle_id);
+      const puzzle = await pickNextPuzzle(db, servedIds);
+      if (!puzzle) {
+        logger.error({ sessionId, userId }, 'ranked-session puzzle-pool-exhausted');
+        return res.status(503).json({ error: 'puzzle pool exhausted' });
+      }
+
+      const nextRoundNum = events.length; // next round = number of completed answers
+      const dispatchedAtMs = Date.now();
+      dispatchedRounds.set(sessionId, {
+        round_num: nextRoundNum,
+        puzzle_id: puzzle.id,
+        puzzle,
+        round_started_at_ms: dispatchedAtMs,
+        last_answer_received_at_ms: null,
       });
-    }
 
-    const servedIds = events.map((e) => e.puzzle_id);
-    if (dispatched && !servedIds.includes(dispatched.puzzle_id)) {
-      // Edge case: if the player advances without answering (shouldn't
-      // happen given the guard above, but defence-in-depth).
-      servedIds.push(dispatched.puzzle_id);
+      return res.status(200).json({
+        round_num: nextRoundNum,
+        puzzle: stripAnswer(puzzle),
+        dispatched_at: nowIso(dispatchedAtMs),
+      });
+    } catch (err) {
+      next(err);
+      return undefined;
     }
-    const puzzle = await pickNextPuzzle(db, servedIds);
-    if (!puzzle) {
-      logger.error({ sessionId, userId }, 'ranked-session puzzle-pool-exhausted');
-      return res.status(503).json({ error: 'puzzle pool exhausted' });
-    }
-
-    const nextRoundNum = events.length; // next round = number of completed answers
-    const dispatchedAtMs = Date.now();
-    dispatchedRounds.set(sessionId, {
-      round_num: nextRoundNum,
-      puzzle_id: puzzle.id,
-      puzzle,
-      round_started_at_ms: dispatchedAtMs,
-      last_answer_received_at_ms: null,
-    });
-
-    return res.status(200).json({
-      round_num: nextRoundNum,
-      puzzle: stripAnswer(puzzle),
-      dispatched_at: nowIso(dispatchedAtMs),
-    });
-  } catch (err) {
-    next(err);
-  }
+  });
 });
 
 /**
  * POST /api/sessions/:id/finish
  */
 router.post('/:id/finish', requireAuth, async (req, res, next) => {
-  try {
-    const sessionId = req.params.id;
-    const db = await getDbAdapter();
-    const nowMs = Date.now();
-    const userId = req.user.id;
-
-    await reconcileExpiredSessions(db, userId, nowMs);
-
-    const session = await loadSessionForUser(db, sessionId, userId);
-    if (!session) return res.status(404).json({ error: 'session not found' });
-
-    // Idempotency: if already finished, return the persisted result.
-    if (session.status === 'finished') {
-      return res.status(200).json({
-        score: session.score,
-        correctCount: session.correct_count,
-        bestStreak: session.best_streak,
-        // fastestAnswerMs is recomputed from events for parity with first-call response.
-        fastestAnswerMs: (await getSessionEvents(db, sessionId))
-          .filter((e) => e.correct)
-          .reduce(
-            (min, e) => (min == null || e.elapsed_ms < min ? e.elapsed_ms : min),
-            null
-          ),
-      });
-    }
-
-    if (session.status !== 'in_progress') {
-      return res.status(409).json({ error: `session is ${session.status}` });
-    }
-
-    const events = await getSessionEvents(db, sessionId);
-    const expectedRounds = session.config_snapshot.rounds;
-    if (events.length < expectedRounds) {
-      return res.status(400).json({
-        error: 'not all rounds answered',
-        answered: events.length,
-        expected: expectedRounds,
-      });
-    }
-
-    const final = computeFinalScore(events, session.config_snapshot);
-    const finishedAtIso = nowIso(nowMs);
-
-    // Update + insert into legacy `scores` table inside one transaction so
-    // a partial failure doesn't leave the session marked finished without a
-    // matching scores row.
+  const sessionId = req.params.id;
+  return withSessionLock(sessionId, async () => {
     try {
-      await db.transaction(async (tx) => {
-        await tx.run(
-          `UPDATE ranked_sessions
-              SET status = 'finished',
-                  score = ?,
-                  correct_count = ?,
-                  best_streak = ?,
-                  finished_at = ?
-            WHERE id = ?`,
-          [final.score, final.correctCount, final.bestStreak, finishedAtIso, sessionId]
-        );
-        // Map ranked_freeplay → 'freeplay', ranked_daily → 'daily' for the
-        // legacy `scores.mode` column (existing /api/scores LB queries).
-        const legacyMode = session.mode === 'ranked_daily' ? 'daily' : 'freeplay';
-        const variant = session.mode === 'ranked_daily' ? 'daily' : 'freeplay';
-        await tx.run(
-          `INSERT INTO scores
-             (user_id, mode, score, correct_count, total_rounds, best_streak,
-              source, variant, client_game_id)
-           VALUES (?, ?, ?, ?, ?, ?, 'ranked', ?, NULL)`,
-          [
-            userId,
-            legacyMode,
-            final.score,
-            final.correctCount,
-            expectedRounds,
-            final.bestStreak,
-            variant,
-          ]
-        );
-      });
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        // The filtered UNIQUE index on (user_id, daily_utc_date)
-        // WHERE mode='ranked_daily' AND status='finished' fires here if a
-        // separate finished daily exists for today. Treat as 409.
-        logAntiCheat(sessionId, 'daily-already-finished', { userId });
-        return res.status(409).json({
-          error: 'already played Ranked Daily today',
-          reason: 'already-played-daily',
+      const db = await getDbAdapter();
+      const nowMs = Date.now();
+      const userId = req.user.id;
+
+      await reconcileExpiredSessions(db, userId, nowMs);
+
+      const session = await loadSessionForUser(db, sessionId, userId);
+      if (!session) return res.status(404).json({ error: 'session not found' });
+
+      // Idempotency: if already finished, return the persisted result.
+      if (session.status === 'finished') {
+        return res.status(200).json({
+          score: session.score,
+          correctCount: session.correct_count,
+          bestStreak: session.best_streak,
+          fastestAnswerMs: (await getSessionEvents(db, sessionId))
+            .filter((e) => e.correct)
+            .reduce(
+              (min, e) => (min == null || e.elapsed_ms < min ? e.elapsed_ms : min),
+              null
+            ),
         });
       }
-      throw err;
-    }
 
-    // Drop in-memory dispatched-round state.
-    dispatchedRounds.delete(sessionId);
+      if (session.status !== 'in_progress') {
+        return res.status(409).json({ error: `session is ${session.status}` });
+      }
 
-    logger.info(
-      {
-        sessionId,
-        userId,
+      const events = await getSessionEvents(db, sessionId);
+      const expectedRounds = session.config_snapshot.rounds;
+      if (events.length < expectedRounds) {
+        return res.status(400).json({
+          error: 'not all rounds answered',
+          answered: events.length,
+          expected: expectedRounds,
+        });
+      }
+
+      const final = computeFinalScore(events, session.config_snapshot);
+      const finishedAtIso = nowIso(nowMs);
+
+      // Atomic compare-and-set finish + scores INSERT in one transaction.
+      // The UPDATE filters on status='in_progress' so a concurrent /finish
+      // (or a finished-by-another-process race) sees `changes=0` and falls
+      // through to the idempotent re-read path below.
+      let finishedNow = false;
+      try {
+        await db.transaction(async (tx) => {
+          const upd = await tx.run(
+            `UPDATE ranked_sessions
+                SET status = 'finished',
+                    score = ?,
+                    correct_count = ?,
+                    best_streak = ?,
+                    finished_at = ?
+              WHERE id = ? AND status = 'in_progress'`,
+            [final.score, final.correctCount, final.bestStreak, finishedAtIso, sessionId]
+          );
+          if (!upd.changes) {
+            // Lost the race; do not insert a duplicate scores row.
+            return;
+          }
+          finishedNow = true;
+          const legacyMode = session.mode === 'ranked_daily' ? 'daily' : 'freeplay';
+          const variant = session.mode === 'ranked_daily' ? 'daily' : 'freeplay';
+          await tx.run(
+            `INSERT INTO scores
+               (user_id, mode, score, correct_count, total_rounds, best_streak,
+                source, variant, client_game_id)
+             VALUES (?, ?, ?, ?, ?, ?, 'ranked', ?, NULL)`,
+            [
+              userId,
+              legacyMode,
+              final.score,
+              final.correctCount,
+              expectedRounds,
+              final.bestStreak,
+              variant,
+            ]
+          );
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          logAntiCheat(sessionId, 'daily-already-finished', { userId });
+          return res.status(409).json({
+            error: 'already played Ranked Daily today',
+            reason: 'already-played-daily',
+          });
+        }
+        throw err;
+      }
+
+      if (!finishedNow) {
+        // Concurrent /finish won; re-read and return the persisted result.
+        const fresh = await loadSessionForUser(db, sessionId, userId);
+        return res.status(200).json({
+          score: fresh.score,
+          correctCount: fresh.correct_count,
+          bestStreak: fresh.best_streak,
+          fastestAnswerMs: events
+            .filter((e) => e.correct)
+            .reduce(
+              (min, e) => (min == null || e.elapsed_ms < min ? e.elapsed_ms : min),
+              null
+            ),
+        });
+      }
+
+      // Drop in-memory dispatched-round state.
+      dispatchedRounds.delete(sessionId);
+
+      logger.info(
+        {
+          sessionId,
+          userId,
+          score: final.score,
+          correctCount: final.correctCount,
+          bestStreak: final.bestStreak,
+        },
+        'ranked-session finished'
+      );
+
+      // TODO(CS52-7e): when getDbUnavailability() is non-null, persist to
+      // the pending_writes queue and return 202. For now the request gate's
+      // 503 covers this case.
+      return res.status(200).json({
         score: final.score,
         correctCount: final.correctCount,
         bestStreak: final.bestStreak,
-      },
-      'ranked-session finished'
-    );
-
-    // TODO(CS52-7e): when getDbUnavailability() is non-null, persist to the
-    // pending_writes queue and return 202. For now the request gate's 503
-    // covers this case.
-    return res.status(200).json({
-      score: final.score,
-      correctCount: final.correctCount,
-      bestStreak: final.bestStreak,
-      fastestAnswerMs: final.fastestAnswerMs,
-    });
-  } catch (err) {
-    next(err);
-  }
+        fastestAnswerMs: final.fastestAnswerMs,
+      });
+    } catch (err) {
+      next(err);
+      return undefined;
+    }
+  });
 });
+
+/**
+ * POST /api/sessions/:id/finish (legacy duplicate removed in local-review fix R1)
+ */
 
 // ── Test-only helpers ────────────────────────────────────────────────────
 //

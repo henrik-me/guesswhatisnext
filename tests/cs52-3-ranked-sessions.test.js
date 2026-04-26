@@ -250,10 +250,50 @@ describe('CS52-3 — Ranked session API', () => {
     expect(a.body.elapsed_ms).toBeGreaterThanOrEqual(150);
     // Score reflects the actual elapsed, not the forged 51ms.
     // Max single-round score (correct, ~0ms, streak 1) = 100 + 100 = 200.
-    // With ~150ms elapsed of 15000ms budget, speed bonus ~99 → ~199. Still
-    // safely below the upper "cheater" ceiling but specifically: NOT 200.
-    // We just assert the score is consistent with the server-measured time.
-    expect(a.body.runningScore).toBeLessThanOrEqual(200);
+    // With ~150ms elapsed of 15000ms budget, speed bonus = 100 - floor(100*150/15000) = 99
+    // → score = 100 + 99 = 199. STRICTLY less than 200 (the ceiling that
+    // unguarded forged client_time_ms would have produced).
+    expect(a.body.runningScore).toBeLessThan(200);
+    expect(a.body.runningScore).toBeGreaterThanOrEqual(195);
+  });
+
+  test('cross-midnight Ranked Daily: in-progress session created yesterday honors yesterday\'s daily_utc_date on finish', async () => {
+    const { token, user } = await registerUser('crossmid2');
+    const db = await getDb();
+    // Create today's session normally.
+    const c = await agent.post('/api/sessions').set(authH(token)).send({ mode: 'ranked_daily' });
+    expect(c.status).toBe(201);
+    const sid = c.body.sessionId;
+    const yesterdayUtc = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+    // Simulate a session created pre-midnight: rewrite its daily_utc_date to
+    // yesterday. The finish path must honor the SNAPSHOT, not "today".
+    await db.run(`UPDATE ranked_sessions SET daily_utc_date = ? WHERE id = ?`, [yesterdayUtc, sid]);
+    // Insert all 10 events directly (skip route validation — we're testing
+    // /finish honors the snapshot, not the answer flow).
+    const cfg = { rounds: 10, round_timer_ms: 15000, inter_round_delay_ms: 0 };
+    const startedAt = new Date().toISOString();
+    for (let r = 0; r < cfg.rounds; r++) {
+      await db.run(
+        `INSERT INTO ranked_session_events
+           (session_id, round_num, puzzle_id, answer, correct,
+            round_started_at, received_at, elapsed_ms, client_time_ms)
+         VALUES (?, ?, ?, 'A', 1, ?, ?, 200, NULL)`,
+        [sid, r, `tst-${String(r).padStart(3, '0')}`, startedAt, startedAt]
+      );
+    }
+    // Drop in-process dispatched-round so /finish doesn't trip on stale state.
+    require('../server/routes/sessions').__test.dispatchedRounds.delete(sid);
+    const f = await agent.post(`/api/sessions/${sid}/finish`).set(authH(token));
+    expect(f.status).toBe(200);
+    // Today should still be eligible — today's daily must not collide with
+    // yesterday's finished row.
+    const today = await agent.post('/api/sessions').set(authH(token)).send({ mode: 'ranked_daily' });
+    expect(today.status).toBe(201);
+    // Sanity: the row finished above retained yesterday's date.
+    const row = await db.get(`SELECT daily_utc_date FROM ranked_sessions WHERE id = ?`, [sid]);
+    expect(row.daily_utc_date).toBe(yesterdayUtc);
+    // Cleanup user state for any later tests.
+    void user;
   });
 
   test('cross-midnight Ranked Daily: yesterday\'s row does not block today', async () => {
