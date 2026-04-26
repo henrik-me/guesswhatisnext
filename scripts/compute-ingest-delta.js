@@ -159,7 +159,7 @@ async function resolvePreviousSuccessIso({ workflow, ghRunner, now, fallbackHour
     '--workflow', workflow,
     '--status', 'success',
     '--limit', '2',
-    '--json', 'createdAt',
+    '--json', 'createdAt,databaseId',
   ];
   const r = await ghRunner('gh', args, { timeoutMs: DEFAULTS.GH_TIMEOUT_MS });
   if (r.code !== 0) {
@@ -182,11 +182,15 @@ async function resolvePreviousSuccessIso({ workflow, ghRunner, now, fallbackHour
     return { iso: fallbackIso, fallback: true };
   }
 
-  // Heuristic: the in-flight run hasn't completed yet, so the FIRST entry
-  // is the previous success. If for some reason the in-flight run already
-  // flipped to success (shouldn't happen mid-step, but be defensive), take
-  // the second.
-  const candidate = parsed.length >= 2 ? parsed[1].createdAt : parsed[0].createdAt;
+  // The current run is still `in_progress` while THIS step executes, so
+  // `gh run list --status=success` will not include it: parsed[0] is the
+  // previous successful run. (We requested `--limit 2` only to leave a
+  // defensive escape hatch — but always take the most recent success
+  // from the filtered list.) Defensively exclude the current run id if
+  // it ever shows up (e.g. the gh API races on a re-run).
+  const currentRunId = process.env.GITHUB_RUN_ID;
+  const filtered = parsed.filter((r) => !currentRunId || String(r.databaseId ?? r.id ?? '') !== String(currentRunId));
+  const candidate = (filtered[0] && filtered[0].createdAt) || (parsed[0] && parsed[0].createdAt);
   if (typeof candidate !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(candidate)) {
     annotate('warning', `gh returned non-ISO createdAt: ${JSON.stringify(candidate)} — falling back`);
     return { iso: fallbackIso, fallback: true, error: 'invalid createdAt from gh' };

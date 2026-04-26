@@ -138,15 +138,36 @@ describe('CS41-7 — resolvePreviousSuccessIso', () => {
     expect(r.iso).toBe('2026-04-26T19:30:00.000Z');
   });
 
-  it('returns SECOND entry when gh returns two (in-flight run already success)', async () => {
+  it('returns most recent createdAt (parsed[0]) — current in-flight run is not yet success', async () => {
     const gh = fakeGh({
-      stdout: ghJson(['2026-04-26T22:14:00.000Z', '2026-04-26T19:30:00.000Z']),
+      stdout: ghJson(['2026-04-26T19:30:00.000Z', '2026-04-25T10:00:00.000Z']),
     });
     const r = await resolvePreviousSuccessIso({
       workflow: 'prod-deploy.yml', ghRunner: gh, now: fixedNow, fallbackHours: 24,
     });
     expect(r.fallback).toBe(false);
     expect(r.iso).toBe('2026-04-26T19:30:00.000Z');
+  });
+
+  it('defensively excludes current run id when GITHUB_RUN_ID matches a returned entry', async () => {
+    process.env.GITHUB_RUN_ID = '999';
+    try {
+      const gh = async () => ({
+        code: 0,
+        stdout: JSON.stringify([
+          { databaseId: 999, createdAt: '2026-04-26T22:14:00.000Z' },
+          { databaseId: 998, createdAt: '2026-04-26T19:30:00.000Z' },
+        ]),
+        stderr: '',
+      });
+      const r = await resolvePreviousSuccessIso({
+        workflow: 'prod-deploy.yml', ghRunner: gh, now: fixedNow, fallbackHours: 24,
+      });
+      expect(r.fallback).toBe(false);
+      expect(r.iso).toBe('2026-04-26T19:30:00.000Z');
+    } finally {
+      delete process.env.GITHUB_RUN_ID;
+    }
   });
 
   it('falls back to N hours when gh returns no successful runs', async () => {

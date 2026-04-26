@@ -27,6 +27,7 @@ env:
 permissions:
   contents: write
   packages: read
+  actions: read  # CS41-7: gh run list (compute-ingest-delta.js) needs Actions read
 
 jobs:
   validate-inputs:
