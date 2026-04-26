@@ -762,7 +762,7 @@ async function handleStartRanked(mode) {
     return;
   }
   rankedStartInFlight = false;
-  if (!result || result.ok) return;
+  if (!result || result.ok || result.aborted) return;
   if (result.error === 'http') {
     if (result.status === 409) {
       showToast('You already played today\u2019s Ranked Daily');
@@ -1072,11 +1072,15 @@ function init() {
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (!action) return;
 
-    // While a Ranked create-session request is in flight, ignore other
-    // navigation/start actions: when the Ranked request resolves it will
-    // call ui.showScreen('game') and would otherwise hijack the user away
-    // from whatever screen they navigated to in the meantime.
-    if (rankedStartInFlight && /^(start-|go-home$)/.test(action)) return;
+    // While a Ranked create-session request is in flight, any navigation
+    // action (anything that isn't another start-ranked-* click) means the
+    // user has lost interest in Ranked. Abort the in-flight session so its
+    // resolution doesn't hijack the user away with showScreen('game'),
+    // then fall through and run the action they actually clicked.
+    if (rankedStartInFlight && !/^start-ranked-/.test(action)) {
+      try { Game.abortRanked && Game.abortRanked(); } catch { /* ignore */ }
+      rankedStartInFlight = false;
+    }
 
     switch (action) {
       case 'start-freeplay':
