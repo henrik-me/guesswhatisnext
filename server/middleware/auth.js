@@ -8,6 +8,23 @@ const { config } = require('../config');
 const JWT_SECRET = config.JWT_SECRET;
 const SYSTEM_API_KEY = config.SYSTEM_API_KEY;
 
+/**
+ * Coerce a JWT-payload user id to a safe non-negative integer.
+ * The JWT is JSON, so a number serialized to a JWT comes back as a number;
+ * but a defense-in-depth coercion here keeps every downstream consumer
+ * (DB queries, ownership checks, in-memory caches like
+ * `unread-count-cache`) on a single, comparable type — Copilot R4
+ * caught this as a real correctness risk if a non-numeric id ever
+ * sneaks into the payload (e.g. UUID-id user introduced later).
+ * Returns 0 for any non-finite / non-positive input (system pseudo-id
+ * is also 0, so this collapses safely).
+ */
+function _coerceUserId(id) {
+  const n = Number(id);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.trunc(n);
+}
+
 /** Middleware: require valid auth (JWT Bearer OR X-API-Key). */
 function requireAuth(req, res, next) {
   // Check X-API-Key first (for system account)
@@ -29,7 +46,7 @@ function requireAuth(req, res, next) {
   const token = header.slice(7);
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    req.user = { id: payload.id, username: payload.username, role: payload.role || 'user' };
+    req.user = { id: _coerceUserId(payload.id), username: payload.username, role: payload.role || 'user' };
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
@@ -59,7 +76,7 @@ function optionalAuth(req, res, next) {
     const token = header.slice(7);
     try {
       const payload = jwt.verify(token, JWT_SECRET);
-      req.user = { id: payload.id, username: payload.username, role: payload.role || 'user' };
+      req.user = { id: _coerceUserId(payload.id), username: payload.username, role: payload.role || 'user' };
     } catch { /* continue without user */ }
   }
   next();

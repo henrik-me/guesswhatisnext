@@ -117,4 +117,27 @@ describe('GET /api/auth/me', () => {
     const res = await getAgent().get('/api/auth/me');
     expect(res.status).toBe(401);
   });
+
+  test('coerces string user-id from JWT payload to integer (CS53-23 R4 defense)', async () => {
+    // Defense-in-depth: even if a non-numeric id ever sneaks into the JWT
+    // payload (e.g. UUID-id user added later), requireAuth must hand
+    // downstream code a numeric id so DB params, ownership checks, and
+    // in-memory caches (unread-count-cache) all key consistently.
+    const jwt = require('jsonwebtoken');
+    const { JWT_SECRET } = require('../server/middleware/auth');
+    // Hand-craft a token with a string id.
+    const stringIdToken = jwt.sign(
+      { id: '42', username: 'string-id-user', role: 'user' },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    // /api/auth/me echoes req.user back; it's the cleanest way to inspect
+    // what the middleware produced without poking internals.
+    const res = await getAgent()
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${stringIdToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.user.id).toBe(42);
+    expect(typeof res.body.user.id).toBe('number');
+  });
 });
