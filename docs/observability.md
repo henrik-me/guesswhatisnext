@@ -509,3 +509,63 @@ ContainerAppConsoleLogs_CL
 ```
 
 Any non-zero rate is worth investigating: it means a queue file's replay failed in a way the drain decided not to retry (corrupt JSON, FK violation, missing handler). Files are preserved under `<DATA_DIR>/pending-writes/dead/<request_id>.json` for operator inspection — pull the file and replay it manually after triage.
+
+### D.3 CS52-6 leaderboard source filter + provenance UI
+
+CS52-6 emits structured pino logs from [`server/routes/scores.js`](../server/routes/scores.js):
+
+- `lb_request` — one per `GET /api/scores/leaderboard*` with fields
+  `{variant, source, period, row_count, user_id}`. Lets you watch source-filter
+  popularity and Daily-vs-Free-Play traffic split.
+
+The client emits `lb_filter_change` to `console.info` (JSON) when the user
+flips the segmented control. Once CS54-9 wires the browser App Insights SDK,
+this will land in `customEvents`.
+
+#### Source-filter popularity (last 24h)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'lb_request'
+| where TimeGenerated > ago(24h)
+| summarize requests = count() by tostring(log.variant), tostring(log.source)
+| order by requests desc
+```
+
+#### Daily vs Free Play LB traffic split
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'lb_request'
+| where TimeGenerated > ago(7d)
+| where tostring(log.variant) in ('freeplay', 'daily')
+| summarize n = count() by bin(TimeGenerated, 1h), tostring(log.variant)
+| render timechart
+```
+
+#### Empty-result rate (signals seed/backfill issues)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'lb_request'
+| where TimeGenerated > ago(24h)
+| extend empty = toint(log.row_count) == 0
+| summarize total = count(), empties = countif(empty) by tostring(log.variant), tostring(log.source)
+| extend empty_pct = round(100.0 * empties / total, 1)
+| order by empty_pct desc
+```
+
+#### Filter-change behaviour (post-CS54-9)
+
+```kusto
+customEvents
+| where name == 'lb_filter_change'
+| where timestamp > ago(7d)
+| extend from_s = tostring(customDimensions.from), to_s = tostring(customDimensions.to)
+| summarize n = count() by from_s, to_s
+| order by n desc
+```
+

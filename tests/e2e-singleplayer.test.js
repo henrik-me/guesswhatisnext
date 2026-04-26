@@ -48,8 +48,11 @@ describe('Single Player E2E', () => {
     expect(scoreRes.body.newAchievements.length).toBe(0);
 
     // 3. Check leaderboard — player should appear
+    // CS52-6: POST /api/scores tags rows as `offline` (self-reported);
+    // the public LB defaults to `ranked`, so explicitly filter for
+    // offline to see this row.
     const lbRes = await agent
-      .get('/api/scores/leaderboard?mode=freeplay&period=all')
+      .get('/api/scores/leaderboard?variant=freeplay&source=offline&period=all')
       .set('Authorization', `Bearer ${userToken}`);
     expect(lbRes.status).toBe(200);
     expect(lbRes.body.leaderboard.length).toBeGreaterThanOrEqual(1);
@@ -116,7 +119,7 @@ describe('Single Player E2E', () => {
       .send({ mode: 'freeplay', score: 1200, correctCount: 10, totalRounds: 10, bestStreak: 10 });
 
     const lbRes = await agent
-      .get('/api/scores/leaderboard?mode=freeplay')
+      .get('/api/scores/leaderboard?variant=freeplay&source=offline')
       .set('Authorization', `Bearer ${userToken}`);
 
     expect(lbRes.body.leaderboard[0].username).toBe('sp_player2');

@@ -15,6 +15,16 @@ const RESERVED_USERNAME_FILTER_SQL = RESERVED_USERNAME_LIKE_PATTERNS
 
 const router = express.Router();
 
+// CS52-6 § Public leaderboard. Variants are gameplay modes addressable via
+// the LB URL: `freeplay` and `daily` are separate leaderboards because
+// their round counts and timing differ — comparing them is meaningless.
+const VALID_VARIANTS = new Set(['freeplay', 'daily']);
+
+// CS52-6 § Decision #6: public LBs accept three source filters. Legacy is
+// NEVER part of any public LB filter (it's profile-only — the contract for
+// pre-CS52 rows that predate the validated/self-reported distinction).
+const VALID_LB_SOURCES = new Set(['ranked', 'offline', 'all']);
+
 /** POST /api/scores — submit a game score (requires auth) */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
@@ -36,8 +46,8 @@ router.post('/', requireAuth, async (req, res, next) => {
     }
 
     const result = await db.run(
-      `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak, source)
+       VALUES (?, ?, ?, ?, ?, ?, 'offline')`,
       [req.user.id, mode, score, correctCount || 0, totalRounds || 0, bestStreak || 0]
     );
 
@@ -64,10 +74,42 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
-/** GET /api/scores/leaderboard?mode=freeplay|daily&period=alltime|weekly|daily&source=ranked|offline|all|legacy&limit=20 */
+/**
+ * GET /api/scores/leaderboard?variant=freeplay|daily&source=ranked|offline|all
+ *                                                    &period=alltime|weekly|daily&limit=20
+ *
+ * CS52-6 § API contract sketch § Public leaderboard.
+ *  - `variant` is REQUIRED — returns 400 if missing or unrecognized.
+ *  - `source` defaults to `ranked` (the competitive view, per Decision #6);
+ *    `offline` shows self-reported games; `all` is the union ranked+offline.
+ *  - Legacy rows (`source='legacy'`) are NEVER returned here — they live
+ *    only on personal endpoints (`/api/scores/me`, profile) per Decision #6.
+ *  - Each row carries `source` so the client can render a provenance badge.
+ *  - `config` is included on every row for forward-compat with the CS52
+ *    contract; in CS52-6 we return `null` (offline configs are user-
+ *    customisable and not denormalised onto `scores`; ranked rows do not
+ *    yet carry a back-pointer to their `ranked_sessions.config_snapshot`).
+ *    A future migration adding `scores.session_id` will populate this
+ *    field for ranked rows.
+ */
 router.get('/leaderboard', optionalAuth, async (req, res, next) => {
   try {
-    const { mode = 'freeplay', period = 'alltime', limit = 20, source } = req.query;
+    const { variant, period = 'alltime', limit = 20 } = req.query;
+    const source = req.query.source || 'ranked';
+
+    if (!variant || !VALID_VARIANTS.has(variant)) {
+      return res.status(400).json({
+        error: 'variant query param required',
+        allowed: Array.from(VALID_VARIANTS),
+      });
+    }
+    if (!VALID_LB_SOURCES.has(source)) {
+      return res.status(400).json({
+        error: 'source must be ranked, offline, or all',
+        allowed: Array.from(VALID_LB_SOURCES),
+      });
+    }
+
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
 
     let dateFilter = '';
@@ -77,28 +119,17 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
       dateFilter = "AND s.played_at >= datetime('now', '-7 days')";
     }
 
-    // CS52-5/CS52-6: source filter is opt-in. When omitted (or unrecognized),
-    // behaviour is unchanged (returns all rows including legacy) so the
-    // existing CS52-pre /leaderboard contract keeps working. When source is
-    // supplied:
-    //   - 'ranked' or 'offline' → exact match on s.source
-    //   - 'all' → union of ranked + offline (legacy excluded)
-    //   - 'legacy' → exact match on s.source (pre-CS52 rows; public read-only,
-    //                 useful for ops dashboards and migration verification —
-    //                 no auth gate, since legacy rows contain no PII beyond
-    //                 username + score, same as ranked/offline)
-    // Any other value is normalized to null so the response's `source` field
-    // never echoes back an unvalidated string the client might think was
-    // applied as a filter.
-    const VALID_SOURCES = new Set(['ranked', 'offline', 'all', 'legacy']);
-    const normalizedSource = VALID_SOURCES.has(source) ? source : null;
-    let sourceFilter = '';
-    const params = [mode];
-    if (normalizedSource === 'ranked' || normalizedSource === 'offline' || normalizedSource === 'legacy') {
-      sourceFilter = 'AND s.source = ?';
-      params.push(normalizedSource);
-    } else if (normalizedSource === 'all') {
+    // Source filter — legacy is excluded from every branch. `all` is the
+    // server-side union of ranked+offline (the spec also allows clients to
+    // compute `all` from the union of the two cached responses; the server
+    // honours the explicit query for callers that don't cache).
+    let sourceFilter;
+    const params = [variant];
+    if (source === 'all') {
       sourceFilter = "AND s.source IN ('ranked','offline')";
+    } else {
+      sourceFilter = 'AND s.source = ?';
+      params.push(source);
     }
     params.push(safeLimit);
 
@@ -113,9 +144,13 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
       LIMIT ?
     `, [...params.slice(0, -1), ...RESERVED_USERNAME_LIKE_PATTERNS, params[params.length - 1]]);
 
-    // Add rank and highlight current user
+    const updatedAt = new Date().toISOString();
     const leaderboard = rows.map((row, i) => ({
       rank: i + 1,
+      // CS52-6 § API contract: each row carries `user` (canonical) plus
+      // `username` (legacy alias) so existing UI code keeps working while
+      // new clients can use the locked-down contract.
+      user: row.username,
       username: row.username,
       score: row.score,
       correctCount: row.correct_count,
@@ -123,20 +158,79 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
       bestStreak: row.best_streak,
       playedAt: row.played_at,
       source: row.source,
+      // See block-comment above re: `config` provenance in CS52-6.
+      config: null,
       isCurrentUser: req.user?.id === row.user_id,
     }));
 
-    res.json({ leaderboard, mode, period, source: normalizedSource });
+    logger.info({
+      event: 'lb_request',
+      variant,
+      source,
+      period,
+      row_count: leaderboard.length,
+      user_id: req.user?.id || null,
+    }, 'GET /api/scores/leaderboard');
+
+    res.json({
+      // `rows` is the canonical CS52-6 contract field; `leaderboard` is
+      // kept as an alias so existing UI code (CS52-pre) keeps working.
+      rows: leaderboard,
+      leaderboard,
+      mode: variant,
+      variant,
+      period,
+      source,
+      cursor: updatedAt,
+      updatedAt,
+    });
   } catch (err) {
     next(err);
   }
 });
 
-/** GET /api/scores/leaderboard/multiplayer?period=alltime|weekly|daily&limit=20 */
+/**
+ * GET /api/scores/leaderboard/multiplayer?source=ranked|offline|all&period=...
+ *
+ * CS52-6: source defaults to `ranked`. Multiplayer matches are always
+ * server-validated (no offline path), so `offline` returns an empty list
+ * and `ranked`/`all` return the existing aggregated rows. Each row carries
+ * `source: 'ranked'` so the provenance UI is consistent across LBs.
+ */
 router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
   try {
     const { period = 'alltime', limit = 20 } = req.query;
+    const source = req.query.source || 'ranked';
+    if (!VALID_LB_SOURCES.has(source)) {
+      return res.status(400).json({
+        error: 'source must be ranked, offline, or all',
+        allowed: Array.from(VALID_LB_SOURCES),
+      });
+    }
+
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
+
+    // Multiplayer has no offline path — short-circuit to an empty list.
+    if (source === 'offline') {
+      const updatedAt = new Date().toISOString();
+      logger.info({
+        event: 'lb_request',
+        variant: 'multiplayer',
+        source,
+        period,
+        row_count: 0,
+        user_id: req.user?.id || null,
+      }, 'GET /api/scores/leaderboard/multiplayer (offline → empty)');
+      return res.json({
+        rows: [],
+        leaderboard: [],
+        mode: 'multiplayer',
+        period,
+        source,
+        cursor: updatedAt,
+        updatedAt,
+      });
+    }
 
     let dateFilter = '';
     let dateFilterW = '';
@@ -176,18 +270,42 @@ router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
       LIMIT ?
     `, [...RESERVED_USERNAME_LIKE_PATTERNS, safeLimit]);
 
+    const updatedAt = new Date().toISOString();
     const leaderboard = rows.map((row, i) => ({
       rank: i + 1,
+      // CS52-6 § API contract: `user` is the canonical field; `username`
+      // is kept as an alias for legacy clients.
+      user: row.username,
       username: row.username,
       wins: row.wins,
       matchesPlayed: row.matches_played,
       winRate: row.matches_played > 0 ? Math.round((row.wins / row.matches_played) * 100) : 0,
       totalScore: row.total_score,
       avgScore: row.avg_score,
+      // CS52-6: multiplayer rows are always server-validated.
+      source: 'ranked',
+      config: null,
       isCurrentUser: req.user?.id === row.user_id,
     }));
 
-    res.json({ leaderboard, mode: 'multiplayer', period });
+    logger.info({
+      event: 'lb_request',
+      variant: 'multiplayer',
+      source,
+      period,
+      row_count: leaderboard.length,
+      user_id: req.user?.id || null,
+    }, 'GET /api/scores/leaderboard/multiplayer');
+
+    res.json({
+      rows: leaderboard,
+      leaderboard,
+      mode: 'multiplayer',
+      period,
+      source,
+      cursor: updatedAt,
+      updatedAt,
+    });
   } catch (err) {
     next(err);
   }
@@ -197,8 +315,11 @@ router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const db = await getDbAdapter();
+    // CS52-6 § Decision #6: profile shows ALL rows including legacy; the
+    // `source` column drives the per-row provenance badge in the UI
+    // (Ranked / Offline / Legacy).
     const scores = await db.all(
-      `SELECT id, mode, score, correct_count, total_rounds, best_streak, played_at
+      `SELECT id, mode, score, correct_count, total_rounds, best_streak, played_at, source
        FROM scores WHERE user_id = ? ORDER BY played_at DESC LIMIT 50`,
       [req.user.id]
     );

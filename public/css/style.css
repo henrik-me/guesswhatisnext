@@ -1875,6 +1875,110 @@ body::before {
   outline-offset: 2px;
 }
 
+/* CS52-6: source filter (Ranked / Offline / All) — segmented control. */
+.leaderboard-source-tabs {
+  display: flex;
+  gap: 0.4rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius);
+  padding: 0.25rem;
+}
+
+.leaderboard-source-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-main);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color var(--transition-speed), color var(--transition-speed);
+}
+
+.leaderboard-source-tab:hover {
+  color: var(--color-text);
+}
+
+.leaderboard-source-tab.active {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.leaderboard-source-tab:focus-visible {
+  outline: 3px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+/* CS52-6: per-row provenance badge (LB rows + profile score history). */
+.provenance-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.75rem;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+}
+
+.provenance-badge.provenance-ranked {
+  background: rgba(46, 204, 113, 0.18);
+  color: #1f7a47;
+  border-color: rgba(46, 204, 113, 0.45);
+}
+
+.provenance-badge.provenance-offline {
+  background: rgba(241, 196, 15, 0.18);
+  color: #8a6d00;
+  border-color: rgba(241, 196, 15, 0.5);
+}
+
+.provenance-badge.provenance-legacy {
+  background: rgba(149, 165, 166, 0.18);
+  color: #5c6c6d;
+  border-color: rgba(149, 165, 166, 0.45);
+}
+
+/* CS52-6: profile recent-games rows. */
+.profile-score-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-surface-border);
+}
+
+.profile-score-row:last-child {
+  border-bottom: none;
+}
+
+.profile-score-mode {
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.profile-score-value {
+  flex: 1 1 auto;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.profile-score-date {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 .leaderboard-tab {
   flex: 1;
   background: none;

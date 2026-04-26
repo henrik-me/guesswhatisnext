@@ -60,20 +60,83 @@ describe('POST /api/scores', () => {
 });
 
 describe('GET /api/scores/leaderboard', () => {
-  test('returns leaderboard', async () => {
+  test('requires variant param (returns 400 when missing)', async () => {
     const res = await getAgent()
       .get('/api/scores/leaderboard')
       .set('Authorization', `Bearer ${userToken}`);
 
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/variant/i);
+  });
+
+  test('rejects unknown variant', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard?variant=multiplayer')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects invalid source', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard?variant=freeplay&source=banana')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  test('returns freeplay leaderboard with default source=ranked', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard?variant=freeplay')
+      .set('Authorization', `Bearer ${userToken}`);
+
     expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.rows)).toBe(true);
     expect(Array.isArray(res.body.leaderboard)).toBe(true);
-    expect(res.body.mode).toBe('freeplay');
-    expect(res.body.period).toBe('alltime');
+    expect(res.body.variant).toBe('freeplay');
+    expect(res.body.source).toBe('ranked');
+    expect(res.body.updatedAt).toBeDefined();
+    // CS52-6: legacy rows must NEVER appear in any public LB filter.
+    for (const r of res.body.rows) {
+      expect(r.source).not.toBe('legacy');
+      expect(r.source).toBe('ranked');
+    }
+  });
+
+  test('source=offline returns only offline-source rows (no legacy)', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard?variant=freeplay&source=offline')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(200);
+    for (const r of res.body.rows) {
+      expect(r.source).toBe('offline');
+    }
+  });
+
+  test('source=all returns ranked+offline union (no legacy)', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard?variant=freeplay&source=all')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(200);
+    for (const r of res.body.rows) {
+      expect(['ranked', 'offline']).toContain(r.source);
+    }
+  });
+
+  test('variant=daily returns daily-only rows', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard?variant=daily')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.variant).toBe('daily');
   });
 
   test('filters by period', async () => {
     const res = await getAgent()
-      .get('/api/scores/leaderboard?period=daily')
+      .get('/api/scores/leaderboard?variant=freeplay&period=daily')
       .set('Authorization', `Bearer ${userToken}`);
 
     expect(res.status).toBe(200);
@@ -90,6 +153,25 @@ describe('GET /api/scores/leaderboard/multiplayer', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.leaderboard)).toBe(true);
     expect(res.body.mode).toBe('multiplayer');
+    expect(res.body.source).toBe('ranked');
+  });
+
+  test('source=offline returns empty (multiplayer is server-validated only)', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard/multiplayer?source=offline')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.rows).toEqual([]);
+    expect(res.body.source).toBe('offline');
+  });
+
+  test('rejects invalid source', async () => {
+    const res = await getAgent()
+      .get('/api/scores/leaderboard/multiplayer?source=banana')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(400);
   });
 
   test('filters by weekly period', async () => {
@@ -114,12 +196,12 @@ describe('GET /api/scores/leaderboard/multiplayer', () => {
 });
 
 describe('GET /api/scores/leaderboard (unauthenticated)', () => {
-  test('returns leaderboard without auth', async () => {
+  test('returns leaderboard without auth (variant required)', async () => {
     const res = await getAgent()
-      .get('/api/scores/leaderboard');
+      .get('/api/scores/leaderboard?variant=freeplay');
 
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body.leaderboard)).toBe(true);
+    expect(Array.isArray(res.body.rows)).toBe(true);
   });
 
   test('returns multiplayer leaderboard without auth', async () => {
@@ -142,5 +224,36 @@ describe('GET /api/scores/me', () => {
     expect(Array.isArray(res.body.stats)).toBe(true);
     // We submitted one score above
     expect(res.body.scores.length).toBeGreaterThanOrEqual(1);
+    // CS52-6: every personal score row carries `source` for badge rendering.
+    for (const s of res.body.scores) {
+      expect(s).toHaveProperty('source');
+    }
+  });
+
+  test('profile shows legacy rows (with badge), but they never leak to public LB', async () => {
+    const db = await require('../server/db').getDbAdapter();
+    const me = await db.get('SELECT id FROM users WHERE username = ?', ['scoreuser']);
+    // Insert a synthetic legacy row directly (CS52 § Decision #6: legacy
+    // rows backfilled at migration time look exactly like this).
+    await db.run(
+      `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak, source)
+       VALUES (?, 'freeplay', 9999, 10, 10, 10, 'legacy')`,
+      [me.id]
+    );
+
+    const meRes = await getAgent()
+      .get('/api/scores/me')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(meRes.status).toBe(200);
+    const sources = meRes.body.scores.map(s => s.source);
+    expect(sources).toContain('legacy');
+
+    for (const src of ['ranked', 'offline', 'all']) {
+      const lb = await getAgent().get(`/api/scores/leaderboard?variant=freeplay&source=${src}`);
+      expect(lb.status).toBe(200);
+      for (const row of lb.body.rows) {
+        expect(row.source).not.toBe('legacy');
+      }
+    }
   });
 });
