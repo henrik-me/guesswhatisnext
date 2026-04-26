@@ -15,7 +15,7 @@ beforeAll(async () => {
 afterAll(teardown);
 
 describe('POST /api/matches', () => {
-  test('creates a match room', async () => {
+  test('creates a match room with server-authoritative config', async () => {
     const res = await getAgent()
       .post('/api/matches')
       .set('Authorization', `Bearer ${userToken}`)
@@ -24,6 +24,8 @@ describe('POST /api/matches', () => {
     expect(res.status).toBe(201);
     expect(res.body.roomCode).toBeDefined();
     expect(res.body.roomCode.length).toBe(6);
+    // CS52-7b: server fills in totalRounds from game_configs (default 5).
+    expect(res.body.totalRounds).toBe(5);
   });
 
   test('creates a room with maxPlayers', async () => {

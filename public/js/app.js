@@ -2101,7 +2101,9 @@ async function createRoom() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        totalRounds: Number(document.getElementById('room-rounds')?.value) || 5,
+        // CS52-7b: rounds / round_timer_ms / inter_round_delay_ms are
+        // server-authoritative (sourced from game_configs); the client only
+        // controls maxPlayers.
         maxPlayers: Number(document.getElementById('room-max-players')?.value) || 2,
       }),
     });

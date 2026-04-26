@@ -306,6 +306,30 @@ ContainerAppConsoleLogs_CL
 
 If multiple revisions are running side-by-side during a deploy, the same admin write lands on only one — the others will keep their cached values until their own TTL expires (per § Decision #10 operator caveat). Cross-reference with § B.9: a `game-configs updated` line should be followed within seconds by a `game-configs cache miss` line on the same `container` (the route busts the local cache), and within ≤24h by similar misses on every other live `container`.
 
+### B.11 Multiplayer matches per config shape (CS52-7b)
+
+`server/ws/matchHandler.js` emits one Pino INFO line per match start with the structured fields `{event: "multiplayer_match_started", match_id, room_code, config: {rounds, round_timer_ms, inter_round_delay_ms}, source}` (the human message is `"multiplayer match started"`). We key the query off `event` rather than `msg` because Pino's string-message argument always overwrites any object-level `msg` field. `source = "game_configs"` means a `game_configs.multiplayer` row supplied the values; `source = "code_default"` means the loader fell back to [`gameConfigDefaults.js`](../server/services/gameConfigDefaults.js).
+
+Use this query to verify a config rollout (e.g., after `PUT /api/admin/game-configs/multiplayer` flips `rounds` to 7) — within seconds you should see new matches starting with the new shape:
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "multiplayer_match_started"
+| extend rounds = toint(pino.config.rounds),
+         round_timer_ms = toint(pino.config.round_timer_ms),
+         inter_round_delay_ms = toint(pino.config.inter_round_delay_ms),
+         source = tostring(pino.source)
+| summarize matches = count(),
+            first = min(TimeGenerated),
+            last = max(TimeGenerated)
+            by rounds, round_timer_ms, inter_round_delay_ms, source
+| order by last desc
+```
+
+A healthy steady state shows one row (the canonical shape) with `source = "game_configs"` (or `"code_default"` if no row has been written for this environment). Two rows during a rollout — old shape then new shape — is the expected transitional pattern; both should disappear in favour of the new shape within a single TTL window. A persistent split with `source = "code_default"` after an admin write is the signal that the cache-bust didn't reach this revision (cross-reference § B.9 + § B.10 / Decision #10 operator caveat).
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:
