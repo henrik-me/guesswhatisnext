@@ -177,6 +177,39 @@ jobs:
               echo "Container App started"
             fi
 
+      # CS41-4: Apply DB migrations BEFORE traffic is shifted to the new
+      # revision. `prod-deploy.yml` runs in single-revision mode, so the
+      # `az containerapp update` step below moves traffic atomically — there
+      # is no post-deploy window to land schema changes safely. Running the
+      # idempotent migration script now means a migration failure aborts the
+      # deploy without ever serving the new image.
+      - name: Checkout repo (for scripts/migrate.js)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ needs.validate-inputs.outputs.commit-sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (production only)
+        run: npm ci --omit=dev
+
+      - name: Run DB migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::secrets.DATABASE_URL is unset; cannot apply prod migrations."
+            exit 1
+          fi
+          node scripts/migrate.js || {
+            echo "::error::Migration failed; aborting deploy before traffic shift"
+            exit 1
+          }
+
       - name: Deploy to production Container App
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
