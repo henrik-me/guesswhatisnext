@@ -523,3 +523,143 @@ describe('CS52-7e — no-timer property', () => {
     expect(replaySrc).not.toMatch(/setTimeout\s*\(/);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────
+// Copilot R1 fixes
+// ────────────────────────────────────────────────────────────────────────
+
+describe('CS52-7e R1 — /finish enqueue rejects invalid session id', () => {
+  test('non-UUID sessionId returns 400 and does NOT write a queue file', async () => {
+    const { token } = await registerUser('pw-finish-bad-id');
+    setUnavailable();
+    const r = await agent
+      .post('/api/sessions/not-a-uuid/finish')
+      .set(authH(token))
+      .send({});
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/invalid session id/i);
+    expect((await listPending()).length).toBe(0);
+  });
+});
+
+describe('CS52-7e R1 — pending_writes queue depth backpressure', () => {
+  test('enqueue throws PENDING_WRITES_QUEUE_FULL once depth >= max', async () => {
+    const pendingWrites = require('../server/lib/pending-writes');
+    pendingWrites.__resetForTests();
+    process.env.PENDING_WRITES_MAX_DEPTH = '3';
+    try {
+      for (let i = 0; i < 3; i++) {
+        await pendingWrites.enqueue({
+          endpoint: 'POST /api/sync',
+          concrete_route: {},
+          user_id: 1,
+          payload: { queuedRecords: [], revalidate: {} },
+          client_game_ids: [],
+        });
+      }
+      let err;
+      try {
+        await pendingWrites.enqueue({
+          endpoint: 'POST /api/sync',
+          concrete_route: {},
+          user_id: 1,
+          payload: { queuedRecords: [], revalidate: {} },
+          client_game_ids: [],
+        });
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeDefined();
+      expect(err.code).toBe('PENDING_WRITES_QUEUE_FULL');
+      expect(err.depth).toBe(3);
+      expect(err.max).toBe(3);
+      // The 4th enqueue must NOT have written a file.
+      expect((await listPending()).length).toBe(3);
+    } finally {
+      delete process.env.PENDING_WRITES_MAX_DEPTH;
+    }
+  });
+
+  test('/api/sync route maps queue-full to 503 + Retry-After', async () => {
+    const { token } = await registerUser('pw-sync-full');
+    const pendingWrites = require('../server/lib/pending-writes');
+    pendingWrites.__resetForTests();
+    // Pre-fill queue to the cap.
+    process.env.PENDING_WRITES_MAX_DEPTH = '1';
+    try {
+      await pendingWrites.enqueue({
+        endpoint: 'POST /api/sync',
+        concrete_route: {},
+        user_id: 999,
+        payload: { queuedRecords: [], revalidate: {} },
+        client_game_ids: [],
+      });
+      setUnavailable();
+      const r = await agent
+        .post('/api/sync')
+        .set(authH(token))
+        .set('X-User-Activity', '1')
+        .send({
+          queuedRecords: [
+            {
+              client_game_id: 'cg-1',
+              completed_at: new Date().toISOString(),
+              mode: 'ranked_freeplay',
+              score: 10,
+              correct_count: 1,
+              best_streak: 1,
+            },
+          ],
+          revalidate: {},
+        });
+      expect(r.status).toBe(503);
+      expect(r.headers['retry-after']).toBe('30');
+      expect(r.body.error).toMatch(/overloaded/i);
+    } finally {
+      delete process.env.PENDING_WRITES_MAX_DEPTH;
+    }
+  });
+});
+
+describe('CS52-7e R1 — replay cleanup error aborts drain', () => {
+  test('non-ENOENT unlink failure stops drain and leaves remaining files in place', async () => {
+    const pendingWrites = require('../server/lib/pending-writes');
+    pendingWrites.__resetForTests();
+
+    await pendingWrites.enqueue({
+      endpoint: 'TEST_ENDPOINT',
+      concrete_route: {},
+      user_id: 1,
+      payload: {},
+    });
+    await pendingWrites.enqueue({
+      endpoint: 'TEST_ENDPOINT',
+      concrete_route: {},
+      user_id: 1,
+      payload: {},
+    });
+    expect((await listPending()).length).toBe(2);
+
+    // Replay handler succeeds, but we simulate a non-ENOENT unlink failure
+    // by stubbing fsp.unlink for this drain pass.
+    const fsPromises = require('fs/promises');
+    const realUnlink = fsPromises.unlink;
+    fsPromises.unlink = async () => {
+      const err = new Error('simulated EACCES');
+      err.code = 'EACCES';
+      throw err;
+    };
+    let result;
+    try {
+      result = await pendingWrites.drainOnce({
+        replayHandlers: { TEST_ENDPOINT: async () => {} },
+      });
+    } finally {
+      fsPromises.unlink = realUnlink;
+    }
+    // First file's handler succeeded but unlink failed → drain aborts.
+    // Second file is left in place for next drain.
+    expect(result.drained).toBe(0);
+    expect((await listPending()).length).toBe(2);
+  });
+});

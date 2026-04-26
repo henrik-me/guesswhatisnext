@@ -79,6 +79,37 @@ function __resetForTests() {
 }
 
 /**
+ * Maximum number of files allowed in the live queue dir at enqueue time.
+ * When the queue is at or above this depth, `enqueue()` throws an
+ * `Error` whose `.code === 'PENDING_WRITES_QUEUE_FULL'` so callers can
+ * map it to a backpressure response (503 Retry-After) instead of
+ * silently growing disk consumption during a prolonged outage or abuse.
+ *
+ * Override via `PENDING_WRITES_MAX_DEPTH`. Default 10000 — comfortably
+ * above any realistic legitimate burst, but small enough to bound
+ * worst-case disk use to ~10–20 MB given the per-record size envelope.
+ */
+const DEFAULT_MAX_DEPTH = 10000;
+function getMaxDepth() {
+  const raw = process.env.PENDING_WRITES_MAX_DEPTH;
+  if (!raw) return DEFAULT_MAX_DEPTH;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_DEPTH;
+}
+
+async function currentQueueDepth() {
+  try {
+    const names = await fsp.readdir(pendingDir());
+    let n = 0;
+    for (const name of names) if (name.endsWith('.json')) n++;
+    return n;
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return 0;
+    throw err;
+  }
+}
+
+/**
  * Persist a queue entry as `<pending-writes>/<request_id>.json`.
  *
  * Writes via temp-file + rename + best-effort fsync so a power-loss /
@@ -88,9 +119,32 @@ function __resetForTests() {
  * @param {object} record - Variant A | B | C; `request_id` is generated
  *   if absent. `queued_at` is filled in if absent.
  * @returns {Promise<{ request_id: string, file_path: string }>}
+ * @throws {Error} with `code === 'PENDING_WRITES_QUEUE_FULL'` when the
+ *   on-disk queue depth is already at or above `PENDING_WRITES_MAX_DEPTH`.
  */
 async function enqueue(record) {
   ensureDirs();
+  const max = getMaxDepth();
+  const depth = await currentQueueDepth();
+  if (depth >= max) {
+    const err = new Error(
+      `pending_writes queue full (depth=${depth}, max=${max})`
+    );
+    err.code = 'PENDING_WRITES_QUEUE_FULL';
+    err.depth = depth;
+    err.max = max;
+    logger.warn(
+      {
+        event: 'pending-writes-enqueue-rejected',
+        reason: 'queue-full',
+        depth,
+        max,
+        endpoint: record && record.endpoint,
+      },
+      'pending-writes: enqueue rejected (queue full)'
+    );
+    throw err;
+  }
   const requestId = record.request_id || crypto.randomUUID();
   const queuedAt = record.queued_at || new Date().toISOString();
   const final = {
@@ -256,7 +310,29 @@ async function drainOnce({ replayHandlers }) {
         }
         try {
           await handler(item.record);
-          await fsp.unlink(item.filePath).catch(() => {});
+          // Only suppress ENOENT (file already removed by a concurrent drain
+          // or operator). Any other unlink failure (permissions / disk I/O
+          // error) means the same file would be re-replayed on the next
+          // drain — duplicating side effects. Abort the drain so operators
+          // can investigate; remaining files stay in place for retry.
+          try {
+            await fsp.unlink(item.filePath);
+          } catch (err) {
+            if (!err || err.code !== 'ENOENT') {
+              logger.error(
+                {
+                  err,
+                  event: 'pending-writes-replay-cleanup-failed',
+                  request_id: item.record.request_id,
+                  endpoint: item.record.endpoint,
+                  filePath: item.filePath,
+                },
+                'pending-writes: replay succeeded but failed to delete queue file; aborting drain'
+              );
+              aborted = true;
+              break;
+            }
+          }
           totalDrained++;
           logger.info(
             {
@@ -319,6 +395,8 @@ module.exports = {
   enqueue,
   drainOnce,
   listPendingFiles,
+  currentQueueDepth,
+  getMaxDepth,
   getDataDir,
   pendingDir,
   deadDir,

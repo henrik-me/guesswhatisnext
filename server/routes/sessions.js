@@ -761,14 +761,59 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
  * The 202 carries `queuedRequestId` and `retryAfterMs: 5000`. No score /
  * correctCount / bestStreak fields — the client will surface the result
  * once a subsequent /api/sync (or another GET) returns a finalised state.
+ *
+ * Validates `sessionId` shape before enqueueing so an authenticated
+ * client cannot inflate the on-disk queue with arbitrary garbage IDs
+ * during an outage. If the queue is already full (per
+ * `PENDING_WRITES_MAX_DEPTH`), responds 503 Retry-After instead of 202.
  */
+// UUID v1–v5 shape (matches `crypto.randomUUID()`'s v4 output and any
+// pre-existing v1 IDs that may be in flight). We only care about shape
+// here — the synchronous `/finish` path further validates ownership/
+// existence against the DB; the queue is just a deferred replay tube.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 async function enqueueFinishAndRespond(req, res, sessionId, descriptor) {
-  const { request_id } = await pendingWrites.enqueue({
-    endpoint: 'POST /api/sessions/:id/finish',
-    concrete_route: { session_id: sessionId },
-    user_id: req.user.id,
-    payload: {},
-  });
+  if (typeof sessionId !== 'string' || !UUID_RE.test(sessionId)) {
+    logger.warn(
+      {
+        event: 'finish_request_queued_rejected',
+        reason: 'invalid-session-id',
+        sessionIdSample: typeof sessionId === 'string' ? sessionId.slice(0, 64) : typeof sessionId,
+        user_id: req.user && req.user.id,
+      },
+      'POST /api/sessions/:id/finish 400 — invalid session id (db-unavailable enqueue path)'
+    );
+    return res.status(400).json({ error: 'invalid session id' });
+  }
+  let request_id;
+  try {
+    ({ request_id } = await pendingWrites.enqueue({
+      endpoint: 'POST /api/sessions/:id/finish',
+      concrete_route: { session_id: sessionId },
+      user_id: req.user.id,
+      payload: {},
+    }));
+  } catch (err) {
+    if (err && err.code === 'PENDING_WRITES_QUEUE_FULL') {
+      logger.error(
+        {
+          event: 'finish_request_queued_rejected',
+          reason: 'queue-full',
+          depth: err.depth,
+          max: err.max,
+          sessionId,
+          user_id: req.user.id,
+        },
+        'POST /api/sessions/:id/finish 503 — pending_writes queue full'
+      );
+      return res
+        .set('Retry-After', '30')
+        .status(503)
+        .json({ error: 'Server is overloaded; please retry later', retryAfter: 30 });
+    }
+    throw err;
+  }
   logger.info(
     {
       event: 'finish_request_queued_202',

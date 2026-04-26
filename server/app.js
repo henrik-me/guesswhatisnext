@@ -299,20 +299,23 @@ function createServer() {
 
     if (!dbInitialized && req.path.startsWith('/api/')) {
       if (dbUnavailability) {
+        // Backoff-gated retry: a permanent-unavailability state may clear
+        // later (capacity renews). Allow a real request to trigger one
+        // re-attempt per backoff window without changing the response shape.
+        // This MUST also fire on the queueable POST path — otherwise an
+        // outage where the only traffic is /api/sync + /finish would never
+        // re-attempt init, leaving `dbUnavailability` set forever and the
+        // pending_writes queue undrained even after the DB recovers.
+        if (isAzure && !initGuard.isInFlight()
+            && Date.now() - lastUnavailabilityRetryAt >= unavailabilityRetryBackoffMs) {
+          lastUnavailabilityRetryAt = Date.now();
+          runInit().catch(() => { /* errors already logged inside runInit */ });
+        }
         // CS52-7e: let queueable POSTs through to enqueue a pending_writes
         // file; they handle their own 202 response.
         if (isPendingWritesEnqueueablePath(req)) {
           // fall through to the activeRequests++ branch below
         } else {
-          // Backoff-gated retry: a permanent-unavailability state may clear
-          // later (capacity renews). Allow a real request to trigger one
-          // re-attempt per backoff window without changing the response shape
-          // — the SPA still stops retrying for this request.
-          if (isAzure && !initGuard.isInFlight()
-              && Date.now() - lastUnavailabilityRetryAt >= unavailabilityRetryBackoffMs) {
-            lastUnavailabilityRetryAt = Date.now();
-            runInit().catch(() => { /* errors already logged inside runInit */ });
-          }
           return sendDbUnavailable(res, dbUnavailability);
         }
       } else {

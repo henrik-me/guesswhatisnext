@@ -94,18 +94,40 @@ async function enqueueSyncAndRespond(req, res, descriptor, queuedRecords) {
     return true;
   });
   const clientGameIds = validRecords.map((r) => String(r.client_game_id));
-  const { request_id } = await pendingWrites.enqueue({
-    endpoint: 'POST /api/sync',
-    concrete_route: {},
-    user_id: req.user.id,
-    payload: {
-      queuedRecords: validRecords,
-      revalidate: (req.body && typeof req.body.revalidate === 'object')
-        ? req.body.revalidate
-        : {},
-    },
-    client_game_ids: clientGameIds,
-  });
+  let request_id;
+  try {
+    ({ request_id } = await pendingWrites.enqueue({
+      endpoint: 'POST /api/sync',
+      concrete_route: {},
+      user_id: req.user.id,
+      payload: {
+        queuedRecords: validRecords,
+        revalidate: (req.body && typeof req.body.revalidate === 'object')
+          ? req.body.revalidate
+          : {},
+      },
+      client_game_ids: clientGameIds,
+    }));
+  } catch (err) {
+    if (err && err.code === 'PENDING_WRITES_QUEUE_FULL') {
+      logger.error(
+        {
+          event: 'sync_request_queued_rejected',
+          reason: 'queue-full',
+          depth: err.depth,
+          max: err.max,
+          user_id: req.user.id,
+          queued_count: validRecords.length,
+        },
+        'POST /api/sync 503 — pending_writes queue full'
+      );
+      return res
+        .set('Retry-After', '30')
+        .status(503)
+        .json({ error: 'Server is overloaded; please retry later', retryAfter: 30 });
+    }
+    throw err;
+  }
   logger.info(
     {
       event: 'sync_request_queued_202',
