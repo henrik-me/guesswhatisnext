@@ -494,6 +494,15 @@ const ui = {
         // surface the auth-expired banner and trigger hard-fail overlay.
         return;
       }
+      if (info.status === 202) {
+        // Server enqueued the finalize for later (db-unavailable path). The
+        // session can't be summarized synchronously; abort cleanly so the
+        // user isn't shown an undefined score.
+        showToast('Server is catching up — your Ranked result will sync shortly');
+        if (Game.abortRanked) Game.abortRanked();
+        showScreen('home');
+        return;
+      }
       showToast(`Ranked error (HTTP ${info.status})`);
     }
   },

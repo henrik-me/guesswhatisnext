@@ -595,6 +595,18 @@ async function finishRankedSession(ui) {
     if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body });
     return;
   }
+  // Finalize must be a synchronous commit (200). The server can also
+  // legitimately return 202 on the db-unavailable enqueue path with a
+  // {queuedRequestId, retryAfterMs} body — which lacks score fields, so
+  // we'd render an undefined summary if we treated it as success. Surface
+  // it as a friendly error and abort the session deterministically.
+  if (res.status !== 200) {
+    let body = null;
+    try { body = await res.json(); } catch { /* ignore */ }
+    if (!state || !state.ranked || state.sessionId !== sessionId) return;
+    if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body });
+    return;
+  }
   const data = await res.json();
   if (!state || !state.ranked || state.sessionId !== sessionId) return;
   state.finished = true;
