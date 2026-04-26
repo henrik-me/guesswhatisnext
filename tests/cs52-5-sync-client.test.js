@@ -214,6 +214,33 @@ describe('db-unavailable (503 unavailable body) + client-side dedupe', () => {
     const sent = JSON.parse(lastCall[1].body);
     expect(sent.queuedRecords.length).toBe(0);
   });
+
+  it('cold-start 503 (Retry-After header without unavailable body) → db-unavailable, NOT network-down', async () => {
+    // Regression for Copilot R5 #1: previously any 503 without a canonical
+    // unavailable body fell into the network-down branch, which flips
+    // canSync to false. The cold-start gate ({ error: 'Database not yet
+    // initialized', retryAfter: 5 } + Retry-After: 5) doesn't fire an
+    // online event to recover, so this could deadlock syncing after a
+    // single cold-start hit.
+    const m = await loadFresh();
+    m.enqueueRecord(m.buildRecord({ score: 50 }, 1));
+    const apiFetch = vi.fn(() => fakeStatus(
+      503,
+      { error: 'Database not yet initialized', retryAfter: 5 },
+      { 'Retry-After': '5' }
+    ));
+    await m.syncNow({ apiFetch, trigger: 'score-submit', currentUserId: 1 });
+    expect(m.connectivity.state).toBe('db-unavailable');
+    expect(m.connectivity.canSync).toBe(true);
+  });
+
+  it('non-retryable 503 (no Retry-After, no body markers) → network-down', async () => {
+    const m = await loadFresh();
+    m.enqueueRecord(m.buildRecord({ score: 50 }, 1));
+    const apiFetch = vi.fn(() => fakeStatus(503, { error: 'something else' }));
+    await m.syncNow({ apiFetch, trigger: 'score-submit', currentUserId: 1 });
+    expect(m.connectivity.state).toBe('network-down');
+  });
 });
 
 describe('sign-out semantics', () => {

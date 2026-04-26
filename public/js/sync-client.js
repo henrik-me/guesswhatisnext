@@ -510,14 +510,22 @@ async function doSync({ apiFetch, trigger, revalidateKeys, currentUserId, signal
   }
 
   if (res.status === 503) {
-    // CS52-7e not yet wired server-side — treat 503 unavailable body the
-    // same way we'll treat the upcoming 202 response (records stay in L1
-    // with lastQueuedAt set; client-side dedupe applies on next trigger).
+    // Treat 503 as transient/db-unavailable when there's any signal that
+    // a future retry could succeed (canonical CS52-5 unavailable body OR a
+    // Retry-After header OR a body retryAfter / phase:'cold-start' marker
+    // from the cold-start gate). Going to network-down here would flip
+    // canSync to false and effectively deadlock syncing — the cold-start
+    // gate doesn't fire an `online` event to recover from. Keep
+    // network-down for true non-retryable / generic 503s only.
     let body503 = null;
     try { body503 = await res.json(); } catch { /* ignore */ }
     const retryAfterHeader = Number(res.headers.get && res.headers.get('Retry-After')) * 1000;
     const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 ? retryAfterHeader : 5000;
-    if (body503 && body503.unavailable) {
+    const isRetryable = !!(
+      (body503 && (body503.unavailable || body503.retryAfter != null || body503.phase === 'cold-start')) ||
+      (Number.isFinite(retryAfterHeader) && retryAfterHeader > 0)
+    );
+    if (isRetryable) {
       const now = Date.now();
       const records = getL1Records();
       for (const r of records) {
@@ -530,7 +538,8 @@ async function doSync({ apiFetch, trigger, revalidateKeys, currentUserId, signal
       setConnectivityState('db-unavailable', `503:${trigger}`);
       return { status: 503, queuedCount: queuedRecords.length };
     }
-    // Generic 503 — treat as transient network failure for the state machine.
+    // Genuinely non-retryable 503 (no body markers, no Retry-After) —
+    // fall back to network-down so the next online event resets state.
     setConnectivityState('network-down', `503-other:${trigger}`);
     return { status: 503, trigger };
   }

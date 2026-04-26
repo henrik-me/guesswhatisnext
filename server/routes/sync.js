@@ -68,6 +68,13 @@ function canonicalJson(obj) {
   return '{' + parts.join(',') + '}';
 }
 
+/** Normalize completed_at to a canonical ISO-8601 UTC string (or null). */
+function normalizeCompletedAt(v) {
+  if (v == null) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 /** Compute payload_hash over the immutable record fields + user_id. */
 function computePayloadHash(userId, raw) {
   return crypto
@@ -82,7 +89,11 @@ function computePayloadHash(userId, raw) {
       total_rounds: Number(raw.total_rounds) || 0,
       best_streak: Number(raw.best_streak) || 0,
       fastest_answer_ms: raw.fastest_answer_ms == null ? null : Number(raw.fastest_answer_ms),
-      completed_at: raw.completed_at != null ? String(raw.completed_at) : null,
+      // Hash the canonical normalized form so two payloads representing
+      // the same instant in different surface forms (e.g. "...:00Z" vs
+      // "...:00.000Z", or epoch-ms vs ISO) hash identically and don't
+      // misclassify a benign retry as conflict_with_existing.
+      completed_at: normalizeCompletedAt(raw.completed_at),
       schema_version: Number(raw.schema_version) || 1,
     }))
     .digest('hex');
@@ -137,11 +148,11 @@ async function processRecord(db, userId, raw) {
     //   bucketing works without an additional cast.
     let playedAt;
     if (raw.completed_at != null) {
-      const parsed = new Date(raw.completed_at);
-      if (Number.isNaN(parsed.getTime())) {
-        return 'rejected';
-      }
-      playedAt = parsed.toISOString();
+      // Use the same normalizer the hash path uses so the persisted
+      // played_at always matches the canonical form that produced
+      // payload_hash.
+      playedAt = normalizeCompletedAt(raw.completed_at);
+      if (playedAt == null) return 'rejected';
     } else {
       playedAt = new Date().toISOString();
     }

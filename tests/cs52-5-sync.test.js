@@ -125,6 +125,31 @@ describe('POST /api/sync — queuedRecords write path', () => {
     ]);
   });
 
+  test('canonical completed_at: same instant in different surface forms is idempotent (not conflict)', async () => {
+    // Regression for Copilot R5 #2: payload_hash used String(completed_at)
+    // directly so "...:00Z" vs "...:00.000Z" hashed differently and a
+    // benign retry from a client that sent the un-suffixed form would be
+    // misclassified as conflict_with_existing. The hash now normalizes via
+    // new Date(...).toISOString() to match the persisted played_at.
+    const equivalent = {
+      client_game_id: 'cg-1',
+      mode: 'freeplay',
+      variant: 'freeplay',
+      score: 1234,
+      correct_count: 8,
+      total_rounds: 10,
+      best_streak: 5,
+      fastest_answer_ms: 1500,
+      // Same instant as the seed record above, expressed with explicit ms.
+      completed_at: '2026-04-25T12:00:00.000Z',
+      schema_version: 1,
+    };
+    const res = await authedSync({ queuedRecords: [equivalent] });
+    expect(res.status).toBe(200);
+    expect(res.body.acked).toEqual(['cg-1']);
+    expect(res.body.rejected).toEqual([]);
+  });
+
   test('skips invalid records (missing client_game_id)', async () => {
     const res = await authedSync({ queuedRecords: [{ score: 100 }] });
     expect(res.status).toBe(200);
