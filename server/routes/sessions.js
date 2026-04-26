@@ -36,6 +36,7 @@ const {
   computeFinalScore,
   validateAnswerEvent,
 } = require('../services/scoringService');
+const { checkAndUnlockAchievements } = require('../achievements');
 const { getDbUnavailability } = require('../lib/transient-db-error');
 const {
   getDbUnavailabilityState,
@@ -716,6 +717,39 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
       // Drop in-memory dispatched-round state.
       dispatchedRounds.delete(sessionId);
 
+      // CS52-7: Evaluate achievements ONLY for server-validated ranked
+      // sessions. Failures here are non-fatal — the score is already
+      // persisted; achievements are a nice-to-have layered on top.
+      let newAchievements = [];
+      try {
+        const context = {
+          score: final.score,
+          correctCount: final.correctCount,
+          totalRounds: expectedRounds,
+          bestStreak: final.bestStreak,
+          mode: session.mode === 'ranked_daily' ? 'daily' : 'freeplay',
+          isWin: false,
+          fastestAnswerMs: final.fastestAnswerMs,
+        };
+        newAchievements = await checkAndUnlockAchievements(userId, context);
+        logger.info(
+          {
+            event: 'achievement_evaluation',
+            user_id: userId,
+            source: 'ranked_finish',
+            session_id: sessionId,
+            mode: session.mode,
+            achievements_unlocked: newAchievements.map((a) => a.id),
+          },
+          'achievements evaluated for ranked finish'
+        );
+      } catch (achErr) {
+        logger.warn(
+          { err: achErr, sessionId, userId },
+          'achievement evaluation failed (non-fatal)'
+        );
+      }
+
       logger.info(
         {
           sessionId,
@@ -732,6 +766,7 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
         correctCount: final.correctCount,
         bestStreak: final.bestStreak,
         fastestAnswerMs: final.fastestAnswerMs,
+        newAchievements,
       });
     } catch (err) {
       // CS52-7e — if a DB op inside the handler surfaces a permanent

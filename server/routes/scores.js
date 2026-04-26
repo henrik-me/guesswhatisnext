@@ -5,7 +5,7 @@
 const express = require('express');
 const { getDbAdapter } = require('../db');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
-const { checkAndUnlockAchievements } = require('../achievements');
+const logger = require('../logger');
 const { RESERVED_USERNAME_LIKE_PATTERNS } = require('../reserved-usernames');
 
 /** SQL fragment that excludes reserved-prefix usernames. Joins with `AND` into an existing WHERE. */
@@ -41,19 +41,24 @@ router.post('/', requireAuth, async (req, res, next) => {
       [req.user.id, mode, score, correctCount || 0, totalRounds || 0, bestStreak || 0]
     );
 
-    // Check achievements
-    const context = {
-      score: score || 0,
-      correctCount: correctCount || 0,
-      totalRounds: totalRounds || 0,
-      bestStreak: bestStreak || 0,
-      mode,
-      isWin: false,
-      fastestAnswerMs: req.body.fastestAnswerMs || null,
-    };
-    const newAchievements = await checkAndUnlockAchievements(req.user.id, context);
+    // CS52-7: Achievement evaluation is intentionally SKIPPED here.
+    // Server achievements unlock only from server-validated outcomes:
+    //   - POST /api/sessions/:id/finish (ranked, CS52-3)
+    //   - WS multiplayer match-end (existing)
+    // The legacy POST /api/scores accepts a self-reported score with no
+    // server-side validation of timing or correctness, so it must not
+    // gate achievement unlocks. See INSTRUCTIONS.md § Achievement gating.
+    logger.info(
+      {
+        event: 'achievement_evaluation_skipped',
+        user_id: req.user.id,
+        source: 'legacy_scores_post',
+        mode,
+      },
+      'achievement evaluation skipped: legacy POST /api/scores'
+    );
 
-    res.status(201).json({ id: result.lastId, newAchievements });
+    res.status(201).json({ id: result.lastId, newAchievements: [] });
   } catch (err) {
     next(err);
   }

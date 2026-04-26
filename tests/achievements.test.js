@@ -50,9 +50,11 @@ describe('GET /api/achievements/me', () => {
     expect(res.body.achievements.length).toBe(0);
   });
 
-  test('returns unlocked achievements after triggering one', async () => {
-    // Submit a score to trigger first_game achievement
-    await getAgent()
+  test('does NOT unlock achievements via legacy POST /api/scores (CS52-7)', async () => {
+    // CS52-7: server achievements unlock only from server-validated outcomes
+    // (ranked /finish, MP match-end). The legacy /api/scores path must NOT
+    // trigger unlocks.
+    const submit = await getAgent()
       .post('/api/scores')
       .set('Authorization', `Bearer ${userToken}`)
       .send({
@@ -63,11 +65,14 @@ describe('GET /api/achievements/me', () => {
         bestStreak: 3,
       });
 
+    expect(submit.status).toBe(201);
+    expect(submit.body.newAchievements).toEqual([]);
+
     const res = await getAgent()
       .get('/api/achievements/me')
       .set('Authorization', `Bearer ${userToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.achievements.length).toBeGreaterThan(0);
+    expect(res.body.achievements.length).toBe(0);
   });
 });
