@@ -7,8 +7,18 @@ import { Game, shuffle } from './game.js';
 import { puzzles as localPuzzles, getCategories } from './puzzles.js';
 import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
-import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError, queueScoreForSync, syncQueuedScores } from './progressive-loader.js';
+import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError } from './progressive-loader.js';
 import { validateStoredAuthToken } from './auth-boot.js';
+import {
+  buildRecord as syncBuildRecord,
+  enqueueRecord as syncEnqueueRecord,
+  syncNow,
+  handleSignOut as syncHandleSignOut,
+  findClaimableRecords,
+  applyClaim,
+  migrateLegacyQueues,
+  installConnectivityListeners,
+} from './sync-client.js';
 
 /**
  * Check a fetch Response for a retryable 503 signal and throw RetryableError if present.
@@ -333,30 +343,40 @@ const ui = {
       bestStreak: summary.bestStreak,
     });
 
-    // Submit score to server if logged in, otherwise queue for later
+    // CS52-5: enqueue every completed game into the unified L1 store, then
+    // fire a gesture-driven sync. Replaces the legacy gwn_pending_scores +
+    // ProgressiveLoader queues.
+    try {
+      const userId = (() => {
+        try { return getCurrentUserId(); } catch { return null; }
+      })();
+      const record = syncBuildRecord(summary, userId);
+      syncEnqueueRecord(record);
+    } catch { /* localStorage unavailable — score is still on screen */ }
+
     if (authToken) {
-      // Local-first: show success immediately, submit in background
       showSyncIndicator('Score saved ✓');
-      submitScore(summary).then(data => {
-        if (data === null) {
-          // 401 — token expired; queue for retry and prompt sign-in
-          const scorePayload = buildScorePayload(summary);
-          const queued = queueScoreForSync(scorePayload);
-          showSyncIndicator(queued ? 'Sign in to sync' : 'Score could not be saved');
-          return;
+      // Submit score to server if logged in (single-flight via syncNow).
+      // Score-submission IS a user gesture per CS52-5 § Sync triggers (#2).
+      syncNow({
+        apiFetch,
+        trigger: 'score-submit',
+        currentUserId: getCurrentUserId(),
+      }).then(result => {
+        if (!result) return;
+        if (result.status === 200) {
+          showSyncIndicator('Synced ✓');
+        } else if (result.status === 202 || result.status === 503) {
+          showSyncIndicator('Will sync later');
+        } else if (result.status === 401) {
+          showSyncIndicator('Sign in to sync');
+        } else if (result.error === 'network') {
+          showSyncIndicator('Will sync later');
         }
-        if (data && data.newAchievements && data.newAchievements.length > 0) {
-          showAchievementToasts(data.newAchievements);
-        }
-        showSyncIndicator('Synced ✓');
       }).catch(() => {
-        // Direct submit failed — queue for background retry on next session
-        const scorePayload = buildScorePayload(summary);
-        const queued = queueScoreForSync(scorePayload);
-        showSyncIndicator(queued ? 'Will sync later' : 'Score could not be saved');
+        showSyncIndicator('Will sync later');
       });
     } else {
-      queuePendingScore(summary);
       showToast('Log in to save your score to the leaderboard');
     }
 
@@ -536,6 +556,11 @@ function init() {
   updateHomeAuthDisplay();
   refreshFeatureFlags();
 
+  // CS52-5: arm online/offline observers. The online event ONLY clears
+  // network-down — it does NOT auto-fire a sync. The next user gesture
+  // is what triggers the actual /api/sync RPC (boot-quiet contract).
+  try { installConnectivityListeners(); } catch { /* test env may lack window */ }
+
   // Validate stored token on startup (non-blocking).
   //
   // CS53-4 + CS53 Policy 1: route through apiFetch so we honor the 503
@@ -577,12 +602,13 @@ function init() {
           updateHomeAuthDisplay();
           if (currentScreen === 'community') updateCommunityAuthDisplay();
         }
-        // Token confirmed valid — sync any queued scores
-        syncQueuedScores(apiFetch, {
-          onSyncing: () => showSyncIndicator('Syncing scores...'),
-          onSynced: () => showSyncIndicator('Scores synced ✓'),
-          onFailed: () => showSyncIndicator('Some scores pending sync'),
-        });
+        // CS52-5: silent token refresh on boot is NOT a sync trigger
+        // (boot-quiet contract). Token is valid; defer the actual sync until
+        // the next user gesture (score-submit, navigation, sync-now button).
+        // We do, however, opportunistically migrate any pre-CS52 queued
+        // entries from the legacy localStorage keys into L1 — that's a
+        // local-only operation, no network/DB activity.
+        try { migrateLegacyQueues(getCurrentUserId()); } catch { /* ignore */ }
       },
       // onDeferred intentionally omitted — silent defer per CS53-4 / Policy 1.
     }).catch(() => {
@@ -1146,44 +1172,9 @@ async function fetchLeaderboard(period) {
   }
 }
 
-/** Submit a score to the server. */
-async function submitScore(summary) {
-  const fastestAnswerMs = (summary.results || [])
-    .filter(r => r.correct)
-    .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
-  const res = await apiFetch('/api/scores', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      score: summary.score,
-      mode: summary.mode || 'freeplay',
-      correctCount: summary.correctCount || 0,
-      totalRounds: summary.totalRounds || 0,
-      bestStreak: summary.bestStreak || 0,
-      fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
-    }),
-  });
-  if (res.status === 401) return null;
-  if (!res.ok) throw new Error(`Score submit failed: ${res.status}`);
-  return res.json();
-}
-
-/** Build a score payload from game summary for the sync queue. */
-function buildScorePayload(summary) {
-  const fastestAnswerMs = (summary.results || [])
-    .filter(r => r.correct)
-    .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
-  return {
-    score: summary.score,
-    mode: summary.mode || 'freeplay',
-    correctCount: summary.correctCount || 0,
-    totalRounds: summary.totalRounds || 0,
-    bestStreak: summary.bestStreak || 0,
-    fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
-  };
-}
+// CS52-5: submitScore() / buildScorePayload() were replaced by the
+// unified /api/sync flow via public/js/sync-client.js. The legacy
+// /api/scores route still exists server-side for backward-compat.
 
 /** Show a subtle sync status indicator. */
 function showSyncIndicator(message) {
@@ -1348,6 +1339,24 @@ let ws = null;
 let authToken = localStorage.getItem('gwn_auth_token');
 let authUsername = localStorage.getItem('gwn_auth_username');
 let authRole = localStorage.getItem('gwn_auth_role');
+
+/** Decode a JWT payload (no verification — server enforces that). */
+function decodeJwtPayload(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(padded));
+  } catch { return null; }
+}
+
+/** Current signed-in user_id from the JWT, or null when signed-out. */
+function getCurrentUserId() {
+  if (!authToken) return null;
+  const payload = decodeJwtPayload(authToken);
+  return payload && Number.isFinite(payload.id) ? payload.id : null;
+}
 let currentAuthMode = 'login';
 const DEFAULT_FEATURE_FLAGS = Object.freeze({
   submitPuzzle: false,
@@ -1490,8 +1499,16 @@ function updateCommunityAuthDisplay() {
   }
 }
 
-/** Log out: clear credentials, close WS, and return to home. */
+/** Log out: clear credentials, close WS, and return to home.
+ *
+ * CS52-5 § Sign-out semantics: clear L2 entirely, demote L1 user_id → null
+ * (records become guest records and re-surface in the claim prompt on next
+ * sign-in), abort any in-flight sync.
+ */
 function logout() {
+  // CS52-5: clear L2, demote L1, abort in-flight (must run BEFORE clearing
+  // authToken so the in-flight controller signal still has the user context).
+  try { syncHandleSignOut(); } catch { /* localStorage may be unavailable */ }
   authToken = null;
   authUsername = null;
   authRole = null;
@@ -1529,81 +1546,32 @@ async function apiFetch(url, options = {}) {
   return res;
 }
 
-const PENDING_SCORES_KEY = 'gwn_pending_scores';
-const MAX_PENDING_SCORES = 10;
+// CS52-5: legacy `gwn_pending_scores` queue + queueScoreForSync() were
+// replaced by the unified L1 store in public/js/sync-client.js. The one-time
+// migrateLegacyQueues() drain (called from auth-boot's onValidated and from
+// the sign-in success path) folds any pre-existing entries into L1.
 
-/** Queue a score for submission after the user logs in. */
-function queuePendingScore(summary) {
-  let pending;
-  try {
-    pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
-  } catch {
-    pending = [];
-    try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
-  }
-  if (!Array.isArray(pending)) {
-    pending = [];
-    try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
-  }
-  const fastestAnswerMs = (summary.results || [])
-    .filter(r => r.correct)
-    .reduce((min, r) => Math.min(min, r.timeMs), Infinity);
-  pending.push({
-    score: summary.score,
-    mode: summary.mode || 'freeplay',
-    correctCount: summary.correctCount || 0,
-    totalRounds: summary.totalRounds || 0,
-    bestStreak: summary.bestStreak || 0,
-    fastestAnswerMs: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
-  });
-  while (pending.length > MAX_PENDING_SCORES) pending.shift();
-  try {
-    localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(pending));
-  } catch {
-    // Storage full or unavailable — score will be lost
-  }
-}
-
-/** Submit any pending scores that were queued while logged out. */
-async function submitPendingScores() {
-  let pending;
-  try {
-    pending = JSON.parse(localStorage.getItem(PENDING_SCORES_KEY) || '[]');
-  } catch {
-    pending = [];
-    try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
-  }
-  if (!Array.isArray(pending)) {
-    pending = [];
-    try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
-  }
-  if (pending.length === 0) return;
-
-  while (pending.length > 0) {
-    const entry = pending[0];
-    try {
-      const res = await apiFetch('/api/scores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
-      });
-      if (!res.ok) return; // leave remaining entries for retry
-    } catch {
-      return; // network error; keep remaining for later
-    }
-    pending.shift();
-    try {
-      if (pending.length > 0) {
-        localStorage.setItem(PENDING_SCORES_KEY, JSON.stringify(pending));
-      } else {
-        localStorage.removeItem(PENDING_SCORES_KEY);
-      }
-    } catch {
-      // Storage unavailable — clear stale data to prevent duplicates, then
-      // continue submitting remaining entries this session without persisting.
-      try { localStorage.removeItem(PENDING_SCORES_KEY); } catch { /* ignore */ }
-      continue;
-    }
+/**
+ * CS52-5 § Claim prompt: when L1 contains records that need to be re-attributed
+ * to the just-signed-in user (unattached guest records, or records left over
+ * from a prior signed-in session), surface a single combined confirm prompt.
+ *
+ * Decline → records stay untouched and re-surface on next sign-in.
+ */
+async function maybeShowClaimPrompt() {
+  const userId = getCurrentUserId();
+  if (userId == null) return;
+  let claimable;
+  try { claimable = findClaimableRecords(userId); }
+  catch { return; }
+  const total = claimable.unattached.length + claimable.mismatched.length;
+  if (total === 0) return;
+  // Use confirm() for MVP — a richer custom-modal UI is CS52-4's screen scope.
+  const proceed = (typeof window !== 'undefined' && typeof window.confirm === 'function')
+    ? window.confirm(`${total} pending offline games will be added to your account.`)
+    : true;
+  if (proceed) {
+    try { applyClaim(userId); } catch { /* ignore */ }
   }
 }
 
@@ -1927,13 +1895,22 @@ async function authAction(action) {
     bindText('auth-error', '');
 
     await refreshFeatureFlags();
-    submitPendingScores();
-    // Retry any scores queued during previous sessions (background sync)
-    syncQueuedScores(apiFetch, {
-      onSyncing: () => showSyncIndicator('Syncing scores...'),
-      onSynced: () => showSyncIndicator('Scores synced ✓'),
-      onFailed: () => showSyncIndicator('Some scores pending sync'),
-    });
+
+    // CS52-5 § Sync trigger #1: sign-in success IS a real user gesture, so
+    // fire a single batched /api/sync. Migrate any pre-CS52 legacy queues
+    // first, surface the claim prompt for any unattached / mismatched
+    // records, then sync.
+    try { migrateLegacyQueues(getCurrentUserId()); } catch { /* ignore */ }
+    await maybeShowClaimPrompt();
+    syncNow({
+      apiFetch,
+      trigger: 'sign-in',
+      currentUserId: getCurrentUserId(),
+    }).then(result => {
+      if (result && result.status === 200 && result.acked && result.acked.length > 0) {
+        showSyncIndicator('Scores synced ✓');
+      }
+    }).catch(() => { /* surfaced via state machine + banner */ });
 
     // Unlock form only after post-login work completes
     unlockAuthForm(action);

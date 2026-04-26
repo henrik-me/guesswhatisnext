@@ -199,3 +199,49 @@ Cross-environment investigations (e.g., "did this regression also reach prod?") 
 - **Cold-start investigation flavor:** [CS53 — prod cold-start retry investigation](../project/clickstops/active/active_cs53_prod-cold-start-retry-investigation.md) is the original incident that motivated CS54. The `ContainerAppConsoleLogs_CL`-only queries used during that investigation become much shorter once the AI `requests` table is in play (compare § B.4 above to the `parse_json(Log_s)` heuristics CS53 had to rely on).
 - **Logger / trace-id injection:** [`server/logger.js`](../server/logger.js) is what makes § B.5's bridge work — Pino log lines carry `trace_id` and `span_id` extracted from the active OTel span.
 - **Telemetry wiring:** [`server/telemetry.js`](../server/telemetry.js) is the AI export path; see CS54 for what it does and doesn't instrument.
+
+
+### B.7 CS52-5 unified sync (POST /api/sync)
+
+CS52-5 emits structured pino logs at three points (see [`server/routes/sync.js`](../server/routes/sync.js)):
+
+- `sync_request_received` — one per request, with `user_id`, `queued_count`, `revalidate_keys`.
+- `sync_record_acked` — one per accepted record, with `client_game_id`, `payload_hash`, `source`.
+- `sync_record_rejected` — one per rejected record, with `client_game_id`, `reason` (`conflict_with_existing` / `schema_unsupported` / `invalid_payload`).
+
+Plus client-side `connectivity_state_transition` log lines (in browser console; visible in the App Insights `customEvents` table once CS54-9 wires the browser SDK).
+
+#### Sync activity by user (last 24h)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where log.msg == 'sync_request_received'
+| where TimeGenerated > ago(24h)
+| summarize requests = count(), total_queued = sum(toint(log.queued_count)), avg_queued = avg(toint(log.queued_count)) by tostring(log.user_id)
+| order by requests desc
+```
+
+#### Rejected records — potential cheaters / clock-skew / corruption
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where log.msg == 'sync_record_rejected'
+| where TimeGenerated > ago(7d)
+| summarize n = count() by tostring(log.reason), tostring(log.user_id)
+| order by n desc
+```
+
+#### Connectivity-state transition trends (db-unavailable spikes ⇒ Free Tier capacity issues)
+
+Once CS54-9 wires the browser App Insights SDK, `connectivity_state_transition` events will land in `customEvents`. Until then, this query is documented for future use:
+
+```kusto
+customEvents
+| where name == 'connectivity_state_transition'
+| where timestamp > ago(24h)
+| extend to_state = tostring(customDimensions.to), trigger = tostring(customDimensions.trigger)
+| summarize n = count() by bin(timestamp, 15m), to_state
+| render timechart
+```

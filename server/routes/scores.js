@@ -53,10 +53,10 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
-/** GET /api/scores/leaderboard?mode=freeplay|daily&period=alltime|weekly|daily&limit=20 */
+/** GET /api/scores/leaderboard?mode=freeplay|daily&period=alltime|weekly|daily&source=ranked|offline|all|legacy&limit=20 */
 router.get('/leaderboard', optionalAuth, async (req, res, next) => {
   try {
-    const { mode = 'freeplay', period = 'alltime', limit = 20 } = req.query;
+    const { mode = 'freeplay', period = 'alltime', limit = 20, source } = req.query;
     const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
 
     let dateFilter = '';
@@ -66,16 +66,32 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
       dateFilter = "AND s.played_at >= datetime('now', '-7 days')";
     }
 
+    // CS52-5/CS52-6: source filter is opt-in. When omitted, behaviour is
+    // unchanged (returns all rows including legacy) so the existing CS52-pre
+    // /leaderboard contract keeps working. When source is supplied:
+    //   - 'ranked' or 'offline' → exact match on s.source
+    //   - 'all' → union of ranked + offline (legacy excluded)
+    //   - 'legacy' → exact match on s.source (admin/operator only)
+    let sourceFilter = '';
+    const params = [mode];
+    if (source === 'ranked' || source === 'offline' || source === 'legacy') {
+      sourceFilter = 'AND s.source = ?';
+      params.push(source);
+    } else if (source === 'all') {
+      sourceFilter = "AND s.source IN ('ranked','offline')";
+    }
+    params.push(safeLimit);
+
     const db = await getDbAdapter();
     const rows = await db.all(`
-      SELECT s.id, s.score, s.correct_count, s.total_rounds, s.best_streak, s.played_at,
+      SELECT s.id, s.score, s.correct_count, s.total_rounds, s.best_streak, s.played_at, s.source,
              u.id as user_id, u.username
       FROM scores s
       JOIN users u ON s.user_id = u.id
-      WHERE s.mode = ? ${dateFilter}
+      WHERE s.mode = ? ${sourceFilter} ${dateFilter}
       ORDER BY s.score DESC
       LIMIT ?
-    `, [mode, safeLimit]);
+    `, params);
 
     // Add rank and highlight current user
     const leaderboard = rows.map((row, i) => ({
@@ -86,10 +102,11 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
       totalRounds: row.total_rounds,
       bestStreak: row.best_streak,
       playedAt: row.played_at,
+      source: row.source,
       isCurrentUser: req.user?.id === row.user_id,
     }));
 
-    res.json({ leaderboard, mode, period });
+    res.json({ leaderboard, mode, period, source: source || null });
   } catch (err) {
     next(err);
   }
