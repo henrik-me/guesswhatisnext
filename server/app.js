@@ -16,6 +16,7 @@ const migrations = require('./db/migrations');
 const { requireSystem } = require('./middleware/auth');
 const authRoutes = require('./routes/auth');
 const scoreRoutes = require('./routes/scores');
+const syncRoutes = require('./routes/sync');
 const matchRoutes = require('./routes/matches');
 const puzzleRoutes = require('./routes/puzzles');
 const achievementRoutes = require('./routes/achievements');
@@ -313,6 +314,7 @@ function createServer() {
   // API routes
   app.use('/api/auth', authRoutes);
   app.use('/api/scores', scoreRoutes);
+  app.use('/api/sync', syncRoutes);
   app.use('/api/matches', matchRoutes);
   app.use('/api/puzzles', puzzleRoutes);
   app.use('/api/achievements', achievementRoutes);
