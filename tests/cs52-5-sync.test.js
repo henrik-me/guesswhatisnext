@@ -156,6 +156,29 @@ describe('POST /api/sync — queuedRecords write path', () => {
     expect(res.body.acked).toEqual([]);
   });
 
+  test('rejects records with unsupported mode (matches legacy /api/scores validator)', async () => {
+    // Regression for Copilot R6 #2: previously the route accepted any
+    // raw.mode and persisted it into scores.mode, polluting downstream
+    // profile/leaderboard queries.
+    const res = await authedSync({
+      queuedRecords: [{
+        client_game_id: 'bad-mode-1',
+        mode: 'multiplayer-trivia', // not in {freeplay, daily}
+        score: 100,
+        correct_count: 5,
+        total_rounds: 10,
+        best_streak: 2,
+        schema_version: 1,
+        completed_at: '2026-04-25T13:00:00Z',
+      }],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.acked).toEqual([]);
+    expect(res.body.rejected).toEqual([
+      { client_game_id: 'bad-mode-1', reason: 'invalid_payload' },
+    ]);
+  });
+
   test('rejects oversized batch (> MAX_QUEUED_RECORDS)', async () => {
     const records = Array.from({ length: 51 }, (_, i) => ({
       client_game_id: `bulk-${i}`,

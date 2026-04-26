@@ -314,16 +314,30 @@ export function clearL2() {
 // ──────────────────────────────────────────────────────────────────
 
 /**
- * Sign-out: clear L2 entirely; demote L1 user_id → null; abort in-flight.
+ * Sign-out: clear L2 entirely; demote L1 user_id → null; clear L1 rejected
+ * bucket; abort in-flight.
  *
- * Records are NOT deleted — they become guest records and re-surface in
- * the claim prompt on next sign-in (privacy-vs-data-loss tradeoff
- * documented in CS52 § Sign-out semantics).
+ * Pending L1 records are NOT deleted — they become guest records and
+ * re-surface in the claim prompt on next sign-in (privacy-vs-data-loss
+ * tradeoff documented in CS52 § Sign-out semantics). The L1 *rejected*
+ * bucket is fully cleared because it carries the original (pre-rejection)
+ * record data including the prior user_id; preserving it across sign-out
+ * on a shared device would leak history.
  */
 export function handleSignOut() {
   clearL2();
+  safeRemove(L1_REJECTED_KEY);
   const records = getL1Records().map(r => ({ ...r, user_id: null, lastQueuedAt: null }));
-  setL1Records(records);
+  const demotionPersisted = setL1Records(records);
+  if (!demotionPersisted) {
+    // Privacy-safe fallback: if we can't persist the demotion, remove the
+    // L1 records entirely rather than leaving them attributed to the
+    // signed-out user in storage. Better data loss than identity leak.
+    safeRemove(L1_RECORDS_KEY);
+    if (typeof console !== 'undefined') {
+      console.warn('[sync] failed to persist L1 sign-out demotion; cleared local sync storage as fallback');
+    }
+  }
   // Abort any in-flight sync. The response (if any) is dropped by the
   // single-flight guard's signal check.
   if (inFlight && inFlight.controller) {

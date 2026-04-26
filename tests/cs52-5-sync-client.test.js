@@ -278,6 +278,44 @@ describe('sign-out semantics', () => {
     expect(records[0].user_id).toBeNull();
     expect(abortFired).toBe(true);
   });
+
+  it('clears the L1 rejected bucket on sign-out (no prior-user history leak)', async () => {
+    // Regression for Copilot R6 #1: previously gwn_l1_rejected survived
+    // sign-out, leaving rejected records (with original user_id) tied to
+    // the prior user on a shared device.
+    const m = await loadFresh();
+    // Seed the rejected bucket directly via localStorage so we don't depend
+    // on the ack/reject pipeline.
+    localStorage.setItem('gwn_l1_rejected', JSON.stringify([
+      { client_game_id: 'rej-1', user_id: 7, score: 50 },
+    ]));
+    expect(m.getL1Rejected().length).toBe(1);
+    m.handleSignOut();
+    expect(m.getL1Rejected().length).toBe(0);
+    expect(localStorage.getItem('gwn_l1_rejected')).toBeNull();
+  });
+
+  it('falls back to clearing L1 records when persisting the demotion fails', async () => {
+    // Regression for Copilot R6 #3: previously handleSignOut ignored
+    // setL1Records' boolean, so a localStorage failure left records still
+    // attributed to the prior user_id.
+    const m = await loadFresh();
+    m.enqueueRecord(m.buildRecord({ score: 1 }, 7));
+    expect(m.getL1Records()[0].user_id).toBe(7);
+    const origSet = localStorage.setItem;
+    const origRemove = localStorage.removeItem;
+    const origWarn = console.warn;
+    console.warn = () => {};
+    // Make setItem fail (so demotion can't persist) but allow removeItem
+    // to succeed (so the privacy-safe fallback can clear the key).
+    localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+    m.handleSignOut();
+    localStorage.setItem = origSet;
+    localStorage.removeItem = origRemove;
+    console.warn = origWarn;
+    // Privacy guarantee: no L1 record can remain attributed to user 7.
+    expect(m.getL1Records().length).toBe(0);
+  });
 });
 
 describe('claim prompt', () => {

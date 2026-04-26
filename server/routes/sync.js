@@ -48,6 +48,11 @@ const MAX_QUEUED_RECORDS = 50;
 const LB_ROW_LIMIT = 100;
 const NOTIF_ROW_LIMIT = 20;
 
+// Mirror the legacy POST /api/scores validation so the unified-sync write
+// path can't pollute the scores table with unexpected mode values that
+// would then leak into profile / leaderboard queries.
+const VALID_MODES = new Set(['freeplay', 'daily']);
+
 // Match server/app.js sendDbUnavailable shape so client-side handlers see a
 // single consistent 503 body across the unified-sync route and the central
 // error path. Includes the `error` field and intentionally omits Retry-After
@@ -320,6 +325,19 @@ router.post('/', requireAuth, async (req, res, next) => {
           client_game_id: raw.client_game_id,
           reason: 'invalid_payload',
         }, 'sync record rejected: invalid completed_at');
+        continue;
+      }
+      if (raw.mode != null && !VALID_MODES.has(String(raw.mode))) {
+        // Match the legacy POST /api/scores validator (server/routes/scores.js).
+        // Records with unrecognized mode values would otherwise pollute the
+        // scores table and downstream profile/leaderboard queries.
+        rejected.push({ client_game_id: raw.client_game_id, reason: 'invalid_payload' });
+        logger.warn({
+          event: 'sync_record_rejected',
+          user_id: userId,
+          client_game_id: raw.client_game_id,
+          reason: 'invalid_payload',
+        }, 'sync record rejected: unsupported mode');
         continue;
       }
 
