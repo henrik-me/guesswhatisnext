@@ -109,10 +109,12 @@ const TRUTHY_TOKENS = ['true', 'yes', 'on', '1', 'enable', 'enabled'];
 const TRUTHY_TOKEN = `(${TRUTHY_TOKENS.join('|')})`;
 
 // Match `FEATURE_FLAG_ALLOW_OVERRIDE` followed by `=` (shell / dotenv) or
-// `:` (YAML), optional quotes, then a truthy token. Case-insensitive on the
-// truthy token. The flag name itself is upper-case by repo convention; we
-// keep the regex case-sensitive on the name to avoid false positives in
-// docs / prose that might mention `feature_flag_allow_override` lowercase.
+// `:` (YAML), optional quotes, then a truthy token. The `i` flag makes the
+// ENTIRE pattern case-insensitive — both the flag name and the truthy token.
+// This is intentional: real env-var assignments use the canonical uppercase
+// name, but if a config file or doc fragment writes the same assignment in
+// lowercase (e.g. `feature_flag_allow_override=true`) it is still a policy
+// violation worth flagging.
 //
 // `^(?!\s*(#|//))` rejects lines whose first non-whitespace is `#` (shell /
 // YAML comment) or `//` (JS/JSON-with-comments) so commented-out config and
@@ -167,12 +169,15 @@ function jsonHasOverrideTruthy(node) {
 // directions, and we constrain the pairing to the enclosing braces so that
 // a truthy value in a *neighbouring* env object cannot create a false
 // positive on a falsy override entry.
-const BICEP_NAME_RE = /name\s*:\s*['"]FEATURE_FLAG_ALLOW_OVERRIDE['"]/;
+const BICEP_NAME_RE = /\bname\b\s*:\s*['"]FEATURE_FLAG_ALLOW_OVERRIDE['"]/;
 // Require either a closing quote (when quoted) or a word boundary (when
 // unquoted) after the truthy token so values like `'trueish'` or `100` do
-// NOT match the `true` / `1` prefix.
+// NOT match the `true` / `1` prefix. The leading `\bvalue\b` boundary
+// prevents matching inside longer identifiers like `somevalue:` or
+// `defaultValue:` (the latter only matters case-insensitively, but `\b`
+// also defends against future renames).
 const BICEP_VALUE_TRUTHY_RE = new RegExp(
-  String.raw`value\s*:\s*(?:'` + TRUTHY_TOKEN + String.raw`'|"` + TRUTHY_TOKEN + String.raw`"|` + TRUTHY_TOKEN + String.raw`\b)`,
+  String.raw`\bvalue\b\s*:\s*(?:'` + TRUTHY_TOKEN + String.raw`'|"` + TRUTHY_TOKEN + String.raw`"|` + TRUTHY_TOKEN + String.raw`\b)`,
   'i',
 );
 

@@ -242,6 +242,24 @@ describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', (
     const findings = scanEnvObjectForm(file);
     expect(findings).toHaveLength(1);
   });
+
+  it('does NOT match `name`/`value` substrings inside longer identifiers (word boundary)', () => {
+    // `hostname:` contains `name:` and `somevalue:` contains `value:`.
+    // Without `\b` boundaries on the BICEP_NAME_RE / BICEP_VALUE_TRUTHY_RE
+    // patterns these would falsely satisfy the pair-detection inside the
+    // same braces, producing a spurious finding. The override flag never
+    // appears here as a real `name:` entry.
+    const bicep = [
+      'env: [',
+      '  {',
+      `    hostname: '${OVERRIDE}'`,
+      "    somevalue: 'true'",
+      '  }',
+      ']',
+    ].join('\n');
+    const file = writeFixture('confusable-identifiers.bicep', bicep);
+    expect(scanEnvObjectForm(file)).toEqual([]);
+  });
 });
 
 describe('CS40-5 Policy 2 — FEATURE_<KEY>_PERCENTAGE=100 regex', () => {
