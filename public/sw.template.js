@@ -12,6 +12,7 @@ const STATIC_ASSETS = [
   '/js/app.js',
   '/js/sync-client.js',
   '/js/connectivity-ui.js',
+  '/js/claim-modal.js',
   '/js/game.js',
   '/js/puzzles.js',
   '/js/daily.js',

@@ -9,6 +9,7 @@ import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
 import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError } from './progressive-loader.js';
 import { validateStoredAuthToken } from './auth-boot.js';
+import { showClaimPromptModal } from './claim-modal.js';
 import {
   CONNECTIVITY_BANNER_COPY,
   renderConnectivityBanner as renderBanner,
@@ -689,11 +690,12 @@ function showRankedAbandonedOverlay() {
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'ranked-abandoned-title');
+  overlay.setAttribute('aria-describedby', 'ranked-abandoned-message');
   overlay.innerHTML = `
     <div class="ranked-abandoned-modal" tabindex="-1">
       <div class="ranked-abandoned-icon" aria-hidden="true">📡</div>
       <h2 class="ranked-abandoned-title" id="ranked-abandoned-title">Session abandoned</h2>
-      <p class="ranked-abandoned-message">Lost connection — Ranked session abandoned, no score recorded.</p>
+      <p class="ranked-abandoned-message" id="ranked-abandoned-message">Lost connection — Ranked session abandoned, no score recorded.</p>
       <div class="ranked-abandoned-actions">
         <button type="button" class="btn btn-primary" data-action="ranked-abandoned-practice">Play Practice</button>
         <button type="button" class="btn btn-secondary" data-action="ranked-abandoned-home">Back to home</button>
@@ -790,102 +792,17 @@ async function handleStartRanked(mode) {
   } else if (result.error === 'network') {
     // Connectivity listeners will surface the banner; show a quick toast too.
     showToast('Network error — Ranked unavailable');
+  } else if (result.error === 'bad-json') {
+    showToast('Couldn\u2019t start Ranked — please try again');
   }
   // result.aborted → silent (overlay shown by handleRankedDisconnect)
 }
 
 /**
- * CS52-4 § Claim prompt — replaces the MVP window.confirm shim.
- *
- * Renders an accessible modal (focus trap, ESC = decline, Enter = accept).
- * Decline → records stay in L1 in current state (re-fires on next sign-in).
- * Accept → applyClaim re-attributes records to currentUserId and they sync
- * on the next gesture-driven /api/sync.
+ * CS52-4 § Claim prompt — implementation extracted to claim-modal.js
+ * for unit testability. See public/js/claim-modal.js +
+ * tests/cs52-4-claim-modal.test.js.
  */
-function showClaimPromptModal({ total, unattachedCount, mismatchedCount, onAccept, onDecline }) {
-  return new Promise(resolve => {
-    const previousActive = document.activeElement;
-    const backdrop = document.createElement('div');
-    backdrop.className = 'claim-modal-backdrop';
-    backdrop.innerHTML = `
-      <div class="claim-modal" role="dialog" aria-modal="true" aria-labelledby="claim-modal-title" aria-describedby="claim-modal-message" tabindex="-1">
-        <h2 class="claim-modal-title" id="claim-modal-title">Add offline games to your account?</h2>
-        <p class="claim-modal-message" id="claim-modal-message">${total} pending offline games will be added to your account.</p>
-        <div class="claim-modal-actions">
-          <button type="button" class="btn btn-secondary" data-action="claim-decline">Not now</button>
-          <button type="button" class="btn btn-primary" data-action="claim-accept">Add to my account</button>
-        </div>
-      </div>`;
-    document.body.appendChild(backdrop);
-    const modal = backdrop.querySelector('.claim-modal');
-    const acceptBtn = backdrop.querySelector('[data-action="claim-accept"]');
-    const declineBtn = backdrop.querySelector('[data-action="claim-decline"]');
-
-    const focusables = [declineBtn, acceptBtn].filter(Boolean);
-    let focusIdx = focusables.length > 1 ? 1 : 0;
-    const setFocus = () => {
-      if (focusables.length === 0) {
-        // Fallback: keep focus inside the modal so keyboard users can still
-        // dismiss with Escape / backdrop click.
-        modal?.focus?.();
-        return;
-      }
-      focusables[focusIdx]?.focus();
-    };
-
-    function cleanup() {
-      backdrop.removeEventListener('keydown', onKey);
-      backdrop.remove();
-      if (previousActive && typeof previousActive.focus === 'function') previousActive.focus();
-    }
-    function accept() {
-      try { console.info('[client] claim_prompt_accepted', { claimedCount: total }); } catch { /* ignore */ }
-      cleanup();
-      try { onAccept && onAccept(); } catch { /* ignore */ }
-      resolve('accept');
-    }
-    function decline() {
-      try { console.info('[client] claim_prompt_declined', { pendingCount: total }); } catch { /* ignore */ }
-      cleanup();
-      try { onDecline && onDecline(); } catch { /* ignore */ }
-      resolve('decline');
-    }
-    function onKey(e) {
-      if (e.key === 'Escape') { e.preventDefault(); decline(); return; }
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        if (focusables.length === 0) return;
-        focusIdx = (focusIdx + (e.shiftKey ? -1 : 1) + focusables.length) % focusables.length;
-        setFocus();
-        return;
-      }
-      if (e.key === 'Enter') {
-        // Per the documented contract Enter always accepts, regardless of
-        // which button currently has focus inside the modal. Without this
-        // explicit handler, Enter on the decline button would trigger its
-        // default click instead.
-        e.preventDefault();
-        accept();
-      }
-    }
-
-    acceptBtn.addEventListener('click', accept);
-    declineBtn.addEventListener('click', decline);
-    backdrop.addEventListener('keydown', onKey);
-    // Click on backdrop = decline (treat as dismiss).
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) decline();
-    });
-
-    try {
-      console.info('[client] claim_prompt_shown', { unattachedCount, mismatchedCount });
-    } catch { /* ignore */ }
-
-    // Focus the primary action so Enter accepts.
-    if (modal) modal.focus();
-    setFocus();
-  });
-}
 
 /** Show a non-blocking sign-in banner for unauthenticated players. */
 function showSignInBanner() {

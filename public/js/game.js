@@ -396,7 +396,19 @@ async function startRanked({ mode, apiFetch, ui }) {
     return { error: 'http', status: res.status, body };
   }
 
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    // Non-JSON success body (proxy error page, truncated response, …).
+    // Clean up the abort controller so a follow-up start isn't blocked,
+    // and surface a structured error to the caller.
+    if (rankedAbortController) {
+      try { rankedAbortController.abort(); } catch { /* ignore */ }
+      rankedAbortController = null;
+    }
+    return { error: 'bad-json', status: res.status };
+  }
   // CS52-4 telemetry: emit ranked_session_started exactly once, AFTER the
   // server confirms session creation. (handleStartRanked deliberately does
   // not pre-emit; that would inflate the denominator with failed starts
