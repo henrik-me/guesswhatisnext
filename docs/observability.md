@@ -383,7 +383,7 @@ Signals emitted from `public/js/app.js` and `public/js/game.js`:
 
 | Signal | Where | Payload |
 | --- | --- | --- |
-| `ranked_session_started` | game.js + app.js (entry) | `{ mode }` |
+| `ranked_session_started` | game.js | `{ mode, sessionId }` |
 | `ranked_session_abandoned_due_to_disconnect` | app.js | `{ mode, sessionId, connectivityState }` |
 | `claim_prompt_shown` | app.js | `{ unattachedCount, mismatchedCount }` |
 | `claim_prompt_accepted` | app.js | `{ claimedCount }` |

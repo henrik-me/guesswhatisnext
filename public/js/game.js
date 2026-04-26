@@ -367,15 +367,19 @@ async function startRanked({ mode, apiFetch, ui }) {
     });
   } catch (err) {
     if (err && err.name === 'AbortError') return { aborted: true };
-    if (ui.showRankedError) ui.showRankedError({ kind: 'network' });
+    // Session-creation failure — caller (handleStartRanked) surfaces the
+    // friendly toast. Do NOT call ui.showRankedError here: it would route
+    // through showRankedError → handleRankedDisconnect → "session abandoned"
+    // overlay, which is wrong because no session was ever created.
     return { error: 'network' };
   }
 
   if (!res.ok) {
     let body = null;
     try { body = await res.json(); } catch { /* ignore */ }
-    if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body });
-    return { error: 'http', status: res.status };
+    // Session-creation HTTP error (409 already-played, 503 warming, 401, …)
+    // Caller maps these to per-status friendly toasts. No ui.showRankedError.
+    return { error: 'http', status: res.status, body };
   }
 
   const data = await res.json();

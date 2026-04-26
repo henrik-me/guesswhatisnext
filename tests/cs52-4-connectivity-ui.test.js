@@ -1,18 +1,18 @@
 /**
  * CS52-4 — Connectivity banner + Ranked entry gate UI tests.
  *
- * app.js is a large IIFE-style module not directly exporting these helpers,
- * so we re-implement the small string-map + DOM helpers here under test.
- * The PURE functions exercised here MUST stay byte-identical to the ones in
- * app.js (CONNECTIVITY_BANNER_COPY, renderConnectivityBanner shape, and the
- * `[data-bind="ranked-entry"]` disabled toggle). If you change one, change
- * both. (We could lift them into a shared module later.)
+ * Drives the *production* helpers from public/js/connectivity-ui.js against
+ * a tiny ad-hoc DOM stand-in. (vitest in this project runs in node mode
+ * without jsdom; the helpers only use the small subset of DOM that we
+ * implement here.) Re-using the same exports app.js wires up means the test
+ * can't drift from production.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  renderConnectivityBanner,
+  applyRankedEntryGate,
+} from '../public/js/connectivity-ui.js';
 
-// Tiny DOM stand-in — vitest's default env lacks jsdom in this project.
-// Just enough surface to drive the helpers: getElementById, querySelector,
-// querySelectorAll, classList, dataset, attributes, style.
 function createEl(tag, attrs = {}) {
   const attributes = new Map();
   const classes = new Set();
@@ -30,31 +30,29 @@ function createEl(tag, attrs = {}) {
       remove: (c) => classes.delete(c),
       contains: (c) => classes.has(c),
     },
-    setAttribute: (k, v) => { attributes.set(k, String(v)); if (k === 'disabled') attributes.set(k, ''); },
+    setAttribute: (k, v) => { attributes.set(k, String(v)); },
     removeAttribute: (k) => { attributes.delete(k); },
     getAttribute: (k) => (attributes.has(k) ? attributes.get(k) : null),
     hasAttribute: (k) => attributes.has(k),
     appendChild: (child) => { children.push(child); child.parentNode = el; return child; },
     get textContent() { return textContent; },
     set textContent(v) { textContent = String(v); },
-    querySelector(sel) {
-      return findFirst(this, sel);
-    },
-    querySelectorAll(sel) {
-      return findAll(this, sel);
-    },
+    querySelector(sel) { return findFirst(this, sel); },
+    querySelectorAll(sel) { return findAll(this, sel); },
   };
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'class') v.split(/\s+/).filter(Boolean).forEach(c => classes.add(c));
     else if (k === 'id') { el.id = v; attributes.set('id', v); }
-    else if (k.startsWith('data-')) { dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v; attributes.set(k, v); }
+    else if (k.startsWith('data-')) {
+      dataset[k.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = v;
+      attributes.set(k, v);
+    }
     else attributes.set(k, v);
   }
   return el;
 }
 
 function matches(el, sel) {
-  // very small selector matcher: #id | [attr="val"] | .class
   if (sel.startsWith('#')) return el.id === sel.slice(1);
   if (sel.startsWith('.')) return el.classList.contains(sel.slice(1));
   const m = sel.match(/^\[([a-zA-Z-]+)="([^"]+)"\]$/);
@@ -67,10 +65,7 @@ function matches(el, sel) {
   }
   return false;
 }
-function walk(el, cb) {
-  cb(el);
-  for (const c of el.children) walk(c, cb);
-}
+function walk(el, cb) { cb(el); for (const c of el.children) walk(c, cb); }
 function findFirst(root, sel) {
   let found = null;
   walk(root, (n) => { if (!found && n !== root && matches(n, sel)) found = n; });
@@ -82,49 +77,12 @@ function findAll(root, sel) {
   return out;
 }
 
-const CONNECTIVITY_BANNER_COPY = {
-  ok: null,
-  'network-down': { text: 'Offline — your games still count', showSignIn: false },
-  'auth-expired': { text: 'Signed out — sign in to save your games', showSignIn: true },
-  'db-unavailable': { text: 'Online scoring paused — your games are queued', showSignIn: false },
-};
-
-function renderConnectivityBanner(root, stateName) {
-  const el = findFirst(root, '#connectivity-banner');
-  if (!el) return;
-  const copy = CONNECTIVITY_BANNER_COPY[stateName];
-  if (!copy) {
-    el.style.display = 'none';
-    el.dataset.state = 'ok';
-    return;
-  }
-  el.dataset.state = stateName;
-  el.style.display = '';
-  const textEl = el.querySelector('[data-bind="connectivity-banner-text"]');
-  if (textEl) textEl.textContent = copy.text;
-  const signInBtn = el.querySelector('[data-action="connectivity-sign-in"]');
-  if (signInBtn) signInBtn.style.display = copy.showSignIn ? '' : 'none';
-}
-
-function applyRankedEntryGate(root, canRank, stateName) {
-  const buttons = findAll(root, '[data-bind="ranked-entry"]');
-  buttons.forEach(btn => {
-    if (canRank) {
-      btn.removeAttribute('disabled');
-      btn.classList.remove('ranked-disabled');
-      btn.removeAttribute('aria-disabled');
-    } else {
-      btn.setAttribute('disabled', 'disabled');
-      btn.classList.add('ranked-disabled');
-      btn.setAttribute('aria-disabled', 'true');
-      btn.dataset.disabledState = stateName;
-    }
-  });
-}
-
 let root;
 beforeEach(() => {
   root = createEl('body');
+  // Add a getElementById helper since renderConnectivityBanner accepts both
+  // Document (with getElementById) and Element (with querySelector('#id')).
+  root.getElementById = (id) => findFirst(root, `#${id}`);
   const banner = createEl('div', { id: 'connectivity-banner', 'data-state': 'ok' });
   banner.style.display = 'none';
   const text = createEl('span', { 'data-bind': 'connectivity-banner-text' });
@@ -197,13 +155,15 @@ describe('CS52-4 ranked entry gate', () => {
     });
   });
 
-  it('toggle false → true clears the disabled state cleanly', () => {
+  it('toggle false → true clears the disabled state cleanly + clears stale dataset.disabledState', () => {
     applyRankedEntryGate(root, false, 'auth-expired');
     applyRankedEntryGate(root, true, 'ok');
     const buttons = findAll(root, '[data-bind="ranked-entry"]');
     buttons.forEach(b => {
       expect(b.hasAttribute('disabled')).toBe(false);
       expect(b.classList.contains('ranked-disabled')).toBe(false);
+      // Stale disabledState must be cleared so it can't leak into telemetry.
+      expect(b.dataset.disabledState).toBeUndefined();
     });
   });
 });

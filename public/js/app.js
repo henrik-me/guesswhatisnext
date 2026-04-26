@@ -10,6 +10,11 @@ import { GameAudio } from './audio.js';
 import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError } from './progressive-loader.js';
 import { validateStoredAuthToken } from './auth-boot.js';
 import {
+  CONNECTIVITY_BANNER_COPY,
+  renderConnectivityBanner as renderBanner,
+  applyRankedEntryGate as applyGate,
+} from './connectivity-ui.js';
+import {
   buildRecord as syncBuildRecord,
   enqueueRecord as syncEnqueueRecord,
   getL1Records,
@@ -450,8 +455,14 @@ const ui = {
   showRankedError(info) {
     if (!info) return;
     if (info.kind === 'network') {
-      showToast('Network error — your Ranked session was abandoned');
-      handleRankedDisconnect('network-down');
+      // Only treat as a mid-session disconnect if there is an in-flight
+      // ranked session to abandon. Session-creation network failures are
+      // surfaced by handleStartRanked, not here.
+      const hasActiveRankedSession = !!(Game.state && Game.state.ranked && !Game.state.finished);
+      if (hasActiveRankedSession) {
+        showToast('Network error — your Ranked session was abandoned');
+        handleRankedDisconnect('network-down');
+      }
       return;
     }
     if (info.kind === 'too-early-retry-exhausted') {
@@ -570,47 +581,17 @@ function showToast(message) {
  *
  * Renders the per-state banner above the main app and toggles the
  * `data-bind="ranked-entry"` buttons disabled state. Subscribes to
- * sync-client's onConnectivityChange so transitions re-render. Strings are
- * canonical from the CS52 design contract § Connectivity state machine.
+ * sync-client's onConnectivityChange so transitions re-render. The pure
+ * helpers (CONNECTIVITY_BANNER_COPY + renderBanner + applyGate) live in
+ * ./connectivity-ui.js so tests can import them directly.
  */
-const CONNECTIVITY_BANNER_COPY = {
-  ok: null,
-  'network-down': { text: 'Offline — your games still count', showSignIn: false },
-  'auth-expired': { text: 'Signed out — sign in to save your games', showSignIn: true },
-  'db-unavailable': { text: 'Online scoring paused — your games are queued', showSignIn: false },
-};
 
 function renderConnectivityBanner(stateName) {
-  const el = document.getElementById('connectivity-banner');
-  if (!el) return;
-  const copy = CONNECTIVITY_BANNER_COPY[stateName];
-  if (!copy) {
-    el.style.display = 'none';
-    el.dataset.state = 'ok';
-    return;
-  }
-  el.dataset.state = stateName;
-  el.style.display = '';
-  const textEl = el.querySelector('[data-bind="connectivity-banner-text"]');
-  if (textEl) textEl.textContent = copy.text;
-  const signInBtn = el.querySelector('[data-action="connectivity-sign-in"]');
-  if (signInBtn) signInBtn.style.display = copy.showSignIn ? '' : 'none';
+  renderBanner(document, stateName);
 }
 
 function applyRankedEntryGate(canRank, stateName) {
-  const buttons = document.querySelectorAll('[data-bind="ranked-entry"]');
-  buttons.forEach(btn => {
-    if (canRank) {
-      btn.removeAttribute('disabled');
-      btn.classList.remove('ranked-disabled');
-      btn.removeAttribute('aria-disabled');
-    } else {
-      btn.setAttribute('disabled', 'disabled');
-      btn.classList.add('ranked-disabled');
-      btn.setAttribute('aria-disabled', 'true');
-      btn.dataset.disabledState = stateName;
-    }
-  });
+  applyGate(document, canRank, stateName);
 }
 
 function applyConnectivityState(stateName) {

@@ -94,7 +94,7 @@ describe('CS52-4 Game.startRanked', () => {
     expect(Game.state.roundTimeMs).toBe(15000);
   });
 
-  it('createSession 409 (already-played-today) returns http error', async () => {
+  it('createSession 409 (already-played-today) returns http error without calling ui.showRankedError', async () => {
     const apiFetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 409,
@@ -102,8 +102,11 @@ describe('CS52-4 Game.startRanked', () => {
     });
     const ui = mockUi();
     const result = await Game.startRanked({ mode: 'ranked_daily', apiFetch, ui });
-    expect(result).toEqual({ error: 'http', status: 409 });
-    expect(ui.showRankedError).toHaveBeenCalledWith(expect.objectContaining({ kind: 'http', status: 409 }));
+    expect(result).toEqual(expect.objectContaining({ error: 'http', status: 409 }));
+    // Session-creation failures are surfaced by handleStartRanked (in app.js)
+    // with friendly per-status toasts. game.js does NOT route them through
+    // ui.showRankedError (which would trigger the mid-session abandoned overlay).
+    expect(ui.showRankedError).not.toHaveBeenCalled();
   });
 
   it('rejects unsupported mode', async () => {
