@@ -19,6 +19,8 @@ import {
   applyClaim,
   migrateLegacyQueues,
   installConnectivityListeners,
+  connectivity,
+  onConnectivityChange,
 } from './sync-client.js';
 
 /**
@@ -297,13 +299,19 @@ const ui = {
     const breakdown = document.querySelector('[data-bind="score-breakdown"]');
     if (result.correct) {
       let html = `
-        <div class="score-row"><span class="label">Base</span><span class="value">+${result.score.points}</span></div>
-        <div class="score-row"><span class="label">Speed bonus</span><span class="value">+${result.score.speedBonus}</span></div>`;
+        <div class="score-row"><span class="label">Base</span><span class="value">+${result.score.points}</span></div>`;
+      if (!result.rankedHidden) {
+        html += `<div class="score-row"><span class="label">Speed bonus</span><span class="value">+${result.score.speedBonus}</span></div>`;
+      }
       if (result.score.multiplier > 1) {
         html += `<div class="score-row"><span class="label">Streak ×${result.score.multiplier}</span><span class="value"><span class="streak-badge">🔥 ×${result.score.multiplier}</span></span></div>`;
       }
       html += `<div class="score-row total"><span class="label">Total</span><span class="value">+${result.score.total}</span></div>`;
       breakdown.innerHTML = html;
+    } else if (result.rankedHidden) {
+      // Ranked: server says incorrect, but we never reveal the canonical answer.
+      breakdown.innerHTML = `
+        <div class="score-row"><span class="label">No points</span><span class="value">+0</span></div>`;
     } else {
       breakdown.innerHTML = `
         <div class="score-row"><span class="label">No points</span><span class="value">+0</span></div>
@@ -344,32 +352,39 @@ const ui = {
       bestStreak: summary.bestStreak,
     });
 
-    // CS52-5: enqueue every completed game into the unified L1 store, then
-    // fire a gesture-driven sync. Replaces the legacy gwn_pending_scores +
-    // ProgressiveLoader queues.
+    // CS52-4: Ranked sessions are persisted server-side by /api/sessions/:id/finish
+    // — the score row already exists in `scores` with `source='ranked'`. Do NOT
+    // double-write into the offline L1 queue (would create a phantom `offline`
+    // row with the same gameplay). Local Practice modes still flow through
+    // CS52-5's L1 + /api/sync path below.
     let enqueued = false;
-    try {
-      const userId = (() => {
-        try { return getCurrentUserId(); } catch { return null; }
-      })();
-      const record = syncBuildRecord(summary, userId);
-      // enqueueRecord returns false on either (a) idempotent dedup (record
-      // already in L1, fine) or (b) L1 cap hit. Distinguish via post-state.
-      const ok = syncEnqueueRecord(record);
-      if (ok) {
-        enqueued = true;
-      } else {
-        // Check whether the record is now in L1 (dedup) or was refused (cap).
-        const present = getL1Records().some(r => r.client_game_id === record.client_game_id);
-        if (present) {
-          enqueued = true; // dedup is benign — record is already queued
+    if (summary.ranked) {
+      enqueued = true; // server-persisted; skip L1 enqueue
+      if (authToken) showSyncIndicator('Ranked score recorded ✓');
+    } else {
+      try {
+        const userId = (() => {
+          try { return getCurrentUserId(); } catch { return null; }
+        })();
+        const record = syncBuildRecord(summary, userId);
+        // enqueueRecord returns false on either (a) idempotent dedup (record
+        // already in L1, fine) or (b) L1 cap hit. Distinguish via post-state.
+        const ok = syncEnqueueRecord(record);
+        if (ok) {
+          enqueued = true;
         } else {
-          showSyncIndicator('Score not saved (offline cache full)');
+          // Check whether the record is now in L1 (dedup) or was refused (cap).
+          const present = getL1Records().some(r => r.client_game_id === record.client_game_id);
+          if (present) {
+            enqueued = true; // dedup is benign — record is already queued
+          } else {
+            showSyncIndicator('Score not saved (offline cache full)');
+          }
         }
-      }
-    } catch { /* localStorage unavailable — score is still on screen */ }
+      } catch { /* localStorage unavailable — score is still on screen */ }
+    }
 
-    if (authToken && enqueued) {
+    if (authToken && enqueued && !summary.ranked) {
       showSyncIndicator('Score saved ✓');
       // Submit score to server if logged in (single-flight via syncNow).
       // Score-submission IS a user gesture per CS52-5 § Sync triggers (#2).
@@ -391,7 +406,7 @@ const ui = {
       }).catch(() => {
         showSyncIndicator('Will sync later');
       });
-    } else if (!authToken) {
+    } else if (!authToken && !summary.ranked) {
       showToast('Log in to save your score to the leaderboard');
     }
     // (authToken && !enqueued) → cap-overflow indicator was already shown above.
@@ -425,6 +440,39 @@ const ui = {
 
     showScreen('gameover');
   },
+
+  /**
+   * CS52-4 § Ranked error surface. Called by game.js for HTTP/network/425
+   * errors mid-session. Network/auth-expired during a session is also handled
+   * by the connectivity state machine (hard fail overlay); this provides a
+   * narrower toast for HTTP-level errors that don't trip connectivity.
+   */
+  showRankedError(info) {
+    if (!info) return;
+    if (info.kind === 'network') {
+      showToast('Network error — your Ranked session was abandoned');
+      handleRankedDisconnect('network-down');
+      return;
+    }
+    if (info.kind === 'too-early-retry-exhausted') {
+      showToast('Server is busy — please try again');
+      return;
+    }
+    if (info.kind === 'http') {
+      if (info.status === 410) {
+        showToast('Session expired — please start a new Ranked game');
+        if (Game.abortRanked) Game.abortRanked();
+        showScreen('home');
+        return;
+      }
+      if (info.status === 401) {
+        // apiFetch already handled global sign-out; connectivity SM will
+        // surface the auth-expired banner and trigger hard-fail overlay.
+        return;
+      }
+      showToast(`Ranked error (HTTP ${info.status})`);
+    }
+  },
 };
 
 /** Handle an option button click — briefly show correct/wrong, then submit. */
@@ -433,29 +481,38 @@ function handleOptionClick(answer, btnEl) {
   const allBtns = document.querySelectorAll('.option-btn');
   allBtns.forEach(b => { b.disabled = true; });
 
-  // Highlight correct/wrong
   const puzzle = Game.state.currentPuzzle;
-  const isCorrect = answer === puzzle.answer;
-  allBtns.forEach(b => {
-    if (b === btnEl && !isCorrect) {
-      b.classList.add('wrong');
-    }
-    if ((b.textContent === puzzle.answer) || (b.querySelector('img')?.src === puzzle.answer)) {
-      b.classList.add('correct');
-    }
-  });
+  const isRanked = !!(Game.state && Game.state.ranked);
 
-  // Play sound feedback
-  if (isCorrect) {
-    GameAudio.playCorrect();
+  // Practice mode: pre-highlight correct/wrong locally (we have the answer
+  // bundled with the puzzle). Ranked mode: we DO NOT have the canonical
+  // answer client-side (CS52 Decision #1), so we cannot pre-color the buttons
+  // — wait for the server's verdict from /answer.
+  if (!isRanked) {
+    const isCorrect = answer === puzzle.answer;
+    allBtns.forEach(b => {
+      if (b === btnEl && !isCorrect) {
+        b.classList.add('wrong');
+      }
+      if ((b.textContent === puzzle.answer) || (b.querySelector('img')?.src === puzzle.answer)) {
+        b.classList.add('correct');
+      }
+    });
+    if (isCorrect) {
+      GameAudio.playCorrect();
+    } else {
+      GameAudio.playWrong();
+    }
   } else {
-    GameAudio.playWrong();
+    // Mark the chosen button "selected" so the user gets click feedback even
+    // without local correctness highlighting.
+    btnEl.classList.add('selected');
   }
 
   // Brief delay to show feedback, then submit
   setTimeout(() => {
     Game.submitAnswer(answer, ui);
-  }, 600);
+  }, isRanked ? 50 : 600);
 }
 
 /** Render category selection buttons. */
@@ -508,8 +565,248 @@ function showToast(message) {
   setTimeout(() => toast.remove(), 2200);
 }
 
-/** Show a non-blocking sign-in banner for unauthenticated players. */
-function showSignInBanner() {
+/**
+ * CS52-4 § Connectivity state machine — UI surface.
+ *
+ * Renders the per-state banner above the main app and toggles the
+ * `data-bind="ranked-entry"` buttons disabled state. Subscribes to
+ * sync-client's onConnectivityChange so transitions re-render. Strings are
+ * canonical from the CS52 design contract § Connectivity state machine.
+ */
+const CONNECTIVITY_BANNER_COPY = {
+  ok: null,
+  'network-down': { text: 'Offline — your games still count', showSignIn: false },
+  'auth-expired': { text: 'Signed out — sign in to save your games', showSignIn: true },
+  'db-unavailable': { text: 'Online scoring paused — your games are queued', showSignIn: false },
+};
+
+function renderConnectivityBanner(stateName) {
+  const el = document.getElementById('connectivity-banner');
+  if (!el) return;
+  const copy = CONNECTIVITY_BANNER_COPY[stateName];
+  if (!copy) {
+    el.style.display = 'none';
+    el.dataset.state = 'ok';
+    return;
+  }
+  el.dataset.state = stateName;
+  el.style.display = '';
+  const textEl = el.querySelector('[data-bind="connectivity-banner-text"]');
+  if (textEl) textEl.textContent = copy.text;
+  const signInBtn = el.querySelector('[data-action="connectivity-sign-in"]');
+  if (signInBtn) signInBtn.style.display = copy.showSignIn ? '' : 'none';
+}
+
+function applyRankedEntryGate(canRank, stateName) {
+  const buttons = document.querySelectorAll('[data-bind="ranked-entry"]');
+  buttons.forEach(btn => {
+    if (canRank) {
+      btn.removeAttribute('disabled');
+      btn.classList.remove('ranked-disabled');
+      btn.removeAttribute('aria-disabled');
+    } else {
+      btn.setAttribute('disabled', 'disabled');
+      btn.classList.add('ranked-disabled');
+      btn.setAttribute('aria-disabled', 'true');
+      btn.dataset.disabledState = stateName;
+    }
+  });
+}
+
+function applyConnectivityState(stateName) {
+  renderConnectivityBanner(stateName);
+  applyRankedEntryGate(stateName === 'ok', stateName);
+  // CS52-4: if a Ranked session is in flight and the state transitions to
+  // anything non-ok, hard-fail the session and show the abandoned overlay.
+  if (stateName !== 'ok' && Game.state && Game.state.ranked && !Game.state.finished) {
+    handleRankedDisconnect(stateName);
+  }
+}
+
+let connectivityUnsubscribe = null;
+function installConnectivityUI() {
+  applyConnectivityState(connectivity.state);
+  if (connectivityUnsubscribe) connectivityUnsubscribe();
+  connectivityUnsubscribe = onConnectivityChange((next) => {
+    applyConnectivityState(next);
+  });
+}
+
+/**
+ * CS52-4 § Mid-Ranked-disconnect = hard fail (per CS52 Decision #9).
+ * Aborts any in-flight session, clears Game state, shows the abandoned overlay.
+ * Server-side reconciliation flips status='abandoned' on the user's next
+ * session-mutating request — no client → server signal needed here.
+ */
+function handleRankedDisconnect(stateName) {
+  const sessionId = Game.abortRanked && Game.abortRanked();
+  try {
+    console.info('[client] ranked_session_abandoned_due_to_disconnect', {
+      mode: (Game.state && Game.state.mode) || null,
+      sessionId,
+      connectivityState: stateName,
+    });
+  } catch { /* ignore */ }
+  showRankedAbandonedOverlay();
+}
+
+function showRankedAbandonedOverlay() {
+  // De-dup: if an overlay is already up, just re-focus its primary action.
+  let overlay = document.querySelector('.ranked-abandoned-overlay');
+  if (overlay) {
+    const primary = overlay.querySelector('.btn-primary');
+    if (primary) primary.focus();
+    return;
+  }
+  overlay = document.createElement('div');
+  overlay.className = 'ranked-abandoned-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'ranked-abandoned-title');
+  overlay.innerHTML = `
+    <div class="ranked-abandoned-modal" tabindex="-1">
+      <div class="ranked-abandoned-icon" aria-hidden="true">📡</div>
+      <h2 class="ranked-abandoned-title" id="ranked-abandoned-title">Session abandoned</h2>
+      <p class="ranked-abandoned-message">Lost connection — Ranked session abandoned, no score recorded.</p>
+      <div class="ranked-abandoned-actions">
+        <button type="button" class="btn btn-primary" data-action="ranked-abandoned-practice">Play Practice</button>
+        <button type="button" class="btn btn-secondary" data-action="ranked-abandoned-home">Back to home</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.ranked-abandoned-modal');
+  if (modal) modal.focus();
+}
+
+function dismissRankedAbandonedOverlay() {
+  const overlay = document.querySelector('.ranked-abandoned-overlay');
+  if (overlay) overlay.remove();
+}
+
+/**
+ * CS52-4 § Ranked entry handler. Validates auth + connectivity, surfaces the
+ * appropriate friendly toast on the common failure modes (not-signed-in,
+ * connectivity gate, 409 already-played-today), and otherwise hands off to
+ * Game.startRanked for the streaming flow.
+ */
+async function handleStartRanked(mode) {
+  if (!isLoggedIn()) {
+    authReturnScreen = currentScreen;
+    showToast('Sign in to play Ranked');
+    showScreen('auth');
+    return;
+  }
+  if (!connectivity.canRank) {
+    const copy = CONNECTIVITY_BANNER_COPY[connectivity.state];
+    showToast(copy ? copy.text : 'Ranked is unavailable right now');
+    return;
+  }
+  try {
+    console.info('[client] ranked_session_started', { mode });
+  } catch { /* ignore */ }
+  let result;
+  try {
+    result = await Game.startRanked({ mode, apiFetch, ui });
+  } catch {
+    showToast('Couldn\u2019t start Ranked — please try again');
+    return;
+  }
+  if (!result || result.ok) return;
+  if (result.error === 'http') {
+    if (result.status === 409) {
+      showToast('You already played today\u2019s Ranked Daily');
+    } else if (result.status === 401) {
+      showToast('Signed out — please sign in again');
+    } else if (result.status === 503) {
+      showToast('Ranked is warming up — try again in a moment');
+    } else {
+      showToast('Couldn\u2019t start Ranked — please try again');
+    }
+  } else if (result.error === 'network') {
+    // Connectivity listeners will surface the banner; show a quick toast too.
+    showToast('Network error — Ranked unavailable');
+  }
+  // result.aborted → silent (overlay shown by handleRankedDisconnect)
+}
+
+/**
+ * CS52-4 § Claim prompt — replaces the MVP window.confirm shim.
+ *
+ * Renders an accessible modal (focus trap, ESC = decline, Enter = accept).
+ * Decline → records stay in L1 in current state (re-fires on next sign-in).
+ * Accept → applyClaim re-attributes records to currentUserId and they sync
+ * on the next gesture-driven /api/sync.
+ */
+function showClaimPromptModal({ total, unattachedCount, mismatchedCount, onAccept, onDecline }) {
+  return new Promise(resolve => {
+    const previousActive = document.activeElement;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'claim-modal-backdrop';
+    backdrop.innerHTML = `
+      <div class="claim-modal" role="dialog" aria-modal="true" aria-labelledby="claim-modal-title" aria-describedby="claim-modal-message" tabindex="-1">
+        <h2 class="claim-modal-title" id="claim-modal-title">Add offline games to your account?</h2>
+        <p class="claim-modal-message" id="claim-modal-message">${total} pending offline games will be added to your account.</p>
+        <div class="claim-modal-actions">
+          <button type="button" class="btn btn-secondary" data-action="claim-decline">Not now</button>
+          <button type="button" class="btn btn-primary" data-action="claim-accept">Add to my account</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+    const modal = backdrop.querySelector('.claim-modal');
+    const acceptBtn = backdrop.querySelector('[data-action="claim-accept"]');
+    const declineBtn = backdrop.querySelector('[data-action="claim-decline"]');
+
+    const focusables = [declineBtn, acceptBtn];
+    let focusIdx = 1;
+    const setFocus = () => focusables[focusIdx]?.focus();
+
+    function cleanup() {
+      backdrop.removeEventListener('keydown', onKey);
+      backdrop.remove();
+      if (previousActive && typeof previousActive.focus === 'function') previousActive.focus();
+    }
+    function accept() {
+      try { console.info('[client] claim_prompt_accepted', { claimedCount: total }); } catch { /* ignore */ }
+      cleanup();
+      try { onAccept && onAccept(); } catch { /* ignore */ }
+      resolve('accept');
+    }
+    function decline() {
+      try { console.info('[client] claim_prompt_declined', { pendingCount: total }); } catch { /* ignore */ }
+      cleanup();
+      try { onDecline && onDecline(); } catch { /* ignore */ }
+      resolve('decline');
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); decline(); return; }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        focusIdx = (focusIdx + (e.shiftKey ? -1 : 1) + focusables.length) % focusables.length;
+        setFocus();
+        return;
+      }
+      if (e.key === 'Enter' && document.activeElement === acceptBtn) {
+        e.preventDefault(); accept();
+      }
+    }
+
+    acceptBtn.addEventListener('click', accept);
+    declineBtn.addEventListener('click', decline);
+    backdrop.addEventListener('keydown', onKey);
+    // Click on backdrop = decline (treat as dismiss).
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) decline();
+    });
+
+    try {
+      console.info('[client] claim_prompt_shown', { unattachedCount, mismatchedCount });
+    } catch { /* ignore */ }
+
+    // Focus the primary action so Enter accepts.
+    if (modal) modal.focus();
+    setFocus();
+  });
+}
   const existing = document.querySelector('.sign-in-banner');
   if (existing) existing.remove();
 
@@ -576,6 +873,11 @@ function init() {
   // network-down — it does NOT auto-fire a sync. The next user gesture
   // is what triggers the actual /api/sync RPC (boot-quiet contract).
   try { installConnectivityListeners(); } catch { /* test env may lack window */ }
+
+  // CS52-4: install the connectivity-banner + ranked-entry gate. Renders
+  // current state once, subscribes to onConnectivityChange so transitions
+  // re-render and (when ok→non-ok mid-Ranked-session) trigger hard fail.
+  try { installConnectivityUI(); } catch { /* DOM may be absent in tests */ }
 
   // Validate stored token on startup (non-blocking).
   //
@@ -711,6 +1013,23 @@ function init() {
       case 'start-daily':
         if (!isLoggedIn()) showSignInBanner();
         Game.startDaily(localPuzzles, ui);
+        break;
+      case 'start-ranked-freeplay':
+      case 'start-ranked-daily':
+        handleStartRanked(action === 'start-ranked-daily' ? 'ranked_daily' : 'ranked_freeplay');
+        break;
+      case 'connectivity-sign-in':
+        authReturnScreen = currentScreen;
+        showScreen('auth');
+        break;
+      case 'ranked-abandoned-practice':
+        dismissRankedAbandonedOverlay();
+        showScreen('category');
+        renderCategories();
+        break;
+      case 'ranked-abandoned-home':
+        dismissRankedAbandonedOverlay();
+        showScreen('home');
         break;
       case 'go-home':
         disconnectWebSocket();
@@ -1585,15 +1904,14 @@ async function maybeShowClaimPrompt() {
   catch { return; }
   const total = claimable.unattached.length + claimable.mismatched.length;
   if (total === 0) return;
-  // Use confirm() for MVP — a richer custom-modal UI is CS52-4's screen scope.
-  // If explicit confirmation is unavailable (no `window.confirm`, e.g. test
-  // env or SSR), fail closed: leave the records untouched rather than
-  // silently auto-attributing offline plays to the signed-in user without
-  // consent. The next sign-in (in a confirm-capable context) will reprompt.
-  const proceed = (typeof window !== 'undefined' && typeof window.confirm === 'function')
-    ? window.confirm(`${total} pending offline games will be added to your account.`)
-    : false;
-  if (proceed) {
+  // CS52-4 § Claim prompt — accessible custom modal (replaces MVP confirm()).
+  // Decline leaves records untouched; they re-surface on next sign-in.
+  const decision = await showClaimPromptModal({
+    total,
+    unattachedCount: claimable.unattached.length,
+    mismatchedCount: claimable.mismatched.length,
+  });
+  if (decision === 'accept') {
     try { applyClaim(userId); } catch { /* ignore */ }
   }
 }

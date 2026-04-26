@@ -369,3 +369,47 @@ customEvents
 | summarize n = count() by bin(timestamp, 15m), to_state
 | render timechart
 ```
+
+---
+
+## E. CS52-4 — Client telemetry signals (Ranked + claim prompt)
+
+CS52-4 emits structured `console.info(...)` lines from the browser. These are
+not (yet) forwarded to App Insights — see § D.1 for the AI client SDK gap
+(tracked under CS54-9). The signal names are stable so the queries below will
+work once the bridge ships.
+
+Signals emitted from `public/js/app.js` and `public/js/game.js`:
+
+| Signal | Where | Payload |
+| --- | --- | --- |
+| `ranked_session_started` | game.js + app.js (entry) | `{ mode }` |
+| `ranked_session_abandoned_due_to_disconnect` | app.js | `{ mode, sessionId, connectivityState }` |
+| `claim_prompt_shown` | app.js | `{ unattachedCount, mismatchedCount }` |
+| `claim_prompt_accepted` | app.js | `{ claimedCount }` |
+| `claim_prompt_declined` | app.js | `{ pendingCount }` |
+
+### Ranked-session abandonment rate (mid-session disconnect frequency)
+
+Once browser AI is wired, this trend reveals how often Ranked sessions die
+mid-stream — a high rate suggests Free Tier connectivity instability or
+auth-token expiry tuning needs revisiting.
+
+```kusto
+customEvents
+| where timestamp > ago(7d)
+| where name in ('ranked_session_started', 'ranked_session_abandoned_due_to_disconnect')
+| summarize n = count() by bin(timestamp, 1h), name
+| evaluate pivot(name, sum(n))
+| extend rate = todouble(ranked_session_abandoned_due_to_disconnect) / todouble(ranked_session_started)
+| render timechart
+```
+
+### Claim-prompt accept rate
+
+```kusto
+customEvents
+| where timestamp > ago(30d)
+| where name in ('claim_prompt_shown', 'claim_prompt_accepted', 'claim_prompt_declined')
+| summarize n = count() by name
+```
