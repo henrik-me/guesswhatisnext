@@ -973,14 +973,23 @@ async function persistCompletedMatch(room, roomCode, userScores) {
       return;
     }
     await db.transaction(async (tx) => {
+      // CS52-7d (Copilot R3): use DB-side CURRENT_TIMESTAMP for the legacy
+      // `matches`/`match_players` DATETIME columns rather than binding an
+      // ISO-Z string. The mssql-adapter passes CURRENT_TIMESTAMP through to
+      // T-SQL unchanged (it's a valid SQL Server keyword), avoiding the
+      // implicit string→DATETIME conversion path that has been brittle in
+      // production (see done_cs18_mssql-production-fixes.md). The new
+      // ranked_sessions rows still take the ISO timestamp so all four
+      // timestamp columns (started_at/finished_at/expires_at) on a single
+      // row are written consistently in one transaction.
       await tx.run(
-        `UPDATE matches SET status = 'finished', finished_at = ? WHERE id = ?`,
-        [finishedAtIso, matchId]
+        `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [matchId]
       );
       for (const { userId, total } of userScores) {
         await tx.run(
-          `UPDATE match_players SET score = ?, finished_at = ? WHERE match_id = ? AND user_id = ?`,
-          [total, finishedAtIso, matchId, userId]
+          `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`,
+          [total, matchId, userId]
         );
       }
       await insertMatchRows(tx, {

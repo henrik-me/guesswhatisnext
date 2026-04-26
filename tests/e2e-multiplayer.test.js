@@ -474,6 +474,24 @@ describe('Multiplayer E2E', () => {
         // client_time_ms preserved separately from server-derived elapsed_ms.
         expect(e.client_time_ms).toBe(500);
       }
+      // CS52-7d (Copilot R3): scoring parity — recompute the final score
+      // from the persisted events via the shared scoring service and assert
+      // it equals what was stored in `ranked_sessions.score` (and the
+      // legacy `match_players.score`). This is the core CS52-7d contract:
+      // live MP scoring + persistence must replay losslessly through the
+      // same `computeFinalScore` path used by single-player Ranked.
+      const { computeFinalScore } =
+        require('../server/services/scoringService');
+      const cfgForScore = JSON.parse(s.config_snapshot);
+      const recomputed = computeFinalScore(events, cfgForScore);
+      expect(recomputed.score).toBe(s.score);
+      expect(recomputed.correctCount).toBe(s.correct_count);
+      expect(recomputed.bestStreak).toBe(s.best_streak);
+      const legacyRow = await db.get(
+        `SELECT score FROM match_players WHERE match_id = ? AND user_id = ?`,
+        [matchId, s.user_id]
+      );
+      expect(legacyRow.score).toBe(s.score);
     }
 
     hostWs.close();
