@@ -697,7 +697,8 @@ async function endMatch(roomCode) {
     // Non-fatal
   }
 
-  // Check achievements for all players
+  // Check achievements for all players (CS52-7: MP match-end is a
+  // server-validated outcome — achievement evaluation is allowed here.)
   try {
     for (const { userId, total, rank } of userScores) {
       const isWin = rank === 1 && rank1Players.length === 1;
@@ -711,6 +712,16 @@ async function endMatch(roomCode) {
         fastestAnswerMs: null,
       };
       const unlocked = await checkAndUnlockAchievements(userId, context);
+      logger.info(
+        {
+          event: 'achievement_evaluation',
+          user_id: userId,
+          source: 'mp_match_end',
+          room_code: roomCode,
+          achievements_unlocked: unlocked.map((a) => a.id),
+        },
+        'achievements evaluated for multiplayer match-end'
+      );
       if (unlocked.length > 0) {
         const ws = room.players.get(userId);
         if (ws && ws.readyState === 1) {

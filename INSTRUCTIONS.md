@@ -390,6 +390,39 @@ Commit locally after every meaningful, working change — each commit should be 
 - **No DB-waking background work.** The database must only be touched in response to actual application usage: real user requests, operator-initiated health probes (curl), or batch jobs explicitly invoked by an operator. **Forbidden**: any timer, watchdog, scheduler, polling loop, or recurring mechanism that issues a DB query (including `SELECT 1`) on its own. This applies equally to pool health watchdogs, periodic warm-up pings, SPA pollers that hit DB-backed endpoints, and recovery loops that re-attempt initialization on a timer. If you need to detect a dead pool, do it lazily on the next real request. If you need a `/api/db-status` endpoint, it must read in-memory state ONLY (`dbInitialized` flag, init-guard `isInFlight()`, `getDbUnavailability` cached last-error) and never issue a DB query. Rationale: an idle DB (e.g. Azure SQL serverless on its way to auto-pause, or Free Tier with a finite monthly compute allowance) must be allowed to stay idle so it can pause cleanly; background DB-keepalive activity has historically caused both unnecessary cost and stuck-state failure modes (CS53).
 - **Cold-start container validation gates every check-in.** For any PR that changes server-side code, client-side runtime code, or DB-touching code (i.e., everything except docs/markdown/CI-config-only changes), the author must run a "cold-start container validation" cycle (`npm run container:validate`) before requesting local review, after local-review fixes are pushed, and after each Copilot review iteration's fixes are pushed. Capture pass/fail per cycle in the PR body under `## Container Validation`. The container restarts cleanly with `GWN_SIMULATE_COLD_START_MS=30000` so the warmup retry path is exercised on every restart, mimicking Azure SQL serverless cold-start behavior. See [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation) for the procedure.
 
+### Achievement gating (CS52-7)
+
+Server achievements unlock **only from server-validated outcomes**:
+
+- `POST /api/sessions/:id/finish` — single-player ranked sessions per CS52-3.
+  Server holds the puzzle answer; `elapsed_ms` is server-derived; the score
+  the evaluator sees is computed by `services/scoringService.js` from
+  per-answer events, not accepted from the client. Logged with
+  `source: 'ranked_finish'`.
+- WebSocket multiplayer match-end (`server/ws/matchHandler.js`) — score is
+  derived from the server-driven round/answer state machine. Logged with
+  `source: 'mp_match_end'`.
+
+Achievement evaluation is **explicitly skipped** for:
+
+- `POST /api/sync` — offline-source records are self-reported and never
+  validated. The handler must not call `checkAndUnlockAchievements`.
+- `POST /api/scores` — legacy / offline submission path. Returns
+  `newAchievements: []` and emits an `achievement_evaluation_skipped`
+  log line so an operator can confirm the gate is holding.
+
+Rationale: achievements must be tied to outcomes the server can independently
+verify (server-held puzzle answers, server-derived timing). Self-reported
+offline scores cannot meet that bar — surfacing them as achievement unlocks
+would re-open the original F2 integrity gap.
+
+Operationally: any future write path that persists a `scores` row should
+either (a) be a server-validated outcome and call `checkAndUnlockAchievements`
+with `source: '<descriptor>_finish'`, or (b) skip evaluation explicitly. The
+KQL invariant in `docs/observability.md` (`achievement_evaluation` events
+with `source ∉ {ranked_finish, mp_match_end}` should always return zero
+rows) is the production check that this rule is holding.
+
 ---
 
 ## Investigation artifacts

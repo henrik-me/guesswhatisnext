@@ -306,6 +306,60 @@ ContainerAppConsoleLogs_CL
 
 If multiple revisions are running side-by-side during a deploy, the same admin write lands on only one — the others will keep their cached values until their own TTL expires (per § Decision #10 operator caveat). Cross-reference with § B.9: a `game-configs updated` line should be followed within seconds by a `game-configs cache miss` line on the same `container` (the route busts the local cache), and within ≤24h by similar misses on every other live `container`.
 
+### B.11 Achievement gating invariant (CS52-7)
+
+Per CS52-7 / Decision #7, server achievements unlock **only** from
+server-validated outcomes. Two log events are emitted around the gate
+(see `server/routes/sessions.js` `/finish`, `server/ws/matchHandler.js`,
+and `server/routes/scores.js`):
+
+- `achievement_evaluation` — fields: `user_id`, `source ∈ {ranked_finish,
+  mp_match_end}`, `achievements_unlocked` (array of achievement ids).
+- `achievement_evaluation_skipped` — emitted by paths that deliberately
+  do NOT evaluate (legacy `POST /api/scores`; `POST /api/sync` skips
+  silently per its module header). Fields: `user_id`, `source` (e.g.
+  `legacy_scores_post`), `mode`.
+
+**Invariant query — should always return zero rows:**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "achievement_evaluation"
+| extend source = tostring(pino.source)
+| where source !in ("ranked_finish", "mp_match_end")
+| project TimeGenerated, container = ContainerName_s, source,
+          user_id = tostring(pino.user_id),
+          achievements_unlocked = pino.achievements_unlocked
+| order by TimeGenerated desc
+```
+
+Any row from this query is a CS52-7 regression — a write path is calling
+`checkAndUnlockAchievements` with an unsanctioned `source`. The fix is to
+remove the call (the path is self-reported) or to widen the allowed-source
+list here only after a code review confirms the new path is genuinely
+server-validated (server-held answer key + server-derived timing).
+
+**Daily volume sanity check (which sources are unlocking what):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "achievement_evaluation"
+| extend source = tostring(pino.source),
+         unlocked_count = array_length(pino.achievements_unlocked)
+| summarize evaluations = count(),
+            with_unlocks = countif(unlocked_count > 0)
+        by bin(TimeGenerated, 1d), source
+| order by TimeGenerated desc, source asc
+```
+
+Use this to confirm both expected sources keep firing post-deploy. If
+`mp_match_end` drops to zero unexpectedly, suspect the WS handler; if
+`ranked_finish` drops, suspect the `/finish` route.
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:
