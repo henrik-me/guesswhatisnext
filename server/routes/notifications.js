@@ -9,6 +9,7 @@ const express = require('express');
 const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { unreadCountCache, coerceUnreadCount } = require('../services/unread-count-cache');
+const logger = require('../logger');
 
 const router = express.Router();
 
@@ -98,6 +99,17 @@ router.get('/count', requireAuth, async (req, res, next) => {
     const cached = unreadCountCache.get(userId);
     if (cached !== null) {
       res.set('X-Cache', 'HIT');
+      // Telemetry (CS53-23): emit one structured Pino line per outcome so
+      // boot-quiet contract behavior is observable in App Insights via the
+      // ContainerAppConsoleLogs_CL bridge (see docs/observability.md § B.7).
+      logger.info({
+        gate: 'boot-quiet',
+        route: '/api/notifications/count',
+        cacheOutcome: 'HIT',
+        userActivity,
+        isSystem,
+        userId,
+      }, 'unread-count cache outcome');
       return res.json({ unread_count: cached });
     }
 
@@ -106,6 +118,14 @@ router.get('/count', requireAuth, async (req, res, next) => {
       // touch the DB. Returns the empty default; any in-flight writer will
       // seed the cache.
       res.set('X-Cache', 'MISS-NO-ACTIVITY');
+      logger.info({
+        gate: 'boot-quiet',
+        route: '/api/notifications/count',
+        cacheOutcome: 'MISS-NO-ACTIVITY',
+        userActivity,
+        isSystem,
+        userId,
+      }, 'unread-count cache outcome');
       return res.json({ unread_count: 0 });
     }
 
@@ -122,7 +142,19 @@ router.get('/count', requireAuth, async (req, res, next) => {
     // truth lives in unread-count-cache.js to avoid drift.
     const count = coerceUnreadCount(row ? row.count : 0);
     const stored = unreadCountCache.setIfFresh(userId, count, token);
-    res.set('X-Cache', stored ? 'MISS' : 'STALE-DROP');
+    const outcome = stored ? 'MISS' : 'STALE-DROP';
+    res.set('X-Cache', outcome);
+    // STALE-DROP signals a real concurrent-writer race (correctness preserved
+    // but worth surfacing if it spikes); use warn so it stands out in queries.
+    const logFn = outcome === 'STALE-DROP' ? logger.warn.bind(logger) : logger.info.bind(logger);
+    logFn({
+      gate: 'boot-quiet',
+      route: '/api/notifications/count',
+      cacheOutcome: outcome,
+      userActivity,
+      isSystem,
+      userId,
+    }, 'unread-count cache outcome');
     res.json({ unread_count: count });
   } catch (err) {
     next(err);

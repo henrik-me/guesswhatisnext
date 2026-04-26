@@ -222,6 +222,47 @@ describe('GET /api/notifications/count', () => {
     expect(res.body.unread_count).toBe(1);
   });
 
+  test('telemetry: emits structured boot-quiet log line per cache outcome', async () => {
+    // CS53-23 telemetry gate (INSTRUCTIONS.md § 4a): the route must emit a
+    // Pino line with gate="boot-quiet" + cacheOutcome on every request, so
+    // the documented KQL query (docs/observability.md § B.7) can observe
+    // contract behavior in App Insights via ContainerAppConsoleLogs_CL.
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const logger = require('../server/logger');
+    unreadCountCache.clear();
+
+    const infoSpy = vi.spyOn(logger, 'info');
+
+    // 1. MISS-NO-ACTIVITY (cold cache, no header, non-system caller)
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    // 2. HIT (seed cache then re-read without header)
+    unreadCountCache.set(userId, 4);
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    const calls = infoSpy.mock.calls.filter(c => c[0] && c[0].gate === 'boot-quiet');
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+
+    const outcomes = calls.map(c => c[0].cacheOutcome);
+    expect(outcomes).toContain('MISS-NO-ACTIVITY');
+    expect(outcomes).toContain('HIT');
+
+    // Each line must carry the fields the KQL query in observability.md uses.
+    for (const c of calls) {
+      expect(c[0]).toMatchObject({
+        gate: 'boot-quiet',
+        route: '/api/notifications/count',
+        userId: expect.any(Number),
+        userActivity: expect.any(Boolean),
+        isSystem: expect.any(Boolean),
+      });
+      expect(typeof c[0].cacheOutcome).toBe('string');
+    }
+  });
+
   test('boot-quiet: no X-User-Activity + cache miss → returns 0 and does NOT touch DB', async () => {
     const { unreadCountCache } = require('../server/services/unread-count-cache');
     const { getDbAdapter } = require('../server/db');
