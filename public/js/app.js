@@ -747,7 +747,9 @@ function init() {
       case 'show-leaderboard':
         showScreen('leaderboard');
         leaderboardMode = 'freeplay';
+        leaderboardSource = 'ranked';
         setActiveLeaderboardMode('freeplay');
+        setActiveLeaderboardSource('ranked');
         setActiveLeaderboardTab('alltime');
         fetchPersonalBests();
         fetchLeaderboard('alltime');
@@ -887,11 +889,41 @@ function init() {
       case 'leaderboard-mode': {
         const mode = e.target.dataset.mode;
         if (mode) {
+          // CS52-6: multiplayer has no offline path (server-validated only)
+          // and hides the source tabs; if the user had selected Offline on
+          // Free Play / Daily, snap back to the default `ranked` so the
+          // hidden state can't strand them with an empty list.
+          if (mode === 'multiplayer' && leaderboardSource !== 'ranked') {
+            leaderboardSource = 'ranked';
+            setActiveLeaderboardSource('ranked');
+          }
           leaderboardMode = mode;
           setActiveLeaderboardMode(mode);
           // Show/hide period tabs for multiplayer (they apply to both)
           setActiveLeaderboardTab('alltime');
           fetchLeaderboard('alltime');
+        }
+        break;
+      }
+      case 'leaderboard-source': {
+        const source = e.target.dataset.source;
+        if (source && source !== leaderboardSource) {
+          // CS52-6 § Telemetry: structured client log for filter changes.
+          // Visible in App Insights customEvents once the browser SDK is
+          // wired (CS54-9). Until then this lands in `console.info`.
+          console.info(JSON.stringify({
+            event: 'lb_filter_change',
+            from: leaderboardSource,
+            to: source,
+            mode: leaderboardMode,
+            ts: new Date().toISOString(),
+          }));
+          leaderboardSource = source;
+          setActiveLeaderboardSource(source);
+          // Re-render from the active period.
+          const activeTab = document.querySelector('.leaderboard-tab.active');
+          const period = activeTab?.dataset.period || 'alltime';
+          fetchLeaderboard(period);
         }
         break;
       }
@@ -1079,6 +1111,10 @@ function loadSettingsUI() {
 }
 
 let leaderboardMode = 'freeplay';
+// CS52-6 § Decision #6: public LBs default to `Ranked` (the competitive
+// view). User flips between Ranked / Offline / All via the segmented
+// control. Multiplayer hides the source tabs (no offline path).
+let leaderboardSource = 'ranked';
 
 /** Fetch and render personal bests section on the leaderboard screen. */
 async function fetchPersonalBests() {
@@ -1148,6 +1184,21 @@ function setActiveLeaderboardMode(mode) {
     tab.classList.toggle('active', isActive);
     tab.setAttribute('aria-selected', isActive);
   });
+  // CS52-6: source tabs only apply to single-player LBs (multiplayer is
+  // server-validated only — no offline path).
+  const sourceTabs = document.querySelector('[data-bind="leaderboard-source-tabs"]');
+  if (sourceTabs) {
+    sourceTabs.style.display = mode === 'multiplayer' ? 'none' : '';
+  }
+}
+
+/** Set the active leaderboard source tab (Ranked / Offline / All) visually. */
+function setActiveLeaderboardSource(source) {
+  document.querySelectorAll('.leaderboard-source-tab').forEach(tab => {
+    const isActive = tab.dataset.source === source;
+    tab.classList.toggle('active', isActive);
+    tab.setAttribute('aria-selected', isActive);
+  });
 }
 
 /** Set the active leaderboard tab visually. */
@@ -1163,9 +1214,15 @@ function setActiveLeaderboardTab(period) {
 async function fetchLeaderboard(period) {
   const container = document.querySelector('[data-bind="leaderboard-table"]');
 
+  // CS52-6 § Public leaderboard contract:
+  //   GET /api/scores/leaderboard?variant=freeplay|daily&source=ranked|offline|all
+  //   GET /api/scores/leaderboard/multiplayer?source=ranked|offline|all
+  // `variant` is REQUIRED on the non-multiplayer endpoint (server returns
+  // 400 if missing). `source` defaults to 'ranked' but we always pass it
+  // explicitly so the response carries the echo we expect.
   const url = leaderboardMode === 'multiplayer'
-    ? `/api/scores/leaderboard/multiplayer?period=${period}`
-    : `/api/scores/leaderboard?mode=freeplay&period=${period}`;
+    ? `/api/scores/leaderboard/multiplayer?source=${leaderboardSource}&period=${period}`
+    : `/api/scores/leaderboard?variant=${leaderboardMode}&source=${leaderboardSource}&period=${period}`;
 
   const data = await progressiveLoad(
     async (signal) => {
@@ -1180,10 +1237,13 @@ async function fetchLeaderboard(period) {
   );
 
   if (data) {
+    // Server returns both `rows` (CS52-6 canonical) and `leaderboard`
+    // (legacy alias). Prefer `rows`.
+    const entries = data.rows || data.leaderboard || [];
     if (leaderboardMode === 'multiplayer') {
-      renderMultiplayerLeaderboard(data.leaderboard);
+      renderMultiplayerLeaderboard(entries);
     } else {
-      renderLeaderboard(data.leaderboard);
+      renderLeaderboard(entries);
     }
   }
 }
@@ -1210,6 +1270,20 @@ function showSyncIndicator(message) {
   }, 3000);
 }
 
+/**
+ * Render a CS52-6 provenance badge for a score row.
+ * - 'ranked'  → green/primary (server-validated)
+ * - 'offline' → amber (self-reported)
+ * - 'legacy'  → muted (pre-CS52; profile-only)
+ */
+function provenanceBadgeHTML(source) {
+  if (!source) return '';
+  const labels = { ranked: 'Ranked', offline: 'Offline', legacy: 'Legacy' };
+  const label = labels[source];
+  if (!label) return '';
+  return `<span class="provenance-badge provenance-${source}" data-source="${source}" aria-label="Score source: ${label}">${label}</span>`;
+}
+
 /** Render leaderboard rows from API data. */
 function renderLeaderboard(entries) {
   const container = document.querySelector('[data-bind="leaderboard-table"]');
@@ -1229,10 +1303,11 @@ function renderLeaderboard(entries) {
     const userClass = isUser ? ' current-user' : '';
     const name = escapeHTML(entry.username || 'Anonymous');
     const score = entry.score ?? 0;
+    const badge = provenanceBadgeHTML(entry.source);
 
     return `<div class="leaderboard-row${rankClass}${userClass}" role="listitem">
       ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
-      <span class="leaderboard-name">${name}${isUser ? ' <span class="you-badge">You</span>' : ''}</span>
+      <span class="leaderboard-name">${name}${isUser ? ' <span class="you-badge">You</span>' : ''}${badge}</span>
       <span class="leaderboard-score">${score.toLocaleString()}</span>
     </div>`;
   }).join('');
@@ -1256,10 +1331,13 @@ function renderMultiplayerLeaderboard(entries) {
     const isUser = entry.isCurrentUser || (isLoggedIn() && authUsername && entry.username === authUsername);
     const userClass = isUser ? ' current-user' : '';
     const name = escapeHTML(entry.username || 'Anonymous');
+    // CS52-6: multiplayer rows are server-validated only; render the
+    // `Ranked` provenance badge for visual consistency with the other LBs.
+    const badge = provenanceBadgeHTML(entry.source || 'ranked');
 
     return `<div class="leaderboard-row${rankClass}${userClass}" role="listitem">
       ${medal ? `<span class="leaderboard-medal">${medal}</span>` : `<span class="leaderboard-rank">${rank}</span>`}
-      <span class="leaderboard-name">${name}${isUser ? ' <span class="you-badge">You</span>' : ''}</span>
+      <span class="leaderboard-name">${name}${isUser ? ' <span class="you-badge">You</span>' : ''}${badge}</span>
       <span class="leaderboard-stats">
         <span class="leaderboard-wins">${entry.wins}W</span>
         <span class="leaderboard-winrate">${entry.winRate}%</span>
@@ -3163,6 +3241,33 @@ function renderProfile(meData, scoresData, achievementsData, historyData) {
       </div>
     </div>
   </div>`;
+
+  // CS52-6 § Decision #6: profile shows ALL rows with badges including
+  // legacy. No toggle, no separate section, no onboarding banner — just
+  // the per-row provenance label so a returning user can recognise their
+  // pre-CS52 scores ("Legacy") without filtering them out.
+  const recentScores = (scoresData.scores || []).slice(0, 5);
+  html += `<div class="profile-section">
+    <div class="profile-section-header">
+      <span class="profile-section-title">🎮 Recent Games</span>
+    </div>`;
+  if (recentScores.length > 0) {
+    html += recentScores.map(s => {
+      const dateStr = s.played_at
+        ? new Date(s.played_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : '';
+      const modeLabel = s.mode === 'daily' ? '📅 Daily' : '🎮 Free Play';
+      return `<div class="profile-score-row">
+        <span class="profile-score-mode">${modeLabel}</span>
+        <span class="profile-score-value">${Number(s.score || 0).toLocaleString()}</span>
+        ${provenanceBadgeHTML(s.source)}
+        ${dateStr ? `<span class="profile-score-date">${dateStr}</span>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    html += '<div class="profile-empty">No games yet — start playing!</div>';
+  }
+  html += '</div>';
 
   // Recent Achievements section
   html += `<div class="profile-section">

@@ -269,7 +269,7 @@ describe('POST /api/sync — achievement evaluation skipped for offline', () => 
 
 describe('GET /api/scores/leaderboard — source filter (CS52-5/6)', () => {
   test('source=offline returns only offline records', async () => {
-    const res = await getAgent().get('/api/scores/leaderboard?mode=freeplay&source=offline');
+    const res = await getAgent().get('/api/scores/leaderboard?variant=freeplay&source=offline');
     expect(res.status).toBe(200);
     expect(res.body.source).toBe('offline');
     for (const row of res.body.leaderboard) {
@@ -278,7 +278,7 @@ describe('GET /api/scores/leaderboard — source filter (CS52-5/6)', () => {
   });
 
   test('source=ranked excludes offline records', async () => {
-    const res = await getAgent().get('/api/scores/leaderboard?mode=freeplay&source=ranked');
+    const res = await getAgent().get('/api/scores/leaderboard?variant=freeplay&source=ranked');
     expect(res.status).toBe(200);
     for (const row of res.body.leaderboard) {
       expect(row.source).toBe('ranked');
@@ -286,26 +286,22 @@ describe('GET /api/scores/leaderboard — source filter (CS52-5/6)', () => {
   });
 
   test('source=all returns ranked + offline (legacy excluded)', async () => {
-    const res = await getAgent().get('/api/scores/leaderboard?mode=freeplay&source=all');
+    const res = await getAgent().get('/api/scores/leaderboard?variant=freeplay&source=all');
     expect(res.status).toBe(200);
     for (const row of res.body.leaderboard) {
       expect(['ranked', 'offline']).toContain(row.source);
     }
   });
 
-  test('without source: legacy contract preserved (no filter)', async () => {
-    const res = await getAgent().get('/api/scores/leaderboard?mode=freeplay');
+  test('CS52-6: omitting source defaults to ranked (no longer null)', async () => {
+    const res = await getAgent().get('/api/scores/leaderboard?variant=freeplay');
     expect(res.status).toBe(200);
-    expect(res.body.source).toBeNull();
+    expect(res.body.source).toBe('ranked');
   });
 
-  test('invalid source is normalized to null (not echoed back unvalidated)', async () => {
-    // Regression for Copilot R2 #6: previously the route echoed the raw
-    // unvalidated query value back, which could mislead clients into thinking
-    // a filter had been applied.
-    const res = await getAgent().get('/api/scores/leaderboard?mode=freeplay&source=garbage-value');
-    expect(res.status).toBe(200);
-    expect(res.body.source).toBeNull();
+  test('CS52-6: invalid source returns 400 (no longer 200 + null)', async () => {
+    const res = await getAgent().get('/api/scores/leaderboard?variant=freeplay&source=garbage-value');
+    expect(res.status).toBe(400);
   });
 });
 
