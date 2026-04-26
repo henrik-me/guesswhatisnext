@@ -131,10 +131,12 @@ describe('CS52-8 cross-task: multiplayer match-end achievement evaluation', () =
     );
     const matchId = matchRow.id;
 
-    const hostWs = await connectWS(hToken);
-    const joinerWs = await connectWS(jToken);
-
+    let hostWs;
+    let joinerWs;
     try {
+      hostWs = await connectWS(hToken);
+      joinerWs = await connectWS(jToken);
+
       hostWs.send(JSON.stringify({ type: 'join', roomCode }));
       await waitForMessage(hostWs, 'joined');
       joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
@@ -190,11 +192,11 @@ describe('CS52-8 cross-task: multiplayer match-end achievement evaluation', () =
       expect(hostUnlocks.length).toBeGreaterThanOrEqual(1);
       expect(joinerUnlocks.length).toBeGreaterThanOrEqual(1);
     } finally {
-      // Always close sockets — a mid-test assertion failure otherwise
-      // leaves upgraded WS connections behind that helper.teardown()
-      // does not reach (it only stops the HTTP server + DB).
-      try { hostWs.close(); } catch { /* ignore */ }
-      try { joinerWs.close(); } catch { /* ignore */ }
+      // Always close whichever sockets were successfully opened, even if
+      // the second connectWS rejected — helper.teardown() does not reach
+      // upgraded WS connections, so a leak here would pollute later tests.
+      if (hostWs) { try { hostWs.close(); } catch { /* ignore */ } }
+      if (joinerWs) { try { joinerWs.close(); } catch { /* ignore */ } }
     }
   }, 20000);
 });
