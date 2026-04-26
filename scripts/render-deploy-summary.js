@@ -124,10 +124,48 @@ function render(results, env = process.env) {
 
   lines.push('### AI verification');
   lines.push('');
-  lines.push('_(populated by CS41-3 in a follow-up PR — placeholder for now)_');
+  lines.push(renderAiVerification(env));
   lines.push('');
 
   return lines.join('\n');
+}
+
+/**
+ * Reads `ai-verification.json` (path overridable via env) and renders the
+ * CS41-3 AI ingest section. Falls back to a "not run / not found"
+ * placeholder when the file is missing — that's the expected state when
+ * the smoke step failed and the verifier was skipped.
+ */
+function renderAiVerification(env = process.env) {
+  const path = env.AI_VERIFICATION_PATH || 'ai-verification.json';
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(path, 'utf-8'));
+  } catch {
+    return '_AI verification not run (smoke failed or skipped — see above)._';
+  }
+  const out = [];
+  out.push(`- **AI resource:** \`${data.ai_resource || '—'}\``);
+  out.push(`- **Revision:** \`${data.revision_name || '—'}\``);
+  out.push(`- **Time window:** \`ago(${data.time_window || '?'})\``);
+  out.push(`- **Query attempts:** ${data.query_attempts ?? '—'}  (cumulative az time: ${fmtElapsed(data.query_duration_ms)})`);
+  out.push(`- **Rows captured:** ${data.rows_total ?? 0} (expected ≥ ${data.expected_rows ?? '?'})`);
+  if (data.error) {
+    out.push(`- **Status:** ❌ AI access broken — \`${String(data.error).slice(0, 240)}\``);
+    return out.join('\n');
+  }
+  if (data.warning) {
+    out.push(`- **Status:** ⚠️ ingest delayed beyond budget — deploy NOT rolled back. Verify \`${data.ai_resource}\` manually.`);
+  } else {
+    out.push('- **Status:** ✅ All smoke probes ingested within budget.');
+  }
+  if (Array.isArray(data.rows_by_route) && data.rows_by_route.length > 0) {
+    out.push('- **By route:**');
+    for (const row of data.rows_by_route) {
+      out.push(`  - \`${row.name}\`: ${row.count} (${row.resultCode})`);
+    }
+  }
+  return out.join('\n');
 }
 
 function main() {
@@ -152,4 +190,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { render, fmtElapsed, statusIcon, migrationIcon, stepDetail };
+module.exports = { render, renderAiVerification, fmtElapsed, statusIcon, migrationIcon, stepDetail };

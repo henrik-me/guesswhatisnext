@@ -409,6 +409,23 @@ jobs:
           # the dedicated "Fail if smoke failed" step gate the rollback.
           exit 0
 
+      - name: AI telemetry verification (CS41-3)
+        id: ai-verify
+        # Only run when smoke succeeded. `continue-on-error: true` is
+        # critical per CS41-3 plan: AI ingest delay is warning-only and
+        # MUST NOT block a healthy deploy or trigger rollback. The
+        # dedicated "Fail if smoke failed" gate (below) drives rollback
+        # decisions; this step does not participate in that gate.
+        if: steps.smoke.outputs.smoke-exit == '0'
+        continue-on-error: true
+        env:
+          NEW_REVISION_NAME: ${{ steps.rev.outputs.revision }}
+          AI_RESOURCE: gwn-ai-production
+          RESOURCE_GROUP: gwn-rg
+          EXPECTED_ROW_COUNT: '6'
+          AI_VERIFY_OUTPUT_PATH: ai-verification.json
+        run: node scripts/verify-ai.js
+
       - name: Render deploy summary (CS41-8)
         if: always()
         env:
@@ -416,6 +433,7 @@ jobs:
           REVISION_NAME: ${{ steps.rev.outputs.revision }}
           MIGRATION_STATUS: applied
           ENVIRONMENT: production
+          AI_VERIFICATION_PATH: ai-verification.json
         run: |
           if [ -f smoke-results.json ]; then
             node scripts/render-deploy-summary.js smoke-results.json >> "$GITHUB_STEP_SUMMARY"
@@ -429,6 +447,14 @@ jobs:
               echo "- **Smoke verdict:** ❌ smoke did not produce results (script crashed or env error)"
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Upload AI verification artifact (CS41-3)
+        if: always() && hashFiles('ai-verification.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: ai-verification-production-${{ github.run_id }}
+          path: ai-verification.json
+          retention-days: 90
 
       - name: Upload smoke results artifact (CS41-8)
         if: always() && hashFiles('smoke-results.json') != ''

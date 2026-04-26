@@ -52,6 +52,9 @@ describe('CS41-8 — render-deploy-summary happy path', () => {
     expect(md).toContain('id=4242');
     expect(md).toContain('| GET /api/health (DB) | ✅ |');
     expect(md).toContain('### AI verification');
+    // No verification file present in this test → falls back to the
+    // "not run" placeholder (verified more thoroughly in CS41-3 tests).
+    expect(md).toMatch(/_AI verification not run/);
     // No perf-warnings section when array is empty
     expect(md).not.toContain('### Perf warnings');
   });
@@ -97,5 +100,72 @@ describe('CS41-8 — render-deploy-summary failure / partial', () => {
     const md = render({ passed: false, steps: [] }, {});
     expect(md).toContain('_no steps recorded_');
     expect(md).toContain('**Smoke verdict:** ❌ fail');
+  });
+});
+
+describe('CS41-3 — AI verification rendering', () => {
+  // Use a tmp file inside the repo (NEVER /tmp per env policy) and clean
+  // up after each test so we don't pollute the working tree.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const tmpFile = path.join(process.cwd(), `ai-verification.test.${process.pid}.json`);
+
+  function withFixture(data, fn) {
+    fs.writeFileSync(tmpFile, JSON.stringify(data));
+    try { return fn({ AI_VERIFICATION_PATH: tmpFile }); } finally {
+      try { fs.unlinkSync(tmpFile); } catch { /* noop */ }
+    }
+  }
+
+  it('renders ✅ status with per-route breakdown when threshold met', () => {
+    const data = {
+      ai_resource: 'gwn-ai-production',
+      revision_name: 'gwn-production--rev42-xy',
+      time_window: '15m',
+      query_attempts: 2,
+      query_duration_ms: 3400,
+      rows_total: 6,
+      expected_rows: 6,
+      threshold_met: true,
+      warning: false,
+      error: null,
+      rows_by_route: [
+        { name: 'GET /healthz', resultCode: '200', count: 1 },
+        { name: 'POST /api/scores', resultCode: '201', count: 1 },
+      ],
+    };
+    const md = withFixture(data, (env) => render(passResults, env));
+    expect(md).toContain('### AI verification');
+    expect(md).toContain('**AI resource:** `gwn-ai-production`');
+    expect(md).toContain('**Revision:** `gwn-production--rev42-xy`');
+    expect(md).toContain('**Query attempts:** 2');
+    expect(md).toContain('**Rows captured:** 6 (expected ≥ 6)');
+    expect(md).toContain('All smoke probes ingested');
+    expect(md).toContain('`POST /api/scores`: 1 (201)');
+  });
+
+  it('renders ⚠️ status when warning=true (ingest delayed)', () => {
+    const data = {
+      ai_resource: 'gwn-ai-production', revision_name: 'rev', time_window: '15m',
+      query_attempts: 7, query_duration_ms: 9100,
+      rows_total: 0, expected_rows: 6, threshold_met: false,
+      warning: true, error: null, rows_by_route: [],
+    };
+    const md = withFixture(data, (env) => render(passResults, env));
+    expect(md).toContain('⚠️ ingest delayed beyond budget');
+    expect(md).toContain('deploy NOT rolled back');
+  });
+
+  it('renders ❌ status when error is set (mechanism failure)', () => {
+    const data = {
+      ai_resource: 'gwn-ai-production', revision_name: 'rev', time_window: '15m',
+      query_attempts: 1, query_duration_ms: 800,
+      rows_total: 0, expected_rows: 6, threshold_met: false,
+      warning: false, error: 'az exited 1: AuthorizationFailed',
+      rows_by_route: [],
+    };
+    const md = withFixture(data, (env) => render(passResults, env));
+    expect(md).toContain('❌ AI access broken');
+    expect(md).toContain('AuthorizationFailed');
   });
 });
