@@ -41,11 +41,34 @@ function _coerceCount(count) {
   return Math.trunc(n);
 }
 
+/**
+ * Hard cap on the total number of distinct users tracked by either map.
+ * In practice the live working set is far smaller than this — typical
+ * deployments have hundreds to low-thousands of active users — but the
+ * caps below give us a defense-in-depth bound on memory growth in two
+ * unbounded-churn scenarios Copilot R8 flagged:
+ *
+ *  - Many distinct users invalidate (e.g. fan-out notifications) but
+ *    never read again — the entry is deleted by `invalidate()` but the
+ *    `generations` counter stays, so `generations` grows without bound.
+ *  - Many distinct users read once and never again — both `entries` and
+ *    `generations` accumulate forever.
+ *
+ * Eviction strategy is simple FIFO over insertion order (JS Map preserves
+ * it). When a cap is hit, evict ~1% of the oldest entries from BOTH maps
+ * in lockstep — the orphan-gen pass also walks `generations` for users
+ * with no live entry. Evicting a live entry is safe: a future read just
+ * recomputes from DB on the next user-activity request, exactly the same
+ * as a cold-start cache miss.
+ */
+const MAX_ENTRIES = 10000;
+const EVICT_BATCH = Math.max(1, Math.floor(MAX_ENTRIES / 100));
+
 class UnreadCountCache {
   constructor() {
     this.entries = new Map(); // userId -> count
     this.generations = new Map(); // userId -> monotonic int (bumped on every write)
-    this.stats = { hits: 0, misses: 0, invalidations: 0, staleSetsRejected: 0 };
+    this.stats = { hits: 0, misses: 0, invalidations: 0, staleSetsRejected: 0, evictions: 0 };
   }
 
   /**
@@ -79,6 +102,7 @@ class UnreadCountCache {
       return false;
     }
     this.entries.set(userId, _coerceCount(count));
+    this._evictIfFull();
     return true;
   }
 
@@ -95,6 +119,7 @@ class UnreadCountCache {
   set(userId, count) {
     this._bumpGen(userId);
     this.entries.set(userId, _coerceCount(count));
+    this._evictIfFull();
   }
 
   /**
@@ -106,22 +131,55 @@ class UnreadCountCache {
   invalidate(userId) {
     this._bumpGen(userId);
     if (this.entries.delete(userId)) this.stats.invalidations++;
+    this._evictIfFull();
   }
 
   _bumpGen(userId) {
     this.generations.set(userId, (this.generations.get(userId) || 0) + 1);
   }
 
+  /**
+   * Bounded-size eviction (Copilot R8). Called from every mutation path so
+   * unbounded-churn workloads (fan-out invalidates to many distinct users,
+   * read-once users) can't grow either map without limit. FIFO over insertion
+   * order; orphan-gen pass cleans up generations whose entry has already been
+   * deleted by `invalidate()`.
+   */
+  _evictIfFull() {
+    if (this.entries.size > MAX_ENTRIES) {
+      let i = 0;
+      for (const userId of this.entries.keys()) {
+        this.entries.delete(userId);
+        this.generations.delete(userId);
+        this.stats.evictions++;
+        if (++i >= EVICT_BATCH) break;
+      }
+    }
+    // Cap orphan generations too — invalidate() leaves a gen counter behind
+    // even after the entry is gone (so in-flight readers' setIfFresh stays
+    // race-correct). Cap at 2× MAX_ENTRIES to leave headroom for in-flight
+    // races, then evict orphans (no live entry) in FIFO order.
+    if (this.generations.size > MAX_ENTRIES * 2) {
+      let i = 0;
+      for (const userId of this.generations.keys()) {
+        if (this.entries.has(userId)) continue;
+        this.generations.delete(userId);
+        this.stats.evictions++;
+        if (++i >= EVICT_BATCH) break;
+      }
+    }
+  }
+
   /** Test helper: clear everything. */
   clear() {
     this.entries.clear();
     this.generations.clear();
-    this.stats = { hits: 0, misses: 0, invalidations: 0, staleSetsRejected: 0 };
+    this.stats = { hits: 0, misses: 0, invalidations: 0, staleSetsRejected: 0, evictions: 0 };
   }
 
   /** Diagnostic snapshot. */
   snapshot() {
-    return { size: this.entries.size, ...this.stats };
+    return { size: this.entries.size, generationsSize: this.generations.size, ...this.stats };
   }
 }
 

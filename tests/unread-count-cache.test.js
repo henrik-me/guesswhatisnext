@@ -70,7 +70,7 @@ describe('UnreadCountCache', () => {
     cache.set(1, 1);
     cache.get(1);
     cache.clear();
-    expect(cache.snapshot()).toEqual({ size: 0, hits: 0, misses: 0, invalidations: 0, staleSetsRejected: 0 });
+    expect(cache.snapshot()).toEqual({ size: 0, generationsSize: 0, hits: 0, misses: 0, invalidations: 0, staleSetsRejected: 0, evictions: 0 });
   });
 
   test('setIfFresh stores when generation matches token', () => {
@@ -112,5 +112,38 @@ describe('UnreadCountCache', () => {
     // writer's invalidation.
     expect(cache.setIfFresh(1, 3, tokB)).toBe(false);
     expect(cache.get(1)).toBeNull();
+  });
+
+  test('bounded eviction: entries map cannot grow unbounded under read-once-many-users churn', () => {
+    // CS53-23 R8 — long-lived process with many distinct users must not
+    // accumulate cache entries forever. Cap is enforced by FIFO eviction
+    // on every set / setIfFresh / invalidate.
+    const N = 10500; // > MAX_ENTRIES (10000) so eviction must fire
+    for (let i = 1; i <= N; i++) {
+      cache.set(i, i);
+    }
+    const snap = cache.snapshot();
+    expect(snap.size).toBeLessThanOrEqual(10000);
+    expect(snap.evictions).toBeGreaterThan(0);
+    // The most-recently-inserted entry must still be present (FIFO evicts
+    // oldest first).
+    expect(cache.get(N)).toBe(N);
+  });
+
+  test('bounded eviction: orphan generations from invalidate-only churn get cleaned up', () => {
+    // CS53-23 R8 — a workload that only ever fans out invalidate() calls
+    // for distinct users (e.g. notification-insert hot path) used to leak
+    // gen counters forever. Cap on generations.size triggers orphan eviction.
+    const N = 21000; // > MAX_ENTRIES * 2 (20000)
+    for (let i = 1; i <= N; i++) {
+      // Bump the gen via invalidate without first setting (entry stays absent).
+      cache.invalidate(i);
+    }
+    const snap = cache.snapshot();
+    // Hard upper bound: orphans get evicted in batches until size <= the cap.
+    // The exact post-eviction size may sit slightly below 2 × MAX_ENTRIES
+    // because eviction fires once per invalidate call after the threshold.
+    expect(snap.generationsSize).toBeLessThanOrEqual(20000);
+    expect(snap.evictions).toBeGreaterThan(0);
   });
 });
