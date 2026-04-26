@@ -540,6 +540,70 @@ jobs:
           }
           echo "MIGRATION_STATUS=applied" >> "$GITHUB_ENV"
 
+      # CS41-12: smoke the OLD revision (still serving 100% of staging
+      # traffic at the apex hostname) against the just-migrated DB BEFORE
+      # we shift traffic to the new revision. Catches backward-incompatibility
+      # the static linter (CS41-11) cannot see — subtle query-shape changes,
+      # app-side schema introspection, trigger/index/default-value side effects.
+      #
+      # Skip conditions (each emits a notice, NOT a failure):
+      #   - MIGRATION_STATUS != 'applied'  → no schema change occurred
+      #     (staging still on SQLite, or migration step skipped).
+      #   - SMOKE_USER_PASSWORD_STAGING unset → mirror CS41-1 smoke skip behavior.
+      #   - steps.deploy.outputs.current-revision empty → first deploy ever.
+      #
+      # Failure mode (smoke fails): the migration HAS been applied to staging
+      # DB, but the OLD revision cannot serve against it. Aborting BEFORE
+      # the traffic-shift step keeps users on the OLD code — but reads/writes
+      # still hit the migrated schema, so this is degraded service. The
+      # existing "Rollback on failure" step deactivates the new revision;
+      # operator must EITHER promote the new revision manually OR hand-write
+      # inverse SQL to revert the migration. See PR body operator playbook.
+      - name: Resolve OLD revision FQDN (CS41-12 prep)
+        if: env.MIGRATION_STATUS == 'applied' && steps.deploy.outputs.current-revision != ''
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            OLD_REV="${{ steps.deploy.outputs.current-revision }}"
+            # In multi-revision mode, latestRevisionName already points at
+            # the new (0% traffic) revision. The deploy step captured
+            # current-revision from the apex traffic config — that is the
+            # one still serving 100%. Use it directly.
+            OLD_FQDN=$(az containerapp revision show \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision "$OLD_REV" \
+              --query "properties.fqdn" -o tsv 2>/dev/null || echo "")
+            if [ -z "$OLD_FQDN" ] || [ "$OLD_FQDN" = "None" ]; then
+              echo "::warning::Could not resolve FQDN for OLD revision $OLD_REV — CS41-12 will skip."
+              echo "OLD_REVISION_FQDN=" >> "$GITHUB_ENV"
+              echo "OLD_REVISION_NAME=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "OLD_REVISION_FQDN=$OLD_FQDN" >> "$GITHUB_ENV"
+            echo "OLD_REVISION_NAME=$OLD_REV" >> "$GITHUB_ENV"
+            echo "Captured OLD revision: $OLD_REV ($OLD_FQDN)"
+
+      - name: Smoke OLD revision against NEW schema (CS41-12)
+        if: env.MIGRATION_STATUS == 'applied' && env.OLD_REVISION_FQDN != ''
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+        run: |
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::notice::secrets.SMOKE_USER_PASSWORD_STAGING is unset — skipping CS41-12 old-revision smoke (mirrors CS41-1 skip behavior)."
+            exit 0
+          fi
+          node scripts/smoke.js "$OLD_REVISION_FQDN" || {
+            echo "::error::CS41-12: MIGRATION BREAKS OLD STAGING SERVER — aborting before traffic shift"
+            echo "::error::Migration applied to staging DB, but old revision $OLD_REVISION_NAME cannot serve against the new schema."
+            echo "::error::Operator action: either promote the new revision manually (az containerapp ingress traffic set --revision-weight $NEW_REV=100) OR revert the migration with hand-written inverse SQL. See PR body operator playbook."
+            exit 1
+          }
+          echo "✅ CS41-12: OLD revision $OLD_REVISION_NAME serves cleanly against the migrated schema."
+
       # CS41-1 + CS41-2: smoke the new revision against its DIRECT FQDN
       # BEFORE shifting traffic. Failure here aborts the deploy with no
       # traffic shift — the existing rollback step (`if: failure()`) handles
