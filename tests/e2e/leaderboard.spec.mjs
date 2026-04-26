@@ -32,9 +32,10 @@ test.describe('Leaderboard', () => {
     await page.locator('.category-btn').first().click();
     await expect(page.locator('[data-screen="game"]')).toHaveClass(/active/);
 
-    // Play all rounds; listen for score submission during the game
+    // Play all rounds; listen for score submission during the game.
+    // CS52-5: scores are submitted via the unified /api/sync endpoint.
     const scoreSubmitted = page.waitForResponse(
-      (resp) => resp.url().includes('/api/scores') && resp.request().method() === 'POST',
+      (resp) => resp.url().includes('/api/sync') && resp.request().method() === 'POST',
       { timeout: 30000 },
     );
     for (let i = 0; i < 10; i++) {
