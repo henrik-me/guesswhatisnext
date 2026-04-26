@@ -134,62 +134,67 @@ describe('CS52-8 cross-task: multiplayer match-end achievement evaluation', () =
     const hostWs = await connectWS(hToken);
     const joinerWs = await connectWS(jToken);
 
-    hostWs.send(JSON.stringify({ type: 'join', roomCode }));
-    await waitForMessage(hostWs, 'joined');
-    joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
-    await waitForMessage(joinerWs, 'joined');
+    try {
+      hostWs.send(JSON.stringify({ type: 'join', roomCode }));
+      await waitForMessage(hostWs, 'joined');
+      joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
+      await waitForMessage(joinerWs, 'joined');
 
-    const startH = waitForMessage(hostWs, 'match-start');
-    const startJ = waitForMessage(joinerWs, 'match-start');
-    hostWs.send(JSON.stringify({ type: 'start-match' }));
-    await Promise.all([startH, startJ]);
+      const startH = waitForMessage(hostWs, 'match-start');
+      const startJ = waitForMessage(joinerWs, 'match-start');
+      hostWs.send(JSON.stringify({ type: 'start-match' }));
+      await Promise.all([startH, startJ]);
 
-    for (let round = 0; round < totalRounds; round++) {
-      await Promise.all([
-        waitForMessage(hostWs, 'round'),
-        waitForMessage(joinerWs, 'round'),
-      ]);
-      const mr = await db.get(
-        `SELECT puzzle_id FROM match_rounds WHERE match_id = ? AND round_num = ?`,
-        [matchId, round + 1]
-      );
-      const pz = await db.get(`SELECT answer FROM puzzles WHERE id = ?`, [mr.puzzle_id]);
-      const correctId = pz.answer;
-      const rH = waitForMessage(hostWs, 'roundResult');
-      const rJ = waitForMessage(joinerWs, 'roundResult');
-      hostWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
-      joinerWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
-      await Promise.all([rH, rJ]);
-    }
-
-    await waitForMessage(hostWs, 'gameOver');
-    await waitForMessage(joinerWs, 'gameOver');
-
-    // Achievement evaluation runs after persistCompletedMatch — poll for
-    // user_achievements rows so we don't race the async path.
-    const unlocked = await waitFor(
-      async () => {
-        const rows = await db.all(
-          `SELECT user_id, achievement_id FROM user_achievements
-            WHERE user_id IN (?, ?)
-            ORDER BY user_id`,
-          [hUser.id, jUser.id]
+      for (let round = 0; round < totalRounds; round++) {
+        await Promise.all([
+          waitForMessage(hostWs, 'round'),
+          waitForMessage(joinerWs, 'round'),
+        ]);
+        const mr = await db.get(
+          `SELECT puzzle_id FROM match_rounds WHERE match_id = ? AND round_num = ?`,
+          [matchId, round + 1]
         );
-        return rows.length >= 2 ? rows : null;
-      },
-      { timeoutMs: 5000, label: 'user_achievements rows for both MP participants' }
-    );
+        const pz = await db.get(`SELECT answer FROM puzzles WHERE id = ?`, [mr.puzzle_id]);
+        const correctId = pz.answer;
+        const rH = waitForMessage(hostWs, 'roundResult');
+        const rJ = waitForMessage(joinerWs, 'roundResult');
+        hostWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
+        joinerWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
+        await Promise.all([rH, rJ]);
+      }
 
-    // Both participants must have at least one achievement unlocked from
-    // the match-end pass. The exact set depends on seed data, but
-    // `first-game` is the minimum guarantee for a fresh user playing their
-    // first server-validated session.
-    const hostUnlocks = unlocked.filter((r) => r.user_id === hUser.id);
-    const joinerUnlocks = unlocked.filter((r) => r.user_id === jUser.id);
-    expect(hostUnlocks.length).toBeGreaterThanOrEqual(1);
-    expect(joinerUnlocks.length).toBeGreaterThanOrEqual(1);
+      await waitForMessage(hostWs, 'gameOver');
+      await waitForMessage(joinerWs, 'gameOver');
 
-    hostWs.close();
-    joinerWs.close();
+      // Achievement evaluation runs after persistCompletedMatch — poll for
+      // user_achievements rows so we don't race the async path.
+      const unlocked = await waitFor(
+        async () => {
+          const rows = await db.all(
+            `SELECT user_id, achievement_id FROM user_achievements
+              WHERE user_id IN (?, ?)
+              ORDER BY user_id`,
+            [hUser.id, jUser.id]
+          );
+          return rows.length >= 2 ? rows : null;
+        },
+        { timeoutMs: 5000, label: 'user_achievements rows for both MP participants' }
+      );
+
+      // Both participants must have at least one achievement unlocked from
+      // the match-end pass. The exact set depends on seed data, but
+      // `first-game` is the minimum guarantee for a fresh user playing their
+      // first server-validated session.
+      const hostUnlocks = unlocked.filter((r) => r.user_id === hUser.id);
+      const joinerUnlocks = unlocked.filter((r) => r.user_id === jUser.id);
+      expect(hostUnlocks.length).toBeGreaterThanOrEqual(1);
+      expect(joinerUnlocks.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      // Always close sockets — a mid-test assertion failure otherwise
+      // leaves upgraded WS connections behind that helper.teardown()
+      // does not reach (it only stops the HTTP server + DB).
+      try { hostWs.close(); } catch { /* ignore */ }
+      try { joinerWs.close(); } catch { /* ignore */ }
+    }
   }, 20000);
 });

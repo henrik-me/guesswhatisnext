@@ -39,15 +39,6 @@ async function loadFresh() {
   return mod;
 }
 
-function fakeOk(body = {}) {
-  return Promise.resolve({
-    status: 200,
-    ok: true,
-    headers: { get: () => null },
-    json: () => Promise.resolve(body),
-  });
-}
-
 describe('CS52-8 — claim-prompt DECLINE leaves L1 untouched and re-surfaces on next sign-in', () => {
   it('decline (no applyClaim call) preserves all L1 records with their original user_ids', async () => {
     const m = await loadFresh();
@@ -71,18 +62,25 @@ describe('CS52-8 — claim-prompt DECLINE leaves L1 untouched and re-surfaces on
     expect(after).toEqual(before);
   });
 
-  it('decline does NOT auto-fire a sync (no apiFetch call without an explicit gesture)', async () => {
+  it('findClaimableRecords is a pure read — repeated detection has no side effects on L1', async () => {
     const m = await loadFresh();
     m.enqueueRecord(m.buildRecord({ score: 11, mode: 'freeplay' }, null));
     m.enqueueRecord(m.buildRecord({ score: 22, mode: 'freeplay' }, 99));
 
-    // Detection alone must not call the network.
-    const apiFetch = vi.fn(() => fakeOk());
-    const claim = m.findClaimableRecords(5);
-    expect(claim.unattached.length + claim.mismatched.length).toBe(2);
-    expect(apiFetch).not.toHaveBeenCalled();
-    // L1 still has both records, untouched.
-    expect(m.getL1Records().length).toBe(2);
+    const snapshot = JSON.stringify(m.getL1Records());
+
+    // Detect repeatedly — each call must return the same bucket without
+    // mutating L1. Decline = "user dismissed the modal, no applyClaim was
+    // called"; the contract says no records are deleted, reassigned, or
+    // auto-synced by the act of declining. The detection function itself
+    // must therefore have no side effects.
+    for (let i = 0; i < 3; i++) {
+      const claim = m.findClaimableRecords(5);
+      expect(claim.unattached.length).toBe(1);
+      expect(claim.mismatched.length).toBe(1);
+    }
+
+    expect(JSON.stringify(m.getL1Records())).toBe(snapshot);
   });
 
   it('after decline, the SAME claimable bucket re-surfaces on a subsequent sign-in', async () => {
