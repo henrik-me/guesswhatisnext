@@ -37,7 +37,7 @@ export function showClaimPromptModal({
     const message = document.createElement('p');
     message.className = 'claim-modal-message';
     message.id = 'claim-modal-message';
-    message.textContent = `${total} pending offline games will be added to your account.`;
+    message.textContent = `${total} pending offline ${total === 1 ? 'game' : 'games'} will be added to your account.`;
 
     const actions = document.createElement('div');
     actions.className = 'claim-modal-actions';
