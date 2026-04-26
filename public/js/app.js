@@ -506,6 +506,11 @@ function handleOptionClick(answer, btnEl) {
   // dereferencing so the click can't throw mid-overlay.
   if (!Game.state || !Game.state.currentPuzzle) return;
 
+  // Stop the round timer immediately so a timer-expiry can't fire
+  // submitAnswer(null) during the 50–600 ms feedback delay below and cause
+  // a double-submit.
+  Game.lockRound && Game.lockRound();
+
   // Disable all option buttons immediately
   const allBtns = document.querySelectorAll('.option-btn');
   allBtns.forEach(b => { b.disabled = true; });

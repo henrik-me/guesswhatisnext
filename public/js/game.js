@@ -646,6 +646,12 @@ export const Game = {
   skipRound,
   submitAnswer,
   shareResult,
+  // Stop the round countdown after the user has selected an answer but
+  // before the brief feedback delay before submitAnswer fires. Without this,
+  // a timer expiry firing inside the 50–600 ms feedback window would call
+  // submitAnswer(null) and cause a double-submit when the deferred submit
+  // also runs.
+  lockRound: () => stopTimer(),
   get state() { return state; },
   get CONFIG() { return CONFIG; },
 };
