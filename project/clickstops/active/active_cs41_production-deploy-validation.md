@@ -1,6 +1,7 @@
 # CS41 — Production & staging deploy validation (functional + telemetry + perf)
 
-**Status:** ⬜ Planned
+**Status:** 🔄 In Progress — rubber-duck review of plan
+**Owner:** yoga-gwn-c2 (claimed 2026-04-26T02:50Z)
 **Origin:** Identified during CS25 production deploy. Replanned 2026-04-26T01:30Z by yoga-gwn-c2 after CS54 (App Insights wiring) made telemetry verification concretely doable, and after the new INSTRUCTIONS.md § 4a Telemetry Validation gate established the policy this CS automates in CI. Earlier plan rev (5 tasks; CS41-3 marked "evaluate feasibility") superseded by this one.
 
 ## Goal
