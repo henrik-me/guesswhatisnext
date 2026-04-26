@@ -62,7 +62,17 @@ const L2_BOUNDS = {
 };
 
 const SCHEMA_VERSION = 1;
-const MAX_L1_RECORDS = 50;
+// L1 capacity is intentionally large: per CS52-5 § Decision #5 we MUST
+// NOT drop unsynced records (offline play could legitimately produce
+// many games before connectivity returns). The cap exists only as a
+// localStorage-quota safety net; if it is ever hit, new enqueues are
+// refused rather than evicting older pending writes.
+const MAX_L1_RECORDS = 500;
+// Per-request wire cap matches server MAX_QUEUED_RECORDS (= 50). Larger
+// L1 backlogs are drained across successive sync triggers (each ack
+// clears the sent batch; the coalesced follow-up + future user gestures
+// pull the next batch).
+const MAX_RECORDS_PER_REQUEST = 50;
 const MAX_REJECTED = 50;
 
 // ──────────────────────────────────────────────────────────────────
@@ -154,8 +164,6 @@ export function getL1Rejected() {
 }
 
 function setL1Records(records) {
-  // Cap to MAX_L1_RECORDS — drop oldest if over.
-  while (records.length > MAX_L1_RECORDS) records.shift();
   if (records.length === 0) safeRemove(L1_RECORDS_KEY);
   else safeWrite(L1_RECORDS_KEY, records);
 }
@@ -202,6 +210,14 @@ export function enqueueRecord(record) {
   const records = getL1Records();
   // Idempotency: if the same client_game_id is already in L1, don't dup.
   if (records.some(r => r.client_game_id === record.client_game_id)) return false;
+  if (records.length >= MAX_L1_RECORDS) {
+    // Quota safety net: refuse new enqueues rather than evicting older
+    // pending writes. In practice this is unreachable for normal play.
+    if (typeof console !== 'undefined') {
+      console.warn(`[sync] L1 cap hit (${MAX_L1_RECORDS}); refusing enqueue of ${record.client_game_id}`);
+    }
+    return false;
+  }
   records.push(record);
   setL1Records(records);
   return true;
@@ -210,8 +226,16 @@ export function enqueueRecord(record) {
 /**
  * One-time migration: drain the two legacy localStorage queues into L1.
  * Safe to call repeatedly — a no-op once the legacy keys are gone.
+ *
+ * Migrated records are inserted with `user_id: null` regardless of the
+ * currently signed-in user. The legacy queues had no per-record identity
+ * binding, so silently auto-attributing them would bypass the CS52-5
+ * claim-prompt flow (§ Sign-out / claim semantics). The next call to
+ * `findClaimableRecords(currentUserId)` will surface them as
+ * `unattached`, and `applyClaim(currentUserId)` re-attributes them only
+ * after the user explicitly acknowledges the prompt.
  */
-export function migrateLegacyQueues(userId) {
+export function migrateLegacyQueues() {
   const legacyKeys = ['gwn_pending_scores', 'gwn_score_sync_queue'];
   let migrated = 0;
   for (const k of legacyKeys) {
@@ -221,15 +245,15 @@ export function migrateLegacyQueues(userId) {
       continue;
     }
     for (const item of items) {
-      enqueueRecord(buildRecord({
+      const enqueued = enqueueRecord(buildRecord({
         score: item.score,
         mode: item.mode || 'freeplay',
         correctCount: item.correctCount,
         totalRounds: item.totalRounds,
         bestStreak: item.bestStreak,
         results: [],
-      }, userId));
-      migrated++;
+      }, null));
+      if (enqueued) migrated++;
     }
     safeRemove(k);
   }
@@ -401,6 +425,14 @@ async function doSync({ apiFetch, trigger, revalidateKeys, currentUserId, signal
     candidates = candidates.filter(r => r.lastQueuedAt == null || r.lastQueuedAt < cutoff);
   }
 
+  // Per-request wire cap. Larger backlogs are drained across successive
+  // sync triggers (each ack removes the sent batch from L1; the
+  // coalesced follow-up below pulls the next batch automatically).
+  if (candidates.length > MAX_RECORDS_PER_REQUEST) {
+    candidates = candidates.slice(0, MAX_RECORDS_PER_REQUEST);
+    pendingFollowup = true; // ensure remaining records get drained
+  }
+
   const queuedRecords = candidates.map(r => ({
     client_game_id: r.client_game_id,
     mode: r.mode,
@@ -426,6 +458,11 @@ async function doSync({ apiFetch, trigger, revalidateKeys, currentUserId, signal
       headers: { 'Content-Type': 'application/json', 'X-User-Activity': '1' },
       body: JSON.stringify(body),
       signal,
+      // CS52-5: a 401 here transitions our local connectivity state to
+      // `auth-expired` (records stay in L1, L2 stays warm). It MUST NOT
+      // trigger the generic auto-logout path in apiFetch — that would
+      // wipe L2 and demote L1, defeating the resume-after-reauth flow.
+      skipAuthHandling: true,
     });
   } catch (err) {
     if (err && err.name === 'AbortError') {

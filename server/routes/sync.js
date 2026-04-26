@@ -97,13 +97,19 @@ async function processRecord(db, userId, raw) {
   }
 
   try {
+    // Persist `completed_at` (offline play time) into `played_at` so
+    // date-based views (e.g. daily leaderboard) reflect when the game
+    // was actually played, not when it was synced. The DB DEFAULT
+    // (current timestamp) only fires when we omit the column, so we
+    // bind it explicitly here for offline records.
+    const playedAt = raw.completed_at ? String(raw.completed_at) : new Date().toISOString();
     await db.run(
       `INSERT INTO scores
          (user_id, mode, score, correct_count, total_rounds, best_streak,
-          source, variant, client_game_id, schema_version, payload_hash)
-       VALUES (?, ?, ?, ?, ?, ?, 'offline', ?, ?, ?, ?)`,
+          source, variant, client_game_id, schema_version, payload_hash, played_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'offline', ?, ?, ?, ?, ?)`,
       [userId, mode, score, correctCount, totalRounds, bestStreak,
-        variant, String(raw.client_game_id), schemaVersion, payloadHash]
+        variant, String(raw.client_game_id), schemaVersion, payloadHash, playedAt]
     );
     return 'acked';
   } catch (err) {

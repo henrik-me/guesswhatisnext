@@ -608,7 +608,7 @@ function init() {
         // We do, however, opportunistically migrate any pre-CS52 queued
         // entries from the legacy localStorage keys into L1 — that's a
         // local-only operation, no network/DB activity.
-        try { migrateLegacyQueues(getCurrentUserId()); } catch { /* ignore */ }
+        try { migrateLegacyQueues(); } catch { /* ignore */ }
       },
       // onDeferred intentionally omitted — silent defer per CS53-4 / Policy 1.
     }).catch(() => {
@@ -1900,7 +1900,7 @@ async function authAction(action) {
     // fire a single batched /api/sync. Migrate any pre-CS52 legacy queues
     // first, surface the claim prompt for any unattached / mismatched
     // records, then sync.
-    try { migrateLegacyQueues(getCurrentUserId()); } catch { /* ignore */ }
+    try { migrateLegacyQueues(); } catch { /* ignore */ }
     await maybeShowClaimPrompt();
     syncNow({
       apiFetch,

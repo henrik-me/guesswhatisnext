@@ -254,6 +254,42 @@ describe('GET /api/scores/leaderboard — source filter (CS52-5/6)', () => {
   });
 });
 
+describe('completed_at persistence', () => {
+  test('offline record persists completed_at as played_at (not sync time)', async () => {
+    const fresh = await registerUser('playedatuser');
+    const completedAt = '2025-01-15T08:30:00.000Z';
+    const res = await getAgent()
+      .post('/api/sync')
+      .set('Authorization', `Bearer ${fresh.token}`)
+      .set('X-User-Activity', '1')
+      .send({
+        queuedRecords: [{
+          client_game_id: 'cg-played-at-1',
+          mode: 'freeplay',
+          variant: 'freeplay',
+          score: 500,
+          correct_count: 5,
+          total_rounds: 10,
+          best_streak: 2,
+          completed_at: completedAt,
+          schema_version: 1,
+        }],
+        revalidate: {},
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.acked).toContain('cg-played-at-1');
+    // Read it back and confirm played_at matches completed_at to the second.
+    const { getDbAdapter } = require('../server/db');
+    const db = await getDbAdapter();
+    const row = await db.get(
+      'SELECT played_at FROM scores WHERE user_id = ? AND client_game_id = ?',
+      [fresh.user.id, 'cg-played-at-1']
+    );
+    const got = new Date(row.played_at).toISOString().slice(0, 19);
+    expect(got).toBe(completedAt.slice(0, 19));
+  });
+});
+
 describe('payload_hash deterministic', () => {
   test('same input produces same hash regardless of key order', () => {
     const { computePayloadHash } = require('../server/routes/sync');

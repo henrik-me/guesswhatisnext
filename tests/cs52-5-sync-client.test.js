@@ -275,12 +275,80 @@ describe('legacy queue migration', () => {
     localStorage.setItem('gwn_score_sync_queue', JSON.stringify([
       { score: 200, mode: 'daily', correctCount: 8, totalRounds: 10, bestStreak: 4 },
     ]));
-    const migrated = m.migrateLegacyQueues(7);
+    const migrated = m.migrateLegacyQueues();
     expect(migrated).toBe(2);
     expect(localStorage.getItem('gwn_pending_scores')).toBeNull();
     expect(localStorage.getItem('gwn_score_sync_queue')).toBeNull();
     expect(m.getL1Records().length).toBe(2);
-    for (const r of m.getL1Records()) expect(r.user_id).toBe(7);
+    // Per CS52-5: migrated records are unattached (user_id=null) so the
+    // claim-prompt flow can attribute them — no silent auto-claim.
+    for (const r of m.getL1Records()) expect(r.user_id).toBeNull();
+    const claim = m.findClaimableRecords(7);
+    expect(claim.unattached.length).toBe(2);
+  });
+});
+
+describe('batching: large L1 backlog drained across requests', () => {
+  it('sends at most MAX_RECORDS_PER_REQUEST (50) per call and schedules a follow-up', async () => {
+    const m = await loadFresh();
+    for (let i = 0; i < 75; i++) {
+      m.enqueueRecord(m.buildRecord({ score: i }, 1));
+    }
+    expect(m.getL1Records().length).toBe(75);
+    const apiFetch = vi.fn((url, opts) => {
+      const sent = JSON.parse(opts.body);
+      // Ack everything we received so it gets removed from L1.
+      return fakeOk({
+        acked: sent.queuedRecords.map(r => r.client_game_id),
+        rejected: [], entities: {},
+      });
+    });
+    await m.syncNow({ apiFetch, trigger: 'sync-now-button', currentUserId: 1 });
+    // Wait for coalesced follow-up
+    for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0));
+    // Two calls: first 50, then remaining 25.
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    const first = JSON.parse(apiFetch.mock.calls[0][1].body);
+    const second = JSON.parse(apiFetch.mock.calls[1][1].body);
+    expect(first.queuedRecords.length).toBe(50);
+    expect(second.queuedRecords.length).toBe(25);
+    expect(m.getL1Records().length).toBe(0);
+  });
+
+  it('refuses new enqueues when L1 cap is hit (no silent eviction)', async () => {
+    const m = await loadFresh();
+    for (let i = 0; i < 500; i++) {
+      const ok = m.enqueueRecord(m.buildRecord({ score: i }, 1));
+      expect(ok).toBe(true);
+    }
+    expect(m.getL1Records().length).toBe(500);
+    // Suppress the warn line for this test
+    const orig = console.warn;
+    console.warn = () => {};
+    const refused = m.enqueueRecord(m.buildRecord({ score: 999 }, 1));
+    console.warn = orig;
+    expect(refused).toBe(false);
+    expect(m.getL1Records().length).toBe(500);
+    // Oldest record (score=0) must still be present (no shift).
+    expect(m.getL1Records()[0].score).toBe(0);
+  });
+});
+
+describe('401 contract: opt out of generic auto-logout', () => {
+  it('passes skipAuthHandling:true so apiFetch does not wipe L1/L2', async () => {
+    const m = await loadFresh();
+    m.setL2Entity('profile', { stats: [], updatedAt: '2026-01-01T00:00:00Z' });
+    m.enqueueRecord(m.buildRecord({ score: 1 }, 1));
+    const apiFetch = vi.fn((_url, opts) => {
+      // Verify the opt-out flag is set on the way in.
+      expect(opts.skipAuthHandling).toBe(true);
+      return fakeStatus(401, { error: 'expired' });
+    });
+    await m.syncNow({ apiFetch, trigger: 'sync-now-button', currentUserId: 1 });
+    expect(m.connectivity.state).toBe('auth-expired');
+    // L2 stays warm; L1 records stay attributed (not demoted by sign-out).
+    expect(m.getL2Entity('profile')).toBeTruthy();
+    expect(m.getL1Records()[0].user_id).toBe(1);
   });
 });
 
