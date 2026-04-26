@@ -2,7 +2,7 @@
 
 This file captures accumulated knowledge, architecture decisions, risk analyses, and tool evaluations across all clickstops.
 
-> **Last updated:** 2026-04-21
+> **Last updated:** 2026-04-26
 
 ---
 
@@ -346,6 +346,69 @@ The two-step rollout is deliberate. Flipping a checker to a hard gate while viol
 **Date:** 2026-04-26
 
 During CS41 (production deploy validation) the user surfaced that the migration framework is forward-only and the deploy sequence applies migrations *before* traffic shifts to the new image — so for a brief window the **old** server runs against the **new** schema. An additive migration is invisible to the old code; a non-additive one is not, and historically that was the unwritten rule rather than an enforced one. CS41-11 added the static linter (`scripts/check-migration-policy.js`) to reject `DROP COLUMN` / `RENAME` / `NOT NULL` tightening, and CS41-12 added the runtime old-revision smoke against the just-migrated DB. CS41-13 then codified the **expand → migrate → contract** pattern in [INSTRUCTIONS.md § Multi-PR pattern for backward-incompatible migrations](INSTRUCTIONS.md#multi-pr-pattern-for-backward-incompatible-migrations) so that backward-incompat changes (rename, drop, type change) land as three individually-additive PRs rather than one unsafe one. The linter override comment on the contract PR must reference the multi-PR plan, which is what makes the safety argument auditable later.
+
+---
+
+### Race-safe in-process cache eviction (CS53-23)
+
+**Date:** 2026-04-26
+
+The unread-count cache landed in CS53-23 ([`server/services/unread-count-cache.js`](server/services/unread-count-cache.js), shipped via PR #255 squash commit `819e3e1`) uses a per-user generation counter for race-safety: writers `_bumpGen(userId)`, readers capture the gen as a token via `beginRead(userId)` before the DB read, and `setIfFresh(userId, count, token)` stores the result only if the gen still matches at commit time. A concurrent writer between `beginRead` and `setIfFresh` bumps the gen and the stale store is rejected. Standard generation-counter pattern.
+
+Bounded FIFO eviction was added under Copilot R8 to prevent unbounded growth in fan-out workloads (many users invalidated, never re-read; gen counters for never-re-read users accumulating forever). Copilot R9 then caught a real correctness bug the eviction had introduced:
+
+1. Reader `beginRead(N)` returned `0` for a never-seen user (default fallback for a missing key in the gen Map). Token captured = 0.
+2. Concurrent writer fired `invalidate(N)` → `_bumpGen` set `gen[N] = 1`.
+3. `_evictIfFull` ran (orphan-gen pass — entry for N had been deleted, gen counter was now an orphan) and deleted `gen[N]`.
+4. Reader's `setIfFresh(N, value, 0)` looked up `currentGen = gen[N] || 0 = 0`. Token (0) matched currentGen (0). Stale value committed.
+
+The reader had been right to be rejected — a writer fired between its `beginRead` and `setIfFresh` — but eviction restoring the default-0 lookup state collided with the pre-bump token of 0. **The general pattern: in a generation-counter race-protocol, eviction must NOT allow `currentGen` to coincide with previously-issued reader tokens.**
+
+Two minimal changes close the hole:
+
+- `beginRead` lazily seeds the gen from a globally-monotonic `_nextGen++` counter, so issued tokens are NEVER `0`. The default-0 fallback that survives eviction can no longer match any in-flight token.
+- `setIfFresh` rejects when `currentGen === undefined` (entry evicted), not just on token mismatch. A reader whose gen was evicted between `beginRead` and `setIfFresh` is now always rejected.
+
+Tests in [`tests/unread-count-cache.test.js`](tests/unread-count-cache.test.js) (the "R9 — eviction does NOT silently accept stale stores from in-flight readers" test) lock the contract.
+
+**Reusable lesson for future cache work** (CS53-19, CS55, anything else extending this pattern to other endpoints): if you bound a generation-counter cache via eviction, ensure that the *default value returned for an evicted key* cannot equal *any token a reader could have captured before eviction*. The simplest way to guarantee that is to issue tokens from a monotonic counter and treat "key absent" as a distinct rejected state in the commit path — never as a default that legitimately equals something.
+
+---
+
+### JWT-id coercion at the auth-middleware boundary (CS53-23)
+
+**Date:** 2026-04-26
+
+Copilot R5 on PR #255 caught a defense-in-depth gap: a previous draft of `_coerceUserId` in [`server/middleware/auth.js`](server/middleware/auth.js) collapsed any non-finite or non-positive id to `0`, then `requireAuth` would set `req.user = { id: 0, ... }` and proceed. Because **`id = 0` is the system pseudo-user** (set on the `X-API-Key` system-key path), a malformed JWT (id `'abc'`, `null`, `0`, negative, non-integer) would silently authenticate as the system account.
+
+In practice today JWT ids are always numbers (DB-issued integers serialized through `jsonwebtoken`'s JSON round-trip), so no live exploit exists — but the contract was implicit and the next contributor adding (say) a UUID-id user or an OAuth integration could re-introduce the vulnerability.
+
+The fix codifies the pattern: **coerce at the middleware boundary, return `null` for any non-coercible value, respond `401` on `null` (do NOT collapse to `0`).** `optionalAuth` follows the same rule — it ignores the token and continues without setting `req.user`. New tests in [`tests/auth.test.js`](tests/auth.test.js) hand-craft JWTs with each malformed-id shape (string, `0`, `-1`, `null`, `1.5`) and assert all five return 401, locking the regression surface.
+
+**Reusable lesson:** any "pseudo-user" sentinel id (in this codebase: `0` for system) is a security trap if user-id coercion has a fallback path that produces the same sentinel. Either:
+
+1. Make the coercion fail loudly (return `null` / throw / 401) — the path taken in CS53-23.
+2. Use a sentinel value that is structurally impossible for a real id (e.g. `-1` or a UUID with a reserved prefix).
+
+Option 1 is preferable because it preserves the simple integer model; option 2 is appropriate when the auth boundary needs to keep failing-open semantics for some reason. **Never** default to the sentinel on parse failure.
+
+---
+
+### `docs/observability.md § B.x` section conflicts under parallel-PR churn (CS53-23)
+
+**Date:** 2026-04-26
+
+The telemetry & observability gate (mandatory for any new code path — see [INSTRUCTIONS.md § 4a](INSTRUCTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work)) creates a structural pressure point in [`docs/observability.md`](docs/observability.md): every new code path landing on `main` must add at least one new `### B.<n>` section under the "Common queries" group. When 3–5 orchestrators are landing telemetry-gated PRs in parallel during a CS-wave, the `B.<n>` numbering becomes a contention surface.
+
+Concrete: the boot-quiet contract section in PR #255 was numbered `### B.7` initially, then `### B.11` after CS52-2 / CS52-3 / CS52-7c claimed `B.7..B.10`, then `### B.12` after CS52-7b claimed `B.11`. Each rebase forced a manual section-renumber and re-resolution of the `### B.<n>` header conflict.
+
+**Mitigation:** treat the section number as **non-load-bearing** — append at the end of § B, accept renumbering during rebase, do not put the number in cross-references from outside the file. Cross-reference by section title or by code path, not by `§ B.<n>`. The rebase pattern is mechanical:
+
+1. Take `HEAD`'s version of the conflict block (main's new sections stay where they are).
+2. Append your section at the end of § B with the next available number.
+3. If your section is referenced elsewhere by number, update those references.
+
+Long-term, if the contention becomes painful enough, candidates to consider: per-domain sub-files under `docs/observability/` (one file per CS feature, no shared numbering), or a stable-anchor convention (`### Boot-quiet contract` rather than `### B.12 Boot-quiet contract`). Neither change made in CS53-23 — the renumber-on-rebase pattern was tractable enough for the current parallel volume.
 
 ---
 
