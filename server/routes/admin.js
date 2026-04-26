@@ -18,10 +18,13 @@
  *   - `round_timer_ms`       : integer ∈ [5000, 60000]            (required)
  *   - `inter_round_delay_ms` : integer ∈ [0, 10000]               (optional, default 0)
  *
- * Action: UPSERT into `game_configs` (dialect-portable update-then-insert,
- * inside a transaction). Sets `updated_at` to ISO-8601 NOW. Busts the local
- * loader cache for this mode so subsequent `getConfig(mode)` calls on this
- * instance see the new value immediately (§ Decision #10 cache-bust rule).
+ * Action: UPSERT into `game_configs` using a dialect-specific atomic
+ * statement (SQLite `INSERT … ON CONFLICT DO UPDATE`, MSSQL `MERGE WITH
+ * (HOLDLOCK)`) — see `upsertConfig` for the rationale. Sets `updated_at`
+ * to NOW (bound as a JS `Date` for MSSQL DATETIME, ISO-8601 string for
+ * SQLite TEXT/DATETIME). Busts the local loader cache for this mode so
+ * subsequent `getConfig(mode)` calls on this instance see the new value
+ * immediately (§ Decision #10 cache-bust rule).
  *
  * Response 200:
  *   { mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at }
@@ -108,9 +111,16 @@ function validateBody(body) {
  * Avoids the previous portable UPDATE-then-INSERT-if-zero pattern, which on
  * MSSQL could let two concurrent writers both observe `changes=0` and both
  * INSERT — one of which would fail on PK and surface as 500.
+ *
+ * `updated_at` typing: MSSQL gets a JS `Date` (the `mssql` driver binds it
+ * as a real `DATETIME`); SQLite gets an ISO-8601 string. Sending an ISO-Z
+ * string into a SQL Server `DATETIME` column relies on implicit string→
+ * datetime conversion which has historically been brittle on Azure SQL
+ * (see `scripts/seed-ranked-puzzles.js` comment), so we avoid it here.
  */
 async function upsertConfig(db, { mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at }) {
   if (db.dialect === 'mssql') {
+    const updatedAtParam = updated_at instanceof Date ? updated_at : new Date(updated_at);
     await db.run(
       `MERGE INTO game_configs WITH (HOLDLOCK) AS t
        USING (SELECT ? AS mode, ? AS rounds, ? AS round_timer_ms,
@@ -124,7 +134,7 @@ async function upsertConfig(db, { mode, rounds, round_timer_ms, inter_round_dela
        WHEN NOT MATCHED THEN
          INSERT (mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at)
          VALUES (s.mode, s.rounds, s.round_timer_ms, s.inter_round_delay_ms, s.updated_at);`,
-      [mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at]
+      [mode, rounds, round_timer_ms, inter_round_delay_ms, updatedAtParam]
     );
     return;
   }
