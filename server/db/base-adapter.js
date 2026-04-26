@@ -95,6 +95,41 @@ class BaseAdapter {
   }
 
   /**
+   * Returns migration tracker state. This is the supported route-facing
+   * API for inspecting which migrations have been recorded as applied.
+   * Routes MUST NOT import `./migrations/_tracker` directly.
+   *
+   * Errors from the tracker query are swallowed and reported via
+   * `lastError` so callers (e.g. an admin endpoint) can map a non-null
+   * `lastError` to HTTP 500 without the adapter throwing. A common
+   * non-null case is "tracker table does not yet exist" (i.e. `migrate()`
+   * has never been called against this database).
+   *
+   * @returns {Promise<{
+   *   applied: number,           // count of migrations actually recorded as applied
+   *   appliedNames: string[],    // names of applied migrations, in version order
+   *   lastError: string|null     // last error from the tracker query, null on success
+   * }>}
+   */
+  async getMigrationState() {
+    try {
+      const { getAppliedMigrations } = require('./migrations/_tracker');
+      const rows = await getAppliedMigrations(this);
+      return {
+        applied: rows.length,
+        appliedNames: rows.map((r) => r.name),
+        lastError: null,
+      };
+    } catch (err) {
+      return {
+        applied: 0,
+        appliedNames: [],
+        lastError: err && err.message ? err.message : String(err),
+      };
+    }
+  }
+
+  /**
    * Health check — verifies the connection is alive.
    * @returns {Promise<boolean>}
    */
