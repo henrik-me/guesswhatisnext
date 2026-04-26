@@ -184,6 +184,128 @@ ContainerAppConsoleLogs_CL
 
 A non-empty result confirms migration 008 was applied during the most recent boot/restart in that environment. An empty result on a freshly-deployed revision means either (a) the runner short-circuited because the migration was already applied in a prior revision (expected on rolling re-deploys) or (b) the runner errored before logging — in which case the boot would also have failed and would surface as an `app-startup` error in `requests`. Cross-check against `_migrations` table contents via the regular DB connection if uncertain.
 
+### B.8 Ranked session lifecycle (CS52-3)
+
+The ranked session API (`POST /api/sessions`, `/answer`, `/next-round`, `/finish`) emits structured Pino lines for every state transition + every anti-cheat rejection. All lines carry `sessionId`; anti-cheat rejections additionally carry `reason` (`out-of-order` | `puzzle-mismatch` | `timing-impossible` | `expired` | `not-in-progress` | `no-current-round` | `duplicate-answer` | `concurrent-active-session` | `already-played-daily` | `daily-already-finished`). The five queries below cover the most common Ranked investigations. All queries apply to both `gwn-ai-staging` and `gwn-ai-production` — pick the resource matching the environment under investigation.
+
+**Code path observed:** [`server/routes/sessions.js`](../server/routes/sessions.js) and [`server/services/scoringService.js`](../server/services/scoringService.js).
+
+**B.8.1 Session created — rate by mode (last hour):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(1h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session created"
+| extend mode = tostring(pino.mode), sessionId = tostring(pino.sessionId)
+| summarize sessions = count() by bin(TimeGenerated, 5m), mode
+| order by TimeGenerated desc
+```
+
+Healthy: ≥1 row per 5-minute bucket per active mode under normal traffic. An empty result for `mode == "ranked_freeplay"` for >15 min means the Ranked entry point is broken (or no users are playing — cross-check with `requests | where name has "/api/sessions"` for raw POST volume).
+
+**B.8.2 Session finished — score distribution (last 24h):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session finished"
+| extend score = toint(pino.score), correctCount = toint(pino.correctCount)
+| summarize sessions = count(),
+            p50_score = percentile(score, 50),
+            p90_score = percentile(score, 90),
+            avg_correct = avg(correctCount)
+  by bin(TimeGenerated, 1h)
+| order by TimeGenerated desc
+```
+
+Use this to spot regressions in the scoring service (sudden drop in `p50_score` while `avg_correct` stays the same → multiplier bug; both drop together → users hitting a UI/timing regression).
+
+**B.8.3 Anti-cheat rejections — rate by reason (last 1h):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(1h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session anti-cheat-rejection"
+| extend reason = tostring(pino.reason), sessionId = tostring(pino.sessionId)
+| summarize rejections = count() by bin(TimeGenerated, 5m), reason
+| order by TimeGenerated desc
+```
+
+Healthy: low background rate on `out-of-order` / `timing-impossible` (real users do occasionally race themselves). A sudden spike on `concurrent-active-session` typically means a client retry loop is hammering `POST /api/sessions` — investigate the client `connectivity.state` machine. Spikes on `already-played-daily` correlate with the start of a new UTC day (expected) but should taper within minutes.
+
+**B.8.4 Forged client_time_ms detection (defence-in-depth telemetry):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session answer-received"
+| extend elapsedMs = toint(pino.elapsedMs),
+         clientTimeMs = toint(pino.clientTimeMs),
+         clientDiff = toint(pino.clientTimeMsDiff),
+         sessionId = tostring(pino.sessionId)
+| where isnotnull(clientTimeMs) and abs(clientDiff) > 5000
+| project TimeGenerated, sessionId, elapsedMs, clientTimeMs, clientDiff
+| order by abs(clientDiff) desc
+| take 50
+```
+
+`clientTimeMsDiff = client_time_ms − elapsed_ms` (server-derived). Per CS52 Decision #7 the score is computed from `elapsedMs` regardless, so this query is for **detection only** — large diffs flag clients that are misreporting (broken clocks, intentional cheat attempts, or a client-bug regression). A consistently high background rate is fine if it correlates with a known clock-skew client; sudden spikes are interesting.
+
+**B.8.5 In-band reconciliation activity (cleanup of stale in_progress rows):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session reconciled-by-request"
+| extend reconciledCount = toint(pino.reconciledCount), userId = toint(pino.userId)
+| summarize total_reconciled = sum(reconciledCount), users_reconciling = dcount(userId)
+  by bin(TimeGenerated, 1h)
+| order by TimeGenerated desc
+```
+
+
+### B.9 `game_configs` cache miss frequency (CS52-7c)
+
+The loader in [`server/services/gameConfigLoader.js`](../server/services/gameConfigLoader.js) emits one Pino INFO line per cache fill with the structured fields `{msg: "game-configs cache miss", mode, source, updated_at?}`. Under steady state with a 24h TTL, expected volume is **at most one line per mode per revision per 24h** — a single revision serving traffic for 24h should emit roughly 3 lines (one per server-authoritative mode: `ranked_freeplay`, `ranked_daily`, `multiplayer`). A spike means either (a) a deploy/restart cycled the in-process cache, or (b) the admin route was used to bust a mode (cross-check with § B.10). Sustained high volume would indicate the cache is not surviving requests, e.g. a bug that re-instantiates the loader per request.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "game-configs cache miss"
+| extend mode = tostring(pino.mode), source = tostring(pino.source), updated_at = tostring(pino.updated_at)
+| summarize fills = count(), latest = max(TimeGenerated) by mode, source
+| order by fills desc
+```
+
+`source = "db"` means a `game_configs` row was found and applied; `source = "defaults"` means the code-level fallback in [`server/services/gameConfigDefaults.js`](../server/services/gameConfigDefaults.js) was used (the row is absent for that mode). A persistent `defaults` line for a mode that operators believe should be DB-overridden is the signal that the row was deleted, never inserted, or the admin write went to a different revision (see § Decision #10 operator caveat about revision overlap).
+
+### B.10 `game_configs` admin updates (CS52-7c audit trail)
+
+Every successful `PUT /api/admin/game-configs/:mode` emits `{msg: "game-configs updated", mode, rounds, round_timer_ms, inter_round_delay_ms, actor: "admin-route"}`. Use this as the audit trail for "who changed what when" and to correlate post-change behaviour shifts against the timeline.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "game-configs updated"
+| extend mode = tostring(pino.mode),
+         rounds = toint(pino.rounds),
+         round_timer_ms = toint(pino.round_timer_ms),
+         inter_round_delay_ms = toint(pino.inter_round_delay_ms),
+         container = ContainerName_s,
+         trace_id = tostring(pino.trace_id)
+| project TimeGenerated, container, mode, rounds, round_timer_ms, inter_round_delay_ms, trace_id
+| order by TimeGenerated desc
+```
+
+If multiple revisions are running side-by-side during a deploy, the same admin write lands on only one — the others will keep their cached values until their own TTL expires (per § Decision #10 operator caveat). Cross-reference with § B.9: a `game-configs updated` line should be followed within seconds by a `game-configs cache miss` line on the same `container` (the route busts the local cache), and within ≤24h by similar misses on every other live `container`.
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:

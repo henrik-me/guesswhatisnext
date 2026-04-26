@@ -25,6 +25,8 @@ const submissionRoutes = require('./routes/submissions');
 const notificationRoutes = require('./routes/notifications');
 const userRoutes = require('./routes/users');
 const telemetryRoutes = require('./routes/telemetry');
+const sessionRoutes = require('./routes/sessions');
+const adminGameConfigsRoutes = require('./routes/admin');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
@@ -321,6 +323,11 @@ function createServer() {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/telemetry', telemetryRoutes);
+  app.use('/api/sessions', sessionRoutes);
+  // CS52-7c — admin route for `game_configs` (PUT /api/admin/game-configs/:mode).
+  // Mounted alongside the inline /api/admin/{drain,init-db} endpoints below;
+  // shares the same SYSTEM_API_KEY auth pattern via requireSystem middleware.
+  app.use('/api/admin/game-configs', adminGameConfigsRoutes);
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, async (req, res, next) => {
