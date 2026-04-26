@@ -116,6 +116,18 @@ describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', (
     expect(scanEnvObjectForm(file)).toEqual([]);
   });
 
+  // Fail-closed: a malformed JSON template could hide a truthy override from
+  // the policy guard. The scanner must emit a finding (so CI fails) rather
+  // than silently skipping the file.
+  it('emits a Policy 1 finding for malformed JSON (fail closed)', () => {
+    const file = writeFixture('broken.json', '{ "env": [ { "name": "X", "value": ');
+    const findings = scanEnvObjectForm(file);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].file).toBe(file);
+    expect(findings[0].line).toBe(1);
+    expect(findings[0].snippet).toMatch(/malformed JSON; policy scan could not be applied/);
+  });
+
   it('detects truthy override in Bicep env-object form (multi-line name/value)', () => {
     // Hand-crafted to mirror what a Container App bicep authoring would produce.
     const bicep = [

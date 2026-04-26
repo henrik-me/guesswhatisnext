@@ -229,8 +229,15 @@ function scanEnvObjectForm(relPath) {
     try {
       parsed = JSON.parse(content);
     } catch {
-      // Malformed JSON — silently skip; other tooling will flag the parse error.
-      return [];
+      // Fail closed: a malformed JSON template could hide a truthy override
+      // from the policy guard. Emit a Policy 1 finding so CI fails until the
+      // file is fixed (or removed). Line 1 is used because JSON.parse does
+      // not give us a useful position we can rely on across Node versions.
+      return [{
+        file: relPath,
+        line: 1,
+        snippet: 'malformed JSON; policy scan could not be applied — fix the file or the override flag may be hidden from the policy guard',
+      }];
     }
     if (jsonHasOverrideTruthy(parsed)) {
       findings.push({
