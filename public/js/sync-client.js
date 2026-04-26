@@ -362,7 +362,9 @@ export function clearL2() {
 export function handleSignOut() {
   clearL2();
   safeRemove(L1_REJECTED_KEY);
-  const records = getL1Records().map(r => ({ ...r, user_id: null, lastQueuedAt: null }));
+  const records = getL1Records()
+    .filter(r => r && typeof r === 'object')
+    .map(r => ({ ...r, user_id: null, lastQueuedAt: null }));
   const demotionPersisted = setL1Records(records);
   if (!demotionPersisted) {
     // Privacy-safe fallback: if we can't persist the demotion, remove the

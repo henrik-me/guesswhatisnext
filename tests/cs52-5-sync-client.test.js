@@ -533,3 +533,25 @@ describe('R7 regressions', () => {
     for (const r of rj) expect(r.rejected_reason).toBe('invalid_local_record');
   });
 });
+
+describe('R9 regressions', () => {
+  it('handleSignOut tolerates corrupted L1 storage (null / non-object entries)', async () => {
+    // Regression for Copilot R9: previously a JSON-valid but corrupted L1
+    // array containing a null element would make the spread { ...r } throw,
+    // skipping the rest of sign-out cleanup (L2 clear, L1 demotion,
+    // in-flight abort) -- a privacy hazard on a shared device.
+    const m = await loadFresh();
+    const good = m.buildRecord({ score: 1 }, 7);
+    localStorage.setItem('gwn_l1_records', JSON.stringify([good, null, 'x']));
+    m.setL2Entity('profile', { stats: [], updatedAt: 'now' });
+    expect(() => m.handleSignOut()).not.toThrow();
+    // L2 was cleared.
+    expect(m.getL2Entity('profile')).toBeNull();
+    // Only the valid record survives, and it is demoted to guest.
+    const remaining = m.getL1Records();
+    expect(remaining.length).toBe(1);
+    expect(remaining[0].user_id).toBeNull();
+    // Connectivity returned to ok.
+    expect(m.connectivity.state).toBe('ok');
+  });
+});
