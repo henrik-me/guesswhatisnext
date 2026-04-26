@@ -160,6 +160,32 @@ describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', (
     const file = writeFixture('falsy.bicep', bicep);
     expect(scanEnvObjectForm(file)).toEqual([]);
   });
+
+  it('does NOT match truthy-token prefixes such as "trueish" or "100"', () => {
+    const bicep = [
+      `name: '${OVERRIDE}'`,
+      "value: 'trueish'",
+      '',
+      `name: '${OVERRIDE}'`,
+      "value: '100'",
+    ].join('\n');
+    const file = writeFixture('prefix.bicep', bicep);
+    expect(scanEnvObjectForm(file)).toEqual([]);
+  });
+
+  it('detects truthy override when Bicep value appears BEFORE name (reverse order)', () => {
+    const bicep = [
+      'env: [',
+      '  {',
+      "    value: 'true'",
+      `    name: '${OVERRIDE}'`,
+      '  }',
+      ']',
+    ].join('\n');
+    const file = writeFixture('reverse.bicep', bicep);
+    const findings = scanEnvObjectForm(file);
+    expect(findings).toHaveLength(1);
+  });
 });
 
 describe('CS40-5 Policy 2 — FEATURE_<KEY>_PERCENTAGE=100 regex', () => {

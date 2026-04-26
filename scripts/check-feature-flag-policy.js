@@ -155,13 +155,17 @@ function jsonHasOverrideTruthy(node) {
   return false;
 }
 
-// Bicep regex pair: locate any line whose name is the override flag, then
-// look ahead within ENV_OBJECT_LOOKAHEAD_LINES for a value: '<truthy>' line.
-// Bicep object literals normally place these within 1-2 lines of each other.
+// Bicep regex pair: locate name+value lines for the override flag within
+// the same object literal. We accept either property ordering (Bicep does
+// not enforce a name-before-value convention) by checking both directions
+// within ENV_OBJECT_LOOKAHEAD_LINES of each name line.
 const ENV_OBJECT_LOOKAHEAD_LINES = 3;
 const BICEP_NAME_RE = /name\s*:\s*['"]FEATURE_FLAG_ALLOW_OVERRIDE['"]/;
+// Require either a closing quote (when quoted) or a word boundary (when
+// unquoted) after the truthy token so values like `'trueish'` or `100` do
+// NOT match the `true` / `1` prefix.
 const BICEP_VALUE_TRUTHY_RE = new RegExp(
-  String.raw`value\s*:\s*['"]?` + TRUTHY_TOKEN + String.raw`['"]?`,
+  String.raw`value\s*:\s*(?:'` + TRUTHY_TOKEN + String.raw`'|"` + TRUTHY_TOKEN + String.raw`"|` + TRUTHY_TOKEN + String.raw`\b)`,
   'i',
 );
 
@@ -193,18 +197,25 @@ function scanEnvObjectForm(relPath) {
   }
   if (/\.bicep$/i.test(relPath)) {
     const lines = content.split(/\r?\n/);
+    // Index truthy-value lines once, then for each name-line look in BOTH
+    // directions within the lookahead window. Property order inside a Bicep
+    // object literal is not semantically significant, so `value` may legally
+    // appear before `name`.
+    const truthyValueLines = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      if (BICEP_VALUE_TRUTHY_RE.test(lines[i])) truthyValueLines.push(i);
+    }
     for (let i = 0; i < lines.length; i += 1) {
       if (!BICEP_NAME_RE.test(lines[i])) continue;
-      const end = Math.min(lines.length, i + 1 + ENV_OBJECT_LOOKAHEAD_LINES);
-      for (let j = i + 1; j < end; j += 1) {
-        if (BICEP_VALUE_TRUTHY_RE.test(lines[j])) {
-          findings.push({
-            file: relPath,
-            line: i + 1,
-            snippet: `${lines[i].trim()} ... ${lines[j].trim()}`,
-          });
-          break;
-        }
+      const lo = i - ENV_OBJECT_LOOKAHEAD_LINES;
+      const hi = i + ENV_OBJECT_LOOKAHEAD_LINES;
+      const match = truthyValueLines.find((j) => j !== i && j >= lo && j <= hi);
+      if (match !== undefined) {
+        findings.push({
+          file: relPath,
+          line: i + 1,
+          snippet: `${lines[i].trim()} ... ${lines[match].trim()}`,
+        });
       }
     }
     return findings;
