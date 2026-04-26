@@ -136,10 +136,7 @@ describe('CS52-4 Game.startRanked', () => {
       });
     const ui = mockUi();
     await Game.startRanked({ mode: 'ranked_freeplay', apiFetch, ui });
-    Game.submitAnswer('A', ui);
-    // submitAnswer is sync but the network call is async — wait a tick
-    await new Promise(r => setTimeout(r, 0));
-    await new Promise(r => setTimeout(r, 0));
+    await Game.submitAnswer('A', ui);
     const answerCall = apiFetch.mock.calls[1];
     expect(answerCall[0]).toBe('/api/sessions/sess-2/answer');
     expect(answerCall[1].method).toBe('POST');
@@ -173,9 +170,7 @@ describe('CS52-4 Game.startRanked', () => {
       });
     const ui = mockUi();
     await Game.startRanked({ mode: 'ranked_freeplay', apiFetch, ui });
-    Game.submitAnswer(null, ui);
-    await new Promise(r => setTimeout(r, 0));
-    await new Promise(r => setTimeout(r, 0));
+    await Game.submitAnswer(null, ui);
     const body = JSON.parse(apiFetch.mock.calls[1][1].body);
     expect(body.answer).toBe(''); // empty string, not null
   });
@@ -206,10 +201,8 @@ describe('CS52-4 Game.startRanked', () => {
       });
     const ui = mockUi();
     await Game.startRanked({ mode: 'ranked_freeplay', apiFetch, ui });
-    Game.submitAnswer('A', ui);
-    await new Promise(r => setTimeout(r, 10));
-    Game.nextRound(ui);
-    await new Promise(r => setTimeout(r, 100));
+    await Game.submitAnswer('A', ui);
+    await Game.nextRound(ui);
     // 4 calls: create, answer, next-round (425), next-round (200)
     expect(apiFetch).toHaveBeenCalledTimes(4);
     expect(apiFetch.mock.calls[2][0]).toBe('/api/sessions/sess-4/next-round');
@@ -259,10 +252,8 @@ describe('CS52-4 Game.startRanked', () => {
       });
     const ui = mockUi();
     await Game.startRanked({ mode: 'ranked_freeplay', apiFetch, ui });
-    Game.submitAnswer('A', ui);
-    await new Promise(r => setTimeout(r, 10));
-    Game.nextRound(ui); // last round → finish
-    await new Promise(r => setTimeout(r, 50));
+    await Game.submitAnswer('A', ui);
+    await Game.nextRound(ui); // last round → finish
     expect(apiFetch.mock.calls[2][0]).toBe('/api/sessions/sess-6/finish');
     expect(ui.showGameOver).toHaveBeenCalledWith(expect.objectContaining({
       score: 150,

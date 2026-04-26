@@ -640,6 +640,9 @@ function handleRankedDisconnect(stateName) {
   showRankedAbandonedOverlay();
 }
 
+let rankedAbandonedPriorFocus = null;
+let rankedAbandonedKeyHandler = null;
+
 function showRankedAbandonedOverlay() {
   // De-dup: if an overlay is already up, just re-focus its primary action.
   let overlay = document.querySelector('.ranked-abandoned-overlay');
@@ -648,6 +651,7 @@ function showRankedAbandonedOverlay() {
     if (primary) primary.focus();
     return;
   }
+  rankedAbandonedPriorFocus = document.activeElement;
   overlay = document.createElement('div');
   overlay.className = 'ranked-abandoned-overlay';
   overlay.setAttribute('role', 'dialog');
@@ -665,12 +669,49 @@ function showRankedAbandonedOverlay() {
     </div>`;
   document.body.appendChild(overlay);
   const modal = overlay.querySelector('.ranked-abandoned-modal');
-  if (modal) modal.focus();
+  const primary = overlay.querySelector('.btn-primary');
+  const secondary = overlay.querySelector('.btn-secondary');
+  const focusables = [primary, secondary].filter(Boolean);
+
+  // Modal keyboard handling — Tab cycles within the overlay (focus trap),
+  // Escape dismisses to home, focus is restored to the prior element on close.
+  rankedAbandonedKeyHandler = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      dismissRankedAbandonedOverlay();
+      showScreen('home');
+      return;
+    }
+    if (e.key === 'Tab' && focusables.length > 0) {
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+  overlay.addEventListener('keydown', rankedAbandonedKeyHandler);
+  if (primary) primary.focus();
+  else if (modal) modal.focus();
 }
 
 function dismissRankedAbandonedOverlay() {
   const overlay = document.querySelector('.ranked-abandoned-overlay');
-  if (overlay) overlay.remove();
+  if (overlay) {
+    if (rankedAbandonedKeyHandler) {
+      overlay.removeEventListener('keydown', rankedAbandonedKeyHandler);
+      rankedAbandonedKeyHandler = null;
+    }
+    overlay.remove();
+  }
+  if (rankedAbandonedPriorFocus && typeof rankedAbandonedPriorFocus.focus === 'function') {
+    try { rankedAbandonedPriorFocus.focus(); } catch { /* ignore */ }
+  }
+  rankedAbandonedPriorFocus = null;
 }
 
 /**
