@@ -268,7 +268,43 @@ ContainerAppConsoleLogs_CL
 | order by TimeGenerated desc
 ```
 
-The reconciliation rate doubles as a proxy for "users disconnect mid-Ranked-session" — high counts indicate the network/UX flow that strands sessions. Per CS52 Decision #9 this is benign (abandoned rows don't count against quotas); persistent volume above the historical baseline is worth investigating.
+
+### B.9 `game_configs` cache miss frequency (CS52-7c)
+
+The loader in [`server/services/gameConfigLoader.js`](../server/services/gameConfigLoader.js) emits one Pino INFO line per cache fill with the structured fields `{msg: "game-configs cache miss", mode, source, updated_at?}`. Under steady state with a 24h TTL, expected volume is **at most one line per mode per revision per 24h** — a single revision serving traffic for 24h should emit roughly 3 lines (one per server-authoritative mode: `ranked_freeplay`, `ranked_daily`, `multiplayer`). A spike means either (a) a deploy/restart cycled the in-process cache, or (b) the admin route was used to bust a mode (cross-check with § B.10). Sustained high volume would indicate the cache is not surviving requests, e.g. a bug that re-instantiates the loader per request.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "game-configs cache miss"
+| extend mode = tostring(pino.mode), source = tostring(pino.source), updated_at = tostring(pino.updated_at)
+| summarize fills = count(), latest = max(TimeGenerated) by mode, source
+| order by fills desc
+```
+
+`source = "db"` means a `game_configs` row was found and applied; `source = "defaults"` means the code-level fallback in [`server/services/gameConfigDefaults.js`](../server/services/gameConfigDefaults.js) was used (the row is absent for that mode). A persistent `defaults` line for a mode that operators believe should be DB-overridden is the signal that the row was deleted, never inserted, or the admin write went to a different revision (see § Decision #10 operator caveat about revision overlap).
+
+### B.10 `game_configs` admin updates (CS52-7c audit trail)
+
+Every successful `PUT /api/admin/game-configs/:mode` emits `{msg: "game-configs updated", mode, rounds, round_timer_ms, inter_round_delay_ms, actor: "admin-route"}`. Use this as the audit trail for "who changed what when" and to correlate post-change behaviour shifts against the timeline.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "game-configs updated"
+| extend mode = tostring(pino.mode),
+         rounds = toint(pino.rounds),
+         round_timer_ms = toint(pino.round_timer_ms),
+         inter_round_delay_ms = toint(pino.inter_round_delay_ms),
+         container = ContainerName_s,
+         trace_id = tostring(pino.trace_id)
+| project TimeGenerated, container, mode, rounds, round_timer_ms, inter_round_delay_ms, trace_id
+| order by TimeGenerated desc
+```
+
+If multiple revisions are running side-by-side during a deploy, the same admin write lands on only one — the others will keep their cached values until their own TTL expires (per § Decision #10 operator caveat). Cross-reference with § B.9: a `game-configs updated` line should be followed within seconds by a `game-configs cache miss` line on the same `container` (the route busts the local cache), and within ≤24h by similar misses on every other live `container`.
 
 ## C. Staging vs prod filtering
 
