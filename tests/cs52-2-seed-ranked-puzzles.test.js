@@ -32,7 +32,7 @@ afterAll(async () => {
 });
 
 describe('seed-ranked-puzzles script', () => {
-  test('first run inserts all puzzles', async () => {
+  test('first run inserts all puzzles, second run is a no-op (idempotent)', async () => {
     const { getDbAdapter } = require('../server/db');
     const migrations = require('../server/db/migrations');
     const db = await getDbAdapter();
@@ -41,24 +41,21 @@ describe('seed-ranked-puzzles script', () => {
     const { seedRankedPuzzles, SEED_FILE } = require('../scripts/seed-ranked-puzzles');
     const data = JSON.parse(fs.readFileSync(SEED_FILE, 'utf-8'));
 
-    const result = await seedRankedPuzzles();
-    expect(result.inserted).toBe(data.puzzles.length);
-    expect(result.skipped).toBe(0);
+    // First run — every puzzle inserted.
+    const first = await seedRankedPuzzles();
+    expect(first.inserted).toBe(data.puzzles.length);
+    expect(first.skipped).toBe(0);
 
     const rows = await db.all('SELECT id, status FROM ranked_puzzles');
     expect(rows.length).toBe(data.puzzles.length);
     for (const r of rows) {
       expect(r.status).toBe('active');
     }
-  });
 
-  test('second run is a no-op (idempotent)', async () => {
-    const { seedRankedPuzzles, SEED_FILE } = require('../scripts/seed-ranked-puzzles');
-    const data = JSON.parse(fs.readFileSync(SEED_FILE, 'utf-8'));
-
-    const result = await seedRankedPuzzles();
-    expect(result.inserted).toBe(0);
-    expect(result.skipped).toBe(data.puzzles.length);
+    // Second run on the same DB — every puzzle skipped, no rows inserted.
+    const second = await seedRankedPuzzles();
+    expect(second.inserted).toBe(0);
+    expect(second.skipped).toBe(data.puzzles.length);
   });
 
   test('all puzzle ids are unique and answer is in options', () => {

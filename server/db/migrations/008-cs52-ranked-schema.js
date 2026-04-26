@@ -93,9 +93,9 @@ module.exports = {
           score INT NULL,
           correct_count INT NULL,
           best_streak INT NULL,
-          started_at NVARCHAR(50) NOT NULL,
-          finished_at NVARCHAR(50) NULL,
-          expires_at NVARCHAR(50) NOT NULL,
+          started_at DATETIME NOT NULL,
+          finished_at DATETIME NULL,
+          expires_at DATETIME NOT NULL,
           daily_utc_date NVARCHAR(20) NULL,
           FOREIGN KEY (user_id) REFERENCES users(id)
         );
@@ -143,8 +143,8 @@ module.exports = {
           puzzle_id NVARCHAR(255) NOT NULL,
           answer NVARCHAR(MAX) NOT NULL,
           correct INT NOT NULL,
-          round_started_at NVARCHAR(50) NOT NULL,
-          received_at NVARCHAR(50) NOT NULL,
+          round_started_at DATETIME NOT NULL,
+          received_at DATETIME NOT NULL,
           elapsed_ms INT NOT NULL,
           client_time_ms INT NULL,
           PRIMARY KEY (session_id, round_num),
@@ -163,8 +163,9 @@ module.exports = {
           answer NVARCHAR(MAX) NOT NULL,
           difficulty INT NULL,
           status NVARCHAR(50) NOT NULL,
-          created_at NVARCHAR(50) NOT NULL,
-          retired_at NVARCHAR(50) NULL
+          created_at DATETIME NOT NULL
+            CONSTRAINT DF_ranked_puzzles_created_at DEFAULT GETDATE(),
+          retired_at DATETIME NULL
         );
       `);
       await db.exec(`
@@ -181,7 +182,7 @@ module.exports = {
           rounds INT NOT NULL,
           round_timer_ms INT NOT NULL,
           inter_round_delay_ms INT NOT NULL CONSTRAINT DF_game_configs_iroms DEFAULT 0,
-          updated_at NVARCHAR(50) NOT NULL
+          updated_at DATETIME NOT NULL
         );
       `);
     } else {
@@ -223,9 +224,9 @@ module.exports = {
           score INTEGER,
           correct_count INTEGER,
           best_streak INTEGER,
-          started_at TEXT NOT NULL,
-          finished_at TEXT,
-          expires_at TEXT NOT NULL,
+          started_at DATETIME NOT NULL,
+          finished_at DATETIME,
+          expires_at DATETIME NOT NULL,
           daily_utc_date TEXT,
           FOREIGN KEY (user_id) REFERENCES users(id)
         );
@@ -262,8 +263,8 @@ module.exports = {
           puzzle_id TEXT NOT NULL,
           answer TEXT NOT NULL,
           correct INTEGER NOT NULL,
-          round_started_at TEXT NOT NULL,
-          received_at TEXT NOT NULL,
+          round_started_at DATETIME NOT NULL,
+          received_at DATETIME NOT NULL,
           elapsed_ms INTEGER NOT NULL,
           client_time_ms INTEGER,
           PRIMARY KEY (session_id, round_num),
@@ -281,8 +282,8 @@ module.exports = {
           answer TEXT NOT NULL,
           difficulty INTEGER,
           status TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          retired_at TEXT
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          retired_at DATETIME
         );
       `);
       await db.exec(`
@@ -297,7 +298,7 @@ module.exports = {
           rounds INTEGER NOT NULL,
           round_timer_ms INTEGER NOT NULL,
           inter_round_delay_ms INTEGER NOT NULL DEFAULT 0,
-          updated_at TEXT NOT NULL
+          updated_at DATETIME NOT NULL
         );
       `);
     }

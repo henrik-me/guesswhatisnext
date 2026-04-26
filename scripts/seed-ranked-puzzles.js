@@ -43,29 +43,40 @@ async function seedRankedPuzzles() {
 
   await db.transaction(async (tx) => {
     for (const p of data.puzzles) {
-      const existing = await tx.get(
-        'SELECT id FROM ranked_puzzles WHERE id = ?',
-        [p.id]
-      );
-      if (existing) {
-        skipped += 1;
-        continue;
+      const params = [
+        p.id,
+        p.category,
+        typeof p.prompt === 'string' ? p.prompt : JSON.stringify(p.prompt),
+        JSON.stringify(p.options),
+        p.answer,
+        p.difficulty ?? null,
+        nowIso,
+      ];
+      let result;
+      if (db.dialect === 'mssql') {
+        // Single-statement idempotent insert; pass id twice for the WHERE NOT EXISTS check.
+        // Mirrors server/db/seed-puzzles.js — race-safe (no SELECT-then-INSERT window).
+        result = await tx.run(
+          `INSERT INTO ranked_puzzles
+             (id, category, prompt, options, answer, difficulty, status, created_at)
+           SELECT ?, ?, ?, ?, ?, ?, 'active', ?
+           WHERE NOT EXISTS (SELECT 1 FROM ranked_puzzles WHERE id = ?)`,
+          [...params, p.id]
+        );
+      } else {
+        result = await tx.run(
+          `INSERT OR IGNORE INTO ranked_puzzles
+             (id, category, prompt, options, answer, difficulty, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`,
+          params
+        );
       }
-      await tx.run(
-        `INSERT INTO ranked_puzzles
-           (id, category, prompt, options, answer, difficulty, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`,
-        [
-          p.id,
-          p.category,
-          typeof p.prompt === 'string' ? p.prompt : JSON.stringify(p.prompt),
-          JSON.stringify(p.options),
-          p.answer,
-          p.difficulty ?? null,
-          nowIso,
-        ]
-      );
-      inserted += 1;
+      const changes = result && typeof result.changes === 'number' ? result.changes : 0;
+      if (changes > 0) {
+        inserted += 1;
+      } else {
+        skipped += 1;
+      }
     }
   });
 

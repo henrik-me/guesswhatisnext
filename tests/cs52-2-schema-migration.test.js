@@ -309,12 +309,28 @@ describe('CS52-2 migration', () => {
   });
 
   test('migration completion is logged via the structured logger', async () => {
-    // The migration runner emits one INFO line per applied migration with
-    // {version, name} fields — see server/db/migrations/_tracker.js.
-    // The test just ensures the registered migration carries the queryable
-    // shape the KQL in docs/observability.md depends on.
-    const m = migrations.find((mig) => mig.version === 8);
-    expect(m.version).toBe(8);
-    expect(m.name).toBe('cs52-ranked-schema');
+    // Spy on logger.info while running migrations on a fresh DB, then assert
+    // the migration runner emitted the {version, name} payload that
+    // docs/observability.md's KQL query depends on (server/db/migrations/_tracker.js
+    // is the source of the log line).
+    const logger = require('../server/logger');
+    const spy = vi.spyOn(logger, 'info').mockImplementation(() => {});
+    const freshDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-cs52-2-log-'));
+    const freshPath = path.join(freshDir, 'log-spy.db');
+    const freshDb = new SqliteAdapter(freshPath);
+    try {
+      await freshDb.connect();
+      await freshDb.migrate(migrations);
+
+      const calls = spy.mock.calls.filter(
+        (c) => c[0] && c[0].version === 8 && c[0].name === 'cs52-ranked-schema'
+      );
+      expect(calls.length).toBe(1);
+      expect(calls[0][1]).toBe('Migration applied');
+    } finally {
+      spy.mockRestore();
+      await freshDb.close();
+      fs.rmSync(freshDir, { recursive: true, force: true });
+    }
   });
 });
