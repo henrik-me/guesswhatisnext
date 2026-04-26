@@ -49,11 +49,13 @@ Trying to layer server validation onto today's single gameplay loop produces a h
 
 5. **Immutable offline records with idempotency.** Each offline game is an immutable record: `{client_game_id, mode, variant, score, correct_count, total_rounds, best_streak, fastest_answer_ms, completed_at, schema_version}`. `schema_version` is a **single integer** (start at `1`); future bumps follow the same migration policy as DB migrations (additive only). Server upserts on `(user_id, client_game_id)` so retries and multi-device replays don't double-count. **Conflict rule:** if `(user_id, client_game_id)` already exists, server compares the hash of immutable fields — match → return as `acked` (idempotent retry); mismatch → return as `rejected: "conflict_with_existing"` and log `warn` for operator visibility. This record format replaces the two ad-hoc client queues that exist today (`gwn_pending_scores` in `app.js` + the ProgressiveLoader queue).
 6. **Provenance flag on every score row.** `source ∈ {ranked, offline, legacy}`. Public leaderboard endpoints accept a `source` filter (`ranked` default, `offline`, or `all`); each leaderboard row carries a provenance badge in the UI. Personal profile endpoints show all rows including legacy with a "Legacy" badge — **no toggle, no separate section, no onboarding banner**. Legacy rows backfilled at migration time and excluded from all public leaderboard filters (legacy is profile-only — it predates the validated/self-reported distinction).
-7. **Anti-cheat bar.** Realistic target: defeat trivial DevTools / API cheating **for the ranked leaderboard**. Not bot-proof. Necessary controls: server-held answer key (decision #1), monotonic answer order, plausible per-answer timing bounds (>50ms, <2× round timer), session expiry, one active ranked session per user, rate limiting on session creation. Offline scores are deliberately not validated — the contract surfaced via the badge + filter is "self-reported, view at your own discretion".
+7. **Anti-cheat bar with server-derived ranked timing.** Realistic target: defeat trivial DevTools / API cheating **for the ranked leaderboard**. Not bot-proof. Necessary controls: server-held answer key (decision #1), monotonic answer order, **server-derived per-answer elapsed time** (the server records a `round_started_at` timestamp when it dispatches a puzzle and computes `elapsed_ms = received_at - round_started_at` on each answer; the client may report a `client_time_ms` for telemetry only — **it is never used for scoring**), session expiry, one active ranked session per user, rate limiting on session creation. The plausibility bounds (`elapsed_ms > 50ms`, `elapsed_ms < 2× round_timer_ms`) are then a sanity check on top of the server-anchored value, not the primary defence. Offline scores are deliberately not validated — the contract surfaced via the badge + filter is "self-reported, view at your own discretion".
 8. **Multiplayer config alignment + storage/scoring unification, both in this CS.** Multiplayer adopts the canonical fixed config from decision #4 (`rounds=5`, `roundTimerMs=20000`, `interRoundDelayMs=3000`) sourced from `game_configs`, not overridable by the client. Multiplayer also moves onto the unified storage + scoring path: a completed match persists as **one `ranked_sessions` row per (match, player)** plus per-answer `ranked_session_events` rows, batch-written in a single transaction on match completion via the shared core scoring service that the WS handler and the HTTP `/sessions/:id/finish` endpoint both call. The "row per (match, player)" shape means the leaderboard query for MP is identical to single-player Ranked (no special join), at the cost of duplicating four small fields (`room_code, match_id, started_at, finished_at`) across participant rows — kept consistent by the single transaction. WebSocket transport stays — only the persistence + scoring layer is shared. Half/abandoned matches do not persist (existing behaviour: disconnect mid-match = no score row).
 9. **DB-aware degradation via a unified connectivity state machine.** The split between Local and Ranked is meaningful only if Ranked degrades cleanly when the DB is unavailable (cold-start, free-tier exhaustion, outage). The client maintains a single enum `connectivity.state ∈ {ok, network-down, auth-expired, db-unavailable}` with derived `canRank = (state === 'ok')` and `canSync = (state in {'ok', 'db-unavailable'})`. Each non-`ok` state shows a state-specific banner; Ranked entry points are disabled in every non-`ok` state; Local stays fully playable in every non-`ok` state. Server: any `POST /api/sessions/:id/finish` or `POST /api/sync` write that arrives while `getDbUnavailability()` is non-null persists the payload to a durable per-request file (returns `202 Accepted` with the queued `requestId`). A drain worker, triggered by the next successful DB write or self-init success log line (no timer), replays the queue idempotently using the `(user_id, client_game_id)` upsert from decision #5. **Mid-Ranked-session disconnect = hard fail** (no soft-downgrade), and the abandoned `ranked_sessions` row gets `status='abandoned'` and **does not count** against the user's "one Ranked Daily/day" or "one active session" limits — a single Wi-Fi blip must not lock a player out of Ranked Daily for 24h. No new background timers; no client-side polling — rely on CS53's existing 503-with-Retry-After warmup signal and on the user's next gesture.
 
 10. **Game shape config lives in the database with code defaults as fallback, edited via an admin route.** A `game_configs` table holds one row per server-authoritative mode (`ranked_freeplay`, `ranked_daily`, `multiplayer`, …) with columns for `rounds`, `round_timer_ms`, `inter_round_delay_ms`, plus `updated_at`. The **code-level constants are the source of truth at boot** — when no row exists for a mode, the loader returns the defaults so a fresh DB always boots to a working game. A row in `game_configs` is an override applied at session creation. The change mechanism is a **minimal admin-only HTTP route** `PUT /api/admin/game-configs/:mode` gated by `SYSTEM_API_KEY` (existing pattern), with payload validation (`rounds ∈ [1, 50]`, `round_timer_ms ∈ [5000, 60000]`, `inter_round_delay_ms ∈ [0, 10000]`) — a hand-typed `UPDATE game_configs SET rounds=0` would otherwise brick the mode. The loader uses an **in-process `Map` cache with 24h TTL** (these tunables change rarely; multi-instance propagation is deferred until horizontal scale); the admin route **busts the local cache on write** so operators see their change take effect immediately on the same instance.
+
+    **Operator caveat re: deploy overlap.** A normal Container Apps revision swap can briefly run the old + new revision side-by-side (~30s during traffic shift), and a `game_configs` change made on one revision will not propagate to the other for up to 24h. To force convergence after an admin edit during a deploy window, the operator should either (a) wait for the old revision to be deactivated as part of the normal traffic shift, or (b) `az containerapp revision restart` on the lagging revision. The CS52-7c loader logs `game-configs: cache miss for mode=X, hit DB row updated_at=…` on every cache fill so operators can observe propagation. This caveat is acceptable because (i) `game_configs` edits happen during quiet windows, not during deploys, and (ii) a brief mixed-config window only affects which canonical shape new sessions are created with — sessions in flight already snapshot their config into `ranked_sessions.config_snapshot` at creation time, so no in-flight session can desync mid-game.
 
 ## Identity & client sync model
 
@@ -76,9 +78,11 @@ Records carry `user_id` (or `null` for guest). Two distinct write paths share on
 
 Unattached + mismatched records are surfaced via a **single combined confirm prompt** ("N pending offline games will be added to your account") rather than two separate prompts — simpler UX, same safety surface.
 
+**Decline semantics:** if the user declines (or dismisses) the claim prompt, records remain in L1 in their current state (guest records stay `user_id=null`; mismatched records keep their stored `user_id`). Nothing is silently deleted, auto-reassigned, or auto-synced. The prompt re-surfaces on each subsequent sign-in until the user explicitly claims or explicitly discards via a per-record action in the rejected/pending bucket UI.
+
 ### localStorage scope
 
-The client maintains two layers in localStorage; both survive page reload, both are cleared on sign-out per the rule below.
+The client maintains two layers in localStorage; both survive page reload. **Sign-out behaviour differs**: L2 is cleared entirely; L1 has `user_id` demoted to `null` (records become guest records, kept until next sign-in / claim) — see "Sign-out semantics" below.
 
 - **L1 — Score submission queue.** The immutable record format from decision #5. Records stay until acked. Rejected records (per the conflict rule in decision #5) move to a separate "rejected" bucket the user can review.
 - **L2-broad — Read cache.** Profile stats, own score history, last-seen leaderboards, last-seen achievements, last-seen notifications. Each L2 entity is tagged with `lastUpdatedAt` so the UI can show "last updated HH:MM" while disconnected, and each is bounded (e.g., last 100 LB rows, last 50 own scores, last 20 notifications) to prevent unbounded growth.
@@ -141,12 +145,16 @@ X-User-Activity: 1
 }
 ```
 
+**202 is mutually exclusive with the 200 fields** — if the server returns `202`, the client must treat the entire batch as queued (no records are acked, no entities are revalidated). The server never returns a mixed response containing both `acked`/`rejected`/`entities` and `queuedRequestIds`.
+
+**Client-side dedupe in `db-unavailable`:** while `connectivity.state === 'db-unavailable'`, gesture-driven triggers must NOT re-post the same `client_game_id` set to the server (would create duplicate per-request files). Concretely: each L1 record carries a `lastQueuedAt` timestamp set when it receives a 202 from the server. On the next sync trigger, the client only includes records whose `lastQueuedAt` is null OR older than the server-supplied `retryAfterMs`. Single-flight + this client-side suppression bound the queue-spam attack surface. The server-side drain worker handles acked records by their `(user_id, client_game_id)` upsert idempotency, so duplicates that do slip through are harmless.
+
 Client behaviour on response:
 
 - **Acked** → record removed from L1 queue; corresponding own-history row in L2 stays, marked `synced=true`. User's offline history view never goes blank.
 - **Rejected** → soft non-blocking notice + persistent badge until viewed; record moves to L1's rejected bucket; never silently lost.
 - **Entities** → replace the matching L2 cache wholesale, bump `lastUpdatedAt`.
-- **202** → records stay in L1 (idempotency on `(user_id, client_game_id)` makes re-send safe); state transitions to `db-unavailable`; banner shows.
+- **202** → records stay in L1 (idempotency on `(user_id, client_game_id)` makes re-send safe); each included record's `lastQueuedAt` is set; state transitions to `db-unavailable`; banner shows.
 - **401** → state transitions to `auth-expired`; client clears in-memory `user_id`; L1+L2 stay intact; sign-in surfaces on next gesture.
 - **Network error** → state transitions to `network-down`; no records lost.
 
@@ -159,7 +167,12 @@ Client behaviour on response:
 | `auth-expired` | "Signed out — sign in to save your games" | ✅ as guest | Disabled | ❌ (no auth) | server `401` |
 | `db-unavailable` | "Online scoring paused — your games are queued" | ✅ | Disabled | ✅ (server returns `202`) | server `503` with CS53 `UnavailableError` payload |
 
-`ok` is restored by the next successful sync RPC (gesture-driven). When multiple layers fail simultaneously, the state reflects whichever signal is observed first; the next RPC re-evaluates.
+**Deterministic precedence when multiple signals fire near-simultaneously:** `auth-expired` > `network-down` > `db-unavailable` > `ok`. Concretely:
+
+- A real `401` (auth) trumps everything — even if the next request fails with a network error, we should still ask the user to sign in once connectivity returns.
+- A `network-down` observation trumps a stale `db-unavailable` (we can't know the DB is still down if we can't reach the server at all).
+- `db-unavailable` is the most-recoverable state; `ok` only reasserts after a successful 200/202 RPC.
+- `ok` is restored by the next successful sync RPC (gesture-driven). The next RPC always re-evaluates and may transition to a higher-precedence state if its response indicates one.
 
 ### Sign-out semantics
 
@@ -173,6 +186,8 @@ Privacy default: sign-out means "remove my stuff from this device".
 
 All migrations are additive (per the LEARNINGS.md migration policy — backward-compatible).
 
+> **Portability note:** the SQL below is a **logical sketch** — implementation in CS52-2 must use the project's dialect-specific migration runner (`server/db/migrations/`) which already handles SQLite / MSSQL differences. In particular, the `IF NOT EXISTS` and `CREATE UNIQUE INDEX ... WHERE` filtered-index syntax shown is SQLite-flavoured; the MSSQL equivalent uses `WHERE` filtered indexes too but without `IF NOT EXISTS` (the migration runner's idempotency check guards re-execution). FK syntax is `INT IDENTITY(1,1)` for new PKs to match `users(id)` (per `server/db/migrations/001-initial.js`).
+
 ### Existing `scores` table — additive columns
 
 ```sql
@@ -182,11 +197,11 @@ ALTER TABLE scores ADD COLUMN variant           TEXT;
                    -- e.g. 'freeplay' | 'daily' | 'multiplayer' (mode-specific sub-variant)
 ALTER TABLE scores ADD COLUMN client_game_id    TEXT;
                    -- UUID minted client-side for offline records; NULL for ranked/legacy
-ALTER TABLE scores ADD COLUMN schema_version    INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE scores ADD COLUMN schema_version    INT     NOT NULL DEFAULT 1;
 ALTER TABLE scores ADD COLUMN payload_hash      TEXT;
                    -- hash of immutable fields, used for E-β conflict detection
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_user_clientgame
+CREATE UNIQUE INDEX idx_scores_user_clientgame
   ON scores(user_id, client_game_id) WHERE client_game_id IS NOT NULL;
 ```
 
@@ -194,39 +209,45 @@ Backfill (CS52-2): `UPDATE scores SET source = 'legacy' WHERE source IS NULL OR 
 
 ### New `ranked_sessions` table
 
+`user_id` is `INT` to match the existing `users(id)` PK (`INT IDENTITY(1,1)` per migration 001). All FKs reference existing tables.
+
 ```sql
 CREATE TABLE ranked_sessions (
   id              TEXT    PRIMARY KEY,    -- server-issued session UUID
-  user_id         TEXT    NOT NULL,
+  user_id         INT     NOT NULL,
   mode            TEXT    NOT NULL,        -- 'ranked_freeplay' | 'ranked_daily' | 'multiplayer'
   config_snapshot TEXT    NOT NULL,        -- JSON of {rounds, round_timer_ms, inter_round_delay_ms} at session creation
   match_id        TEXT,                    -- non-null only for multiplayer rows; same value across all participant rows of one match
   room_code       TEXT,                    -- multiplayer only
   status          TEXT    NOT NULL,        -- 'in_progress' | 'finished' | 'abandoned' | 'expired'
-  score           INTEGER,                 -- server-computed at finish; NULL until finished
-  correct_count   INTEGER,
-  best_streak     INTEGER,
+  score           INT,                     -- server-computed at finish; NULL until finished
+  correct_count   INT,
+  best_streak     INT,
   started_at      TEXT    NOT NULL,
   finished_at     TEXT,
-  expires_at      TEXT    NOT NULL
+  expires_at      TEXT    NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 CREATE INDEX idx_ranked_sessions_user_mode_finished ON ranked_sessions(user_id, mode, finished_at DESC);
 CREATE INDEX idx_ranked_sessions_match              ON ranked_sessions(match_id) WHERE match_id IS NOT NULL;
+CREATE INDEX idx_ranked_sessions_user_status_expires ON ranked_sessions(user_id, status, expires_at);
 ```
 
-Note: I-β shape (one row per `(match, player)` for multiplayer). Match metadata (`room_code`, `match_id`, `started_at`, `finished_at`) is duplicated across participant rows of the same match; the single match-completion transaction keeps them consistent.
+Note: I-β shape (one row per `(match, player)` for multiplayer). Match metadata (`room_code`, `match_id`, `started_at`, `finished_at`) is duplicated across participant rows of the same match; the single match-completion transaction keeps them consistent. The `idx_ranked_sessions_user_status_expires` index supports the in-band reconciliation rule below.
 
 ### New `ranked_session_events` table
 
 ```sql
 CREATE TABLE ranked_session_events (
-  session_id   TEXT    NOT NULL REFERENCES ranked_sessions(id),
-  round_num    INTEGER NOT NULL,
-  puzzle_id    TEXT    NOT NULL,
-  answer       TEXT    NOT NULL,           -- the option index/value the player submitted
-  correct      INTEGER NOT NULL,           -- 0 or 1, server-computed against the held answer key
-  time_ms      INTEGER NOT NULL,           -- client-reported per-event time; server validates within bounds
-  received_at  TEXT    NOT NULL,           -- server arrival time
+  session_id        TEXT    NOT NULL REFERENCES ranked_sessions(id),
+  round_num         INT     NOT NULL,
+  puzzle_id         TEXT    NOT NULL,
+  answer            TEXT    NOT NULL,        -- the option index/value the player submitted
+  correct           INT     NOT NULL,        -- 0 or 1, server-computed against the held answer key
+  round_started_at  TEXT    NOT NULL,        -- server timestamp when the puzzle was dispatched (anti-cheat anchor)
+  received_at       TEXT    NOT NULL,        -- server arrival time of this answer
+  elapsed_ms        INT     NOT NULL,        -- server-computed: received_at - round_started_at; this is the score input
+  client_time_ms    INT,                     -- client-reported, telemetry only — never used for scoring (decision #7)
   PRIMARY KEY (session_id, round_num)
 );
 ```
@@ -240,7 +261,7 @@ CREATE TABLE ranked_puzzles (
   prompt          TEXT    NOT NULL,         -- JSON or markdown payload, mode-appropriate
   options         TEXT    NOT NULL,         -- JSON array
   answer          TEXT    NOT NULL,         -- the secret; never returned through any client-facing endpoint
-  difficulty      INTEGER,
+  difficulty      INT,
   status          TEXT    NOT NULL,         -- 'active' | 'retired' | 'demoted_to_local'
   created_at      TEXT    NOT NULL,
   retired_at      TEXT
@@ -253,9 +274,9 @@ CREATE INDEX idx_ranked_puzzles_status ON ranked_puzzles(status);
 ```sql
 CREATE TABLE game_configs (
   mode                  TEXT    PRIMARY KEY,    -- 'ranked_freeplay' | 'ranked_daily' | 'multiplayer'
-  rounds                INTEGER NOT NULL,
-  round_timer_ms        INTEGER NOT NULL,
-  inter_round_delay_ms  INTEGER NOT NULL DEFAULT 0,
+  rounds                INT     NOT NULL,
+  round_timer_ms        INT     NOT NULL,
+  inter_round_delay_ms  INT     NOT NULL DEFAULT 0,
   updated_at            TEXT    NOT NULL
 );
 ```
@@ -264,20 +285,33 @@ No seed rows — empty table is the default state, and the loader returns code-l
 
 ### New `pending_writes` durable queue (CS52-7e)
 
-For `db-unavailable` 202-path writes. Per-request file under a mounted volume so they survive container restarts and image swaps.
+For `db-unavailable` 202-path writes. Persisted as one file per request under a mounted volume so they survive container restarts and image swaps. **Replay must be deterministic from the file alone** — no reliance on ambient process state, in-memory session caches, or signed JWTs that may have expired by drain time.
 
-```sql
--- Logical shape; on-disk implementation is one file per request under <DATA_DIR>/pending-writes/
+```jsonc
+// On-disk layout: <DATA_DIR>/pending-writes/<request_id>.json
 {
-  "request_id":   "<uuid>",
-  "endpoint":     "/api/sessions/:id/finish" | "/api/sync",
-  "user_id":      "...",
-  "payload":      { ... },
-  "queued_at":    "<iso ts>"
+  "request_id":     "<uuid>",
+  "schema_version": 1,
+  "endpoint":       "POST /api/sessions/:id/finish" | "POST /api/sync",
+  "concrete_route": {
+    // Materialised path params; what `:id` actually was when queued.
+    "session_id": "<ranked_sessions.id>"   // present for /finish
+  },
+  "user_id":        <int>,                 // resolved at queue time, not from a re-validated JWT at drain time
+  "payload":        { /* exact request body */ },
+  "queued_at":      "<iso ts>",
+  "client_game_ids": [ ... ]               // for /sync; pre-extracted to make idempotency cheap
 }
 ```
 
-Drained on next successful DB write or self-init-success log line (no timer); replay is idempotent via the `(user_id, client_game_id)` upsert.
+**Drain trigger (no background timer):** the drain worker is invoked **only** when one of these two events fires within a normal request:
+
+1. The next successful DB write completes inside any HTTP request handler (post-commit hook).
+2. The lazy-init self-init-success path logs `db-init: ok` (i.e. `getDbUnavailability()` transitions back to `null`) — invoked from inside the request that triggered the lazy init.
+
+The drain worker reads the directory, sorts by `queued_at`, and replays each file inside a single request-bound async loop. Replay calls the same internal write functions the original request would have called (NOT a re-issued HTTP fetch back to localhost), with `user_id` taken from the file. Idempotency: `(user_id, client_game_id)` upsert for `/sync`; `ranked_sessions.id` already-finished check for `/finish` (if `status='finished'` and `score` is set, the file is just deleted with no DB write). Successfully-replayed files are deleted; files that fail with a non-retryable error are moved to `<DATA_DIR>/pending-writes/dead/` for operator inspection.
+
+**Multiplayer match-completion writes use the same queue.** When `getDbUnavailability()` is non-null at match-end, the WS handler serialises the planned `ranked_sessions` rows + `ranked_session_events` rows for all participants into a single `pending_writes` file with a synthetic `endpoint: "INTERNAL multiplayer-match-completion"` and replays the same way (this closes the gap that the WS path is otherwise outside CS52-7e's `/finish`+`/sync` scope). The match is not announced as "saved" to the players until either the immediate write succeeds or the queue file is fsynced to disk — this preserves the existing "match finished = score recorded" UX contract even during a DB blip.
 
 ## API contract sketch
 
@@ -290,18 +324,40 @@ POST /api/sessions
   body: { mode: "ranked_freeplay" | "ranked_daily" }
   → 200 { sessionId, expiresAt, config: {rounds, roundTimerMs, interRoundDelayMs}, puzzles: [{id, prompt, options}, ...] }
   → 409 if user already has an active ranked session, or already played Ranked Daily today
+         (after applying the in-band reconciliation rule below)
   → 503 if db-unavailable (Ranked entry should already be disabled client-side; this is a defence-in-depth)
 
+  Server side: the response also seeds round_started_at for round 0 (i.e. the dispatch
+  timestamp). For each subsequent round, round_started_at is set when the previous answer
+  arrives + interRoundDelayMs has elapsed (or when the client polls `next-round`, depending
+  on flow chosen in CS52-3).
+
 POST /api/sessions/:id/answer
-  body: { round_num, puzzle_id, answer, time_ms }
-  → 200 { correct: bool, runningScore: int }
-  → 400 if out-of-order, timing impossible, puzzle_id mismatched
+  body: { round_num, puzzle_id, answer, client_time_ms }    // client_time_ms is telemetry only
+  → 200 { correct: bool, runningScore: int, elapsed_ms: int }   // elapsed_ms is server-computed
+  → 400 if out-of-order, server-computed elapsed_ms outside [50ms, 2× round_timer_ms],
+        puzzle_id mismatched, or session expired
 
 POST /api/sessions/:id/finish
   body: {}        // server already has all events; client just signals "done"
   → 200 { score, correctCount, bestStreak, fastestAnswerMs }
   → 202 (db-unavailable path) { queuedRequestId }
 ```
+
+**Server-side in-band reconciliation (no background sweeper, per the no-DB-waking-work rule):** the "one active ranked session per user" and "one Ranked Daily/day/user" gates are enforced by reconciling at the moment the user takes the next action that would conflict — never by a timer. Concretely, `POST /api/sessions` runs this query first:
+
+```sql
+UPDATE ranked_sessions
+   SET status      = 'abandoned',
+       finished_at = <now>
+ WHERE user_id    = <current user>
+   AND status     = 'in_progress'
+   AND expires_at < <now>;
+```
+
+This converts any stale `in_progress` rows whose `expires_at` has passed (i.e. the player walked away or got disconnected and never returned) into `abandoned` rows, freeing the "one active session" slot. Because `abandoned` rows do NOT count against the daily / active-session limits (decision #9), the next `POST /api/sessions` then proceeds normally. The same UPDATE runs at the top of `/answer` and `/finish` so a user who comes back inside the expiry window can resume their actual session, but a user whose session lapsed cannot accidentally count it. **No background process touches the DB** — the reconciliation rides on the next user request.
+
+The Ranked-Daily-once-per-day check is `WHERE status = 'finished' AND mode = 'ranked_daily' AND date(finished_at) = today_utc` — `abandoned` and `expired` rows are excluded by status, so a single Wi-Fi blip cannot lock the user out for 24h.
 
 ### Unified offline sync (CS52-5)
 
@@ -334,7 +390,7 @@ PUT /api/admin/game-configs/:mode
 |---|------|--------|-------|
 | CS52-1 | **Design lock-down.** Finalise: provenance vocabulary; `scores` schema migration (`source`, `variant`, `client_game_id`, `schema_version`, `payload_hash` columns); new tables (`ranked_sessions`, `ranked_session_events`, `ranked_puzzles`, `game_configs`); ranked puzzle pool sourcing (server-only, fresh-content seed); canonical configs for `ranked_freeplay` / `ranked_daily` / `multiplayer`; `game_configs` change mechanism (admin route + 24h TTL cache); identity & client sync model (guest vs signed-in-offline, claim prompt, single-flight gesture-driven `POST /api/sync`); connectivity state machine; mid-Ranked-disconnect rule; sign-out semantics; offline sync conflict rule (payload-hash). **Output: this design PR — no application code yet.** | ✅ Complete (this PR) | Sequencing prereq for everything else. |
 | CS52-2 | **Schema migration + ranked puzzle pool.** Apply the CS52-1 schema (additive only, per LEARNINGS.md migration policy). Create the server-only `ranked_puzzles` pool seeded with **~50 freshly-authored puzzles**. Backfill existing `scores` rows with `source='legacy'`. The existing bundled puzzle corpus stays as-is; no answer-stripping needed because Ranked puzzles never come from the bundle. | ⬜ Pending | Backwards-compatible; no behaviour change yet. |
-| CS52-3 | **Ranked session API.** Implement `POST /api/sessions` (creates session, returns puzzles without `answer`), `POST /api/sessions/:id/answer` (per-event validation), `POST /api/sessions/:id/finish` (server computes final score, persists `source='ranked'`). Enforce: monotonic round order, timing bounds (>50ms, <2× round timer), session expiry, one active session per user, one Ranked Daily/day/user. Abandoned sessions (`status='abandoned'`) do NOT count against the daily / active-session limits. The scoring logic lives in a **shared core scoring service** (not inline in the route) so CS52-7d can reuse it from the WS handler. | ⬜ Pending | Server-side only; client integration in CS52-4. Shared service is the seam for multiplayer unification. |
+| CS52-3 | **Ranked session API.** Implement `POST /api/sessions` (creates session, returns puzzles without `answer`, also seeds `round_started_at` for round 0), `POST /api/sessions/:id/answer` (per-event validation; **server computes `elapsed_ms = received_at - round_started_at`** and stores it as the score input — `client_time_ms` is telemetry only, never used for scoring), `POST /api/sessions/:id/finish` (server computes final score from `elapsed_ms` per event, persists `source='ranked'`). Enforce: monotonic round order, server-derived timing bounds (`elapsed_ms ∈ [50, 2× round_timer_ms]`), session expiry, one active session per user, one Ranked Daily/day/user. Implement the **in-band reconciliation rule** at the top of `/api/sessions`, `/answer`, and `/finish`: any `in_progress` row for the user with `expires_at < now` is updated to `status='abandoned'` (no background sweeper, per the no-DB-waking-work rule). Abandoned and expired sessions do NOT count against the daily / active-session limits. The scoring logic lives in a **shared core scoring service** (not inline in the route) so CS52-7d can reuse it from the WS handler. | ⬜ Pending | Server-side only; client integration in CS52-4. Shared service is the seam for multiplayer unification. |
 | CS52-4 | **Client mode picker, Ranked flow, connectivity state machine + claim prompt.** Refactor `public/js/game.js` to accept either a local puzzle queue or a server session. Add Ranked entry points to Free Play and Daily screens (alongside existing Local entry points — Local renamed to Practice in UI for clarity). Implement the `connectivity.state` enum and per-state banners; disable Ranked entry points in every non-`ok` state. Implement the single combined claim prompt that fires on first sign-in when L1 has unattached or mismatched records. Mid-Ranked-disconnect handler shows the "Lost connection — Ranked session abandoned" overlay (hard fail, no soft-downgrade). | ⬜ Pending | First user-visible change. |
 | CS52-5 | **Unified offline record + idempotent sync.** Replace both existing client queues (`gwn_pending_scores` + ProgressiveLoader queue) with the L1 immutable record format from CS52-1. Implement `POST /api/sync` per the contract sketch — single batched RPC carrying `queuedRecords` + `revalidate` map; single-flight client-side with **coalesce** policy; gesture-driven triggers only (no timers, no `online`-event auto-fire). Server upserts on `(user_id, client_game_id)`; **payload-hash conflict rule**: identical hash → `acked` (idempotent); mismatch → `rejected: "conflict_with_existing"` + `warn` log. Implement L2-broad client read cache (profile, history, leaderboards, achievements, notifications) with `lastUpdatedAt` and per-entity bounds. Sign-out: clear L2, demote L1 `user_id → null`, abort in-flight sync. Verify cross-device sync E2E. | ⬜ Pending | Personal cross-device sync is the user-facing acceptance criterion. |
 | CS52-6 | **Leaderboard source filter + provenance UI.** Public leaderboard endpoints (`/api/scores/leaderboard`, `/api/scores/leaderboard/multiplayer`) accept a `source` query param: `ranked` (default), `offline`, `all`. Personal endpoints (`/api/scores/me`, profile) unchanged — show everything including legacy. Leaderboard UI gets a 3-way toggle (`Ranked` / `Offline` / `All`); each row shows a provenance badge ("Ranked" / "Offline"). Profile rows show the same badges plus "Legacy" for pre-CS52 rows (no toggle, no separate section, no onboarding banner). Legacy rows excluded from all three public-LB filters (profile-only). | ⬜ Pending | Where the offline / ranked split becomes visible to the player. |
@@ -342,8 +398,8 @@ PUT /api/admin/game-configs/:mode
 | CS52-7b | **Multiplayer config alignment (read from DB).** Have `matchHandler.js` / `matchService.js` source `rounds`, `roundTimerMs`, and `interRoundDelayMs` from the DB-backed `game_configs` row added in CS52-7c, with the code-level defaults from CS52-1 used as fallback. Reject or ignore client-supplied overrides for these fields; remove the host-picks-rounds dropdown from the room-creation UI. Add a server-side test that asserts a client cannot influence round count or inter-round delay. | ⬜ Pending | Depends on CS52-7c. |
 | CS52-7c | **DB-backed game shape config + admin route.** Implement the `game_configs` table from CS52-1: one row per mode (`ranked_freeplay`, `ranked_daily`, `multiplayer`, others as needed) with columns for `rounds`, `round_timer_ms`, `inter_round_delay_ms`, plus an `updated_at` audit column. Loader uses an **in-process `Map` cache with 24h TTL**; on cache miss, reads the row and falls back to the **code-level default constants** when no row exists so a fresh DB always boots to a working game. Implement the admin route `PUT /api/admin/game-configs/:mode` gated by `SYSTEM_API_KEY` with payload validation (`rounds ∈ [1,50]`, `round_timer_ms ∈ [5000,60000]`, `inter_round_delay_ms ∈ [0,10000]`); the route busts the local cache on write so operators see their change take effect immediately on the same instance. Wire Ranked Free Play (CS52-3) and Ranked Daily to read from this loader. | ⬜ Pending | Foundation for runtime configurability across all server-authoritative modes. Code default is the source of truth at boot; DB row overrides per environment. |
 | CS52-7d | **Multiplayer storage + scoring path unification.** Refactor `server/ws/matchHandler.js` so a completed match writes through the shared core scoring service from CS52-3 and persists as **one `ranked_sessions` row per (match, player)** plus N `ranked_session_events` rows (per-player, per-answer), batch-written in a single transaction on match completion. Match metadata (`match_id`, `room_code`, `started_at`, `finished_at`) is duplicated across the participant rows of the same match — that's the I-β tradeoff for query parity with single-player Ranked. WS handler keeps the live in-process state machine (transport stays WS); only the persistence + scoring layer is shared. Half/abandoned matches do not persist (existing behaviour — disconnect mid-match = no score row). The legacy `POST /api/scores` write path from multiplayer is removed. Multiplayer leaderboard query updates if needed to read from the unified rows. | ⬜ Pending | Depends on CS52-3 (shared scoring service must exist). Eventual write on match completion is acceptable; no per-event WS→DB writes during play. |
-| CS52-7e | **DB-aware degradation server-side queue (per decision #9).** Server: any `POST /api/sessions/:id/finish` or `POST /api/sync` request that arrives while `getDbUnavailability()` is non-null persists the payload to a durable per-request file under a mounted volume (returns `202 Accepted` with the queued `requestId`). A drain worker, triggered by the next successful DB write or self-init success log line (no timer), replays the queue idempotently using the `(user_id, client_game_id)` upsert from CS52-5. The `unavailable` reason and friendly messages are centralised so CS56's stale-cache fallback can reuse them. (Client-side `connectivity.state` machine + Ranked-entry-point disabling is implemented in CS52-4.) | ⬜ Pending | Depends on CS52-5 (idempotent record) and CS52-3 (sessions API). Closes the cold-DB / free-tier UX gap exposed in CS53; folds in what was briefly drafted as CS57. |
-| CS52-8 | **Tests + closeout.** E2E coverage: Ranked Free Play happy path, Ranked Daily one-shot enforcement, offline → sync → cross-device visibility, anti-cheat rejections (out-of-order, impossible timing, expired, double session, daily replay), abandoned-session-doesn't-count-vs-daily-limit, leaderboard filter (`ranked` / `offline` / `all` produces the expected row sets), multiplayer config locked (client override ignored), multiplayer match completion writes correct number of `ranked_sessions` rows + event rows, DB config override changes round count for the next session, DB config row missing → code defaults applied, admin route validation rejects out-of-bounds payloads, admin route cache-bust takes effect immediately, `/api/sync` payload-hash conflict returns rejected, sign-out demotes L1 to guest. Schema migration test (legacy backfill). Move clickstop to `done/`, comment on #198, update CONTEXT.md. | ⬜ Pending | Closeout depends on all prior tasks merging. |
+| CS52-7e | **DB-aware degradation server-side queue (per decision #9).** Implement the `pending_writes` durable queue at `<DATA_DIR>/pending-writes/` per the schema sketch (one JSON file per request with `request_id`, `endpoint`, **`concrete_route` materialising path params (e.g. `session_id` for `/finish`)**, `user_id` resolved at queue time, `payload`, `client_game_ids`). Three write paths must enqueue when `getDbUnavailability()` is non-null: `POST /api/sessions/:id/finish` (returns `202` with `queuedRequestId`), `POST /api/sync` (returns `202` with `queuedRequestIds`, **mutually exclusive with the 200-response `acked`/`rejected`/`entities` fields**), and **multiplayer match-completion writes from the WS handler** (synthetic `endpoint: "INTERNAL multiplayer-match-completion"`). The drain worker is invoked **only** from inside a real request: post-commit hook on the next successful DB write, or from inside the request that triggered the lazy-init-success transition (no timer, no scheduler). Drain calls the same internal write functions the original request would have called (NOT a re-issued HTTP fetch); idempotency via `(user_id, client_game_id)` upsert for `/sync`, via `ranked_sessions.id` already-finished short-circuit for `/finish`. Failed files move to `<DATA_DIR>/pending-writes/dead/`. The `unavailable` reason and friendly messages are centralised so CS56's stale-cache fallback can reuse them. (Client-side `connectivity.state` machine + Ranked-entry-point disabling is implemented in CS52-4.) | ⬜ Pending | Depends on CS52-5 (idempotent record) and CS52-3 (sessions API). Closes the cold-DB / free-tier UX gap exposed in CS53; folds in what was briefly drafted as CS57. |
+| CS52-8 | **Tests + closeout.** E2E coverage: Ranked Free Play happy path, Ranked Daily one-shot enforcement, **server-derived timing wins over a forged client_time_ms (cheater submitting `client_time_ms=51` for every answer scores per the actual server-measured elapsed_ms)**, offline → sync → cross-device visibility, anti-cheat rejections (out-of-order, impossible elapsed_ms, expired, double session, daily replay), **in-band reconciliation: an expired in_progress row is converted to abandoned by the next session-create call (NOT by any timer); abandoned and expired sessions do NOT block the next Ranked Daily**, leaderboard filter (`ranked` / `offline` / `all` produces the expected row sets), multiplayer config locked (client override ignored), multiplayer match completion writes correct number of `ranked_sessions` rows + event rows, **multiplayer match completion during db-unavailable enqueues a pending_writes file and replays correctly when DB returns**, DB config override changes round count for the next session, DB config row missing → code defaults applied, admin route validation rejects out-of-bounds payloads, admin route cache-bust takes effect immediately, `/api/sync` payload-hash conflict returns rejected, **`/api/sync` 202 response never contains acked/rejected/entities (mutual exclusivity)**, **client-side dedupe: while in db-unavailable, repeated sync triggers within retryAfterMs do not re-enqueue the same client_game_id**, **connectivity precedence: 401 + simultaneous network failure ends in auth-expired, not network-down**, **claim-prompt decline leaves L1 untouched and re-surfaces on next sign-in**, sign-out demotes L1 to guest + clears L2 + aborts in-flight sync. Schema migration test (legacy backfill). Move clickstop to `done/`, comment on #198, update CONTEXT.md. | ⬜ Pending | Closeout depends on all prior tasks merging. |
 
 ## Will not be done (deliberate)
 
@@ -370,6 +426,13 @@ PUT /api/admin/game-configs/:mode
 - **Mid-Ranked-session disconnect** triggers a hard-fail "Ranked session abandoned" overlay; the server marks the row `status='abandoned'` and **does not count it** against the user's "one Ranked Daily/day" or "one active session" limits.
 - **Sign-out** clears L2 entirely, demotes L1 records' `user_id → null` (becoming guest records), and aborts any in-flight sync RPC.
 - **Offline sync conflict** (same `client_game_id` re-submitted): server compares the hash of immutable fields. Match → returned as `acked` (idempotent retry). Mismatch → returned as `rejected: "conflict_with_existing"` and surfaced via a soft non-blocking notice in the client; `warn` log line on the server.
+- **Server-derived ranked timing:** for every Ranked answer the server computes `elapsed_ms = received_at - round_started_at` and stores that as the score input. A test must demonstrate that a forged client `client_time_ms=51` does NOT produce a maxed-out speed bonus — the score reflects actual server-measured elapsed time.
+- **In-band session reconciliation:** at the top of `POST /api/sessions`, `/answer`, and `/finish`, any of the user's `in_progress` rows whose `expires_at < now` is updated to `status='abandoned'`. No background process touches the DB. A test must demonstrate that an expired in-progress Ranked Daily does NOT block the user from starting a new Ranked Daily within the same UTC day.
+- **`POST /api/sync` 202 mutual exclusivity:** when the server returns `202`, the response body contains `queuedRequestIds` and `retryAfterMs` only — never `acked`, `rejected`, or `entities`. Client must treat the entire batch as queued.
+- **Client-side dedupe in `db-unavailable`:** while the connectivity state is `db-unavailable`, repeated sync triggers within `retryAfterMs` of a record's `lastQueuedAt` must NOT re-include that record in the next request. A test must demonstrate that 5 rapid `Sync now` clicks in `db-unavailable` produce 5 server-side requests but only 1 `pending_writes` file per record.
+- **Connectivity precedence:** when multiple failure signals fire near-simultaneously, the resulting state follows the precedence `auth-expired > network-down > db-unavailable > ok`. A test must demonstrate that a request that returns 401 followed by a network drop on retry ends in `auth-expired`, not `network-down`.
+- **Multiplayer DB-unavailable replay:** when `getDbUnavailability()` is non-null at multiplayer match end, the WS handler enqueues a `pending_writes` file (synthetic endpoint `INTERNAL multiplayer-match-completion`) and the drain worker, on next successful DB write, persists the planned `ranked_sessions` participant rows + per-player `ranked_session_events` rows correctly. A test must demonstrate end-to-end recovery without losing the match.
+- **Claim-prompt decline:** if the user dismisses the "claim N offline games" prompt, no records are deleted, reassigned, or auto-synced; the prompt re-surfaces on the next sign-in.
 - All tests pass (`npm run lint && npm test && npm run test:e2e`); `npm run check:docs:strict` is clean.
 
 ## Open questions for CS52-1 to resolve
