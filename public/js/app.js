@@ -813,6 +813,9 @@ function showClaimPromptModal({ total, unattachedCount, mismatchedCount, onAccep
     setFocus();
   });
 }
+
+/** Show a non-blocking sign-in banner for unauthenticated players. */
+function showSignInBanner() {
   const existing = document.querySelector('.sign-in-banner');
   if (existing) existing.remove();
 

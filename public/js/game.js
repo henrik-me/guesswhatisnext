@@ -593,10 +593,6 @@ function abortRanked() {
   return priorId;
 }
 
-function _attachRankedApiFetch(apiFetch) {
-  if (state && state.ranked) state.apiFetch = apiFetch;
-}
-
 // Re-export startRanked. apiFetch is plumbed via state.apiFetch internally.
 async function startRankedExport(opts) {
   return startRanked(opts);
