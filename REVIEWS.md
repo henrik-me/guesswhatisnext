@@ -97,3 +97,5 @@ gh api graphql -f query='mutation { resolveReviewThread(input: { threadId: "THRE
 ```
 
 **Large-diff PR behavior:** On large diffs, Copilot may re-post comments on unchanged lines. When comments reference already-fixed code, reply with the fix commit hash and resolve.
+
+**Persistent re-post across rounds (phantom comments):** Copilot may re-post the *same inline comment* (same comment ID, same wording) across multiple review rounds even after the thread has been replied-to and resolved AND the source/PR-body has been independently verified clean of the flagged wording. This was observed on PR #257 across 5 review rounds (R1–R5) with comment id `3142842628`. **Recognition pattern:** if the same comment id reappears at round 3+ and a careful re-read of the cited line confirms no actual issue, treat it as bot persistence — reply once explaining "Round N of the same comment; source/PR body verified clean; resolving as phantom" and resolve. Do NOT spend additional review cycles searching for a phantom issue. This applies only to *exact-repeat* comments; new findings on the same line should still be addressed normally.
