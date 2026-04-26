@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main -- no PR required.
 
-> **Last updated:** 2026-04-26T01:35Z
+> **Last updated:** 2026-04-26T01:43Z
 
 ## Orchestrators
 
@@ -17,7 +17,7 @@ CS44-3 schema upgrade.
 | yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-25T22:42Z |
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active | 2026-04-25T19:18Z |
 | yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | 2026-04-26T01:08Z |
-| yoga-gwn-c5 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot5 | 🟢 Active | 2026-04-26T01:35Z |
+| yoga-gwn-c5 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot5 | 🟢 Active | 2026-04-26T01:43Z |
 | omni-gwn | HENRIKM-OMNI| C:\src\guesswhatisnext | ⚪ Offline | 2026-04-22T00:55Z |
 | omni-gwn-c2 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot2 | ⚪ Offline | 2026-04-21T22:38Z |
 
@@ -27,5 +27,5 @@ CS44-3 schema upgrade.
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
 | CS53-23 | Boot-quiet contract foundation (absorbed from CS55-2 v2) | copilot_review | yoga-gwn | C:\src\gwn-worktrees\wt-cs53-23 | cs53-23-boot-quiet-contract | #255 | 2026-04-25T23:20Z | Head `3268634`. Addressed Copilot R5/PR-#255 R1 finding (`/api/notifications` list coercion + cache-seeding gap). Restored CI green: SW rebuilt, docs-consistency strict at 0 findings (fixed 7 pre-existing broken links to active_cs58 → done_cs58 + planned_cs56 path + 3 non-canonical states), E2E badge tests aligned with boot-quiet contract. Tests: 547 passed. Container-validate ✅ cycle 7. **Next:** await CI re-run on `3268634` + Copilot R6 review → merge → unblocks CS53-19 + all of CS55. | -- |
 | CS53-19 | CS53 | blocked | yoga-gwn | C:\src\guesswhatisnext | -- | -- | 2026-04-25T22:10Z | Phase A (boot/focus/refresh HAR inventory) can start now in parallel; Phases C-G now depend on CS53-23 (was CS55-2.G/H/J before the absorption). | Waiting on CS53-23 (boot-quiet contract foundation) |
-| CS52-1 | CS52 | copilot_review | yoga-gwn-c5 | C:\src\guesswhatisnext_copilot5 | yoga-gwn-c5/cs52-1-design-lockdown | #258 | 2026-04-26T01:35Z | Design-only PR (docs). All 9 open questions resolved 1:1 with user. Two rubber-duck cycles complete: R1 (2 P0 + 6 P1 + 3 P2) addressed in `035ed36`; R2 (1 P0 + 2 P1) addressed in `2aaee1f` (locked streaming round-dispatch model autonomously per user-unavailable instruction; closed cross-midnight Ranked Daily loophole via `daily_utc_date` + UNIQUE INDEX; fully specified MP synthetic queue payload). docs-consistency strict: 0 findings. **Next:** dispatch GPT-5.4 local review → request Copilot review → merge. No container validation needed (docs-only). | -- |
+| CS52-1 | CS52 | ready_to_merge | yoga-gwn-c5 | C:\src\guesswhatisnext_copilot5 | yoga-gwn-c5/cs52-1-design-lockdown | #258 | 2026-04-26T01:43Z | **Docs-only PR ready for user merge.** All 9 open questions resolved 1:1 with user. Three review cycles complete: R1 rubber-duck (2 P0 + 6 P1 + 3 P2) → `035ed36`; R2 rubber-duck (1 P0 + 2 P1) → `2aaee1f`; R3 GPT-5.4 (3 P1 + 1 P2) → `4aa8fbd`. Per REVIEWS.md, docs-only PRs skip Copilot review. CI green (docs-consistency: 0 findings). Branch up-to-date with main. **`mergeStateStatus: BLOCKED`** = waiting on user approval (branch protection requires reviewer approval). PR: https://github.com/henrik-me/guesswhatisnext/pull/258 | -- |
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
