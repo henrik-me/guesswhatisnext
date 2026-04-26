@@ -58,6 +58,22 @@ function connectWS(token) {
   });
 }
 
+/**
+ * Helper: poll an async predicate until it returns truthy, or throw on timeout.
+ * Used in CS52-7d persistence tests so we wait on a deterministic DB/FS signal
+ * instead of a fixed `setTimeout` (Copilot R1 — flake-resistance).
+ */
+async function waitFor(predicate, { timeoutMs = 4000, intervalMs = 50, label = 'condition' } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let lastVal;
+  while (Date.now() < deadline) {
+    lastVal = await predicate();
+    if (lastVal) return lastVal;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(`waitFor("${label}") timed out after ${timeoutMs}ms`);
+}
+
 /** Helper: wait for a specific WS message type. */
 function waitForMessage(ws, type, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
@@ -419,16 +435,21 @@ describe('Multiplayer E2E', () => {
     await waitForMessage(hostWs, 'gameOver');
     await waitForMessage(joinerWs, 'gameOver');
 
-    // Allow async persist to settle (endMatch -> persistCompletedMatch).
-    await new Promise((r) => setTimeout(r, 250));
-
-    const sessions = await db.all(
-      `SELECT id, user_id, mode, status, score, correct_count, best_streak, room_code,
-              match_id, config_snapshot
-         FROM ranked_sessions
-        WHERE match_id = ?
-        ORDER BY user_id`,
-      [matchId]
+    // CS52-7d (Copilot R1): poll for the persisted rows instead of a fixed
+    // sleep — endMatch -> persistCompletedMatch is async relative to gameOver.
+    const sessions = await waitFor(
+      async () => {
+        const rows = await db.all(
+          `SELECT id, user_id, mode, status, score, correct_count, best_streak, room_code,
+                  match_id, config_snapshot
+             FROM ranked_sessions
+            WHERE match_id = ?
+            ORDER BY user_id`,
+          [matchId]
+        );
+        return rows.length === 2 ? rows : null;
+      },
+      { timeoutMs: 4000, label: 'ranked_sessions rows for matchId' }
     );
     expect(sessions).toHaveLength(2);
     for (const s of sessions) {
@@ -504,83 +525,109 @@ describe('Multiplayer E2E', () => {
 
     // Play through all rounds; flip the DB-unavailability flag right before
     // the last answer so endMatch's preflight short-circuits to Variant C.
-    for (let r = 0; r < totalRounds; r++) {
-      const hostRound = waitForMessage(hostWs, 'round');
-      const joinerRound = waitForMessage(joinerWs, 'round');
-      const [hostMsg] = await Promise.all([hostRound, joinerRound]);
-      const correctId = hostMsg.puzzle.options[0].id;
-      if (r === totalRounds - 1) {
-        setDbUnavailabilityState({ reason: 'capacity-exhausted', message: 'test' });
+    // Wrap in try/finally so the global flag is always reset, even if an
+    // assertion below throws (Copilot R1 — flag-leak resistance).
+    try {
+      for (let r = 0; r < totalRounds; r++) {
+        const hostRound = waitForMessage(hostWs, 'round');
+        const joinerRound = waitForMessage(joinerWs, 'round');
+        const [hostMsg] = await Promise.all([hostRound, joinerRound]);
+        const correctId = hostMsg.puzzle.options[0].id;
+        if (r === totalRounds - 1) {
+          setDbUnavailabilityState({ reason: 'capacity-exhausted', message: 'test' });
+        }
+        const hostResult = waitForMessage(hostWs, 'roundResult');
+        const joinerResult = waitForMessage(joinerWs, 'roundResult');
+        hostWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
+        joinerWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
+        await Promise.all([hostResult, joinerResult]);
       }
-      const hostResult = waitForMessage(hostWs, 'roundResult');
-      const joinerResult = waitForMessage(joinerWs, 'roundResult');
-      hostWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
-      joinerWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
-      await Promise.all([hostResult, joinerResult]);
-    }
-    await waitForMessage(hostWs, 'gameOver');
-    await waitForMessage(joinerWs, 'gameOver');
+      await waitForMessage(hostWs, 'gameOver');
+      await waitForMessage(joinerWs, 'gameOver');
 
-    // Allow async persist/enqueue to settle.
-    await new Promise((r) => setTimeout(r, 300));
+      // Pending file exists with our endpoint + match_id — poll for the
+      // file to appear instead of using a fixed sleep (Copilot R1 — flake
+      // resistance). While the unavailability flag is set, no ranked_sessions
+      // rows are written yet.
+      const dbPath = process.env.GWN_DB_PATH;
+      const pendingDir = path.join(path.dirname(dbPath), 'pending-writes');
+      const mpRecord = await waitFor(
+        async () => {
+          let entries;
+          try {
+            entries = await fsp.readdir(pendingDir);
+          } catch (err) {
+            if (err.code === 'ENOENT') return null;
+            throw err;
+          }
+          for (const f of entries.filter((f) => f.endsWith('.json'))) {
+            const rec = JSON.parse(await fsp.readFile(path.join(pendingDir, f), 'utf8'));
+            if (rec.endpoint === 'INTERNAL multiplayer-match-completion'
+                && rec.concrete_route.match_id === matchId) {
+              return rec;
+            }
+          }
+          return null;
+        },
+        { timeoutMs: 4000, label: 'Variant C pending file for matchId' }
+      );
+      expect(mpRecord).not.toBeNull();
+      expect(mpRecord.payload.participants).toHaveLength(2);
 
-    // While unavailable, no ranked_sessions rows for this match yet.
-    const beforeRows = await db.all(
-      `SELECT id FROM ranked_sessions WHERE match_id = ?`, [matchId]
-    );
-    expect(beforeRows).toHaveLength(0);
+      // While unavailable, no ranked_sessions rows for this match yet.
+      const beforeRows = await db.all(
+        `SELECT id FROM ranked_sessions WHERE match_id = ?`, [matchId]
+      );
+      expect(beforeRows).toHaveLength(0);
 
-    // Pending file exists with our endpoint + match_id.
-    const dbPath = process.env.GWN_DB_PATH;
-    const pendingDir = path.join(path.dirname(dbPath), 'pending-writes');
-    const files = (await fsp.readdir(pendingDir)).filter((f) => f.endsWith('.json'));
-    expect(files.length).toBeGreaterThanOrEqual(1);
-    let mpRecord = null;
-    for (const f of files) {
-      const rec = JSON.parse(await fsp.readFile(path.join(pendingDir, f), 'utf8'));
-      if (rec.endpoint === 'INTERNAL multiplayer-match-completion'
-          && rec.concrete_route.match_id === matchId) {
-        mpRecord = rec;
-        break;
+      // Clear unavailability + trigger drain via any successful request.
+      setDbUnavailabilityState(null);
+      const trig = await agent2.get('/api/features');
+      expect(trig.status).toBe(200);
+
+      // Poll for the drained rows + events to materialise.
+      const afterRows = await waitFor(
+        async () => {
+          const rows = await db.all(
+            `SELECT id, mode, status, score FROM ranked_sessions WHERE match_id = ?`,
+            [matchId]
+          );
+          return rows.length === 2 ? rows : null;
+        },
+        { timeoutMs: 4000, label: 'drained ranked_sessions rows' }
+      );
+      expect(afterRows).toHaveLength(2);
+      for (const row of afterRows) {
+        expect(row.mode).toBe('multiplayer');
+        expect(row.status).toBe('finished');
       }
+      const eventRows = await db.all(
+        `SELECT session_id FROM ranked_session_events
+          WHERE session_id IN (SELECT id FROM ranked_sessions WHERE match_id = ?)`,
+        [matchId]
+      );
+      expect(eventRows.length).toBe(2 * totalRounds);
+
+      // The MP record file should be gone after successful drain — poll
+      // (the drain unlinks the file after the transaction commits).
+      await waitFor(
+        async () => {
+          const remaining = (await fsp.readdir(pendingDir)).filter((f) => f.endsWith('.json'));
+          for (const f of remaining) {
+            const rec = JSON.parse(await fsp.readFile(path.join(pendingDir, f), 'utf8'));
+            if (rec.endpoint === 'INTERNAL multiplayer-match-completion'
+                && rec.concrete_route.match_id === matchId) return null;
+          }
+          return true;
+        },
+        { timeoutMs: 4000, label: 'Variant C pending file removed after drain' }
+      );
+    } finally {
+      // Always restore — protects later tests from a stuck unavailability flag.
+      setDbUnavailabilityState(null);
+      hostWs.close();
+      joinerWs.close();
     }
-    expect(mpRecord).not.toBeNull();
-    expect(mpRecord.payload.participants).toHaveLength(2);
-
-    // Clear unavailability + trigger drain via any successful request.
-    setDbUnavailabilityState(null);
-    const trig = await agent2.get('/api/features');
-    expect(trig.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 400));
-
-    const afterRows = await db.all(
-      `SELECT id, mode, status, score FROM ranked_sessions WHERE match_id = ?`,
-      [matchId]
-    );
-    expect(afterRows).toHaveLength(2);
-    for (const row of afterRows) {
-      expect(row.mode).toBe('multiplayer');
-      expect(row.status).toBe('finished');
-    }
-    const eventRows = await db.all(
-      `SELECT session_id FROM ranked_session_events
-        WHERE session_id IN (SELECT id FROM ranked_sessions WHERE match_id = ?)`,
-      [matchId]
-    );
-    expect(eventRows.length).toBe(2 * totalRounds);
-
-    // The MP record file should be gone after successful drain.
-    const remaining = (await fsp.readdir(pendingDir)).filter((f) => f.endsWith('.json'));
-    const stillThere = [];
-    for (const f of remaining) {
-      const rec = JSON.parse(await fsp.readFile(path.join(pendingDir, f), 'utf8'));
-      if (rec.endpoint === 'INTERNAL multiplayer-match-completion'
-          && rec.concrete_route.match_id === matchId) stillThere.push(f);
-    }
-    expect(stillThere).toHaveLength(0);
-
-    hostWs.close();
-    joinerWs.close();
   });
 });
 

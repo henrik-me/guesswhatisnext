@@ -768,11 +768,13 @@ function assignRanks(sortedEntries) {
  *
  * Drops users who never had a ranked_session_id pre-allocated (defensive —
  * pre-allocation happens once at startMatch over `room.players`). For each
- * participant, walks `room.roundsMeta` and `room.answers` to materialise
- * one event per round that the participant answered. Missed rounds (e.g.
- * the participant disconnected mid-match but the match still completed)
- * are simply absent from the events array — the (session_id, round_num)
- * PK on `ranked_session_events` makes that the natural shape.
+ * participant, emits **one event per round** so the recomputed
+ * `computeFinalScore()` walk sees the same correctness/streak sequence the
+ * live `endRound` produced (which calls `scoreRoundForUser` for every
+ * participant — answered or not — to reset streaks on misses). Unanswered
+ * rounds are written with `correct=0`, `answer=''`, `elapsed_ms=roundTimerMs`,
+ * `client_time_ms=null`, and `received_at = round_started_at + roundTimerMs`,
+ * which mirrors the live timeout handling at line ~720.
  *
  * Server-derived `elapsed_ms = received_at_ms − round_started_at_ms` is
  * the only value used by the shared scoring service; the client's `timeMs`
@@ -781,6 +783,7 @@ function assignRanks(sortedEntries) {
  */
 function buildParticipantPayloads(room) {
   const configSnapshot = room.configSnapshot;
+  const roundTimerMs = room.roundTimerMs;
   const participants = [];
   const userIds = Object.keys(room.rankedSessionIds || {});
   for (const userIdStr of userIds) {
@@ -789,23 +792,40 @@ function buildParticipantPayloads(room) {
     const events = [];
     for (let r = 0; r < room.totalRounds; r++) {
       const meta = room.roundsMeta[r];
+      if (!meta) continue;
       const answer = room.answers[r] && room.answers[r][userId];
-      if (!meta || !answer) continue;
-      const correct = answer.answerId === meta.answer_key ? 1 : 0;
-      const elapsedMs = Math.max(0, answer.receivedAtMs - meta.round_started_at_ms);
-      events.push({
-        round_num: r,
-        puzzle_id: meta.puzzle_id,
-        answer: String(answer.answerId == null ? '' : answer.answerId),
-        correct,
-        round_started_at: meta.round_started_at_iso,
-        received_at: new Date(answer.receivedAtMs).toISOString(),
-        elapsed_ms: elapsedMs,
-        client_time_ms:
-          typeof answer.timeMs === 'number' && Number.isFinite(answer.timeMs)
-            ? Math.trunc(answer.timeMs)
-            : null,
-      });
+      if (answer) {
+        const correct = answer.answerId === meta.answer_key ? 1 : 0;
+        const elapsedMs = Math.max(0, answer.receivedAtMs - meta.round_started_at_ms);
+        events.push({
+          round_num: r,
+          puzzle_id: meta.puzzle_id,
+          answer: String(answer.answerId == null ? '' : answer.answerId),
+          correct,
+          round_started_at: meta.round_started_at_iso,
+          received_at: new Date(answer.receivedAtMs).toISOString(),
+          elapsed_ms: elapsedMs,
+          client_time_ms:
+            typeof answer.timeMs === 'number' && Number.isFinite(answer.timeMs)
+              ? Math.trunc(answer.timeMs)
+              : null,
+        });
+      } else {
+        // Unanswered round — emit a zero-points event so streak is reset
+        // when computeFinalScore replays the sequence (parity with live
+        // endRound's per-participant scoreRoundForUser call).
+        const timeoutAtMs = meta.round_started_at_ms + roundTimerMs;
+        events.push({
+          round_num: r,
+          puzzle_id: meta.puzzle_id,
+          answer: '',
+          correct: 0,
+          round_started_at: meta.round_started_at_iso,
+          received_at: new Date(timeoutAtMs).toISOString(),
+          elapsed_ms: roundTimerMs,
+          client_time_ms: null,
+        });
+      }
     }
     const final = computeFinalScore(events, configSnapshot);
     participants.push({
