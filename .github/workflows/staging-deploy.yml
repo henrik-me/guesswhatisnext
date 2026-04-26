@@ -852,6 +852,109 @@ jobs:
                 --revision "$NEW_REV" || true
             fi
 
+      # CS41-5: rollback verification with explicit revision targeting.
+      # After the existing rollback step has shifted staging traffic back to
+      # the prior revision and deactivated the failed new revision, this
+      # step re-runs the CS41-1 smoke and CS41-3 AI verify AGAINST the
+      # rolled-back revision specifically. Two independent reasons:
+      #   1. Confirm the rollback actually produced a healthy serving state —
+      #      otherwise the apex is in an indeterminate condition (both new
+      #      and rollback revision broken) and an operator must intervene.
+      #   2. Tag AI telemetry to the rollback revision's `cloud_RoleInstance`
+      #      so post-incident forensics can distinguish rollback-driven
+      #      requests from the failed deploy's earlier requests.
+      #
+      # AI verify here is warning-only (same contract as CS41-3): a delayed
+      # AI ingest does NOT undo a successful rollback smoke. Smoke failure,
+      # however, is a HARD failure with a distinct operator-grep marker
+      # ("ROLLBACK TARGET ALSO UNHEALTHY") to differentiate this incident
+      # mode from CS41-12's "MIGRATION BREAKS OLD STAGING SERVER" — operator
+      # playbook is different.
+      - name: Rollback verification (CS41-5)
+        if: failure() && steps.deploy.outputs.current-revision != ''
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+          AI_RESOURCE: gwn-ai-staging
+          RESOURCE_GROUP: gwn-rg
+          EXPECTED_ROW_COUNT: '6'
+        run: |
+          # Allow Azure ingress to settle on the rolled-back revision after
+          # the rollback step's `traffic set` + `sleep 10`. Small additional
+          # buffer protects against revision-list lag.
+          sleep 15
+
+          ROLLBACK_REVISION_NAME=$(az containerapp show \
+            --name gwn-staging --resource-group gwn-rg \
+            --query "properties.configuration.ingress.traffic[?weight==\`100\`].revisionName | [0]" -o tsv 2>/dev/null || echo "")
+          ROLLBACK_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          if [ -z "$ROLLBACK_REVISION_NAME" ] || [ "$ROLLBACK_REVISION_NAME" = "None" ]; then
+            echo "::warning::CS41-5: could not resolve rollback revision name (no traffic at weight=100). Skipping rollback verification — operator must verify manually."
+            exit 0
+          fi
+
+          ROLLBACK_FQDN=$(az containerapp revision show \
+            --name gwn-staging --resource-group gwn-rg \
+            --revision "$ROLLBACK_REVISION_NAME" \
+            --query "properties.fqdn" -o tsv 2>/dev/null || echo "")
+          if [ -z "$ROLLBACK_FQDN" ] || [ "$ROLLBACK_FQDN" = "None" ]; then
+            echo "::warning::CS41-5: could not resolve FQDN for rollback revision $ROLLBACK_REVISION_NAME. Skipping rollback verification — operator must verify manually."
+            exit 0
+          fi
+
+          echo "::notice::CS41-5: rollback target revision=$ROLLBACK_REVISION_NAME fqdn=$ROLLBACK_FQDN at $ROLLBACK_TIMESTAMP"
+
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::notice::CS41-5: SMOKE_USER_PASSWORD_STAGING unset — skipping rollback smoke (mirrors CS41-1 skip behavior)."
+            exit 0
+          fi
+
+          # 1. Smoke against the rollback target. If THIS fails, both the
+          # new revision (deploy-time smoke) AND the rollback target are
+          # broken — indeterminate state; operator must intervene.
+          if ! SMOKE_RESULTS_PATH=rollback-smoke-results.json node scripts/smoke.js "$ROLLBACK_FQDN"; then
+            echo "::error::CS41-5: ROLLBACK TARGET ALSO UNHEALTHY — operator intervention required"
+            echo "::error::Rolled-back revision $ROLLBACK_REVISION_NAME failed CS41-1 smoke at $ROLLBACK_TIMESTAMP."
+            echo "::error::Service is in an indeterminate state: both the new revision (failed deploy) and the rollback target are broken."
+            echo "::error::Do NOT auto-roll-forward — operator must investigate. See PR body operator playbook for CS41-5."
+            exit 1
+          fi
+
+          # 2. AI verify on the rollback target (warning-only, mirrors CS41-3).
+          set +e
+          NEW_REVISION_NAME="$ROLLBACK_REVISION_NAME" \
+          AI_VERIFY_OUTPUT_PATH=rollback-ai-verification.json \
+            node scripts/verify-ai.js
+          AI_EXIT=$?
+          set -e
+          if [ "$AI_EXIT" -ne 0 ]; then
+            echo "::warning::CS41-5: AI verification mechanism failed for rollback target $ROLLBACK_REVISION_NAME (exit $AI_EXIT). Rollback smoke succeeded; investigate AI access path separately."
+          elif [ -f rollback-ai-verification.json ] && grep -q '"warning":[[:space:]]*true' rollback-ai-verification.json; then
+            echo "::warning::CS41-5: AI ingest delayed for rollback target $ROLLBACK_REVISION_NAME — rollback succeeded but AI not yet reflecting rolled-back traffic. Investigate AI separately if delay persists > 15 min."
+          fi
+
+          echo "✅ CS41-5: rollback verification passed against $ROLLBACK_REVISION_NAME (smoke ok; AI exit=$AI_EXIT)"
+
+      - name: Upload rollback smoke results artifact (CS41-5)
+        if: always() && hashFiles('rollback-smoke-results.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: rollback-smoke-results-staging-${{ github.run_id }}
+          path: rollback-smoke-results.json
+          retention-days: 90
+
+      - name: Upload rollback AI verification artifact (CS41-5)
+        if: always() && hashFiles('rollback-ai-verification.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: rollback-ai-verification-staging-${{ github.run_id }}
+          path: rollback-ai-verification.json
+          retention-days: 90
+
       - name: Tag deployment
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
