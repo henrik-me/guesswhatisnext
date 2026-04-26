@@ -377,9 +377,9 @@ Tests in [`tests/unread-count-cache.test.js`](tests/unread-count-cache.test.js) 
 
 ### JWT-id coercion at the auth-middleware boundary (CS53-23)
 
-**Date:** 2026-04-26
+**Date:** 2026-04-26 — landed via PR #255, squash commit `819e3e1`
 
-Copilot R5 on PR #255 caught a defense-in-depth gap: a previous draft of `_coerceUserId` in [`server/middleware/auth.js`](server/middleware/auth.js) collapsed any non-finite or non-positive id to `0`, then `requireAuth` would set `req.user = { id: 0, ... }` and proceed. Because **`id = 0` is the system pseudo-user** (set on the `X-API-Key` system-key path), a malformed JWT (id `'abc'`, `null`, `0`, negative, non-integer) would silently authenticate as the system account.
+Copilot R5 on PR #255 caught a defense-in-depth gap:a previous draft of `_coerceUserId` in [`server/middleware/auth.js`](server/middleware/auth.js) collapsed any non-finite or non-positive id to `0`, then `requireAuth` would set `req.user = { id: 0, ... }` and proceed. Because **`id = 0` is the system pseudo-user** (set on the `X-API-Key` system-key path), a malformed JWT (id `'abc'`, `null`, `0`, negative, non-integer) would silently alias the request to the system pseudo-user's sentinel id, risking corruption of any downstream logic keyed only by user id (ownership checks, DB writes, in-memory caches like `unread-count-cache`). It would NOT by itself grant `role: 'system'` — `requireAuth` derives role from `payload.role || 'user'`, and `requireSystem` checks role rather than id — so a successful escalation to system privilege would also require a separately-forged role claim. The risk is sentinel-id aliasing, not an automatic `requireSystem` bypass.
 
 In practice today JWT ids are always numbers (DB-issued integers serialized through `jsonwebtoken`'s JSON round-trip), so no live exploit exists — but the contract was implicit and the next contributor adding (say) a UUID-id user or an OAuth integration could re-introduce the vulnerability.
 
@@ -396,7 +396,7 @@ Option 1 is preferable because it preserves the simple integer model; option 2 i
 
 ### `docs/observability.md § B.x` section conflicts under parallel-PR churn (CS53-23)
 
-**Date:** 2026-04-26
+**Date:** 2026-04-26 — landed via PR #255, squash commit `819e3e1`
 
 The telemetry & observability gate (mandatory for any new code path — see [INSTRUCTIONS.md § 4a](INSTRUCTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work)) creates a structural pressure point in [`docs/observability.md`](docs/observability.md): every new code path landing on `main` must add at least one new `### B.<n>` section under the "Common queries" group. When 3–5 orchestrators are landing telemetry-gated PRs in parallel during a CS-wave, the `B.<n>` numbering becomes a contention surface.
 

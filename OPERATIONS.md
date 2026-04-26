@@ -324,23 +324,26 @@ Branch protection requires the head branch to be up-to-date with `main` before m
 
 **`gh pr merge --auto` is disabled in this repo** (`enablePullRequestAutoMerge = false`), so the auto-queue escape hatch GitHub normally provides isn't available.
 
-**Escalation rule (operator-approved):**
+**Escalation rule (owner / admin only, only after explicit user approval).**
 
-Once a PR satisfies all of:
+This is an **exception path**, not default merge procedure. Per [§ WORKBOARD.md — Live Coordination in TRACKING.md](TRACKING.md#workboardmd--live-coordination) and the broader "no self-decided shortcuts" rule in [§ Quick Reference Checklist in INSTRUCTIONS.md](INSTRUCTIONS.md#quick-reference-checklist), a non-owner orchestrator must NOT use `--admin`. Once a PR satisfies all of the criteria below AND the user (or a delegated authority with admin rights) has explicitly approved the merge, the owner / admin may use `gh pr merge --squash --admin`:
+
 - All required CI checks SUCCESS on the latest head commit
 - All required reviews approved (Copilot for code/config; local review for docs-only — see [REVIEWS.md](REVIEWS.md))
-- The user (or a delegated authority) has explicitly approved the merge
 - The PR has been ready-to-merge for ≥30 minutes AND `main` has moved ≥3 times since the last successful CI
 
-…prefer `gh pr merge --squash --admin` over yet another rebase. The `--admin` flag bypasses the up-to-date requirement; the squash strategy keeps `main` history clean. Do **not** use `--admin` to bypass actual content conflicts (DIRTY mergeStateStatus) — that path requires a real rebase and conflict resolution.
+The `--admin` flag bypasses the up-to-date requirement; the squash strategy keeps `main` history clean. Do **not** use `--admin` to bypass actual content conflicts (`mergeStateStatus = DIRTY`) — that path requires a real rebase and conflict resolution.
 
-**When using `--admin`, post a PR comment** documenting why the bypass was used (e.g., "Admin merge after 10 rebase cycles in churning main; CI green on `<sha>`, all reviews approved, user approved at `<time>`"). This preserves the audit trail for branch-protection exceptions.
+**When using `--admin`, post a PR comment** documenting why the bypass was used, who approved it, and which CI sha was last successful (e.g., "Admin merge after 10 rebase cycles in churning main; CI green on `<sha>`, all reviews approved, user approved at `<time>`"). This preserves the audit trail for branch-protection exceptions.
 
 **Pre-merge sanity check via the merge tree**, even when bypassing the up-to-date check, to catch silent semantic conflicts that GitHub's mergeStateStatus wouldn't flag (e.g. two concurrent PRs both rewriting the same JSDoc):
 
 ```powershell
 git fetch origin main
-git merge-tree $(git merge-base origin/main HEAD) origin/main HEAD | grep -E 'CONFLICT|<<<<<<<' | head
+$mb = git merge-base origin/main HEAD
+git merge-tree $mb origin/main HEAD |
+  Select-String 'CONFLICT|<<<<<<<' |
+  Select-Object -First 10
 # Empty output = the squash-merge tree is clean
 ```
 
