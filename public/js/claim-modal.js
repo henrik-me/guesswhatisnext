@@ -94,6 +94,12 @@ export function showClaimPromptModal({
       if (e.key === 'Tab') {
         e.preventDefault && e.preventDefault();
         if (focusables.length === 0) return;
+        // Sync focusIdx to document.activeElement before cycling. Without
+        // this, a click (or AT-driven focus) on Decline leaves focusIdx
+        // pointing at Accept, and Tab would skip Accept entirely — focus
+        // would appear stuck on Decline because we'd compute Decline → Decline.
+        const currentFocusIdx = focusables.indexOf(document.activeElement);
+        if (currentFocusIdx !== -1) focusIdx = currentFocusIdx;
         focusIdx = (focusIdx + (e.shiftKey ? -1 : 1) + focusables.length) % focusables.length;
         setFocus();
         return;

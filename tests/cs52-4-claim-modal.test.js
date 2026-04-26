@@ -199,6 +199,23 @@ describe('showClaimPromptModal', () => {
     await promise;
   });
 
+  it('Tab respects current activeElement (click-then-Tab cycles correctly)', async () => {
+    showClaimPromptModal({ total: 1, unattachedCount: 1, mismatchedCount: 0 });
+    const backdrop = document.body.children[0];
+    const accept = findByAction(backdrop, 'claim-accept');
+    const decline = findByAction(backdrop, 'claim-decline');
+
+    // User clicks (or AT focuses) Decline directly — focusIdx is now stale.
+    decline.focus();
+    expect(document.activeElement).toBe(decline);
+    // Tab must move to Accept (Decline → Accept), not stay on Decline.
+    keydown(backdrop, 'Tab');
+    expect(document.activeElement).toBe(accept);
+    // And Tab again wraps back to Decline.
+    keydown(backdrop, 'Tab');
+    expect(document.activeElement).toBe(decline);
+  });
+
   it('invokes onAccept callback when Accept is clicked', async () => {
     const onAccept = vi.fn();
     const onDecline = vi.fn();
