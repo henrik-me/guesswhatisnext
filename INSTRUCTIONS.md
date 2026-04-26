@@ -416,6 +416,14 @@ verify (server-held puzzle answers, server-derived timing). Self-reported
 offline scores cannot meet that bar — surfacing them as achievement unlocks
 would re-open the original F2 integrity gap.
 
+Cumulative-counting rules (e.g. `games_played`, `daily_count`,
+`categories_played`) inside `server/achievements.js` filter the `scores`
+table to `source = 'ranked'` so that pre-loaded offline history cannot be
+used to graduate a single ranked finish into a high-threshold server
+achievement (e.g. 2 offline daily rows + 1 ranked finish ≠ `daily-3`).
+Multiplayer-win counting (`mp_wins`) reads from `match_players` directly,
+which is server-validated by construction.
+
 Operationally: any future write path that persists a `scores` row should
 either (a) be a server-validated outcome and call `checkAndUnlockAchievements`
 with `source: '<descriptor>_finish'`, or (b) skip evaluation explicitly. The

@@ -279,4 +279,124 @@ describe('CS52-7 — Achievement gating', () => {
       logger.info = orig;
     }
   });
+
+  test('idempotent /finish replay does NOT re-evaluate achievements', async () => {
+    // Regression guard: a future refactor that moves achievement evaluation
+    // above the `finishedNow` guard or into the idempotent re-read branch
+    // would re-evaluate on every /finish call. Assert exactly one
+    // achievement_evaluation log is emitted across two /finish calls for
+    // the same session.
+    const logger = require('../server/logger');
+    const captured = [];
+    const orig = logger.info.bind(logger);
+    logger.info = (...args) => {
+      captured.push(args);
+      return orig(...args);
+    };
+    try {
+      const { token } = await registerUser('cs52-7-replay');
+
+      const create = await agent
+        .post('/api/sessions')
+        .set(authH(token))
+        .send({ mode: 'ranked_freeplay' });
+      const sessionId = create.body.sessionId;
+      let round = create.body.round0;
+      for (let i = 0; i < 10; i++) {
+        await pause(60);
+        await agent
+          .post(`/api/sessions/${sessionId}/answer`)
+          .set(authH(token))
+          .send({
+            round_num: round.round_num,
+            puzzle_id: round.puzzle.id,
+            answer: round.puzzle.options[0],
+            client_time_ms: 1000,
+          });
+        if (i < 9) {
+          const nxt = await agent
+            .post(`/api/sessions/${sessionId}/next-round`)
+            .set(authH(token))
+            .send({});
+          round = nxt.body;
+        }
+      }
+
+      const first = await agent
+        .post(`/api/sessions/${sessionId}/finish`)
+        .set(authH(token))
+        .send({});
+      expect(first.status).toBe(200);
+
+      // Second /finish (idempotent replay) — must not produce a second
+      // evaluation log.
+      const second = await agent
+        .post(`/api/sessions/${sessionId}/finish`)
+        .set(authH(token))
+        .send({});
+      expect(second.status).toBe(200);
+      expect(second.body.score).toBe(first.body.score);
+
+      const evals = captured.filter(
+        (a) => a[0] && typeof a[0] === 'object' && a[0].event === 'achievement_evaluation'
+          && a[0].session_id === sessionId
+      );
+      expect(evals.length).toBe(1);
+    } finally {
+      logger.info = orig;
+    }
+  });
+
+  test('cumulative achievements ignore offline-source rows (no leak via /api/sync)', async () => {
+    // CS52-7 hardening: offline records synced via /api/sync must not
+    // pre-load the user with progress that a single ranked finish then
+    // graduates into a server achievement. Specifically: 2 offline daily
+    // rows + 1 ranked daily must NOT unlock daily-3 (threshold=3).
+    const { token } = await registerUser('cs52-7-cumul');
+
+    // Inject 2 offline daily rows via /api/sync.
+    const syncRes = await agent
+      .post('/api/sync')
+      .set(authH(token))
+      .set('X-User-Activity', '1')
+      .send({
+        queuedRecords: [
+          {
+            client_game_id: 'cum-1',
+            mode: 'daily',
+            variant: 'daily',
+            score: 100,
+            correct_count: 5,
+            total_rounds: 10,
+            best_streak: 2,
+            completed_at: '2026-04-23T12:00:00Z',
+            schema_version: 1,
+          },
+          {
+            client_game_id: 'cum-2',
+            mode: 'daily',
+            variant: 'daily',
+            score: 200,
+            correct_count: 6,
+            total_rounds: 10,
+            best_streak: 3,
+            completed_at: '2026-04-24T12:00:00Z',
+            schema_version: 1,
+          },
+        ],
+        revalidate: {},
+      });
+    expect(syncRes.body.acked.length).toBe(2);
+
+    // Now play one full ranked session — daily-3 must NOT unlock from a
+    // single ranked finish even though scores has 3 daily rows total.
+    const finish = await playFullRankedSession(token);
+    expect(finish.status).toBe(200);
+    const ids = finish.body.newAchievements.map((a) => a.id);
+    expect(ids).not.toContain('daily-3');
+
+    const me = await agent.get('/api/achievements/me').set(authH(token));
+    const meIds = me.body.achievements.map((a) => a.id);
+    expect(meIds).not.toContain('daily-3');
+  });
 });
