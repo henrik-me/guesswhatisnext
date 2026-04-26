@@ -670,13 +670,19 @@ function handleRankedDisconnect(stateName) {
       connectivityState: stateName,
     });
   } catch { /* ignore */ }
-  showRankedAbandonedOverlay();
+  showRankedAbandonedOverlay(stateName);
 }
+
+const RANKED_ABANDONED_REASON_COPY = {
+  'network-down': 'Lost connection — Ranked session abandoned, no score recorded.',
+  'auth-expired': 'Signed out — Ranked session abandoned, no score recorded.',
+  'db-unavailable': 'Server unavailable — Ranked session abandoned, no score recorded.',
+};
 
 let rankedAbandonedPriorFocus = null;
 let rankedAbandonedKeyHandler = null;
 
-function showRankedAbandonedOverlay() {
+function showRankedAbandonedOverlay(stateName) {
   // De-dup: if an overlay is already up, just re-focus its primary action.
   let overlay = document.querySelector('.ranked-abandoned-overlay');
   if (overlay) {
@@ -684,6 +690,8 @@ function showRankedAbandonedOverlay() {
     if (primary) primary.focus();
     return;
   }
+  const message = RANKED_ABANDONED_REASON_COPY[stateName]
+    || 'Ranked session abandoned, no score recorded.';
   rankedAbandonedPriorFocus = document.activeElement;
   overlay = document.createElement('div');
   overlay.className = 'ranked-abandoned-overlay';
@@ -695,7 +703,7 @@ function showRankedAbandonedOverlay() {
     <div class="ranked-abandoned-modal" tabindex="-1">
       <div class="ranked-abandoned-icon" aria-hidden="true">📡</div>
       <h2 class="ranked-abandoned-title" id="ranked-abandoned-title">Session abandoned</h2>
-      <p class="ranked-abandoned-message" id="ranked-abandoned-message">Lost connection — Ranked session abandoned, no score recorded.</p>
+      <p class="ranked-abandoned-message" id="ranked-abandoned-message">${message}</p>
       <div class="ranked-abandoned-actions">
         <button type="button" class="btn btn-primary" data-action="ranked-abandoned-practice">Play Practice</button>
         <button type="button" class="btn btn-secondary" data-action="ranked-abandoned-home">Back to home</button>

@@ -15,7 +15,13 @@
  * Mid-Ranked-disconnect (Decision #9): abortRanked() must abort in-flight
  * fetches AND clear state so a late response handler can't crash.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
+
+// Capture any pre-existing globals so we can restore them in afterAll and
+// not leak our stand-ins into other test files (vitest runs node mode where
+// many tests expect document/localStorage to be undefined).
+const __prevDocument = globalThis.document;
+const __prevLocalStorage = globalThis.localStorage;
 
 globalThis.document = {
   getElementById: () => null,
@@ -68,6 +74,16 @@ beforeEach(async () => {
 afterEach(() => {
   // Stop any in-flight timer/session so it doesn't bleed into the next test.
   try { Game.abortRanked && Game.abortRanked(); } catch { /* ignore */ }
+});
+
+afterAll(() => {
+  // Restore the prior globals so this file doesn't leak its DOM /
+  // localStorage stand-ins into unrelated test files when vitest reuses a
+  // worker process.
+  if (__prevDocument === undefined) { delete globalThis.document; }
+  else { globalThis.document = __prevDocument; }
+  if (__prevLocalStorage === undefined) { delete globalThis.localStorage; }
+  else { globalThis.localStorage = __prevLocalStorage; }
 });
 
 describe('CS52-4 Game.startRanked', () => {

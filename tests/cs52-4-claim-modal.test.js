@@ -16,6 +16,8 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+const __prevDocument = globalThis.document;
+
 // --- Tiny DOM stand-in ---------------------------------------------------
 // We build only what showClaimPromptModal touches: createElement, append/
 // remove, addEventListener/removeEventListener, focus tracking, and a
@@ -117,6 +119,11 @@ beforeEach(async () => {
 
 afterEach(() => {
   infoSpy.mockRestore();
+  // Restore previous global.document so this file doesn't leak its fake
+  // DOM into other test files (vitest in node mode often expects
+  // document to be undefined).
+  if (__prevDocument === undefined) { delete global.document; }
+  else { global.document = __prevDocument; }
 });
 
 describe('showClaimPromptModal', () => {

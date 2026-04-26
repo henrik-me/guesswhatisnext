@@ -309,13 +309,6 @@ export { shuffle };
 let rankedAbortController = null;
 
 /**
- * Normalize a server-issued ranked puzzle ({ id, prompt: { type, sequence,
- * explanation }, options, ... }) into the local puzzle shape the existing UI
- * expects. The `answer` field is intentionally absent — the client never sees
- * the correct answer in Ranked.
- */
-
-/**
  * Defensive JSON parse helper for Ranked endpoints. Returns the parsed body
  * on success, or `undefined` if parsing throws (non-JSON proxy error pages,
  * truncated bodies, …). Callers compare against `undefined` (not falsy) so
@@ -329,6 +322,12 @@ async function safeJson(res) {
   }
 }
 
+/**
+ * Normalize a server-issued ranked puzzle ({ id, prompt: { type, sequence,
+ * explanation }, options, ... }) into the local puzzle shape the existing UI
+ * expects. The `answer` field is intentionally absent — the client never sees
+ * the correct answer in Ranked.
+ */
 function normalizeRankedPuzzle(p) {
   const puzzle = (p && typeof p === 'object') ? p : {};
   const prompt = puzzle.prompt;
