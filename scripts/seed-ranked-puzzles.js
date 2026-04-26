@@ -37,12 +37,15 @@ async function seedRankedPuzzles() {
   }
 
   const db = await getDbAdapter();
-  const nowIso = new Date().toISOString();
   let inserted = 0;
   let skipped = 0;
 
   await db.transaction(async (tx) => {
     for (const p of data.puzzles) {
+      // created_at is intentionally omitted — the column DEFAULT
+      // (GETDATE() on MSSQL, CURRENT_TIMESTAMP on SQLite) supplies a
+      // proper datetime value. Sending an ISO-Z string into a DATETIME
+      // column on Azure SQL is brittle (implicit-conversion failures).
       const params = [
         p.id,
         p.category,
@@ -50,7 +53,6 @@ async function seedRankedPuzzles() {
         JSON.stringify(p.options),
         p.answer,
         p.difficulty ?? null,
-        nowIso,
       ];
       let result;
       if (db.dialect === 'mssql') {
@@ -58,16 +60,16 @@ async function seedRankedPuzzles() {
         // Mirrors server/db/seed-puzzles.js — race-safe (no SELECT-then-INSERT window).
         result = await tx.run(
           `INSERT INTO ranked_puzzles
-             (id, category, prompt, options, answer, difficulty, status, created_at)
-           SELECT ?, ?, ?, ?, ?, ?, 'active', ?
+             (id, category, prompt, options, answer, difficulty, status)
+           SELECT ?, ?, ?, ?, ?, ?, 'active'
            WHERE NOT EXISTS (SELECT 1 FROM ranked_puzzles WHERE id = ?)`,
           [...params, p.id]
         );
       } else {
         result = await tx.run(
           `INSERT OR IGNORE INTO ranked_puzzles
-             (id, category, prompt, options, answer, difficulty, status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`,
+             (id, category, prompt, options, answer, difficulty, status)
+           VALUES (?, ?, ?, ?, ?, ?, 'active')`,
           params
         );
       }

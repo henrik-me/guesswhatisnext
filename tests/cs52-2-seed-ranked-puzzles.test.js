@@ -11,9 +11,13 @@ const fs = require('fs');
 const os = require('os');
 
 let tmpDir;
+let originalDbPath;
+let originalNodeEnv;
 
 beforeAll(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-cs52-2-seed-'));
+  originalDbPath = process.env.GWN_DB_PATH;
+  originalNodeEnv = process.env.NODE_ENV;
   process.env.GWN_DB_PATH = path.join(tmpDir, 'seed.db');
   process.env.NODE_ENV = 'test';
 });
@@ -28,7 +32,19 @@ afterAll(async () => {
   if (tmpDir && fs.existsSync(tmpDir)) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
-  delete process.env.GWN_DB_PATH;
+  // Restore previously-set env values (deleting if they weren't set originally)
+  // so this file is well-behaved when run alongside others or under different
+  // vitest isolation modes.
+  if (originalDbPath === undefined) {
+    delete process.env.GWN_DB_PATH;
+  } else {
+    process.env.GWN_DB_PATH = originalDbPath;
+  }
+  if (originalNodeEnv === undefined) {
+    delete process.env.NODE_ENV;
+  } else {
+    process.env.NODE_ENV = originalNodeEnv;
+  }
 });
 
 describe('seed-ranked-puzzles script', () => {
