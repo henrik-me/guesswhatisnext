@@ -216,20 +216,24 @@ describe('CS52-3 — Ranked session API', () => {
       [new Date().toISOString()]
     );
 
-    const c = await agent.post('/api/sessions').set(authH(token)).send({ mode: 'ranked_freeplay' });
-    expect(c.body.config.interRoundDelayMs).toBe(500);
-    expect(c.body.config.rounds).toBe(3);
-    await pause(60);
-    await playRound(token, c.body.sessionId, c.body.round0);
-    const tooEarly = await nextRound(token, c.body.sessionId);
-    expect(tooEarly.status).toBe(425);
-    expect(tooEarly.body.retryAfterMs).toBeGreaterThan(0);
-    expect(tooEarly.headers['retry-after']).toBeDefined();
-    await pause(550);
-    const ok = await nextRound(token, c.body.sessionId);
-    expect(ok.status).toBe(200);
-
-    await db.run(`DELETE FROM game_configs WHERE mode = 'ranked_freeplay'`);
+    try {
+      const c = await agent.post('/api/sessions').set(authH(token)).send({ mode: 'ranked_freeplay' });
+      expect(c.body.config.interRoundDelayMs).toBe(500);
+      expect(c.body.config.rounds).toBe(3);
+      await pause(60);
+      await playRound(token, c.body.sessionId, c.body.round0);
+      const tooEarly = await nextRound(token, c.body.sessionId);
+      expect(tooEarly.status).toBe(425);
+      expect(tooEarly.body.retryAfterMs).toBeGreaterThan(0);
+      expect(tooEarly.headers['retry-after']).toBeDefined();
+      await pause(550);
+      const ok = await nextRound(token, c.body.sessionId);
+      expect(ok.status).toBe(200);
+    } finally {
+      // Always remove the override row, even if an assertion above fails, so
+      // the config doesn't leak into subsequent tests in this file.
+      await db.run(`DELETE FROM game_configs WHERE mode = 'ranked_freeplay'`);
+    }
   });
 
   test('server-derived elapsed_ms wins over forged client_time_ms', async () => {
@@ -250,7 +254,8 @@ describe('CS52-3 — Ranked session API', () => {
     expect(a.body.elapsed_ms).toBeGreaterThanOrEqual(150);
     // Score reflects the actual elapsed, not the forged 51ms.
     // Max single-round score (correct, ~0ms, streak 1) = 100 + 100 = 200.
-    // With ~150ms elapsed of 15000ms budget, speed bonus = 100 - floor(100*150/15000) = 99
+    // With ~150ms elapsed of a 15000ms budget, timeRatio = 1 - 150/15000 = 0.99,
+    // so speed bonus = Math.round(MAX_SPEED_BONUS * timeRatio) = round(100 * 0.99) = 99
     // → score = 100 + 99 = 199. STRICTLY less than 200 (the ceiling that
     // unguarded forged client_time_ms would have produced).
     expect(a.body.runningScore).toBeLessThan(200);
