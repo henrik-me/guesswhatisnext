@@ -24,13 +24,13 @@ async function insertSmokeUser(username = 'gwn-smoke-bot') {
   return result.lastId;
 }
 
-async function insertScore(userId, score, mode = 'freeplay') {
+async function insertScore(userId, score, mode = 'freeplay', source = 'offline') {
   const db = require('../server/db');
   const adapter = await db.getDbAdapter();
   await adapter.run(
-    `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [userId, mode, score, 10, 10, 5]
+    `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [userId, mode, score, 10, 10, 5, source]
   );
 }
 
@@ -86,7 +86,7 @@ describe("CS41-0: 'gwn-smoke-*' prefix filtered from public surfaces", () => {
   });
 
   test('GET /api/scores/leaderboard hides smoke-bot, shows regular user', async () => {
-    const res = await getAgent().get('/api/scores/leaderboard?mode=freeplay&period=alltime');
+    const res = await getAgent().get('/api/scores/leaderboard?variant=freeplay&source=offline&period=alltime');
     expect(res.status).toBe(200);
     const usernames = res.body.leaderboard.map((r) => r.username);
     expect(usernames).toContain('regular-cs41');

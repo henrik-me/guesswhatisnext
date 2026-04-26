@@ -72,7 +72,7 @@ scenarios:
               expect:
                 - statusCode: 200
           - get:
-              url: "/api/scores/leaderboard?mode=freeplay&period=weekly"
+              url: "/api/scores/leaderboard?variant=freeplay&period=weekly"
               headers:
                 Authorization: "Bearer {{ token }}"
               expect:
