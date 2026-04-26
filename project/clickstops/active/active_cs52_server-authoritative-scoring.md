@@ -474,6 +474,16 @@ PUT /api/admin/game-configs/:mode
 
 ## Tasks
 
+**Per-task review-loop policy (applies to every CS52-2..CS52-11 PR):**
+
+1. Worktree branch: `yoga-gwn-c<N>/cs52-<task>-<short-name>` (or `<machine>-gwn[-cN]/cs52-<task>-<short-name>`).
+2. **Container validation** (`npm run container:validate`) before requesting any review, after each fix push, and after each Copilot iteration's fixes — required for every task that touches server/client/DB code (i.e. all of CS52-2..CS52-7e). Capture pass/fail per cycle in PR body's `## Container Validation` section per [INSTRUCTIONS.md § Database & Data](../../../INSTRUCTIONS.md#database--data). CS52-9/10/11 supersede this with their own production-shape validation.
+3. **Local review (GPT-5.4 or higher)** via the `code-review` agent before requesting Copilot review per [REVIEWS.md § Local Review Loop](../../../REVIEWS.md#local-review-loop-gpt-54-or-higher). Findings recorded in PR description under `## Local Review`. CS52-2..CS52-7e author may run additional rubber-duck cycles at design/test-design milestones.
+4. **Copilot PR review** — request via `gh pr edit <PR#> --add-reviewer Copilot` after local review is clean. Address all valid findings, reply on each thread, resolve all threads. Iterate until Copilot approves with no new comments. Per [REVIEWS.md § Copilot PR Review Policy](../../../REVIEWS.md). CS52-9/10/11 are validation/deploy tasks — if their PRs are docs-only (e.g. CS52-11 closeout), Copilot review may be skipped per the docs-only rule; otherwise required.
+5. **CI green** (`npm run lint && npm test && npm run test:e2e` plus `npm run check:docs:strict`).
+6. **WORKBOARD updates** at every state transition (`claimed → implementing → local_review → copilot_review → ready_to_merge → merged`).
+7. **Merge to main** only after Copilot approves AND CI is green AND the user has approved (branch protection).
+
 | # | Task | Status | Notes |
 |---|------|--------|-------|
 | CS52-1 | **Design lock-down.** Finalise: provenance vocabulary; `scores` schema migration (`source`, `variant`, `client_game_id`, `schema_version`, `payload_hash` columns); new tables (`ranked_sessions`, `ranked_session_events`, `ranked_puzzles`, `game_configs`); ranked puzzle pool sourcing (server-only, fresh-content seed); canonical configs for `ranked_freeplay` / `ranked_daily` / `multiplayer`; `game_configs` change mechanism (admin route + 24h TTL cache); identity & client sync model (guest vs signed-in-offline, claim prompt, single-flight gesture-driven `POST /api/sync`); connectivity state machine; mid-Ranked-disconnect rule; sign-out semantics; offline sync conflict rule (payload-hash). **Output: this design PR — no application code yet.** | ✅ Complete (this PR) | Sequencing prereq for everything else. |
