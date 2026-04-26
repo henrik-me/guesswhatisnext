@@ -5,7 +5,9 @@
  * pending ones in order. Each migration is wrapped in a transaction.
  *
  * This module is used by BaseAdapter.migrate() and should not be
- * imported directly by routes.
+ * imported directly by routes. Routes that need to inspect tracker
+ * state must go through `db.getMigrationState()` on the adapter,
+ * which is the supported route-facing API (added in CS61-0).
  */
 
 const MIGRATIONS_TABLE = '_migrations';
@@ -47,6 +49,23 @@ async function getAppliedVersions(db) {
 }
 
 /**
+ * Get the full list of already-applied migrations (version + name),
+ * ordered by version ascending.
+ *
+ * Used by BaseAdapter.getMigrationState() to expose tracker state
+ * to routes without those routes importing this module directly.
+ *
+ * @param {import('../base-adapter')} db
+ * @returns {Promise<Array<{version: number, name: string}>>}
+ */
+async function getAppliedMigrations(db) {
+  const rows = await db.all(
+    `SELECT version, name FROM ${MIGRATIONS_TABLE} ORDER BY version`
+  );
+  return rows.map((r) => ({ version: r.version, name: r.name }));
+}
+
+/**
  * Run all pending migrations in version order.
  *
  * @param {import('../base-adapter')} db - Database adapter
@@ -77,4 +96,4 @@ async function runMigrations(db, migrations) {
   return pending.length;
 }
 
-module.exports = { runMigrations, ensureMigrationsTable, getAppliedVersions };
+module.exports = { runMigrations, ensureMigrationsTable, getAppliedVersions, getAppliedMigrations };
