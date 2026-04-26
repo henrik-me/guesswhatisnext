@@ -353,9 +353,9 @@ async function startRanked({ mode, apiFetch, ui }) {
   rankedAbortController = new AbortController();
   const signal = rankedAbortController.signal;
 
-  // Telemetry: session-creation request fired (the actual session_started
-  // event is emitted from game.js after the server returns success — this
-  // pre-flight log avoids inflating the denominator with failed starts).
+  // No client telemetry is emitted before POST /api/sessions.
+  // ranked_session_started is logged only after the server confirms
+  // session creation so failed starts are not counted as started sessions.
 
   let res;
   try {
