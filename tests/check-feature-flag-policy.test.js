@@ -19,6 +19,7 @@ const {
   OVERRIDE_TRUTHY_RE,
   PERCENTAGE_100_RE,
   scanEnvObjectForm,
+  jsonHasOverrideTruthy,
 } = require('../scripts/check-feature-flag-policy.js');
 
 // Built via concatenation so the policy script (which scans this file as
@@ -259,6 +260,57 @@ describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', (
     ].join('\n');
     const file = writeFixture('confusable-identifiers.bicep', bicep);
     expect(scanEnvObjectForm(file)).toEqual([]);
+  });
+
+  // R4 Copilot finding: braces inside a `//` line comment must NOT throw off
+  // the brace-pairing walk in `enclosingBraceLineRange`. Here the comment on
+  // the line above the real env entry contains an unbalanced `{` that, before
+  // the comment-strip pass was added, caused the walker to pair the override
+  // `name:` with the truthy `value:` from a *different* (sibling) object.
+  it('does NOT mis-pair across braces hidden inside line comments', () => {
+    const bicep = [
+      'env: [',
+      '  {',
+      "    name: 'NEIGHBOUR'",
+      "    value: 'true'",
+      '  }',
+      "  // example shape from docs: { name: 'X', value: 'true' }",
+      '  {',
+      `    name: '${OVERRIDE}'`,
+      "    value: 'false'",
+      '  }',
+      ']',
+    ].join('\n');
+    const file = writeFixture('comment-braces.bicep', bicep);
+    expect(scanEnvObjectForm(file)).toEqual([]);
+  });
+});
+
+// R4 Copilot finding: the JSON walker compared `node.name` with `===`, which
+// would miss a lowercase-misspelled override entry that the single-line regex
+// (case-insensitive) would otherwise catch. The walker must be case-insensitive
+// on the flag name to keep the two scan paths consistent.
+describe('CS40 follow-up Policy 1 — JSON walker case-insensitivity', () => {
+  it('detects lowercase-misspelled override flag in JSON env-object form', () => {
+    const arm = {
+      env: [
+        { name: 'feature_flag_allow_override', value: 'true' },
+      ],
+    };
+    expect(jsonHasOverrideTruthy(arm)).toBe(true);
+  });
+
+  it('detects mixed-case override flag in JSON env-object form', () => {
+    const arm = {
+      env: [
+        { name: 'Feature_Flag_Allow_Override', value: 'YES' },
+      ],
+    };
+    expect(jsonHasOverrideTruthy(arm)).toBe(true);
+  });
+
+  it('does NOT match unrelated string-typed name values', () => {
+    expect(jsonHasOverrideTruthy({ name: 'NODE_ENV', value: 'true' })).toBe(false);
   });
 });
 

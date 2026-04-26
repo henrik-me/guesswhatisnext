@@ -152,7 +152,8 @@ function jsonHasOverrideTruthy(node) {
   if (
     Object.prototype.hasOwnProperty.call(node, 'name')
     && Object.prototype.hasOwnProperty.call(node, 'value')
-    && node.name === 'FEATURE_FLAG_ALLOW_OVERRIDE'
+    && typeof node.name === 'string'
+    && node.name.toUpperCase() === 'FEATURE_FLAG_ALLOW_OVERRIDE'
     && isTruthyEnvValue(node.value)
   ) {
     return true;
@@ -180,6 +181,43 @@ const BICEP_VALUE_TRUTHY_RE = new RegExp(
   String.raw`\bvalue\b\s*:\s*(?:'` + TRUTHY_TOKEN + String.raw`'|"` + TRUTHY_TOKEN + String.raw`"|` + TRUTHY_TOKEN + String.raw`\b)`,
   'i',
 );
+
+// Replace line-comment (`//...` and `#...`) and block-comment (`/* ... */`)
+// regions in `src` with spaces of equal length so character offsets are
+// preserved for downstream brace-walking. This is a coarse strip — it does
+// not understand string literals, so a `//` or `#` inside a quoted string
+// will also be blanked out. That is acceptable here because the brace walker
+// already cannot see into string literals; the goal is to avoid pairing a
+// real `name:` with a `value:` from a `{ ... }` literal that lives inside a
+// commented-out example block.
+function stripCommentsPreservingOffsets(src) {
+  const out = src.split('');
+  let i = 0;
+  const n = out.length;
+  while (i < n) {
+    const c = out[i];
+    const next = i + 1 < n ? out[i + 1] : '';
+    if (c === '/' && next === '*') {
+      out[i] = ' '; out[i + 1] = ' ';
+      let j = i + 2;
+      while (j < n && !(out[j] === '*' && j + 1 < n && out[j + 1] === '/')) {
+        if (out[j] !== '\n') out[j] = ' ';
+        j += 1;
+      }
+      if (j < n) { out[j] = ' '; out[j + 1] = ' '; j += 2; }
+      i = j;
+      continue;
+    }
+    if ((c === '/' && next === '/') || c === '#') {
+      let j = i;
+      while (j < n && out[j] !== '\n') { out[j] = ' '; j += 1; }
+      i = j;
+      continue;
+    }
+    i += 1;
+  }
+  return out.join('');
+}
 
 // Given a character offset, return the line range [openLine, closeLine] of
 // the nearest enclosing `{ ... }` block, or null if the offset is not inside
@@ -255,6 +293,11 @@ function scanEnvObjectForm(relPath) {
   }
   if (/\.bicep$/i.test(relPath)) {
     const lines = content.split(/\r?\n/);
+    // Strip comments (preserving offsets) before brace-walking so that
+    // `{`/`}` characters inside `//` line comments or `/* ... */` blocks do
+    // not mis-identify the nearest enclosing object literal. We keep the
+    // original `content` for snippet/line extraction.
+    const codeOnly = stripCommentsPreservingOffsets(content);
     // Precompute character offsets of each line start so we can map line
     // indices to absolute offsets for brace-range lookups.
     const lineStarts = [0];
@@ -279,7 +322,7 @@ function scanEnvObjectForm(relPath) {
       // backward brace walk. `nameMatch.index` is set because BICEP_NAME_RE
       // is non-global.
       const nameOffset = lineStarts[i] + nameMatch.index;
-      const range = enclosingBraceLineRange(content, lineStarts, nameOffset);
+      const range = enclosingBraceLineRange(codeOnly, lineStarts, nameOffset);
       if (!range) continue;
       // Allow same-line pairings: a `{ name: 'X', value: 'true' }` literal
       // has both matches on the same line, which is still one object.
