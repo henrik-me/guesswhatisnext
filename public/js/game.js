@@ -318,11 +318,15 @@ function normalizeRankedPuzzle(p) {
   const puzzle = (p && typeof p === 'object') ? p : {};
   const prompt = puzzle.prompt;
   const promptObj = (prompt && typeof prompt === 'object') ? prompt : {};
+  // CS52-4 anti-cheat: ranked puzzles must not expose hints. The server
+  // strips `answer` but currently still includes `explanation` in the
+  // payload; force it to '' here so it can never leak via DevTools, and
+  // ui.showResult always renders an empty explanation for ranked rounds.
   return {
     id: puzzle.id,
     sequence: Array.isArray(promptObj.sequence) ? promptObj.sequence : [],
     type: promptObj.type || 'text',
-    explanation: promptObj.explanation || '',
+    explanation: '',
     options: Array.isArray(puzzle.options) ? puzzle.options : [],
     category: puzzle.category,
     difficulty: puzzle.difficulty,

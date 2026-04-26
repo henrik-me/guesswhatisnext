@@ -670,4 +670,3 @@ customEvents
 | where name in ('claim_prompt_shown', 'claim_prompt_accepted', 'claim_prompt_declined')
 | summarize n = count() by name
 ```
->>>>>>> origin/main
