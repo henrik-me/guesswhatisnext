@@ -75,6 +75,13 @@ function computePayloadHash(userId, raw) {
     .digest('hex');
 }
 
+/** True iff the value parses to a finite Date (accepts ISO strings, epoch ms, etc.). */
+function isValidCompletedAt(v) {
+  if (v == null) return true; // optional — server fills in default
+  const d = new Date(v);
+  return !Number.isNaN(d.getTime());
+}
+
 /** Upsert a single L1 record. Returns 'acked' | 'rejected' | throws. */
 async function processRecord(db, userId, raw) {
   const payloadHash = computePayloadHash(userId, raw);
@@ -102,7 +109,31 @@ async function processRecord(db, userId, raw) {
     // was actually played, not when it was synced. The DB DEFAULT
     // (current timestamp) only fires when we omit the column, so we
     // bind it explicitly here for offline records.
-    const playedAt = raw.completed_at ? String(raw.completed_at) : new Date().toISOString();
+    //
+    // Bind a JS Date object (not a raw ISO string) so the MSSQL adapter
+    // serializes it to a proper DATETIME — SQL Server's implicit-conversion
+    // path rejects ISO strings with a 'Z' suffix and would otherwise leave
+    // valid offline records stuck in L1 with neither ack nor reject.
+    // Normalize completed_at to a canonical UTC ISO-8601 string.
+    // - The mssql node driver implicitly converts a parameterized ISO-8601
+    //   string with a `Z` suffix into a SqlDateTime; the conversion path that
+    //   would reject a `Z` suffix (raw string concatenation into SQL text) is
+    //   never used here because all values are bound via `request.input(...)`.
+    // - SQLite stores TEXT verbatim; ISO-8601 with `T` and `Z` is the format
+    //   SQLite's date()/datetime() functions understand, so daily-leaderboard
+    //   bucketing works without an additional cast.
+    // - We always pass through `new Date(...)` so a malformed `completed_at`
+    //   surfaces as a deterministic rejection instead of corrupt DB state.
+    let playedAt;
+    if (raw.completed_at) {
+      const parsed = new Date(raw.completed_at);
+      if (Number.isNaN(parsed.getTime())) {
+        return 'rejected';
+      }
+      playedAt = parsed.toISOString();
+    } else {
+      playedAt = new Date().toISOString();
+    }
     await db.run(
       `INSERT INTO scores
          (user_id, mode, score, correct_count, total_rounds, best_streak,
@@ -245,6 +276,16 @@ router.post('/', requireAuth, async (req, res, next) => {
         if (raw && raw.client_game_id !== undefined) {
           rejected.push({ client_game_id: raw.client_game_id, reason: 'invalid_payload' });
         }
+        continue;
+      }
+      if (!isValidCompletedAt(raw.completed_at)) {
+        rejected.push({ client_game_id: raw.client_game_id, reason: 'invalid_payload' });
+        logger.warn({
+          event: 'sync_record_rejected',
+          user_id: userId,
+          client_game_id: raw.client_game_id,
+          reason: 'invalid_payload',
+        }, 'sync record rejected: invalid completed_at');
         continue;
       }
 

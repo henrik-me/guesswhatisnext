@@ -288,6 +288,36 @@ describe('completed_at persistence', () => {
     const got = new Date(row.played_at).toISOString().slice(0, 19);
     expect(got).toBe(completedAt.slice(0, 19));
   });
+
+  // Copilot R1 #6: malformed completed_at must reject the record (not stall it
+  // in L1 forever, not silently insert garbage). Reason classified as
+  // invalid_payload so the client can surface the rejection cleanly.
+  test('malformed completed_at is rejected with invalid_payload reason', async () => {
+    const fresh = await registerUser('badtsuser');
+    const res = await getAgent()
+      .post('/api/sync')
+      .set('Authorization', `Bearer ${fresh.token}`)
+      .set('X-User-Activity', '1')
+      .send({
+        queuedRecords: [{
+          client_game_id: 'cg-bad-ts-1',
+          mode: 'freeplay',
+          variant: 'freeplay',
+          score: 100,
+          correct_count: 1,
+          total_rounds: 5,
+          best_streak: 1,
+          completed_at: 'not-a-date',
+          schema_version: 1,
+        }],
+        revalidate: {},
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.acked).toEqual([]);
+    expect(res.body.rejected).toEqual([
+      { client_game_id: 'cg-bad-ts-1', reason: 'invalid_payload' },
+    ]);
+  });
 });
 
 describe('payload_hash deterministic', () => {

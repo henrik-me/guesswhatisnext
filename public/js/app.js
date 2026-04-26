@@ -12,6 +12,7 @@ import { validateStoredAuthToken } from './auth-boot.js';
 import {
   buildRecord as syncBuildRecord,
   enqueueRecord as syncEnqueueRecord,
+  getL1Records,
   syncNow,
   handleSignOut as syncHandleSignOut,
   findClaimableRecords,
@@ -346,15 +347,29 @@ const ui = {
     // CS52-5: enqueue every completed game into the unified L1 store, then
     // fire a gesture-driven sync. Replaces the legacy gwn_pending_scores +
     // ProgressiveLoader queues.
+    let enqueued = false;
     try {
       const userId = (() => {
         try { return getCurrentUserId(); } catch { return null; }
       })();
       const record = syncBuildRecord(summary, userId);
-      syncEnqueueRecord(record);
+      // enqueueRecord returns false on either (a) idempotent dedup (record
+      // already in L1, fine) or (b) L1 cap hit. Distinguish via post-state.
+      const ok = syncEnqueueRecord(record);
+      if (ok) {
+        enqueued = true;
+      } else {
+        // Check whether the record is now in L1 (dedup) or was refused (cap).
+        const present = getL1Records().some(r => r.client_game_id === record.client_game_id);
+        if (present) {
+          enqueued = true; // dedup is benign — record is already queued
+        } else {
+          showSyncIndicator('Score not saved (offline cache full)');
+        }
+      }
     } catch { /* localStorage unavailable — score is still on screen */ }
 
-    if (authToken) {
+    if (authToken && enqueued) {
       showSyncIndicator('Score saved ✓');
       // Submit score to server if logged in (single-flight via syncNow).
       // Score-submission IS a user gesture per CS52-5 § Sync triggers (#2).
@@ -376,9 +391,10 @@ const ui = {
       }).catch(() => {
         showSyncIndicator('Will sync later');
       });
-    } else {
+    } else if (!authToken) {
       showToast('Log in to save your score to the leaderboard');
     }
+    // (authToken && !enqueued) → cap-overflow indicator was already shown above.
 
     // Show/hide share button based on mode
     const shareBtn = document.querySelector('[data-action="share-result"]');
@@ -1347,7 +1363,10 @@ function decodeJwtPayload(token) {
   if (parts.length !== 3) return null;
   try {
     const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(atob(padded));
+    const remainder = padded.length % 4;
+    if (remainder === 1) return null;
+    const fullyPadded = padded + '='.repeat((4 - remainder) % 4);
+    return JSON.parse(atob(fullyPadded));
   } catch { return null; }
 }
 

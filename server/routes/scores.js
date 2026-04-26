@@ -71,7 +71,10 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
     // /leaderboard contract keeps working. When source is supplied:
     //   - 'ranked' or 'offline' → exact match on s.source
     //   - 'all' → union of ranked + offline (legacy excluded)
-    //   - 'legacy' → exact match on s.source (admin/operator only)
+    //   - 'legacy' → exact match on s.source (pre-CS52 rows; public read-only,
+    //                 useful for ops dashboards and migration verification —
+    //                 no auth gate, since legacy rows contain no PII beyond
+    //                 username + score, same as ranked/offline)
     let sourceFilter = '';
     const params = [mode];
     if (source === 'ranked' || source === 'offline' || source === 'legacy') {

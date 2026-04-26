@@ -201,22 +201,24 @@ Cross-environment investigations (e.g., "did this regression also reach prod?") 
 - **Telemetry wiring:** [`server/telemetry.js`](../server/telemetry.js) is the AI export path; see CS54 for what it does and doesn't instrument.
 
 
-### B.7 CS52-5 unified sync (POST /api/sync)
+### B.8 CS52-5 unified sync (POST /api/sync)
 
 CS52-5 emits structured pino logs at three points (see [`server/routes/sync.js`](../server/routes/sync.js)):
 
 - `sync_request_received` — one per request, with `user_id`, `queued_count`, `revalidate_keys`.
-- `sync_record_acked` — one per accepted record, with `client_game_id`, `payload_hash`, `source`.
-- `sync_record_rejected` — one per rejected record, with `client_game_id`, `reason` (`conflict_with_existing` / `schema_unsupported` / `invalid_payload`).
+- `sync_record_acked` — one per accepted record, with `client_game_id` and `user_id`.
+- `sync_record_rejected` — one per rejected record, with `client_game_id`, `user_id`, and `reason` (`conflict_with_existing` for payload-hash mismatch on an existing `client_game_id`, `invalid_payload` for malformed `completed_at` or missing `client_game_id`).
 
 Plus client-side `connectivity_state_transition` log lines (in browser console; visible in the App Insights `customEvents` table once CS54-9 wires the browser SDK).
+
+The event name is carried in the structured `log.event` field (Pino's `msg` is a human-readable string like `"POST /api/sync received"`), so KQL queries below filter on `tostring(log.event)`.
 
 #### Sync activity by user (last 24h)
 
 ```kusto
 ContainerAppConsoleLogs_CL
 | extend log = parse_json(Log_s)
-| where log.msg == 'sync_request_received'
+| where tostring(log.event) == 'sync_request_received'
 | where TimeGenerated > ago(24h)
 | summarize requests = count(), total_queued = sum(toint(log.queued_count)), avg_queued = avg(toint(log.queued_count)) by tostring(log.user_id)
 | order by requests desc
@@ -227,7 +229,7 @@ ContainerAppConsoleLogs_CL
 ```kusto
 ContainerAppConsoleLogs_CL
 | extend log = parse_json(Log_s)
-| where log.msg == 'sync_record_rejected'
+| where tostring(log.event) == 'sync_record_rejected'
 | where TimeGenerated > ago(7d)
 | summarize n = count() by tostring(log.reason), tostring(log.user_id)
 | order by n desc

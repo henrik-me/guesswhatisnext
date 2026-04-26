@@ -34,8 +34,19 @@ test.describe('Leaderboard', () => {
 
     // Play all rounds; listen for score submission during the game.
     // CS52-5: scores are submitted via the unified /api/sync endpoint.
+    // Tightened predicate (Copilot R1): require a non-empty queuedRecords array
+    // in the request body so a sign-in-triggered /api/sync (which carries an
+    // empty/absent queuedRecords) doesn't satisfy the wait early.
     const scoreSubmitted = page.waitForResponse(
-      (resp) => resp.url().includes('/api/sync') && resp.request().method() === 'POST',
+      (resp) => {
+        if (!resp.url().includes('/api/sync') || resp.request().method() !== 'POST') return false;
+        try {
+          const body = JSON.parse(resp.request().postData() || '{}');
+          return Array.isArray(body.queuedRecords) && body.queuedRecords.length > 0;
+        } catch {
+          return false;
+        }
+      },
       { timeout: 30000 },
     );
     for (let i = 0; i < 10; i++) {
