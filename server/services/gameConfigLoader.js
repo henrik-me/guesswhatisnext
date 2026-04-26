@@ -111,7 +111,7 @@ function createLoader({ getDb, now = Date.now, logger: log = logger, ttlMs = GAM
 
     cache.set(mode, { config, cachedAt: now() });
     log.info(
-      { msg: 'game-configs cache miss', mode, source, ...(updatedAt ? { updated_at: updatedAt } : {}) },
+      { mode, source, ...(updatedAt ? { updated_at: updatedAt } : {}) },
       'game-configs cache miss'
     );
     return config;

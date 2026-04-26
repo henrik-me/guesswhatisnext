@@ -69,7 +69,7 @@ describe('gameConfigLoader', () => {
     expect(cfg).toEqual({ rounds: 3, round_timer_ms: 25000, inter_round_delay_ms: 4000 });
     expect(loader._cacheSize()).toBe(1);
     expect(silentLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ msg: 'game-configs cache miss', mode: 'multiplayer', source: 'db', updated_at: '2026-02-01T00:00:00Z' }),
+      expect.objectContaining({ mode: 'multiplayer', source: 'db', updated_at: '2026-02-01T00:00:00Z' }),
       'game-configs cache miss'
     );
   });
@@ -81,7 +81,7 @@ describe('gameConfigLoader', () => {
     await loader.getConfig('ranked_freeplay');
     expect(fake.getCalls()).toBe(1);
     expect(silentLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ msg: 'game-configs cache miss', mode: 'ranked_freeplay', source: 'defaults' }),
+      expect.objectContaining({ mode: 'ranked_freeplay', source: 'defaults' }),
       'game-configs cache miss'
     );
   });

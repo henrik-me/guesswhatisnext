@@ -74,10 +74,13 @@ function validateBody(body) {
     };
   }
 
-  // inter_round_delay_ms is optional — default to 0 if omitted (consistent
-  // with the schema DEFAULT 0 in migration 008).
+  // inter_round_delay_ms is optional — only omission (undefined) defaults
+  // to 0, consistent with the schema DEFAULT 0 in migration 008. An
+  // explicitly-provided null/non-integer is rejected so callers can't
+  // bypass validation by sending `inter_round_delay_ms: null` or
+  // `inter_round_delay_ms: "0"`.
   let delay = inter_round_delay_ms;
-  if (delay === undefined || delay === null) {
+  if (delay === undefined) {
     delay = 0;
   } else if (!isInt(delay) || !inRange(delay, VALIDATION_BOUNDS.inter_round_delay_ms)) {
     return {
@@ -91,29 +94,52 @@ function validateBody(body) {
 }
 
 /**
- * Portable UPSERT (UPDATE then INSERT-if-zero) inside a transaction.
- * Both adapters expose `tx.run` returning `{ changes, lastId }`.
+ * Atomic UPSERT, dialect-specific so concurrent first-time writes for the
+ * same mode cannot race on the primary key.
  *
- * We deliberately avoid SQLite's `ON CONFLICT … DO UPDATE` and MSSQL's
- * `MERGE` so the same SQL works on both backends. Update-first means an
- * existing row is updated in place (preserving primary key); insert-on-zero
- * handles first-time writes. Wrapping in a transaction prevents a torn
- * read between the UPDATE and the INSERT under concurrent admin writes
- * (which are vanishingly rare anyway — admin route, not user traffic).
+ *   - SQLite: `INSERT … ON CONFLICT(mode) DO UPDATE` (single statement,
+ *     atomic; supported since SQLite 3.24, in better-sqlite3 ≥6).
+ *   - MSSQL : `MERGE` with `HOLDLOCK` so the existence check + INSERT/UPDATE
+ *     happen under a key-range lock — without `HOLDLOCK` two concurrent
+ *     MERGEs can both miss the existing row and one will trip the primary
+ *     key. Admin writes are rare, but the operator workflow ("apply config
+ *     to two modes back-to-back via a script") makes it cheap to be correct.
+ *
+ * Avoids the previous portable UPDATE-then-INSERT-if-zero pattern, which on
+ * MSSQL could let two concurrent writers both observe `changes=0` and both
+ * INSERT — one of which would fail on PK and surface as 500.
  */
 async function upsertConfig(db, { mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at }) {
-  await db.transaction(async (tx) => {
-    const updateRes = await tx.run(
-      'UPDATE game_configs SET rounds = ?, round_timer_ms = ?, inter_round_delay_ms = ?, updated_at = ? WHERE mode = ?',
-      [rounds, round_timer_ms, inter_round_delay_ms, updated_at, mode]
+  if (db.dialect === 'mssql') {
+    await db.run(
+      `MERGE INTO game_configs WITH (HOLDLOCK) AS t
+       USING (SELECT ? AS mode, ? AS rounds, ? AS round_timer_ms,
+                     ? AS inter_round_delay_ms, ? AS updated_at) AS s
+         ON t.mode = s.mode
+       WHEN MATCHED THEN UPDATE
+         SET rounds = s.rounds,
+             round_timer_ms = s.round_timer_ms,
+             inter_round_delay_ms = s.inter_round_delay_ms,
+             updated_at = s.updated_at
+       WHEN NOT MATCHED THEN
+         INSERT (mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at)
+         VALUES (s.mode, s.rounds, s.round_timer_ms, s.inter_round_delay_ms, s.updated_at);`,
+      [mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at]
     );
-    if (!updateRes || !updateRes.changes) {
-      await tx.run(
-        'INSERT INTO game_configs (mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at) VALUES (?, ?, ?, ?, ?)',
-        [mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at]
-      );
-    }
-  });
+    return;
+  }
+
+  // SQLite (and any future backend that adopts this syntax).
+  await db.run(
+    `INSERT INTO game_configs (mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(mode) DO UPDATE SET
+       rounds = excluded.rounds,
+       round_timer_ms = excluded.round_timer_ms,
+       inter_round_delay_ms = excluded.inter_round_delay_ms,
+       updated_at = excluded.updated_at`,
+    [mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at]
+  );
 }
 
 router.put('/:mode', requireSystem, async (req, res, next) => {
@@ -140,7 +166,6 @@ router.put('/:mode', requireSystem, async (req, res, next) => {
 
     logger.info(
       {
-        msg: 'game-configs updated',
         mode,
         rounds,
         round_timer_ms,

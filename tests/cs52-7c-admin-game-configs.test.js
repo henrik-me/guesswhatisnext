@@ -89,6 +89,7 @@ describe('PUT /api/admin/game-configs/:mode — validation', () => {
     ['delay -1', { inter_round_delay_ms: -1 }],
     ['delay 10001', { inter_round_delay_ms: 10001 }],
     ['delay string', { inter_round_delay_ms: 'abc' }],
+    ['delay null', { inter_round_delay_ms: null }],
   ])('invalid %s → 400', async (_label, override) => {
     const res = await getAgent()
       .put('/api/admin/game-configs/ranked_freeplay')
