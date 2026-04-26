@@ -1,7 +1,13 @@
 # CS40 — Feature Flag Testing Infrastructure
 
-**Status:** ⬜ Planned (revised 2026-04-25 by yoga-gwn-c4 — most original
-scope is de-facto shipped; remaining work is audit + harden + document + guard)
+**Status:** ✅ Done (merged 2026-04-26 via PR #256, squash commit `3415d04`)
+
+**Closure note:** CS40 was reframed during pickup after audit found that the
+chosen mechanism (option (b) `FEATURE_FLAG_ALLOW_OVERRIDE` env var) was
+already silently shipped during CS25. Remaining work was audit + harden +
+document + guard, all delivered. PR #256 was admin-merged after CI green
+(5/5 checks) and local rubber-duck/code-review passes; no Copilot PR review
+was requested before merge — noted as a process gap.
 **Goal:** Confirm and lock in the feature-flag testing mechanism that was
 silently shipped during CS25, document it formally, and add a CI regression
 guard so the percentage-rollout `=100` workaround can't be reintroduced and
