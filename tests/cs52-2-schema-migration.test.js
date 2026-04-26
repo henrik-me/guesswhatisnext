@@ -24,12 +24,34 @@ const migrations = require('../server/db/migrations');
 let tmpDir;
 let dbPath;
 let db;
+let migrationsApplied;
 
 beforeAll(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-cs52-2-'));
   dbPath = path.join(tmpDir, 'cs52-2.db');
   db = new SqliteAdapter(dbPath);
   await db.connect();
+
+  // Set up a "legacy" pre-migration-008 state so the backfill assertion has
+  // something to observe, then run all migrations. Done here in beforeAll so
+  // every individual test in this file is order-independent: running
+  // `vitest -t '<single test name>'` still produces a fully-migrated DB.
+  const initial = migrations.filter((m) => m.version === 1);
+  await db.migrate(initial);
+
+  await db.run(
+    "INSERT INTO users (username, password_hash) VALUES ('legacyuser', 'x')"
+  );
+  const u = await db.get(
+    "SELECT id FROM users WHERE username = 'legacyuser'"
+  );
+  await db.run(
+    `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak)
+     VALUES (?, 'freeplay', 100, 5, 5, 3)`,
+    [u.id]
+  );
+
+  migrationsApplied = await db.migrate(migrations);
 });
 
 afterAll(async () => {
@@ -46,28 +68,8 @@ describe('CS52-2 migration', () => {
     expect(m.name).toBe('cs52-ranked-schema');
   });
 
-  test('seeds a legacy scores row, then runs all migrations', async () => {
-    // Migration 001 is needed first to create the scores table — run only 001
-    // so we can insert a pre-existing row before migration 008's backfill.
-    const initial = migrations.filter((m) => m.version === 1);
-    await db.migrate(initial);
-
-    // Need a user row for the FK
-    await db.run(
-      "INSERT INTO users (username, password_hash) VALUES ('legacyuser', 'x')"
-    );
-    const u = await db.get(
-      "SELECT id FROM users WHERE username = 'legacyuser'"
-    );
-    await db.run(
-      `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak)
-       VALUES (?, 'freeplay', 100, 5, 5, 3)`,
-      [u.id]
-    );
-
-    // Now apply ALL pending migrations (002…008)
-    const applied = await db.migrate(migrations);
-    expect(applied).toBeGreaterThanOrEqual(7);
+  test('all pending migrations applied (002…008) on top of legacy state', () => {
+    expect(migrationsApplied).toBeGreaterThanOrEqual(7);
   });
 
   test('scores table has all new columns', async () => {
