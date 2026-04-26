@@ -68,6 +68,26 @@ The project uses a central feature-flag module for staged rollouts. The client m
 - **Rollout stability:** percentage rollouts are deterministic per authenticated user
 - **Override policy:** each feature must explicitly opt in and define its own override names; overrides are never global
 
+#### Feature flag testing across environments (CS40)
+
+Where request overrides (`?ff_<key>=true` query param or `X-Gwn-Feature-<Key>` header) are accepted at runtime:
+
+| Context | NODE_ENV | Override accepted? | How |
+|---|---|---|---|
+| Local dev (`npm run dev`) | `development` | ✅ default-on | No env var needed |
+| Vitest unit suite (`npm test`) | `test` | ✅ default-on | No env var needed |
+| Local Docker SQLite | `development` | ✅ default-on | No env var needed |
+| Local Docker MSSQL (`npm run dev:mssql`) | `production` | ✅ via opt-in | `FEATURE_FLAG_ALLOW_OVERRIDE=true` set in `docker-compose.mssql.yml` |
+| Staging-deploy in-CI smoke service (`.github/workflows/staging-deploy.yml`) | `staging` | ✅ via opt-in | `FEATURE_FLAG_ALLOW_OVERRIDE=true` set on the in-CI ephemeral service container only |
+| **Live `gwn-staging` ACA app** | `staging` | ❌ never | Env var deliberately absent (verified by CS40-1 audit) |
+| **Production (`prod-deploy.yml`, `gwn-prod`)** | `production` | ❌ never | Env var deliberately absent; enforced by `npm run check:feature-flag-policy` |
+
+**E2E test pattern.** Browser specs use `await page.goto('/?ff_<key>=true')`; backend integration tests use the matching `X-Gwn-Feature-<Key>` header on supertest requests. The client (`public/js/app.js`) propagates `ff_*` query params into subsequent API calls so a single navigation toggles the feature for the whole session.
+
+**Forbidden pattern: `FEATURE_<KEY>_PERCENTAGE=100` as an E2E workaround.** It enables the flag for every user — too blunt for per-test control and prevents tests that need flag-OFF behavior in the same run. Use the override mechanism above instead. `npm run check:feature-flag-policy` (chained into `npm test`) flags this pattern in `tests/`, `docker-compose*.yml`, and `.github/workflows/`. Legitimate non-zero rollout values in live-deploy assets (e.g. `prod-deploy.yml` for a real staged rollout) are **not** flagged.
+
+**Production override exposure is locked down by policy:** `npm run check:feature-flag-policy` fails CI if `FEATURE_FLAG_ALLOW_OVERRIDE` is set to a truthy value in `prod-deploy.yml`, `infra/deploy.{sh,ps1}`, or any `infra/**/*.{bicep,json}` Container App template.
+
 ### File Organization
 - One module per file, one responsibility per module
 - Shared constants (timer duration, scoring multipliers, etc.) go in a `config` object at the top of the relevant file
