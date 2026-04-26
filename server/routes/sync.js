@@ -55,8 +55,11 @@ const VALID_MODES = new Set(['freeplay', 'daily']);
 
 // Match server/app.js sendDbUnavailable shape so client-side handlers see a
 // single consistent 503 body across the unified-sync route and the central
-// error path. Includes the `error` field and intentionally omits Retry-After
-// (its absence signals the SPA to stop retrying and render the banner).
+// error path. Includes the `error` field and intentionally omits Retry-After;
+// the /api/sync client (public/js/sync-client.js) treats `503` + `unavailable: true`
+// as retryable and falls back to its default retry delay when the header is
+// absent. (The "no Retry-After ⇒ stop retrying" rule applies to the
+// progressiveLoad / throwIfRetryable paths, not to the unified /api/sync route.)
 function sendUnavailable(res, descriptor) {
   return res.status(503).json({
     error: 'Database temporarily unavailable',

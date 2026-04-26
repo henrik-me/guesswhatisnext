@@ -555,3 +555,23 @@ describe('R9 regressions', () => {
     expect(m.connectivity.state).toBe('ok');
   });
 });
+
+describe('R10 regressions', () => {
+  it('applyClaim returns 0 when persisting the claim to localStorage fails', async () => {
+    // Regression for Copilot R10 #2: previously applyClaim returned the
+    // number of in-memory mutations even if setL1Records() failed, so the
+    // UI reported success while the records on disk were still attributed
+    // to the prior user_id (un-claimed on next reload).
+    const m = await loadFresh();
+    m.enqueueRecord(m.buildRecord({ score: 1 }, null));   // guest
+    m.enqueueRecord(m.buildRecord({ score: 2 }, 99));     // mismatched
+    const origSet = localStorage.setItem;
+    const origWarn = console.warn;
+    console.warn = () => {};
+    localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+    const changed = m.applyClaim(5);
+    localStorage.setItem = origSet;
+    console.warn = origWarn;
+    expect(changed).toBe(0);
+  });
+});

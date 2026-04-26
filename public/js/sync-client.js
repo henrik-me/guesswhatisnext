@@ -414,7 +414,17 @@ export function applyClaim(currentUserId) {
       changed++;
     }
   }
-  setL1Records(records);
+  if (changed === 0) return 0;
+  if (!setL1Records(records)) {
+    // Persist failed (quota / storage error). Don't claim "success" to the
+    // caller — the records on disk are still attributed to the previous
+    // user_id, so the next reload would un-claim them. Returning 0 lets
+    // the UI surface the failure / re-prompt rather than silently lying.
+    if (typeof console !== 'undefined') {
+      console.warn('[sync] failed to persist claim; reporting 0 records claimed');
+    }
+    return 0;
+  }
   return changed;
 }
 
