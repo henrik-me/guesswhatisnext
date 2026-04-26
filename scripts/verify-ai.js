@@ -97,10 +97,20 @@ function defaultAzRunner(args, { timeoutMs = 60_000 } = {}) {
     let stderr = '';
     let settled = false;
     let proc;
+    // On Linux runners (ubuntu-latest in our deploy workflows) `az` is a
+    // shell script on PATH and spawn() can invoke it directly. On Windows
+    // `az` is a `.cmd` shim which Node refuses to spawn without a shell
+    // (CVE-2024-27980 hardening). For the Windows path we route through
+    // cmd.exe and quote the args ourselves — the KQL analytics query is
+    // full of pipes/parens/single-quotes which would otherwise be eaten
+    // by cmd.exe's parser.
     try {
-      // shell:true on Windows so that `az` (a .cmd shim) resolves; no-op
-      // on Linux runners since args[0] is already an absolute name.
-      proc = spawn('az', args, { shell: process.platform === 'win32' });
+      if (process.platform === 'win32') {
+        const cmdLine = ['az'].concat(args.map(quoteForCmd)).join(' ');
+        proc = spawn('cmd.exe', ['/d', '/s', '/c', cmdLine], { windowsVerbatimArguments: true });
+      } else {
+        proc = spawn('az', args, { shell: false });
+      }
     } catch (err) {
       return resolve({ code: -1, stdout: '', stderr: `spawn failed: ${err.message}` });
     }
@@ -125,6 +135,23 @@ function defaultAzRunner(args, { timeoutMs = 60_000 } = {}) {
       resolve({ code, stdout, stderr });
     });
   });
+}
+
+/**
+ * Quote a single argument for cmd.exe consumption. cmd.exe has two layers
+ * of escaping: shell metacharacters (|&<>^()) need `^` escaping, and the
+ * inner argument double-quoting follows MSVCRT rules. Wrapping in double
+ * quotes neutralizes shell metacharacters, then we double any existing
+ * double quotes inside the value. This is sufficient for the controlled
+ * inputs we pass (arg flags + revision-name-derived KQL).
+ */
+function quoteForCmd(arg) {
+  const s = String(arg);
+  if (s === '') return '""';
+  // Always wrap in double quotes; double any internal double quotes; the
+  // backslash escaping rules don't apply to args without trailing
+  // backslashes, which our inputs never produce.
+  return '"' + s.replace(/"/g, '""') + '"';
 }
 
 /**
