@@ -501,6 +501,42 @@ jobs:
           CANONICAL_HOST: ${{ vars.CANONICAL_HOST }}
           STAGING_URL: ${{ vars.STAGING_URL }}
 
+      # CS41-4: Apply DB migrations AFTER the new revision is deployed
+      # (at 0% traffic) but BEFORE `traffic set` shifts traffic to it.
+      # Per the v3 plan, staging uses multi-revision mode so this is the
+      # correct gate point — a migration failure here aborts the deploy
+      # without ever shifting traffic to the new revision.
+      #
+      # NOTE: the live Azure `gwn-staging` Container App currently runs
+      # SQLite at /tmp/game.db (ephemeral, recreated on every revision).
+      # If `secrets.STAGING_DATABASE_URL` is unset, the step is a documented
+      # no-op; once staging moves to managed MSSQL the operator sets the
+      # secret and migrations begin running automatically.
+      - name: Checkout repo (for scripts/migrate.js)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (production only)
+        run: npm ci --omit=dev
+
+      - name: Run DB migrations
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::secrets.STAGING_DATABASE_URL is unset — staging is still on container-local SQLite. Skipping pre-deploy migration step. Set the secret once staging moves to managed MSSQL."
+            exit 0
+          fi
+          node scripts/migrate.js || {
+            echo "::error::Migration failed; aborting deploy before traffic shift"
+            exit 1
+          }
+
       - name: Switch traffic to new revision
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
