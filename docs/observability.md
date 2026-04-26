@@ -423,3 +423,65 @@ customEvents
 | summarize n = count() by bin(timestamp, 15m), to_state
 | render timechart
 ```
+
+### D.2 CS52-7e `pending_writes` durable queue
+
+CS52-7e emits four structured pino events as the queue moves through enqueue → drain → replay (or dead-letter). The signal is what tells operators the DB went unavailable, how much traffic the queue absorbed, how long replay took once the DB came back, and whether anything got stuck.
+
+- `pending-writes: enqueued` — every `/api/sync` 202 response (Variant B) and every `/api/sessions/:id/finish` 202 response (Variant A); also CS52-7d's WS Variant C path. Carries `request_id`, `endpoint`, `user_id`, `queued_at`, `file_path`.
+- `pending-writes: drain started` — once per drain pass (post-response hook on a successful API request, or the unavailability-state-cleared listener). Carries `file_count`.
+- `pending-writes: replayed` — one per successfully replayed file. Carries `request_id`, `endpoint`, `replay_duration_ms`.
+- `pending-writes: dead-letter` — one per file moved to `<DATA_DIR>/pending-writes/dead/`. Carries `request_id`, `endpoint`, `error_class`. **This is the alarming signal**: any non-zero rate means a queue file's replay failed in a way the drain considers non-retryable (corrupt JSON, schema mismatch, etc.).
+
+Pino's `msg` is the human-readable form (`"pending-writes: enqueued"`), so the KQL queries below pivot on `tostring(log.event)` (e.g. `pending-writes-enqueued`).
+
+#### Queue depth over time (enqueue vs. replay rate)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) in ('pending-writes-enqueued', 'pending-writes-replayed', 'pending-writes-dead-letter')
+| where TimeGenerated > ago(24h)
+| summarize
+    enqueued = countif(tostring(log.event) == 'pending-writes-enqueued'),
+    replayed = countif(tostring(log.event) == 'pending-writes-replayed'),
+    dead     = countif(tostring(log.event) == 'pending-writes-dead-letter')
+  by bin(TimeGenerated, 5m)
+| extend backlog_delta = enqueued - replayed - dead
+| render timechart
+```
+
+Interpretation: `backlog_delta` is the per-bin change in queue depth — positive means the DB is unavailable and traffic is being absorbed; negative means a drain pass is catching up. Cumulative `sum(backlog_delta)` tracks live queue depth.
+
+#### Drain latency distribution (per-file replay duration)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'pending-writes-replayed'
+| where TimeGenerated > ago(24h)
+| extend replay_ms = toint(log.replay_duration_ms),
+         endpoint = tostring(log.endpoint)
+| summarize
+    p50 = percentile(replay_ms, 50),
+    p95 = percentile(replay_ms, 95),
+    p99 = percentile(replay_ms, 99),
+    n   = count()
+  by endpoint
+| order by n desc
+```
+
+Interpretation: `replay_duration_ms` is the per-file work (DB transaction + I/O). Healthy values are sub-100ms; sustained >1000ms suggests the DB is in a slow-recovery state and operators should consider explicit warm-up via `POST /api/admin/init-db`.
+
+#### Dead-letter rate (alarming)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'pending-writes-dead-letter'
+| where TimeGenerated > ago(7d)
+| summarize n = count() by tostring(log.endpoint), tostring(log.error_class), bin(TimeGenerated, 1h)
+| order by TimeGenerated desc
+```
+
+Any non-zero rate is worth investigating: it means a queue file's replay failed in a way the drain decided not to retry (corrupt JSON, FK violation, missing handler). Files are preserved under `<DATA_DIR>/pending-writes/dead/<request_id>.json` for operator inspection — pull the file and replay it manually after triage.

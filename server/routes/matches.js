@@ -6,6 +6,14 @@ const express = require('express');
 const crypto = require('crypto');
 const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { RESERVED_USERNAME_LIKE_PATTERNS } = require('../reserved-usernames');
+
+/** SQL fragment: `<alias>.username NOT LIKE ?` joined with AND for every reserved prefix. */
+function reservedUsernameFilter(alias) {
+  return RESERVED_USERNAME_LIKE_PATTERNS
+    .map(() => `${alias}.username NOT LIKE ?`)
+    .join(' AND ');
+}
 
 const router = express.Router();
 
@@ -125,9 +133,10 @@ router.get('/history', requireAuth, async (req, res, next) => {
       LEFT JOIN match_players opp ON opp.match_id = m.id AND opp.user_id != mp.user_id
       LEFT JOIN users opp_u ON opp.user_id = opp_u.id
       WHERE mp.user_id = ? AND m.status = 'finished'
+        AND (opp_u.username IS NULL OR (${reservedUsernameFilter('opp_u')}))
       ORDER BY m.finished_at DESC
       LIMIT ?
-    `, [req.user.id, limit]);
+    `, [req.user.id, ...RESERVED_USERNAME_LIKE_PATTERNS, limit]);
 
     const history = rows.map(row => {
       let result = 'loss';
@@ -167,8 +176,8 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     const players = await db.all(
       `SELECT u.id, u.username, mp.score, mp.finished_at
        FROM match_players mp JOIN users u ON mp.user_id = u.id
-       WHERE mp.match_id = ?`,
-      [match.id]
+       WHERE mp.match_id = ? AND ${reservedUsernameFilter('u')}`,
+      [match.id, ...RESERVED_USERNAME_LIKE_PATTERNS]
     );
 
     res.json({ ...match, players });

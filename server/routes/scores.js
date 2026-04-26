@@ -6,6 +6,12 @@ const express = require('express');
 const { getDbAdapter } = require('../db');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const logger = require('../logger');
+const { RESERVED_USERNAME_LIKE_PATTERNS } = require('../reserved-usernames');
+
+/** SQL fragment that excludes reserved-prefix usernames. Joins with `AND` into an existing WHERE. */
+const RESERVED_USERNAME_FILTER_SQL = RESERVED_USERNAME_LIKE_PATTERNS
+  .map(() => 'u.username NOT LIKE ?')
+  .join(' AND ');
 
 const router = express.Router();
 
@@ -102,10 +108,10 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
              u.id as user_id, u.username
       FROM scores s
       JOIN users u ON s.user_id = u.id
-      WHERE s.mode = ? ${sourceFilter} ${dateFilter}
+      WHERE s.mode = ? ${sourceFilter} AND ${RESERVED_USERNAME_FILTER_SQL} ${dateFilter}
       ORDER BY s.score DESC
       LIMIT ?
-    `, params);
+    `, [...params.slice(0, -1), ...RESERVED_USERNAME_LIKE_PATTERNS, params[params.length - 1]]);
 
     // Add rank and highlight current user
     const leaderboard = rows.map((row, i) => ({
@@ -164,11 +170,11 @@ router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
           )
         GROUP BY mp_w.user_id
       ) w ON w.user_id = u.id
-      WHERE m.status = 'finished' ${dateFilter}
+      WHERE m.status = 'finished' AND ${RESERVED_USERNAME_FILTER_SQL} ${dateFilter}
       GROUP BY u.id, u.username, w.wins
       ORDER BY wins DESC, total_score DESC
       LIMIT ?
-    `, [safeLimit]);
+    `, [...RESERVED_USERNAME_LIKE_PATTERNS, safeLimit]);
 
     const leaderboard = rows.map((row, i) => ({
       rank: i + 1,

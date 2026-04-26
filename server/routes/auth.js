@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { getDbAdapter } = require('../db');
 const { generateToken, requireAuth } = require('../middleware/auth');
+const { isReservedUsername } = require('../reserved-usernames');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -62,6 +63,9 @@ router.post('/register', registerDailyLimiter, registerHourlyLimiter, registerBu
     }
     if (username.length < 3 || username.length > 20) {
       return res.status(400).json({ error: 'Username must be 3-20 characters' });
+    }
+    if (isReservedUsername(username)) {
+      return res.status(400).json({ error: "Username prefix 'gwn-smoke-' is reserved" });
     }
     if (password.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
