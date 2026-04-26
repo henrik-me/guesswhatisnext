@@ -174,8 +174,10 @@ describe('CS52-8 cross-task: multiplayer match-end achievement evaluation', () =
         await Promise.all([rH, rJ]);
       }
 
-      await waitForMessage(hostWs, 'gameOver');
-      await waitForMessage(joinerWs, 'gameOver');
+      await Promise.all([
+        waitForMessage(hostWs, 'gameOver'),
+        waitForMessage(joinerWs, 'gameOver'),
+      ]);
 
       // Achievement evaluation runs after persistCompletedMatch — poll for
       // user_achievements rows so we don't race the async path.
