@@ -789,6 +789,27 @@ function buildParticipantPayloads(room) {
   for (const userIdStr of userIds) {
     const userId = Number(userIdStr);
     const rankedSessionId = room.rankedSessionIds[userIdStr];
+    // CS52-7d (Copilot R7): dropped/forfeited players see score=0 in the
+    // live `gameOver` payload (endMatch hardcodes ``total: 0`` for users
+    // in ``room.droppedPlayers``). Mirror that semantics in persistence
+    // so the persisted ``ranked_sessions.score`` and
+    // ``match_players.score`` match what the user actually saw — write a
+    // 0-score row with no events rather than recomputing a non-zero
+    // score from earlier rounds' answers. Keeps the
+    // "persisted score == live UI total" contract for forfeits and
+    // keeps ``/api/matches/history`` + the multiplayer leaderboard
+    // consistent with the gameOver clients received.
+    if (room.droppedPlayers && room.droppedPlayers.has(userId)) {
+      participants.push({
+        user_id: userId,
+        ranked_session_id: rankedSessionId,
+        score: 0,
+        correct_count: 0,
+        best_streak: 0,
+        events: [],
+      });
+      continue;
+    }
     const events = [];
     for (let r = 0; r < room.totalRounds; r++) {
       const meta = room.roundsMeta[r];
