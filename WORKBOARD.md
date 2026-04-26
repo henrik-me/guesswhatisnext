@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main -- no PR required.
 
-> **Last updated:** 2026-04-26T03:35Z
+> **Last updated:** 2026-04-26T19:25Z
 
 ## Orchestrators
 
@@ -29,4 +29,5 @@ CS44-3 schema upgrade.
 | CS53-19 | CS53 | blocked | yoga-gwn | C:\src\guesswhatisnext | -- | -- | 2026-04-25T22:10Z | Phase A (boot/focus/refresh HAR inventory) can start now in parallel; Phases C-G now depend on CS53-23 (was CS55-2.G/H/J before the absorption). | Waiting on CS53-23 (boot-quiet contract foundation) |
 | CS52-2 | CS52 | implementing | yoga-gwn-c5 | C:\src\gwn-worktrees\wt-cs52-2 | yoga-gwn-c5/cs52-2-schema-and-ranked-pool | -- | 2026-04-26T03:30Z | Sub-agent dispatched and now implementing migration 008 (additive ALTERs to `scores` + 5 new tables: `ranked_sessions`, `ranked_session_events`, `ranked_puzzles`, `game_configs`) with 2 filtered UNIQUE INDEXes on `ranked_sessions` + ~50 fresh-authored ranked-puzzle seed file + idempotent `seed:ranked-puzzles` script + tests + KQL telemetry validation. Sequential prereq for CS52-3, CS52-5, CS52-7c. | -- |
 | CS41 | Production & staging deploy validation (functional + telemetry + perf) | implementing | yoga-gwn-c2 | C:\src\guesswhatisnext_copilot2 | -- | -- | 2026-04-26T19:30Z | Plan v4 (13 tasks, 4 tracks). **Wave 1 ALL MERGED**: #272 CS41-11 (linter) → `6fc32fb`; #261 CS41-6 (PR-CI gate) → `a91bcd5`; #260 CS41-0 (smoke user prereq) → `17f9df8`; #262 CS41-4 (migration step) → `b8571a8`. § 4a gate + migration policy linter both ACTIVE in CI. **Next:** dispatch Track A wave 2 (CS41-1+2+8 smoke flow + perf + summary). | -- |
+| CS52-7e | CS52 — pending_writes durable queue + drain | ready_to_merge | yoga-gwn-c5 | C:\src\gwn-worktrees\wt-cs52-7e | yoga-gwn-c5/cs52-7e-impl | #267 | 2026-04-26T19:25Z | PR #267 head `1f5b8e3`. Copilot R1 returned 3 findings (post-replay unlink swallows non-ENOENT errors; /finish enqueue lacked sessionId validation + queue-depth cap; dbUnavailability + queueable POST never re-tried init) — all fixed in commit `0142172`, replied + threads resolved. Re-requested Copilot via REST; bot did not re-engage after merge-with-main (known limitation). All 5 CI checks SUCCESS, 691/691 tests pass, lint clean, container:validate ✅ post-R1 (17×503 → 200 in 34.4s; project gwn-c5-wt7e). Branch up-to-date with main (merge `1f5b8e3`). **Awaiting human merge approval.** | -- |
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
