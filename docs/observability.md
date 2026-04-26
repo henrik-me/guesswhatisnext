@@ -569,3 +569,60 @@ customEvents
 | order by n desc
 ```
 
+
+## E. Post-deploy verification (CS41)
+
+Every successful staging or production deploy now emits two queryable artifacts that operators can re-run after the fact:
+
+1. **CS41-3 — AI verification (warning-only):** confirms the new revision started exporting telemetry within 10 minutes of cutover.
+2. **CS41-7 — Per-deploy ingest delta:** captures total AI ingest (rows + GB) since the previous successful deploy, by `itemType`. Rendered in the deploy workflow summary AND uploaded as a 90-day artifact (`ingest-delta-<env>-<run_id>.json`).
+
+Cross-reference: full task / acceptance-criteria detail in [`done_cs41_production-deploy-validation.md`](../project/clickstops/done/done_cs41_production-deploy-validation.md).
+
+### E.1 CS41-3 post-deploy AI verification
+
+This is the same query the deploy workflow runs against the just-deployed revision. To re-run it manually for a specific revision:
+
+```kusto
+requests
+| where timestamp > ago(10m)
+| where cloud_RoleInstance has "<NEW_REVISION_NAME>"
+| summarize requests=count() by name, resultCode
+| order by requests desc
+```
+
+Replace `<NEW_REVISION_NAME>` with the value from `az containerapp revision list --name gwn-production -g gwn-rg --query "[?properties.active].name" -o tsv` (or the staging app name).
+
+**Interpreting the deploy summary annotation:**
+
+- ✅ `AI verification: <N> requests across <M> routes` — the new revision is exporting telemetry; deploy is fully verified.
+- ⚠️ `AI verification: 0 rows after 10 min wait — telemetry may be delayed; not blocking deploy` — the revision is healthy by smoke (CS41-1) and DB (CS41-4) but AI ingest hasn't caught up. This is **not a failure** per CS41-3's design (warning-only). Re-run the KQL above 5–15 min later; if still 0 rows after 30 minutes, escalate as a CS54 telemetry-export regression.
+- ❌ `AI verification: query failed (<error>)` — distinct from "0 rows": the AI access path itself is broken (RBAC, network, az CLI). This DOES fail the deploy. Check the service-principal `Reader` role on `gwn-rg` (CS54-1) and the `az` CLI version pinned in the deploy YAML.
+
+### E.2 CS41-7 per-deploy ingest delta
+
+Rendered in `$GITHUB_STEP_SUMMARY` of every deploy workflow run AND uploaded as `ingest-delta-<env>-<run_id>.json` (90-day retention). Operators retrieve historical artifacts with:
+
+```powershell
+gh run download <run-id> --name ingest-delta-production-<run-id>
+```
+
+The underlying query, scoped to the window between the previous successful deploy and the current one:
+
+```kusto
+union *
+| where timestamp between (datetime('<PREV_DEPLOY_ISO>') .. now())
+| summarize gb_ingested = sum(_BilledSize) / (1024.0 * 1024.0 * 1024.0),
+            rows = count() by itemType
+| order by gb_ingested desc
+```
+
+Where `<PREV_DEPLOY_ISO>` is auto-derived by the workflow via `gh run list --workflow=<deploy-yaml> --status=success --limit=2 --json createdAt --jq '.[1].createdAt'` (the second-most-recent success — i.e., the deploy before this one). If no prior successful run is found, the workflow falls back to a 24-hour window and emits a `::notice::` annotation.
+
+**Interpreting the deploy summary annotation:**
+
+- A row per `itemType` (`requests`, `customEvents`, `dependencies`, `traces`, `exceptions`, `pageViews`, etc.) with `rows` and `gb_ingested`.
+- A sudden 10×+ jump in any single `itemType` between consecutive deploys is the signal CS60 watches for ingest cost regressions; correlate against the diff between the two deploys (`git log <prev-sha>..<this-sha>`).
+- Empty / missing rows for an `itemType` that is normally non-zero (e.g., `requests`) indicates a telemetry-export regression — check CS54 wiring and § E.1 above.
+
+CS60-1/2/3 operators consume these artifacts at measurement-window time via `gh run download` rather than re-running the KQL — the artifacts are the historical record.

@@ -329,6 +329,34 @@ az rest --method post `
 
 Adjust the `ResourceGroupName` filter, the timeframe, or the grouping dimensions to scope the query (for example, group by `ServiceName` to compare Container Apps vs Azure SQL). The `cost.json` file is a working artifact — delete it after the query runs (it is not committed; see `.gitignore`).
 
+## Deploy gates (CS41)
+
+Every staging and production deploy runs through a defense-in-depth chain of automated gates established by [CS41](project/clickstops/done/done_cs41_production-deploy-validation.md). Brief reference; see the CS41 done file for full task / acceptance-criteria detail.
+
+**Pre-PR (PR-CI):**
+- § 4a Telemetry Validation gate — every PR body that touches code (not docs-only) must include a `## Telemetry Validation` section. Enforced by `actions/github-script` reading `pull_request.body` + `listFiles` (CS41-6).
+- Migration policy linter — `scripts/check-migration-policy.js` runs in `npm test` and rejects backward-incompatible patterns (`DROP COLUMN`, `RENAME`, new `NOT NULL` without `DEFAULT`, etc.) unless overridden via inline `// MIGRATION-POLICY-OVERRIDE: <reason + multi-PR-plan-link>` comment that references an [expand→migrate→contract](INSTRUCTIONS.md) plan (CS41-11 + CS41-13).
+
+**Pre-traffic-shift (deploy workflow):**
+- DB migrations run via `node scripts/migrate.js` BEFORE the `az containerapp update` step (prod) or BEFORE `traffic set` (staging). Failure aborts the deploy with no traffic shift (CS41-4).
+- CS41-12 old-server-on-new-schema smoke runs the CS41-1 smoke flow against the OLD revision's direct FQDN against the just-migrated DB. Failure → abort + "MIGRATION BREAKS OLD SERVER — manual recovery required" annotation.
+- CS41-1 smoke (login as `gwn-smoke-bot`, submit score, assert via `/api/scores/me`, assert `/api/health` DB ok) + CS41-2 per-request perf gates run against the new revision's direct FQDN BEFORE the `traffic set` step (staging multi-revision restructure landed in CS41-9).
+
+**Post-traffic-shift / post-deploy:**
+- CS41-3 AI verification (warning-only, scoped to the new revision via `cloud_RoleInstance`).
+- CS41-7 per-deploy AI ingest summary (workflow summary + 90-day artifact `ingest-delta-<env>-<run_id>.json`).
+- CS41-8 deploy summary annotation aggregating image SHA + revision + migration result + smoke per-step + per-request times + AI verify result + ingest delta + AI Logs blade link.
+
+**Rollback path:**
+- CS41-5 captures `ROLLBACK_REVISION_NAME` + `ROLLBACK_TIMESTAMP` and re-runs CS41-1 + CS41-3 scoped to that revision and time window. "ROLLBACK TARGET ALSO UNHEALTHY" hard-fail annotation if the rollback target itself fails smoke (operator intervention required).
+
+**Operator one-time setup (per env):**
+- GitHub secret `SMOKE_USER_PASSWORD_PROD` (env-scoped to production environment).
+- GitHub secret `SMOKE_USER_PASSWORD_STAGING` (env-scoped to staging environment).
+- `node scripts/setup-smoke-user.js` against each env's DB to create the `gwn-smoke-bot` user (idempotent). Until done, smoke steps gracefully skip with a notice — the deploy still succeeds.
+
+For the post-deploy KQL queries that CS41-3 / CS41-7 emit and how to interpret the deploy summary annotation, see [`docs/observability.md` § E](docs/observability.md#e-post-deploy-verification-cs41).
+
 ## Observability — App Insights query examples
 
 See [`docs/observability.md`](docs/observability.md) for the full KQL bundle and operator runbook: how to access App Insights logs (portal + `az monitor log-analytics query`), common queries (requests by route, error rate, latency percentiles, slow requests, distributed-trace bridge to Pino logs in `ContainerAppConsoleLogs_CL`, cold-start mssql connect latency), staging-vs-prod filtering, and the dev/operator note about not exporting `APPLICATIONINSIGHTS_CONNECTION_STRING` locally.
