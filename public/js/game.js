@@ -313,16 +313,17 @@ let rankedAbortController = null;
  * the correct answer in Ranked.
  */
 function normalizeRankedPuzzle(p) {
-  const prompt = p && p.prompt;
+  const puzzle = (p && typeof p === 'object') ? p : {};
+  const prompt = puzzle.prompt;
   const promptObj = (prompt && typeof prompt === 'object') ? prompt : {};
   return {
-    id: p.id,
+    id: puzzle.id,
     sequence: Array.isArray(promptObj.sequence) ? promptObj.sequence : [],
     type: promptObj.type || 'text',
     explanation: promptObj.explanation || '',
-    options: Array.isArray(p.options) ? p.options : [],
-    category: p.category,
-    difficulty: p.difficulty,
+    options: Array.isArray(puzzle.options) ? puzzle.options : [],
+    category: puzzle.category,
+    difficulty: puzzle.difficulty,
   };
 }
 

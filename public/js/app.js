@@ -488,12 +488,17 @@ const ui = {
 
 /** Handle an option button click — briefly show correct/wrong, then submit. */
 function handleOptionClick(answer, btnEl) {
+  // Defensive guard: a connectivity-driven hard-fail (or any other async
+  // abort) can null Game.state between render and click. Bail before
+  // dereferencing so the click can't throw mid-overlay.
+  if (!Game.state || !Game.state.currentPuzzle) return;
+
   // Disable all option buttons immediately
   const allBtns = document.querySelectorAll('.option-btn');
   allBtns.forEach(b => { b.disabled = true; });
 
   const puzzle = Game.state.currentPuzzle;
-  const isRanked = !!(Game.state && Game.state.ranked);
+  const isRanked = !!Game.state.ranked;
 
   // Practice mode: pre-highlight correct/wrong locally (we have the answer
   // bundled with the puzzle). Ranked mode: we DO NOT have the canonical
