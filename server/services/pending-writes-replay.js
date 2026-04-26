@@ -266,6 +266,7 @@ async function replayMpMatch(record) {
   }
 
   const matchId = record.concrete_route.match_id;
+  const roomCode = record.concrete_route.room_code || null;
   let existing;
   try {
     existing = await db.get(
@@ -284,19 +285,32 @@ async function replayMpMatch(record) {
 
   try {
     await db.transaction(async (tx) => {
+      // CS52-7d: keep legacy matches/match_players in sync alongside the
+      // new ranked_sessions rows (the live MP path also writes both inside
+      // a single transaction). Without this, `/api/match-history` and the
+      // legacy MP leaderboard would not see the replayed match.
+      await tx.run(
+        `UPDATE matches SET status = 'finished', finished_at = ? WHERE id = ?`,
+        [finishedAt, matchId]
+      );
       for (const p of record.payload.participants) {
         if (!p || !p.ranked_session_id || typeof p.user_id !== 'number') {
           throw new Error(`Variant C participant missing ranked_session_id/user_id`);
         }
         await tx.run(
+          `UPDATE match_players SET score = ?, finished_at = ? WHERE match_id = ? AND user_id = ?`,
+          [p.score || 0, finishedAt, matchId, p.user_id]
+        );
+        await tx.run(
           `INSERT INTO ranked_sessions
-             (id, user_id, mode, match_id, config_snapshot, status,
+             (id, user_id, mode, match_id, room_code, config_snapshot, status,
               score, correct_count, best_streak, started_at, finished_at, expires_at)
-           VALUES (?, ?, 'multiplayer', ?, ?, 'finished', ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, 'multiplayer', ?, ?, ?, 'finished', ?, ?, ?, ?, ?, ?)`,
           [
             p.ranked_session_id,
             p.user_id,
             matchId,
+            roomCode,
             configJson,
             p.score || 0,
             p.correct_count || 0,
@@ -331,6 +345,17 @@ async function replayMpMatch(record) {
   } catch (err) {
     throw tagTransientIfDbUnavailable(err);
   }
+
+  logger.info(
+    {
+      event: 'multiplayer_match_replayed',
+      match_id: matchId,
+      room_code: roomCode,
+      participant_count: record.payload.participants.length,
+      drain_request_id: record.request_id || null,
+    },
+    'multiplayer match replayed from pending_writes Variant C'
+  );
 }
 
 const REPLAY_HANDLERS = {
