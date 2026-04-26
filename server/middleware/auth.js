@@ -8,6 +8,28 @@ const { config } = require('../config');
 const JWT_SECRET = config.JWT_SECRET;
 const SYSTEM_API_KEY = config.SYSTEM_API_KEY;
 
+/**
+ * Coerce a JWT-payload user id to a safe positive integer, OR return
+ * `null` if the value can't be safely interpreted as a real user id.
+ *
+ * Rationale (Copilot R4 + R5):
+ * - The JWT is JSON, so a number serialized to a JWT comes back as a
+ *   number; but defense-in-depth coercion here keeps every downstream
+ *   consumer (DB queries, ownership checks, in-memory caches like
+ *   `unread-count-cache`) on a single, comparable type — even if a
+ *   non-numeric id ever sneaks into the payload (e.g. UUID-id user
+ *   introduced later).
+ * - Returning `null` (rather than collapsing to 0) on invalid input
+ *   prevents a malformed token from silently authenticating as the
+ *   system pseudo-user (id 0). `requireAuth` MUST treat null as a 401
+ *   and `optionalAuth` MUST treat it as no auth.
+ */
+function _coerceUserId(id) {
+  const n = Number(id);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
 /** Middleware: require valid auth (JWT Bearer OR X-API-Key). */
 function requireAuth(req, res, next) {
   // Check X-API-Key first (for system account)
@@ -29,7 +51,13 @@ function requireAuth(req, res, next) {
   const token = header.slice(7);
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    req.user = { id: payload.id, username: payload.username, role: payload.role || 'user' };
+    const coercedId = _coerceUserId(payload.id);
+    if (coercedId === null) {
+      // Malformed payload (non-numeric / non-positive id) — refuse to
+      // authenticate rather than collapsing to id=0 (the system pseudo).
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    req.user = { id: coercedId, username: payload.username, role: payload.role || 'user' };
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
@@ -59,7 +87,13 @@ function optionalAuth(req, res, next) {
     const token = header.slice(7);
     try {
       const payload = jwt.verify(token, JWT_SECRET);
-      req.user = { id: payload.id, username: payload.username, role: payload.role || 'user' };
+      const coercedId = _coerceUserId(payload.id);
+      // Same rule as requireAuth: a malformed id means "no usable auth";
+      // continue without setting req.user rather than authenticating as
+      // the system pseudo-user.
+      if (coercedId !== null) {
+        req.user = { id: coercedId, username: payload.username, role: payload.role || 'user' };
+      }
     } catch { /* continue without user */ }
   }
   next();

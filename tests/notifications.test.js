@@ -8,12 +8,14 @@ const SYSTEM_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
 const ENABLED_SUBMISSIONS_PATH = '/api/submissions?ff_submit_puzzle=1';
 
 let userToken;
+let userId;
 let user2Token;
 
 beforeAll(async () => {
   await setup();
-  const { token } = await registerUser('notifuser1');
-  userToken = token;
+  const reg1 = await registerUser('notifuser1');
+  userToken = reg1.token;
+  userId = reg1.user.id;
   const { token: t2 } = await registerUser('notifuser2');
   user2Token = t2;
 });
@@ -169,33 +171,44 @@ describe('PUT /api/notifications/read-all', () => {
 
     const countBefore = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(countBefore.body.unread_count).toBeGreaterThan(0);
 
     const res = await getAgent()
       .put('/api/notifications/read-all')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(res.status).toBe(200);
     expect(res.body.updated).toBeGreaterThanOrEqual(0);
 
     const countAfter = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(countAfter.body.unread_count).toBe(0);
   });
 });
 
 describe('GET /api/notifications/count', () => {
+  // Ensure spies set up inside individual tests are restored even if an
+  // assertion throws (Copilot review finding) — prevents spy leakage across
+  // tests in this describe block.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test('returns 401 without auth', async () => {
     const res = await getAgent().get('/api/notifications/count');
     expect(res.status).toBe(401);
   });
 
-  test('returns correct unread count', async () => {
+  test('returns correct unread count (with X-User-Activity)', async () => {
     // Mark all as read first
     await getAgent()
       .put('/api/notifications/read-all')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
 
     // Create new notification
     const subId = await createSubmission(userToken);
@@ -203,9 +216,323 @@ describe('GET /api/notifications/count', () => {
 
     const res = await getAgent()
       .get('/api/notifications/count')
-      .set('Authorization', `Bearer ${userToken}`);
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
     expect(res.status).toBe(200);
     expect(res.body.unread_count).toBe(1);
+  });
+
+  test('telemetry: emits structured boot-quiet log line per cache outcome (all 4)', async () => {
+    // CS53-23 telemetry gate (INSTRUCTIONS.md § 4a): the route must emit a
+    // Pino line with gate="boot-quiet" + cacheOutcome on every authorized
+    // request that reaches the handler, so the documented KQL query
+    // (docs/observability.md § B.7) can observe contract behavior in App
+    // Insights via ContainerAppConsoleLogs_CL. This test exercises ALL FOUR
+    // outcomes (MISS-NO-ACTIVITY, HIT, MISS, STALE-DROP) and verifies both
+    // the info-level and warn-level (STALE-DROP) emission paths.
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const logger = require('../server/logger');
+    unreadCountCache.clear();
+
+    const infoSpy = vi.spyOn(logger, 'info');
+    const warnSpy = vi.spyOn(logger, 'warn');
+
+    // Make sure the user has a known unread count > 0 so MISS returns a
+    // non-zero count and the COUNT(*) query path is exercised.
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    const subId = await createSubmission(userToken);
+    await reviewSubmission(subId, 'approved');
+    unreadCountCache.invalidate(userId);
+
+    // 1. MISS-NO-ACTIVITY (cold cache, no header, non-system caller).
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    // 2. MISS (cold cache, header present → DB read seeds the cache).
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+
+    // 3. HIT (re-read after seeding, no header).
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+
+    // 4. STALE-DROP — simulate a writer firing while a reader was mid-flight
+    //    by manually invalidating between beginRead and setIfFresh.
+    const tok = unreadCountCache.beginRead(userId);
+    unreadCountCache.invalidate(userId);
+    expect(unreadCountCache.setIfFresh(userId, 99, tok)).toBe(false);
+    // Now drive the route under conditions that produce STALE-DROP via the
+    // handler itself: pre-invalidate the cache, then race a real handler
+    // call against an in-test invalidate that fires before setIfFresh.
+    // We achieve this deterministically by wrapping db.get with a hook that
+    // invalidates the cache mid-query, so the route's setIfFresh is rejected.
+    const { getDbAdapter } = require('../server/db');
+    const db = await getDbAdapter();
+    const realGet = db.get.bind(db);
+    const getStub = vi.spyOn(db, 'get').mockImplementation(async (...args) => {
+      const r = await realGet(...args);
+      // Bump generation between the route's beginRead and setIfFresh.
+      unreadCountCache.invalidate(userId);
+      return r;
+    });
+    const r4 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r4.headers['x-cache']).toBe('STALE-DROP');
+    getStub.mockRestore();
+
+    // Assertions across both spies.
+    const infoCalls = infoSpy.mock.calls.filter(c => c[0] && c[0].gate === 'boot-quiet');
+    const warnCalls = warnSpy.mock.calls.filter(c => c[0] && c[0].gate === 'boot-quiet');
+    const allCalls = [...infoCalls, ...warnCalls];
+
+    const outcomes = allCalls.map(c => c[0].cacheOutcome);
+    expect(outcomes).toContain('MISS-NO-ACTIVITY');
+    expect(outcomes).toContain('MISS');
+    expect(outcomes).toContain('HIT');
+    expect(outcomes).toContain('STALE-DROP');
+
+    // STALE-DROP must use warn (so it stands out in queries), the other
+    // three must use info.
+    expect(warnCalls.map(c => c[0].cacheOutcome)).toEqual(
+      expect.arrayContaining(['STALE-DROP'])
+    );
+    expect(infoCalls.map(c => c[0].cacheOutcome)).not.toContain('STALE-DROP');
+
+    // Every line must carry the fields the KQL query in observability.md uses.
+    for (const c of allCalls) {
+      expect(c[0]).toMatchObject({
+        gate: 'boot-quiet',
+        route: '/api/notifications/count',
+        userId: expect.any(Number),
+        userActivity: expect.any(Boolean),
+        isSystem: expect.any(Boolean),
+      });
+      expect(typeof c[0].cacheOutcome).toBe('string');
+    }
+  });
+
+  test('boot-quiet: no X-User-Activity + cache miss → returns 0 and does NOT touch DB', async () => {
+    // Scope: this test asserts the route-level guarantee — once the request
+    // reaches the handler (DB already initialized, requireAuth passed),
+    // header-less /count traffic does not call db.get/all/run. The pre-route
+    // cold-start init gate at server/app.js:258-280 is NOT exercised here;
+    // gating that path on X-User-Activity is CS53-19.D's scope, with a
+    // dedicated cold-start test once that lands.
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const { getDbAdapter } = require('../server/db');
+    unreadCountCache.clear();
+
+    const db = await getDbAdapter();
+    // Spy on every read/write entrypoint so a future regression that switches
+    // the route to db.all / db.run can't slip past silently.
+    const getSpy = vi.spyOn(db, 'get');
+    const allSpy = vi.spyOn(db, 'all');
+    const runSpy = vi.spyOn(db, 'run');
+
+    const res = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.unread_count).toBe(0);
+    expect(res.headers['x-cache']).toBe('MISS-NO-ACTIVITY');
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(allSpy).not.toHaveBeenCalled();
+    expect(runSpy).not.toHaveBeenCalled();
+  });
+
+  test('boot-quiet: no X-User-Activity + cache hit → returns cached value, no DB', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const { getDbAdapter } = require('../server/db');
+    unreadCountCache.clear();
+    unreadCountCache.set(userId, 7);
+
+    const db = await getDbAdapter();
+    const getSpy = vi.spyOn(db, 'get');
+    const allSpy = vi.spyOn(db, 'all');
+    const runSpy = vi.spyOn(db, 'run');
+
+    const res = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.unread_count).toBe(7);
+    expect(res.headers['x-cache']).toBe('HIT');
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(allSpy).not.toHaveBeenCalled();
+    expect(runSpy).not.toHaveBeenCalled();
+  
+  });
+
+  test('boot-quiet bypass: system-key auth + cache miss → DB read allowed (no header needed)', async () => {
+    // INSTRUCTIONS.md § Database & Data: the boot-quiet contract does NOT
+    // apply to operator/system-key requests. CS53-23 R4 finding.
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const { getDbAdapter } = require('../server/db');
+    unreadCountCache.clear();
+
+    const db = await getDbAdapter();
+    const getSpy = vi.spyOn(db, 'get');
+
+    const res = await getAgent()
+      .get('/api/notifications/count')
+      .set('X-API-Key', SYSTEM_KEY); // no X-User-Activity header
+    expect(res.status).toBe(200);
+    // System user (id=0) has no notifications in the seed, so count is 0,
+    // but the key assertion is that we DID hit the DB on cache miss.
+    expect(res.headers['x-cache']).toBe('MISS');
+    expect(getSpy).toHaveBeenCalled();
+    expect(typeof res.body.unread_count).toBe('number');
+  });
+
+  test('with X-User-Activity: 1 + cache miss → exactly one DB query and seeds cache', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    const { getDbAdapter } = require('../server/db');
+    unreadCountCache.clear();
+
+    // Make sure there is one unread to count (note: review path also uses db.get internally)
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    const subId = await createSubmission(userToken);
+    await reviewSubmission(subId, 'approved');
+
+    unreadCountCache.invalidate(userId);
+    const db = await getDbAdapter();
+    const spy = vi.spyOn(db, 'get');
+    spy.mockClear();
+
+    const r1 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r1.status).toBe(200);
+    expect(r1.headers['x-cache']).toBe('MISS');
+    expect(r1.body.unread_count).toBeGreaterThanOrEqual(1);
+    // The /count endpoint issues exactly one db.get for the COUNT(*) query.
+    const countCalls = spy.mock.calls.filter(args => /COUNT\(\*\)\s+AS\s+count\s+FROM\s+notifications/i.test(args[0])).length;
+    expect(countCalls).toBe(1);
+
+    // Second call: served from cache, no DB.
+    spy.mockClear();
+    const r2 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r2.headers['x-cache']).toBe('HIT');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  test('caches result so repeated user-activity polls do not hit DB', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+    unreadCountCache.clear();
+
+    // Mark all as read so count is deterministic
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+
+    // Create one notification → invalidates cache
+    const subId = await createSubmission(userToken);
+    await reviewSubmission(subId, 'approved');
+
+    const before = unreadCountCache.snapshot();
+
+    // First call: cache miss → DB hit (header present allows it)
+    const r1 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r1.status).toBe(200);
+    expect(r1.headers['x-cache']).toBe('MISS');
+    expect(r1.body.unread_count).toBe(1);
+
+    // 5 more calls: all cache hits → no DB
+    for (let i = 0; i < 5; i++) {
+      const r = await getAgent()
+        .get('/api/notifications/count')
+        .set('Authorization', `Bearer ${userToken}`)
+        .set('X-User-Activity', '1');
+      expect(r.status).toBe(200);
+      expect(r.headers['x-cache']).toBe('HIT');
+      expect(r.body.unread_count).toBe(1);
+    }
+
+    const after = unreadCountCache.snapshot();
+    expect(after.misses - before.misses).toBe(1);
+    expect(after.hits - before.hits).toBe(5);
+  });
+
+  test('write paths invalidate cache (mark-read, mark-all-read, new notification)', async () => {
+    const { unreadCountCache } = require('../server/services/unread-count-cache');
+
+    // Seed cache by hitting count
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+
+    // New notification should invalidate
+    const subId = await createSubmission(userToken);
+    await reviewSubmission(subId, 'approved');
+    const r1 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r1.headers['x-cache']).toBe('MISS');
+    expect(r1.body.unread_count).toBeGreaterThanOrEqual(1);
+
+    // Cache is now warm; mark-all-read INVALIDATES (not set-0) to avoid
+    // overwriting a concurrent invalidate from createReviewNotification.
+    // The next user-activity read recomputes from DB.
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    const r2 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r2.headers['x-cache']).toBe('MISS');
+    expect(r2.body.unread_count).toBe(0);
+
+    // mark-single-read: create + read one, expect cache invalidated
+    const subId2 = await createSubmission(userToken);
+    await reviewSubmission(subId2, 'approved');
+    const list = await getAgent()
+      .get('/api/notifications?unread=true')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    const id = list.body.notifications[0].id;
+    // Warm cache before mark-read
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    await getAgent()
+      .put(`/api/notifications/${id}/read`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    const r3 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r3.headers['x-cache']).toBe('MISS');
+    unreadCountCache.clear();
   });
 });
 

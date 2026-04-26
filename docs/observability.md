@@ -384,6 +384,30 @@ ContainerAppConsoleLogs_CL
 
 A healthy steady state shows one row (the canonical shape) with `source = "game_configs"` (or `"code_default"` if no row has been written for this environment). Two rows during a rollout — old shape then new shape — is the expected transitional pattern; both should disappear in favour of the new shape within a single TTL window. A persistent split with `source = "code_default"` after an admin write is the signal that the cache-bust didn't reach this revision (cross-reference § B.9 + § B.10 / Decision #10 operator caveat).
 
+### B.12 Boot-quiet contract: unread-count cache outcomes (CS53-23)
+
+Observes the `/api/notifications/count` endpoint's compliance with the [boot-quiet contract](../INSTRUCTIONS.md#database--data) — every authorized request that reaches the route handler and completes successfully emits a structured Pino line with `gate="boot-quiet"` and `cacheOutcome` ∈ {`HIT`, `MISS`, `MISS-NO-ACTIVITY`, `STALE-DROP`}. Requests that fail earlier in the middleware stack (401 from `requireAuth`, 503 from the cold-start init gate in `server/app.js`) never reach the handler. Requests that throw inside the handler before the log line emits (e.g. a DB error on the MISS / STALE-DROP path) are also absent here — they show up as 5xx rows in the AI `requests` table and as Pino error lines from the Express error middleware. To investigate failures, cross-reference the AI `requests` table for the same time window. Use this query to confirm:
+
+- Boot/focus/poller traffic stays in `MISS-NO-ACTIVITY` or `HIT` (never `MISS`) — that's the "no DB wake on stale-tab traffic" guarantee.
+- A spike in `MISS-NO-ACTIVITY` after a deploy means many users are loading the SPA without yet taking a real action that would seed the cache (expected on cold starts; should drop as users interact).
+- Any `STALE-DROP` rows indicate the cache rejected a read's value during `setIfFresh` (concurrent-writer race OR the user's gen entry was evicted between `beginRead` and `setIfFresh`). Both outcomes are correctness-preserving; sustained STALE-DROP volume warrants looking at writer paths or eviction churn.
+
+Runs in the **workspace** scope (uses `ContainerAppConsoleLogs_CL` directly — Pino's structured stdout). Equivalent CLI: `az monitor log-analytics query --workspace <customer-id> --analytics-query '<below>'`.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(1h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.gate) == "boot-quiet"
+  and tostring(pino.route) == "/api/notifications/count"
+| summarize count() by cacheOutcome=tostring(pino.cacheOutcome), bin(TimeGenerated, 5m)
+| order by TimeGenerated desc, cacheOutcome asc
+```
+
+Healthy steady state: predominantly `HIT` (warm cache) and `MISS-NO-ACTIVITY` (cold tabs); occasional `MISS` after writers invalidate; `STALE-DROP` should be rare (single-digit per hour at most under normal user load). Empty result for >15 min on a busy environment means the route stopped being hit — investigate whether SPA is making the call at all.
+
+To drill into a specific request, grab `trace_id` from the Pino row and feed into § B.5 to bridge to the matching AI `requests` row. Code path: [`server/routes/notifications.js`](../server/routes/notifications.js) (the `router.get('/count', ...)` handler).
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:

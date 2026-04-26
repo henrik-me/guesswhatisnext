@@ -10,6 +10,7 @@ const { getDbAdapter } = require('../db');
 const { isFeatureEnabled } = require('../feature-flags');
 const { requireAuth, requireSystem } = require('../middleware/auth');
 const { VALID_CATEGORIES } = require('../categories');
+const { unreadCountCache } = require('../services/unread-count-cache');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -62,6 +63,7 @@ async function createReviewNotification(db, submission, status, reviewerNotes) {
       'INSERT INTO notifications (user_id, type, message, data) VALUES (?, ?, ?, ?)',
       [submission.user_id, type, message, data]
     );
+    unreadCountCache.invalidate(submission.user_id);
   } catch (err) {
     logger.warn({ err, submissionId: submission.id }, 'Failed to create review notification');
   }

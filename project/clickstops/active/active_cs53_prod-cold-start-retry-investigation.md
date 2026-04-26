@@ -58,7 +58,7 @@ After a code re-read against the current `main`, most rows in the table below th
 | CS53-8a | ~~Pool watchdog: background interval pinging the pool with `SELECT 1` and recreating it on N consecutive failures.~~ | ❌ Cancelled | Violates the no-DB-wake policy ([§ Database & Data in INSTRUCTIONS.md](../../../INSTRUCTIONS.md#database--data)); pool death is detected lazily on the next real request via the central error handler. Re-creation is then handled in-band (or via an operator `POST /api/admin/init-db`). |
 | CS53-8b | Public `/api/db-status` endpoint — **ops/health endpoint only**. Reads in-memory state (`dbInitialized` flag, init-guard `isInFlight()`, `getDbUnavailability` cached last-error). **Does NOT issue any DB query.** **No SPA polling.** SPA learns DB state via responses to real user requests (`UnavailableError` / `RetryableError` already in place from PR #234). | ⬜ Pending | Scope tightened to comply with Policy 1. Safe to probe externally because it does not touch the DB. |
 | CS53-9 | **Lazy self-init (replace timer with request-driven).** PR #233 introduced a 60s slow-retry `setTimeout` that re-attempts `initializeDatabase()` while `dbInitialized=false`. That violates Policy 1. Replace with: on first inbound user request when `dbInitialized=false`, call `runInit()` via the init guard. Subsequent concurrent requests during init either queue or get `503 + Retry-After` per existing central error handler. The init guard already prevents concurrent attempts. | ✅ Done (this PR) | Acceptance: no `setInterval`/`setTimeout` in `server/app.js` or `server/lib/db-init-guard.js` issues a DB query; cold app boot does not contact DB until the first request arrives. Verified by `tests/lazy-init.test.js`. |
-| CS53-10 | **Test out-of-money (`capacity_exhausted`) state end-to-end.** Need a way to reliably reproduce Azure SQL Free Tier `capacity_exhausted` (`ELOGIN` with "paused for the remainder of the month" message) in the local container or a unit test, so that the fail-fast `UnavailableError` path stays regression-protected. Approach TBD — orchestrator + user iterate after Round 1. | ⬜ Pending — design | Stub. Likely options: (a) extend `GWN_SIMULATE_COLD_START_MS`-style env var to inject a synthesized `ELOGIN`+free-tier-exhausted message on first connect; (b) inject via the mssql adapter test harness directly. |
+| CS53-10 | **Test out-of-money (`capacity_exhausted`) state end-to-end + improve cold-start fidelity.** Need a way to reliably reproduce Azure SQL Free Tier `capacity_exhausted` (`ELOGIN` with "paused for the remainder of the month" message) AND surface realistic transient failures during cold-start, so the `UnavailableError` banner path AND the warmup-retry path stay regression-protected without changing prod billing. See **§ CS53-10 design (2026-04-24)** below. | ⬜ Pending — design ready | Approach: add `GWN_SIMULATE_DB_UNAVAILABLE={capacity_exhausted,transient}` and `GWN_SIMULATE_COLD_START_FAILS=N` env vars to mssql-adapter; extend `container:validate` with `--mode=` flag; new tests asserting classifier shape match. |
 | CS53-11 | **Local cold-start container validation harness.** Add `npm run container:validate` that boots the MSSQL stack with `GWN_SIMULATE_COLD_START_MS`, probes `/api/features` until it transitions from 503 → 200, and asserts the warmup retry path is exercised on every restart. Required by Policy 2 (cold-start container validation gates check-in). | ✅ Done | Script in `scripts/container-validate.js`. Used by every CS53-* PR going forward. Verified by hand on PRs #240, #244. |
 | CS53-12 | **Fix `ServerResponse` `'finish'` listener leak.** Container logs emit `MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 finish listeners added to [ServerResponse]` repeatedly during normal traffic (hot DB, no retries). Suspected sources: OTel HTTP instrumentation, pino-http, and the drain/active-request tracker in `server/app.js` each attach a `'finish'` listener per request. Identify which middleware accumulates without removing, fix, and add a regression guard (assert `res.listenerCount('finish') ≤ N` in an integration test). In CS53 scope because the leak amplifies under cold-start retry storms (each retried request stacks more listeners) and degrades the same UX path CS53 protects. | ✅ Done | Landed via `setMaxListeners(32)` on the response-tracker emitter (commit `8e49fff`). Cherry-picked into PR #244 because cs53-17 was branched off pre-fix. Regression test in `tests/response-listener-cap.test.js`. |
 | CS53-13 | **Retry-loop UX when cold-start exceeds budget.** When the auth retry loop (CS53-17) exhausts its `AUTH_WARMUP_DEADLINE_MS` budget without a successful response, the user currently sees a static "Server is warming up — please try again in a moment" message and must click again. Three design candidates: (a) keep current behaviour but add a retry button with a fresh budget; (b) auto-extend the budget once on user opt-in; (c) surface a structured "still cold after Ns" status. | ⬜ Pending — design | Stub. Decide after CS53-17 ships and we have manual-validation data on how often the 120s deadline actually trips. |
@@ -71,7 +71,7 @@ After a code re-read against the current `main`, most rows in the table below th
 | CS53-20 | **CD-side cold-start smoke against staging.** `npm run container:validate` (CS53-11) is a great local regression harness, but it does not run in CI/CD. A regression that breaks cold-start handling would ship to prod and only be caught when a user clicks login during an Azure SQL auto-pause window. Add a post-deploy job (against staging) that does the equivalent probe — boot a known-paused state and assert the warmup retry path completes within budget. | ⬜ Pending — P3 | Implementation options: (a) `az containerapp exec` into the deployed staging app and run the validation probe; (b) external probe from the GitHub Actions runner that hits the staging URL after waiting for auto-pause; (c) a synthetic transaction in App Insights once CS54 lands. Option (b) is the most portable and doesn't depend on CS54. |
 | CS53-21 | **Solo-PR merge-gating policy.** PR #244 had to merge with `gh pr merge --admin` because branch protection requires an APPROVED review and the only reviewer (Copilot bot) only ever issues "COMMENTED" reviews. Admin override silently bypasses CI gates as well. Decide: (a) make Copilot bot's "COMMENTED" sufficient when all CI checks pass, (b) configure a "self-merge after N successful CI cycles" rule, (c) accept admin-override as documented policy with a checklist (CI green + local review clean + Copilot has no open findings). | 🪓 Deferred to CS53-24 — P3 | **2026-04-25 refresh:** out of CS53 cold-start scope; extraction decision (which planned CS owns it) is rolled up into CS53-24 (pre-close follow-up decisions) so we don't re-litigate it now. Recommended landing position is still option (a). |
 | CS53-22 | **Prod-deploy verify must respect Policy 1 + capacity-exhausted state.** Prod deploy of `cceedac` (run 24935682157) auto-rolled back because `Verify production deployment` polls `/api/health` and requires `db=ok`. With Policy 1 (lazy DB init) the new code returns `db=not_initialized` until something wakes the DB; `/api/health` no longer does that. Worse, when Azure SQL Free Tier is exhausted (the user's current state), `db` will *never* be `ok` even after warming — so the verify step blocks shipping the very fix that handles capacity exhaustion. Two-phase fix: (1) actively probe `/api/features` to trigger lazy init OR confirm `503 + unavailable=true + no Retry-After` (intentional unavailability is a successful deploy of the unavailable-handling code); (2) authoritatively check `/api/health` for `status=ok` (and `db=ok` only when phase 1 returned 200). | ✅ Done | PR #246 merged (squash `842827f`). Re-deploy run 24936344788 succeeded with `phase1=intentional_unavailable` — proving the verify logic on its first real run. Production now on `cceedac` (revision `gwn-production--0000018`). |
-| CS53-23 | **Boot-quiet contract foundation (absorbed from CS55-2 v2).** Take ownership of PR #241 (`cs55-2-unread-count-cache`) and rework v1 (5-min TTL — violates Policy 1) into the v2 design. Defines the `X-User-Activity: 1` request-header contract, the server-side enforcement helper, the cache-lifetime model (process lifetime, writer-only invalidation), and the response shape when the header is absent. This is the contract foundation that CS53-19 (apply contract to every endpoint) and CS55 (real-time notifications) both depend on. | ⬜ Pending — **P0** (next dispatch) | Sub-tasks (renumbered from CS55-2.A–L): **CS53-23.A** remove TTL re-read (cache lifetime = process lifetime; writer-only invalidation); **CS53-23.B** decide cold-cache miss policy (recommend: return `0`/`null` until first writer seeds — strict zero-DB-from-reads); **CS53-23.C** define `X-User-Activity: 1` request-header contract (header semantics + missing → never touch DB); **CS53-23.D** wire SPA's `refreshNotificationBadge()` (`public/js/app.js:3403`), submission-screen open, mark-read, mark-all-read paths to send the header; **CS53-23.E** apply contract to `/api/auth/me` (HMAC + expiry verification without DB lookup, OR cached user row with write-invalidation); **CS53-23.F** audit + gate the rest of the boot/focus set (`/api/features`, `/api/notifications` list, `/api/scores/me`, `/api/achievements`, `/api/matches/history`) — each must be DB-free, cached + write-invalidated, or explicitly require the header; **CS53-23.G** add `INSTRUCTIONS.md § Database & Data` paragraph documenting the contract; **CS53-23.H** tests asserting header absence → zero DB queries (unit + integration); **CS53-23.I** add `## Container Validation` to PR #241 body and run `npm run container:validate` per Policy 2; **CS53-23.J** GPT-5.4 R3+ local review on the policy-compliant design; **CS53-23.K** Copilot review on PR #241; **CS53-23.L** merge once container-validate, GPT-5.4, and Copilot are clean. Cross-link: planned_cs55 marks CS55 dependent on this row. |
+| CS53-23 | **Boot-quiet contract foundation (absorbed from CS55-2 v2).** Defined the `X-User-Activity: 1` request-header contract, the in-process unread-count cache (process-lifetime, writer-invalidated, race-safe via per-user generation counter, bounded FIFO eviction), system-key bypass, JWT-id security hardening (malformed id → 401, not silent system pseudo-user), telemetry signal + KQL § B.12 in `docs/observability.md`. Wired today on `/api/notifications/count` only — CS53-19 enrolls the rest. | ✅ Done | Merged 2026-04-26 via PR #255 (squash commit `819e3e1`). Reviewed via 11 Copilot rounds (R11 returned 0 findings — converged). 786+ tests, container-validate cycles 6–12 PASS, telemetry validation gate satisfied. **Cold-start caveat (CS53-19.D scope):** the global `/api/*` request gate at `server/app.js:258-280` calls `runInit()` for header-less requests when `!dbInitialized`, which can touch the DB before an enrolled handler runs — closes end-to-end via CS53-19.D. The route-level guarantee holds once the DB is initialized. |
 | CS53-24 | **Pre-close follow-up decisions.** Final task before CS53 is moved to `done/`. Resolve: (1) **CS53-13 retry-budget UX** — by this point CS54 telemetry should have run for some time; decide based on whether the 120s deadline actually trips in real prod traffic. (2) **CS53-21 solo-PR merge-gating policy** — extract to its own planned CS (recommended) or land inline; pick a CS number and file the planned CS file. (3) Anything else that surfaces during CS53-23/19 implementation that's tangential and should be deferred. | ⬜ Pending — P3 | Do not run this until everything else in CS53 is merged. The point of deferring is to avoid re-litigating decisions we don't yet have data for. After CS53-24 closes, the very last step before declaring CS53 ✅ Done is the operator-side **prod-billing flip + live validation** (see remaining-work summary item 8). |
 
 ## CS53-1 findings (preliminary, 2026-04-23)
@@ -519,3 +519,93 @@ i.e. the app boots and reports healthy without ever waking the DB. Verified by t
 - General "make Azure SQL faster" infra work — separate concern.
 - Migrating off Azure SQL serverless free tier — cost/architecture decision.
 - Adding new client-side telemetry routes — that's CS47's job.
+
+## CS53-10 design (2026-04-24)
+
+> **Provenance:** originally drafted on PR #240 (`cs53-10-design-capture`, closed as superseded). Ported into PR #255 to preserve the design for future CS53-10 implementation. The companion artifacts in #240 — `scripts/validate-cold-start-ui.js`, the `validate:cold-start-ui` npm script, and the `.cs53-11-shots/` gitignore entry — were CS53-11 closure tooling and either already on main or out of scope here; they can be reintroduced from the closed branch if CS53-10 implementation needs them.
+
+### Problem
+
+After PR #236 we have `GWN_SIMULATE_COLD_START_MS` which adds a one-shot delay before the first `mssql.connect()`. That covers the "DB takes time to wake" cold-start dimension. **Two production-impacting failure modes remain unsimulatable locally:**
+
+1. **`capacity_exhausted`** (Free-Tier monthly allowance — the actual 2026-04-23 incident). The classifier `getDbUnavailability` matches `ELOGIN` + `paused for the remainder of the month`, the central error handler emits `503 + {unavailable:true, reason:'capacity_exhausted'}` with no `Retry-After`, and the client renders an `UnavailableError` banner. None of this can be exercised end-to-end without changing prod billing.
+2. **Realistic transient connect failures during the cold-start window.** Today's sim only delays; it doesn't throw `ConnectionError`/`ETIMEOUT` mid-window the way Azure SQL serverless does (multiple failed attempts before resume). The slow-retry init loop and the `isTransientDbError` path are partly untested at the integration level.
+
+### Proposed env-var matrix (all default off; production-safe)
+
+| Env var | Effect | Validates |
+|---------|--------|-----------|
+| `GWN_SIMULATE_COLD_START_MS` (existing) | First-connect delay; one-shot per process. | CS53-3+6 adaptive cap, warmup messaging |
+| **`GWN_SIMULATE_COLD_START_FAILS=N`** (new) | First **N** `_connect()` attempts throw a synthetic `ConnectionError`/`ETIMEOUT`. N+1th proceeds (subject to existing sim delay). | Slow-retry init loop + `isTransientDbError` classifier (transient branch), retry-button-at-cap path |
+| **`GWN_SIMULATE_DB_UNAVAILABLE=capacity_exhausted`** (new) | Every `_connect()` throws `Error{ name:'ConnectionError', code:'ELOGIN', message:"Login failed for user 'gwn_app'. The database is paused for the remainder of the month due to free capacity allowance." }`. Persists until env var unset and container recreated. | `getDbUnavailability` → `{reason:'capacity_exhausted'}`; central error handler → `503 + {unavailable:true,…}` no Retry-After; client throws `UnavailableError`; loader renders banner; `fetchProfile` `Promise.allSettled` promotes to single banner |
+| **`GWN_SIMULATE_DB_UNAVAILABLE=transient`** (new, optional) | Every `_connect()` throws `Error{ name:'ConnectionError', code:'ETIMEOUT', message:'Connection Timeout: server is not responding (simulated)' }`. | "DB truly down forever, not capacity-exhausted" — client retries until cap, shows Retry button (CS53-3+6 down-DB walked example) |
+
+### Implementation sketch (`server/db/mssql-adapter.js`)
+
+Extend the existing `_connect()` simulator block. All new helpers no-op when env unset.
+
+```js
+async function _maybeSimulateUnavailable() {
+  const mode = process.env.GWN_SIMULATE_DB_UNAVAILABLE;
+  if (!mode) return;
+  if (mode === 'capacity_exhausted') {
+    const err = new Error("Login failed for user 'gwn_app'. The database is paused for the remainder of the month due to free capacity allowance.");
+    err.name = 'ConnectionError';
+    err.code = 'ELOGIN';
+    throw err;
+  }
+  if (mode === 'transient') {
+    const err = new Error('Connection Timeout: server is not responding (simulated)');
+    err.name = 'ConnectionError';
+    err.code = 'ETIMEOUT';
+    throw err;
+  }
+  // Unknown value: log a warning and treat as no-op (fail-open in dev,
+  // fail-closed for unknown modes).
+}
+
+async function _maybeSimulateColdStartFails(attemptCount) {
+  const raw = process.env.GWN_SIMULATE_COLD_START_FAILS;
+  const limit = typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : 0;
+  if (limit <= 0 || attemptCount > limit) return;
+  const err = new Error('Connection Timeout: server is not responding (simulated cold-start fail)');
+  err.name = 'ConnectionError';
+  err.code = 'ETIMEOUT';
+  throw err;
+}
+```
+
+Wire both into `_connect()` BEFORE `this._sql.connect(config)`. Track `_connectAttemptCount` in static module scope. Order of evaluation: (1) cold-start delay (existing) → (2) cold-start-fails (if any) → (3) unavailable mode (if set) → (4) real connect.
+
+### Tests
+
+- `tests/mssql-simulate-unavailable.test.js` — assert each mode throws an error whose `name`/`code`/`message` match exactly what `isTransientDbError` and `getDbUnavailability` need; assert classifier returns expected shape.
+- `tests/mssql-cold-start-fails.test.js` — assert N failures then success (with N=0,1,3); assert `_connectAttemptCount` increments correctly across retries.
+- `tests/error-handler-unavailability.test.js` — extend with an integration case driving the adapter via the `capacity_exhausted` sim and asserting the response shape (503 + body + no Retry-After).
+
+### `npm run container:validate` extension
+
+Add `--mode=<default|cold-start-fails|capacity-exhausted|transient>`:
+
+| Mode | Env vars set | Assertion |
+|------|--------------|-----------|
+| `default` (existing) | `GWN_SIMULATE_COLD_START_MS=30000` | First DB-touching request gets ≥1× 503+Retry-After, then 200 within `WARMUP_CAP_MS+30s` |
+| `cold-start-fails` | `GWN_SIMULATE_COLD_START_MS=0`, `GWN_SIMULATE_COLD_START_FAILS=3` | First request gets ≥3× 503+Retry-After before 200 |
+| `capacity-exhausted` | `GWN_SIMULATE_DB_UNAVAILABLE=capacity_exhausted` | First DB-touching request gets 503 with body `{unavailable:true,reason:'capacity_exhausted'}` AND **no** `Retry-After` header. Repeated; never recovers. |
+| `transient` | `GWN_SIMULATE_DB_UNAVAILABLE=transient` | Every DB-touching request gets 503 with `Retry-After` header (retryable path); never recovers; last assertion: client-side cap eventually reached (covered by `progressive-loader.test.js`, not by HTTP probe). |
+
+Optional follow-up (CS53-10b, separate ticket if scope grows): a Playwright E2E that drives the SPA against `--mode=capacity-exhausted` and asserts the banner DOM is rendered.
+
+### Public DB-touching endpoint for browser-based validation (NOT in CS53-10)
+
+Browser-based validation today requires login because no public endpoint touches the DB. **Out of scope for CS53-10** — track separately if needed (likely as part of CS53-11 follow-up or a tiny standalone ticket). Operator validation via `container:validate --mode=...` and unit/integration tests cover the regression surface; manual browser validation already requires login (henrik account exists in the seed data).
+
+### Open questions for orchestrator + user iteration
+
+1. **Synthetic message verbatim from prod, or with `(simulated)` suffix?** Prod-mirroring tests classifier regex robustness against the real message; suffix is safer ops-wise (no chance of a real prod log being confused with a simulated one). **Tentative recommendation: verbatim**, with the `GWN_SIMULATE_DB_UNAVAILABLE` env var existence itself being the audit trail. Decide before dispatch.
+2. **E2E banner check (Playwright) in CS53-10 or split as CS53-10b?** Tentative recommendation: split — CS53-10 stays HTTP-level + unit; CS53-10b adds Playwright after browser-based validation generally is unblocked.
+3. **Public DB-touching endpoint for logged-out validation:** out of scope here; track in a fresh ticket if needed.
+
+### PR scope estimate
+
+~250 lines (adapter changes + 3 test files + script extension). One PR. Sub-agent on Opus 4.7. Local review on GPT-5.4. Copilot review. `container:validate` must pass in `default` mode + at least the new `capacity-exhausted` mode before requesting any review (per Policy 2).

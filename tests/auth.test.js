@@ -117,4 +117,53 @@ describe('GET /api/auth/me', () => {
     const res = await getAgent().get('/api/auth/me');
     expect(res.status).toBe(401);
   });
+
+  test('coerces string user-id from JWT payload to integer (CS53-23 R4 defense)', async () => {
+    // Defense-in-depth: even if a non-numeric id ever sneaks into the JWT
+    // payload (e.g. UUID-id user added later), requireAuth must hand
+    // downstream code a numeric id so DB params, ownership checks, and
+    // in-memory caches (unread-count-cache) all key consistently.
+    const jwt = require('jsonwebtoken');
+    const { JWT_SECRET } = require('../server/middleware/auth');
+    // Hand-craft a token with a string id.
+    const stringIdToken = jwt.sign(
+      { id: '42', username: 'string-id-user', role: 'user' },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    // /api/auth/me echoes req.user back; it's the cleanest way to inspect
+    // what the middleware produced without poking internals.
+    const res = await getAgent()
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${stringIdToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.user.id).toBe(42);
+    expect(typeof res.body.user.id).toBe('number');
+  });
+
+  test('rejects JWT with non-coercible user id (CS53-23 R5 — must not collapse to 0=system)', async () => {
+    // Copilot R5 security finding: the previous _coerceUserId returned 0
+    // for any non-finite / non-positive value, which would silently
+    // authenticate a malformed token as the system pseudo-user (id=0).
+    // The fix returns null and requireAuth must respond 401 instead.
+    const jwt = require('jsonwebtoken');
+    const { JWT_SECRET } = require('../server/middleware/auth');
+
+    // Each of these payloads should be REJECTED with 401 — never silently
+    // become req.user.id = 0.
+    const badPayloads = [
+      { id: 'not-a-number', username: 'attacker', role: 'user' },
+      { id: 0, username: 'attacker', role: 'user' },           // would alias to system
+      { id: -1, username: 'attacker', role: 'user' },
+      { id: null, username: 'attacker', role: 'user' },
+      { id: 1.5, username: 'attacker', role: 'user' },          // non-integer
+    ];
+    for (const payload of badPayloads) {
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+      const res = await getAgent()
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(401);
+    }
+  });
 });
