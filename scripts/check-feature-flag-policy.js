@@ -100,7 +100,13 @@ function listRootDockerComposeFiles() {
 // Scanners
 // --------------------------------------------------------------------------
 
-const TRUTHY_TOKEN = '(true|yes|on|1|enable|enabled)';
+// Single source of truth for the truthy-token list. Both the regex
+// alternation (`TRUTHY_TOKEN`, used by single-line scanners) and the Set
+// (`TRUTHY_VALUES`, used by the structural JSON walker) are derived from
+// this array so the two scan paths cannot drift if the list is ever
+// updated.
+const TRUTHY_TOKENS = ['true', 'yes', 'on', '1', 'enable', 'enabled'];
+const TRUTHY_TOKEN = `(${TRUTHY_TOKENS.join('|')})`;
 
 // Match `FEATURE_FLAG_ALLOW_OVERRIDE` followed by `=` (shell / dotenv) or
 // `:` (YAML), optional quotes, then a truthy token. Case-insensitive on the
@@ -122,7 +128,7 @@ const OVERRIDE_TRUTHY_RE = new RegExp(
 // `OVERRIDE_TRUTHY_RE` above misses this entirely. We detect it two ways:
 //   - .json templates: structural JSON.parse + walk (precise, no false positives)
 //   - .bicep templates: regex pair (no native bicep parser available)
-const TRUTHY_VALUES = new Set(['true', 'yes', 'on', '1', 'enable', 'enabled']);
+const TRUTHY_VALUES = new Set(TRUTHY_TOKENS);
 
 function isTruthyEnvValue(v) {
   if (v === true || v === 1) return true;
