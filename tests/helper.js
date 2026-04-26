@@ -107,4 +107,27 @@ async function registerUser(username = 'testuser', password = 'testpass123') {
   return { user: res.body.user, token: res.body.token };
 }
 
-module.exports = { getAgent, getServer, setup, teardown, registerUser };
+/**
+ * CS52-7b — seed/override a `game_configs` row for tests that need a
+ * non-default game shape (e.g. small `rounds` to keep multiplayer e2e tests
+ * fast). Writes the row directly + busts the loader cache, mirroring what
+ * the admin route does at runtime.
+ */
+async function setGameConfig(mode, { rounds, round_timer_ms, inter_round_delay_ms }) {
+  const { getDbAdapter } = require('../server/db');
+  const { bustCache } = require('../server/services/gameConfigLoader');
+  const db = await getDbAdapter();
+  await db.run(
+    `INSERT INTO game_configs (mode, rounds, round_timer_ms, inter_round_delay_ms, updated_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(mode) DO UPDATE SET
+       rounds = excluded.rounds,
+       round_timer_ms = excluded.round_timer_ms,
+       inter_round_delay_ms = excluded.inter_round_delay_ms,
+       updated_at = CURRENT_TIMESTAMP`,
+    [mode, rounds, round_timer_ms, inter_round_delay_ms]
+  );
+  bustCache(mode);
+}
+
+module.exports = { getAgent, getServer, setup, teardown, registerUser, setGameConfig };

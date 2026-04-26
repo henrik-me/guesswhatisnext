@@ -6,6 +6,8 @@ const express = require('express');
 const crypto = require('crypto');
 const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { getConfig } = require('../services/gameConfigLoader');
+const logger = require('../logger');
 
 const router = express.Router();
 
@@ -14,10 +16,18 @@ function generateRoomCode() {
   return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
-/** POST /api/matches — create a new match room */
+/**
+ * POST /api/matches — create a new match room.
+ *
+ * CS52-7b § Decision #8: `total_rounds` / `round_timer_ms` /
+ * `inter_round_delay_ms` are NOT client-configurable. Any such fields in the
+ * request body are ignored; the canonical multiplayer shape is sourced from
+ * the `game_configs` table via `getConfig('multiplayer')` (CS52-7c loader),
+ * with a code-level fallback in `gameConfigDefaults.js`.
+ */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { totalRounds = 5, maxPlayers = 2 } = req.body;
+    const { maxPlayers = 2 } = req.body;
     const db = await getDbAdapter();
 
     // Validate maxPlayers
@@ -30,6 +40,19 @@ router.post('/', requireAuth, async (req, res, next) => {
     const userExists = await db.get('SELECT 1 FROM users WHERE id = ?', [req.user.id]);
     if (!userExists) {
       return res.status(401).json({ error: 'User not found — please log in again' });
+    }
+
+    // CS52-7b: server-authoritative config. Ignore any client-supplied
+    // totalRounds / round_timer_ms / inter_round_delay_ms.
+    const mpConfig = await getConfig('multiplayer');
+    const totalRounds = mpConfig.rounds;
+
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'totalRounds')
+        && Number(req.body.totalRounds) !== totalRounds) {
+      logger.info(
+        { userId: req.user.id, attemptedTotalRounds: req.body.totalRounds, configRounds: totalRounds },
+        'multiplayer client totalRounds override ignored'
+      );
     }
 
     const id = crypto.randomUUID();
