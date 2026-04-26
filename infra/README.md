@@ -7,7 +7,7 @@ Per [INSTRUCTIONS.md § Documentation Conventions](../INSTRUCTIONS.md#documentat
 ## Quickstart
 
 - **Local / first-run bootstrap:** `./infra/deploy.sh --help` (Bash) or `.\infra\deploy.ps1 -help` (PowerShell). The scripts are idempotent.
-- **Staging + production deploys:** see [`.github/workflows/staging-deploy.yml`](../.github/workflows/staging-deploy.yml) and [`.github/workflows/prod-deploy.yml`](../.github/workflows/prod-deploy.yml) for triggers, gates, and pipeline shape. The Azure `gwn-staging` Container App is being moved to scale-to-zero (on-demand cold-start; live state tracks [CS58-1/CS58-2](../project/clickstops/active/active_cs58_scale-staging-to-zero.md)) and is not a pre-prod release gate — see [§ Waking staging for ad-hoc validation in OPERATIONS.md](../OPERATIONS.md#waking-staging-for-ad-hoc-validation).
+- **Staging + production deploys:** see [`.github/workflows/staging-deploy.yml`](../.github/workflows/staging-deploy.yml) and [`.github/workflows/prod-deploy.yml`](../.github/workflows/prod-deploy.yml) for triggers, gates, and pipeline shape. The Azure `gwn-staging` Container App is being moved to scale-to-zero (on-demand cold-start; live state tracks [CS58-1/CS58-2](../project/clickstops/done/done_cs58_scale-staging-to-zero.md)) and is not a pre-prod release gate — see [§ Waking staging for ad-hoc validation in OPERATIONS.md](../OPERATIONS.md#waking-staging-for-ad-hoc-validation).
 - **No Bicep / ARM templates:** infra is created imperatively by the deploy scripts via `az containerapp` commands.
 
 ## Custom Domain (one-time setup)
