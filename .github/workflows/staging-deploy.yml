@@ -26,6 +26,7 @@ env:
 permissions:
   contents: write
   packages: write
+  actions: read  # CS41-7: gh run list (compute-ingest-delta.js) needs Actions read
 
 jobs:
   build-and-push:
@@ -791,6 +792,33 @@ jobs:
               echo "- **Smoke verdict:** ⚠️ smoke skipped or did not produce results"
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # CS41-7: per-deploy AI ingest summary. Runs on BOTH success and
+      # failure paths (failed deploys still generated some traffic before
+      # failing). `continue-on-error: true` is mandatory — a metric query
+      # failure must NEVER block or rollback a deploy. Window is bounded
+      # by `gh run list` against the previous successful run of this
+      # workflow; on first deploy of staging we fall back to 24h.
+      # Output: `ingest-delta.json` (uploaded as 90-day artifact below)
+      # and a markdown section appended to the workflow run summary.
+      - name: Compute AI ingest delta (CS41-7)
+        if: success() || failure()
+        continue-on-error: true
+        env:
+          ENV: staging
+          WORKFLOW: ${{ github.workflow }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/compute-ingest-delta.js > ingest-delta.json
+          node scripts/render-ingest-section.js ingest-delta.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload ingest delta artifact (CS41-7)
+        if: always() && hashFiles('ingest-delta.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: ingest-delta-staging-${{ github.run_id }}
+          path: ingest-delta.json
+          retention-days: 90
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''

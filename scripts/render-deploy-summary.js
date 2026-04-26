@@ -127,6 +127,17 @@ function render(results, env = process.env) {
   lines.push(renderAiVerification(env));
   lines.push('');
 
+  // CS41-7: if the ingest-delta artifact is already on disk by the time
+  // render-deploy-summary runs, fold it into the summary so operators see
+  // smoke + AI verify + ingest delta in one block. The dedicated CS41-7
+  // workflow step still appends its own section unconditionally — these
+  // two paths are independent.
+  const ingestSection = renderIngestDeltaIfPresent(env);
+  if (ingestSection) {
+    lines.push(ingestSection);
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 
@@ -168,6 +179,27 @@ function renderAiVerification(env = process.env) {
   return out.join('\n');
 }
 
+/**
+ * CS41-7 hook: if `ingest-delta.json` exists at the conventional path
+ * (overridable via env), render its markdown section via the same renderer
+ * the dedicated workflow step uses. Returns null when the file is missing
+ * or unreadable so callers can omit the section silently.
+ */
+function renderIngestDeltaIfPresent(env = process.env) {
+  const path = env.INGEST_DELTA_PATH || 'ingest-delta.json';
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(path, 'utf-8'));
+  } catch {
+    return null;
+  }
+  // Lazy-require to avoid a hard dep when the file doesn't exist (and to
+  // keep render-deploy-summary.js loadable in test environments that don't
+  // have render-ingest-section.js on disk).
+  const { render: renderIngest } = require('./render-ingest-section.js');
+  return renderIngest(data);
+}
+
 function main() {
   const inputPath = process.argv[2];
   if (!inputPath) {
@@ -190,4 +222,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { render, renderAiVerification, fmtElapsed, statusIcon, migrationIcon, stepDetail };
+module.exports = { render, renderAiVerification, renderIngestDeltaIfPresent, fmtElapsed, statusIcon, migrationIcon, stepDetail };
