@@ -453,16 +453,18 @@ async function submitRankedAnswer(answer, ui) {
     if (ui.showRankedError) ui.showRankedError({ kind: 'network' });
     return;
   }
-  if (!state || !state.ranked) return; // aborted between fetch and response
+  if (!state || !state.ranked || state.sessionId !== sessionId) return; // aborted/replaced between fetch and response
 
   if (!res.ok) {
     let body = null;
     try { body = await res.json(); } catch { /* ignore */ }
+    if (!state || !state.ranked || state.sessionId !== sessionId) return;
     if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body });
     return;
   }
 
   const data = await res.json();
+  if (!state || !state.ranked || state.sessionId !== sessionId) return;
   const correct = !!data.correct;
   if (correct) {
     state.streak += 1;
@@ -526,22 +528,26 @@ async function nextRankedRound(ui) {
       if (ui.showRankedError) ui.showRankedError({ kind: 'network' });
       return;
     }
-    if (!state || !state.ranked) return;
+    if (!state || !state.ranked || state.sessionId !== sessionId) return;
 
     if (res.status === 425) {
       let body = null;
       try { body = await res.json(); } catch { /* ignore */ }
+      if (!state || !state.ranked || state.sessionId !== sessionId) return;
       const retryMs = (body && Number(body.retryAfterMs)) || 1000;
       await new Promise(r => setTimeout(r, Math.min(retryMs, 5000)));
+      if (!state || !state.ranked || state.sessionId !== sessionId) return;
       continue;
     }
     if (!res.ok) {
       let body = null;
       try { body = await res.json(); } catch { /* ignore */ }
+      if (!state || !state.ranked || state.sessionId !== sessionId) return;
       if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body });
       return;
     }
     const data = await res.json();
+    if (!state || !state.ranked || state.sessionId !== sessionId) return;
     presentRankedRound(data, ui);
     return;
   }
@@ -574,14 +580,16 @@ async function finishRankedSession(ui) {
     if (ui.showRankedError) ui.showRankedError({ kind: 'network' });
     return;
   }
-  if (!state || !state.ranked) return;
+  if (!state || !state.ranked || state.sessionId !== sessionId) return;
   if (!res.ok) {
     let body = null;
     try { body = await res.json(); } catch { /* ignore */ }
+    if (!state || !state.ranked || state.sessionId !== sessionId) return;
     if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body });
     return;
   }
   const data = await res.json();
+  if (!state || !state.ranked || state.sessionId !== sessionId) return;
   state.finished = true;
   const summary = {
     score: data.score,

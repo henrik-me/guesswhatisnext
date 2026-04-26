@@ -777,8 +777,13 @@ function showClaimPromptModal({ total, unattachedCount, mismatchedCount, onAccep
         setFocus();
         return;
       }
-      if (e.key === 'Enter' && document.activeElement === acceptBtn) {
-        e.preventDefault(); accept();
+      if (e.key === 'Enter') {
+        // Per the documented contract Enter always accepts, regardless of
+        // which button currently has focus inside the modal. Without this
+        // explicit handler, Enter on the decline button would trigger its
+        // default click instead.
+        e.preventDefault();
+        accept();
       }
     }
 

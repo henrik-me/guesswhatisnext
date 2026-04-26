@@ -58,6 +58,9 @@ function mockUi() {
 let Game;
 beforeEach(async () => {
   vi.resetModules();
+  // Test isolation: clear the in-memory localStorage stub so settings or
+  // other keys written by one test cannot leak into the next.
+  try { globalThis.localStorage.clear(); } catch { /* ignore */ }
   const mod = await import('../public/js/game.js');
   Game = mod.Game;
 });
