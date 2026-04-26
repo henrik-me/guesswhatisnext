@@ -56,10 +56,16 @@ function _coerceCount(count) {
  *
  * Eviction strategy is simple FIFO over insertion order (JS Map preserves
  * it). When a cap is hit, evict ~1% of the oldest entries from BOTH maps
- * in lockstep — the orphan-gen pass also walks `generations` for users
- * with no live entry. Evicting a live entry is safe: a future read just
- * recomputes from DB on the next user-activity request, exactly the same
- * as a cold-start cache miss.
+ * in lockstep. Race-safety after eviction is preserved by `setIfFresh`'s
+ * "currentGen===undefined → reject" rule (Copilot R9): once a user's gen
+ * has been evicted, any in-flight reader holding a token for that user
+ * gets rejected when they try to commit, so the cache cannot be
+ * incorrectly seeded with a stale value (which is what would happen if
+ * the lookup naively defaulted to 0 for evicted users — a token of 0
+ * issued before any writer would then match the post-eviction default).
+ *
+ * Exported as a CommonJS named export so unit tests can derive their
+ * assertions from the same constant rather than hard-coding (R9).
  */
 const MAX_ENTRIES = 10000;
 const EVICT_BATCH = Math.max(1, Math.floor(MAX_ENTRIES / 100));
@@ -68,15 +74,31 @@ class UnreadCountCache {
   constructor() {
     this.entries = new Map(); // userId -> count
     this.generations = new Map(); // userId -> monotonic int (bumped on every write)
+    // Globally monotonic counter. Every `_bumpGen` and every lazy seed in
+    // `beginRead` allocates a fresh value from here. Combined with the
+    // "currentGen must be defined" check in `setIfFresh`, this means a
+    // token issued by `beginRead` can NEVER coincide with a future
+    // `currentGen` for a different epoch (post-eviction or post-bump),
+    // closing the R9 correctness hole around evicted gen entries.
+    this._nextGen = 1;
     this.stats = { hits: 0, misses: 0, invalidations: 0, staleSetsRejected: 0, evictions: 0 };
   }
 
   /**
-   * Begin a read attempt: returns a token the caller must pass back to setIfFresh().
-   * Captures the current generation so a concurrent invalidate() can be detected.
+   * Begin a read attempt: returns a token the caller must pass back to
+   * setIfFresh(). If the user has no live generation entry, lazily seed
+   * one from `_nextGen` so the returned token is ALWAYS a strictly-positive,
+   * never-before-issued value. That keeps token=0 from re-emerging as a
+   * "match" after an eviction defaults the lookup back to 0 (Copilot R9).
    */
   beginRead(userId) {
-    return this.generations.get(userId) || 0;
+    let g = this.generations.get(userId);
+    if (g === undefined) {
+      g = this._nextGen++;
+      this.generations.set(userId, g);
+      this._evictIfFull();
+    }
+    return g;
   }
 
   /** Returns cached count for userId, or null if miss. No TTL — process-lifetime cache. */
@@ -91,13 +113,14 @@ class UnreadCountCache {
 
   /**
    * Conditional set: only stores if the generation matches the token captured
-   * at the start of the read. If a writer ran in between, the set is rejected
-   * and the cache stays empty so the next user-activity reader recomputes.
+   * at the start of the read. If a writer ran in between OR the user's gen
+   * entry was evicted (currentGen === undefined), the set is rejected and
+   * the cache stays empty so the next user-activity reader recomputes.
    * Returns true on store, false on rejection.
    */
   setIfFresh(userId, count, token) {
-    const currentGen = this.generations.get(userId) || 0;
-    if (currentGen !== token) {
+    const currentGen = this.generations.get(userId);
+    if (currentGen === undefined || currentGen !== token) {
       this.stats.staleSetsRejected++;
       return false;
     }
@@ -135,15 +158,15 @@ class UnreadCountCache {
   }
 
   _bumpGen(userId) {
-    this.generations.set(userId, (this.generations.get(userId) || 0) + 1);
+    this.generations.set(userId, this._nextGen++);
   }
 
   /**
-   * Bounded-size eviction (Copilot R8). Called from every mutation path so
-   * unbounded-churn workloads (fan-out invalidates to many distinct users,
-   * read-once users) can't grow either map without limit. FIFO over insertion
-   * order; orphan-gen pass cleans up generations whose entry has already been
-   * deleted by `invalidate()`.
+   * Bounded-size eviction (Copilot R8 + R9). Cap both Maps; on overflow,
+   * delete the oldest ~1% of entries in FIFO order. Eviction is safe
+   * w.r.t. in-flight readers because `setIfFresh` rejects when
+   * `currentGen === undefined` — a reader whose gen got evicted between
+   * `beginRead` and `setIfFresh` cannot incorrectly commit.
    */
   _evictIfFull() {
     if (this.entries.size > MAX_ENTRIES) {
@@ -155,10 +178,6 @@ class UnreadCountCache {
         if (++i >= EVICT_BATCH) break;
       }
     }
-    // Cap orphan generations too — invalidate() leaves a gen counter behind
-    // even after the entry is gone (so in-flight readers' setIfFresh stays
-    // race-correct). Cap at 2× MAX_ENTRIES to leave headroom for in-flight
-    // races, then evict orphans (no live entry) in FIFO order.
     if (this.generations.size > MAX_ENTRIES * 2) {
       let i = 0;
       for (const userId of this.generations.keys()) {
@@ -174,6 +193,7 @@ class UnreadCountCache {
   clear() {
     this.entries.clear();
     this.generations.clear();
+    this._nextGen = 1;
     this.stats = { hits: 0, misses: 0, invalidations: 0, staleSetsRejected: 0, evictions: 0 };
   }
 
@@ -189,4 +209,7 @@ module.exports = {
   UnreadCountCache,
   unreadCountCache: singleton,
   coerceUnreadCount: _coerceCount,
+  // Exported for unit tests so eviction-bound assertions don't hard-code
+  // the literal values (Copilot R9).
+  MAX_ENTRIES,
 };

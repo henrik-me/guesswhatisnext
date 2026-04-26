@@ -118,12 +118,13 @@ describe('UnreadCountCache', () => {
     // CS53-23 R8 — long-lived process with many distinct users must not
     // accumulate cache entries forever. Cap is enforced by FIFO eviction
     // on every set / setIfFresh / invalidate.
-    const N = 10500; // > MAX_ENTRIES (10000) so eviction must fire
+    const { MAX_ENTRIES } = require('../server/services/unread-count-cache');
+    const N = MAX_ENTRIES + 500;
     for (let i = 1; i <= N; i++) {
       cache.set(i, i);
     }
     const snap = cache.snapshot();
-    expect(snap.size).toBeLessThanOrEqual(10000);
+    expect(snap.size).toBeLessThanOrEqual(MAX_ENTRIES);
     expect(snap.evictions).toBeGreaterThan(0);
     // The most-recently-inserted entry must still be present (FIFO evicts
     // oldest first).
@@ -134,16 +135,44 @@ describe('UnreadCountCache', () => {
     // CS53-23 R8 — a workload that only ever fans out invalidate() calls
     // for distinct users (e.g. notification-insert hot path) used to leak
     // gen counters forever. Cap on generations.size triggers orphan eviction.
-    const N = 21000; // > MAX_ENTRIES * 2 (20000)
+    const { MAX_ENTRIES } = require('../server/services/unread-count-cache');
+    const cap = MAX_ENTRIES * 2;
+    const N = cap + 1000;
     for (let i = 1; i <= N; i++) {
       // Bump the gen via invalidate without first setting (entry stays absent).
       cache.invalidate(i);
     }
     const snap = cache.snapshot();
-    // Hard upper bound: orphans get evicted in batches until size <= the cap.
-    // The exact post-eviction size may sit slightly below 2 × MAX_ENTRIES
-    // because eviction fires once per invalidate call after the threshold.
-    expect(snap.generationsSize).toBeLessThanOrEqual(20000);
+    expect(snap.generationsSize).toBeLessThanOrEqual(cap);
     expect(snap.evictions).toBeGreaterThan(0);
+  });
+
+  test('R9 — eviction does NOT silently accept stale stores from in-flight readers', () => {
+    // Copilot R9 correctness finding: under the previous implementation,
+    // beginRead returned 0 when no gen entry existed, and eviction could
+    // delete a gen entry making `generations.get(userId) || 0` default
+    // back to 0 — so a reader holding a token=0 captured pre-bump could
+    // incorrectly match the post-eviction default and commit a stale value.
+    //
+    // The fix:
+    //   1. beginRead lazily seeds with a globally monotonic _nextGen, so
+    //      tokens are NEVER 0.
+    //   2. setIfFresh rejects when currentGen === undefined, not just when
+    //      it doesn't match the token.
+    //
+    // This test reproduces the original race: capture a token, simulate
+    // a writer + an eviction that drops the gen entry, then attempt
+    // setIfFresh — must be REJECTED.
+    const tok = cache.beginRead(1);
+    expect(tok).toBeGreaterThan(0); // (1) tokens are never 0
+
+    // Simulate writer + eviction by dropping the gen entry directly
+    // (mirrors what _evictIfFull would do for an orphan).
+    cache.invalidate(1);
+    cache.generations.delete(1);
+
+    // (2) Attempt to commit with the original token — must be rejected.
+    expect(cache.setIfFresh(1, 99, tok)).toBe(false);
+    expect(cache.get(1)).toBeNull();
   });
 });
