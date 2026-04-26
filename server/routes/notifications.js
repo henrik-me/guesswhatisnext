@@ -35,9 +35,13 @@ router.get('/', requireAuth, async (req, res, next) => {
       query += ' LIMIT 50';
     }
 
-    // Capture cache generation BEFORE any DB work for this request (list + count)
-    // so we can race-safely seed the cache from this request's authoritative count.
-    const token = unreadCountCache.beginRead(userId);
+    const isSystemList = req.user.role === 'system';
+    const willSeedCache = userActivity || isSystemList;
+    // Only capture a generation token when we're actually going to call
+    // setIfFresh — beginRead has the side-effect of lazily seeding the
+    // generations Map (R9), and seeding for boot/focus polls that will
+    // never store wastes an entry and an eviction-check (Copilot R10).
+    const token = willSeedCache ? unreadCountCache.beginRead(userId) : null;
     const notifications = await db.all(query, params);
 
     const countRow = await db.get(
@@ -52,7 +56,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     // poll on a different page load — gets a HIT instead of MISS-NO-ACTIVITY.
     // Only seed when the request was a user gesture or operator call;
     // otherwise we'd let an unrelated background fetch populate the cache.
-    if (userActivity || req.user.role === 'system') {
+    if (willSeedCache) {
       unreadCountCache.setIfFresh(userId, unreadCount, token);
     }
 
@@ -159,15 +163,21 @@ router.get('/count', requireAuth, async (req, res, next) => {
     const stored = unreadCountCache.setIfFresh(userId, count, token);
     const outcome = stored ? 'MISS' : 'STALE-DROP';
     res.set('X-Cache', outcome);
-    // STALE-DROP signals a real concurrent-writer race (correctness preserved
-    // but worth surfacing if it spikes); use warn so it stands out in queries.
-    // Branch instead of `.bind` to avoid allocating a bound function on every
-    // request to this hot endpoint (Copilot R5).
+    // STALE-DROP signals that the cache rejected this read's value during
+    // setIfFresh — either because a concurrent writer bumped the generation
+    // OR because the user's gen entry was evicted between beginRead and
+    // setIfFresh (Copilot R10). Both outcomes are correctness-preserving
+    // and benign individually; we log at warn so a sustained spike (which
+    // would indicate either a hot writer collision or eviction churn) is
+    // visible in the boot-quiet KQL query. Branch instead of `.bind` to
+    // avoid allocating a bound function on every request (Copilot R5).
+    const dropReason = stored ? undefined : 'generation-changed-or-evicted';
     if (outcome === 'STALE-DROP') {
       logger.warn({
         gate: 'boot-quiet',
         route: '/api/notifications/count',
         cacheOutcome: outcome,
+        dropReason,
         userActivity,
         isSystem,
         userId,
