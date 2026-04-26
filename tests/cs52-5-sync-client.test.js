@@ -477,3 +477,59 @@ describe('boot-quiet contract: 400 without X-User-Activity is server-side', () =
     expect(opts.headers['X-User-Activity']).toBe('1');
   });
 });
+
+
+describe('R7 regressions', () => {
+  it('coalesced syncNow returns the in-flight result (not null) so callers see success/failure', async () => {
+    // Regression for Copilot R7 #1: previously coalesced callers got
+    // .then(() => null), so e.g. score-submit indicator could not observe
+    // the real outcome of the coalesced sync.
+    const m = await loadFresh();
+    let resolveFirst;
+    const firstPayload = { acked: [], rejected: [], entities: { profile: { x: 1 } } };
+    const apiFetch = vi.fn(() => new Promise(r => { resolveFirst = r; }));
+    const p1 = m.syncNow({ apiFetch, trigger: 'sync-now-button' });
+    const p2 = m.syncNow({ apiFetch, trigger: 'score-submit' }); // coalesced
+    resolveFirst({
+      status: 200, ok: true,
+      headers: { get: () => null },
+      json: () => Promise.resolve(firstPayload),
+    });
+    const [r1, r2] = await Promise.all([p1, p2]);
+    expect(r1).toBeTruthy();
+    expect(r1.status).toBe(200);
+    // Coalesced caller MUST receive the same outcome (not null).
+    expect(r2).toBe(r1);
+  });
+
+  it('prunes corrupted L1 records (missing client_game_id) before sending', async () => {
+    // Regression for Copilot R7 #2: previously a corrupted L1 row would be
+    // sent with client_game_id: undefined, server would reject with
+    // client_game_id: null, and the ack/reject pipeline could not match
+    // (undefined !== null) -- leaving it stuck in L1 forever.
+    const m = await loadFresh();
+    // Seed a mix: one valid record, one corrupted (missing client_game_id),
+    // one non-object.
+    const good = m.buildRecord({ score: 100 }, 1);
+    localStorage.setItem('gwn_l1_records', JSON.stringify([
+      good,
+      { score: 50, user_id: 1 }, // missing client_game_id
+      'not-an-object',
+    ]));
+    expect(m.getL1Records().length).toBe(3);
+    const apiFetch = vi.fn(() => fakeOk({ acked: [], rejected: [], entities: {} }));
+    await m.syncNow({ apiFetch, trigger: 'sync-now-button', currentUserId: 1 });
+    // Wire only carries the valid record.
+    const sent = JSON.parse(apiFetch.mock.calls[0][1].body);
+    expect(sent.queuedRecords.length).toBe(1);
+    expect(sent.queuedRecords[0].client_game_id).toBe(good.client_game_id);
+    // L1 storage is cleaned (no stuck corrupted rows).
+    const remaining = m.getL1Records();
+    expect(remaining.length).toBe(1);
+    expect(remaining[0].client_game_id).toBe(good.client_game_id);
+    // Corrupted rows moved to rejected bucket with local reason.
+    const rj = m.getL1Rejected();
+    expect(rj.length).toBe(2);
+    for (const r of rj) expect(r.rejected_reason).toBe('invalid_local_record');
+  });
+});

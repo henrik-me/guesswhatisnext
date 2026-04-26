@@ -174,6 +174,41 @@ function setL1Rejected(rejected) {
   else safeWrite(L1_REJECTED_KEY, rejected);
 }
 
+/**
+ * Prune corrupted L1 entries (non-object or missing/empty client_game_id)
+ * from storage before they are sent on the wire. Without this, a corrupted
+ * row would be sent with `client_game_id: undefined`, get rejected by the
+ * server as `client_game_id: null`, and the client-side ack/reject pipeline
+ * would not be able to match it (undefined !== null) — leaving it stuck in
+ * L1 and retried on every sync forever. We move pruned rows into the
+ * rejected bucket with a local reason so they remain inspectable but do
+ * not block sync. Returns the cleaned, valid records.
+ */
+function pruneInvalidL1Records() {
+  const all = getL1Records();
+  const valid = [];
+  const invalid = [];
+  for (const r of all) {
+    if (r && typeof r === 'object' && typeof r.client_game_id === 'string' && r.client_game_id.length > 0) {
+      valid.push(r);
+    } else {
+      invalid.push(r);
+    }
+  }
+  if (invalid.length === 0) return valid;
+  const rj = getL1Rejected();
+  for (const bad of invalid) {
+    rj.push({
+      ...(bad && typeof bad === 'object' ? bad : { raw: bad }),
+      rejected_reason: 'invalid_local_record',
+      rejected_at: new Date().toISOString(),
+    });
+  }
+  setL1Rejected(rj);
+  setL1Records(valid);
+  return valid;
+}
+
 /** Generate a stable unique client_game_id (UUID-ish, no crypto dep). */
 export function generateClientGameId() {
   // RFC4122 v4-style without requiring crypto.randomUUID (older browsers).
@@ -431,7 +466,9 @@ export async function syncNow({ apiFetch, trigger, revalidateKeys = REVALIDATE_K
 
   if (inFlight) {
     pendingFollowup = true;
-    return inFlight.promise.then(() => null);
+    // Coalesce: hand the same in-flight result back so the second caller
+    // (e.g. score-submit indicator) can observe success/failure too.
+    return inFlight.promise;
   }
 
   const controller = new AbortController();
@@ -454,7 +491,7 @@ export async function syncNow({ apiFetch, trigger, revalidateKeys = REVALIDATE_K
 }
 
 async function doSync({ apiFetch, trigger, revalidateKeys, currentUserId, signal }) {
-  const allRecords = getL1Records();
+  const allRecords = pruneInvalidL1Records();
 
   // Filter: only records belonging to the current user (or guest records
   // when signed-out) get included on the wire.
