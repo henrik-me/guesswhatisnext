@@ -186,7 +186,7 @@ function Assert-AppInsightsSecretPresent {
     if (-not (Normalize-TsvValue ($secretListOutput | Out-String))) {
         Write-Host "Error: ACA secret 'appinsights-connection-string' is not registered on $AppName." -ForegroundColor Red
         Write-Host "       Run the CS54-1 + CS54-2 operator steps first — see" -ForegroundColor Red
-        Write-Host "       project/clickstops/active/active_cs54_enable-app-insights-in-prod.md" -ForegroundColor Red
+        Write-Host "       project/clickstops/done/done_cs54_enable-app-insights-in-prod.md" -ForegroundColor Red
         Write-Host "       (or done/done_cs54_*.md once the clickstop is closed)." -ForegroundColor Red
         throw "Missing ACA secret 'appinsights-connection-string' on $AppName"
     }

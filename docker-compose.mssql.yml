@@ -27,7 +27,7 @@ services:
       CANONICAL_HOST: "localhost"
       # Allow feature flag query param overrides (e.g. ?ff_submit_puzzle=true)
       # so E2E tests can control flags per-test, matching SQLite E2E behavior.
-      # Temporary workaround — CS40 tracks the proper solution.
+      # See INSTRUCTIONS.md "Feature flag testing across environments" (CS40).
       FEATURE_FLAG_ALLOW_OVERRIDE: "true"
       # Trust 2 proxy hops: browser→Caddy (sets XFF) → Express (socket).
       # Default is 1 (Azure has a single proxy). Docker Caddy adds one more.

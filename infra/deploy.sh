@@ -170,7 +170,7 @@ ensure_appinsights_secret_present() {
   if [ -z "$(sanitize_tsv_value "$cli_output")" ]; then
     echo "Error: ACA secret 'appinsights-connection-string' is not registered on $app_name." >&2
     echo "       Run the CS54-1 + CS54-2 operator steps first — see" >&2
-    echo "       project/clickstops/active/active_cs54_enable-app-insights-in-prod.md" >&2
+    echo "       project/clickstops/done/done_cs54_enable-app-insights-in-prod.md" >&2
     echo "       (or done/done_cs54_*.md once the clickstop is closed)." >&2
     exit 1
   fi
