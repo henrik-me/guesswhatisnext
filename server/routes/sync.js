@@ -123,11 +123,11 @@ async function processRecord(db, userId, raw) {
     // (current timestamp) only fires when we omit the column, so we
     // bind it explicitly here for offline records.
     //
-    // Bind a JS Date object (not a raw ISO string) so the MSSQL adapter
-    // serializes it to a proper DATETIME — SQL Server's implicit-conversion
-    // path rejects ISO strings with a 'Z' suffix and would otherwise leave
-    // valid offline records stuck in L1 with neither ack nor reject.
-    // Normalize completed_at to a canonical UTC ISO-8601 string.
+    // Normalize completed_at to a canonical UTC ISO-8601 string before
+    // binding it as a query parameter.
+    // - The value is parsed through `new Date(...)` first so a malformed
+    //   `completed_at` surfaces as a deterministic rejection instead of
+    //   corrupt DB state.
     // - The mssql node driver implicitly converts a parameterized ISO-8601
     //   string with a `Z` suffix into a SqlDateTime; the conversion path that
     //   would reject a `Z` suffix (raw string concatenation into SQL text) is
@@ -135,8 +135,6 @@ async function processRecord(db, userId, raw) {
     // - SQLite stores TEXT verbatim; ISO-8601 with `T` and `Z` is the format
     //   SQLite's date()/datetime() functions understand, so daily-leaderboard
     //   bucketing works without an additional cast.
-    // - We always pass through `new Date(...)` so a malformed `completed_at`
-    //   surfaces as a deterministic rejection instead of corrupt DB state.
     let playedAt;
     if (raw.completed_at) {
       const parsed = new Date(raw.completed_at);
@@ -284,11 +282,23 @@ router.post('/', requireAuth, async (req, res, next) => {
     const acked = [];
     const rejected = [];
 
-    for (const raw of queuedRecords) {
+    for (const [recordIndex, raw] of queuedRecords.entries()) {
       if (!raw || typeof raw !== 'object' || !raw.client_game_id) {
-        if (raw && raw.client_game_id !== undefined) {
-          rejected.push({ client_game_id: raw.client_game_id, reason: 'invalid_payload' });
-        }
+        // Always emit a structured rejection + warn log for these so a
+        // corrupted L1 entry (e.g. missing client_game_id) is visible in
+        // logs and the client/operator can detect and remediate instead of
+        // silently retrying forever.
+        const clientGameId = (raw && typeof raw === 'object' && raw.client_game_id !== undefined)
+          ? raw.client_game_id
+          : null;
+        rejected.push({ client_game_id: clientGameId, reason: 'invalid_payload' });
+        logger.warn({
+          event: 'sync_record_rejected',
+          user_id: userId,
+          client_game_id: clientGameId,
+          record_index: recordIndex,
+          reason: 'invalid_payload',
+        }, 'sync record rejected: missing or invalid client_game_id');
         continue;
       }
       if (!isValidCompletedAt(raw.completed_at)) {

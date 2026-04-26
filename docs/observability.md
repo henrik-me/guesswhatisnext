@@ -201,7 +201,7 @@ Cross-environment investigations (e.g., "did this regression also reach prod?") 
 - **Telemetry wiring:** [`server/telemetry.js`](../server/telemetry.js) is the AI export path; see CS54 for what it does and doesn't instrument.
 
 
-### B.8 CS52-5 unified sync (POST /api/sync)
+### D.1 CS52-5 unified sync (POST /api/sync)
 
 CS52-5 emits structured pino logs at three points (see [`server/routes/sync.js`](../server/routes/sync.js)):
 

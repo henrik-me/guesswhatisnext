@@ -13,13 +13,11 @@
 const { getAgent, setup, teardown, registerUser } = require('./helper');
 
 let userToken;
-let userA;
 
 beforeAll(async () => {
   await setup();
   const reg = await registerUser('syncuser');
   userToken = reg.token;
-  userA = reg.user;
 });
 
 afterAll(teardown);
@@ -369,6 +367,3 @@ describe('payload_hash deterministic', () => {
     expect(a).not.toBe(b);
   });
 });
-
-// Reference for caller variable hoisting (vitest treats this fine)
-void userA;

@@ -222,17 +222,28 @@ describe('sign-out semantics', () => {
     m.enqueueRecord(m.buildRecord({ score: 1 }, 7));
     m.setL2Entity('profile', { stats: [{ a: 1 }], updatedAt: '2026-01-01T00:00:00Z' });
     expect(m.getL2Entity('profile')).toBeTruthy();
-    // Pretend a sync is in flight
+    // Real abort wiring: the fake apiFetch observes opts.signal and rejects
+    // with an AbortError when the controller fires, so abortFired now
+    // actually proves handleSignOut() invoked controller.abort().
     let abortFired = false;
-    const apiFetch = vi.fn(() => new Promise((_resolve, _reject) => {
-      // never resolves; aborted by sign-out
-      // signal isn't passed to apiFetch in this fake; simulate by checking
-      // post-condition only
-      abortFired = true;
+    const apiFetch = vi.fn((_url, opts = {}) => new Promise((_resolve, reject) => {
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      if (opts.signal?.aborted) {
+        abortFired = true;
+        reject(abortError);
+        return;
+      }
+      opts.signal?.addEventListener('abort', () => {
+        abortFired = true;
+        reject(abortError);
+      }, { once: true });
     }));
     void m.syncNow({ apiFetch, trigger: 'sign-in', currentUserId: 7 });
     expect(m._isInFlight()).toBe(true);
     m.handleSignOut();
+    // Yield so the abort handler + the rejected-promise catch run.
+    await Promise.resolve();
     expect(m._isInFlight()).toBe(false);
     expect(m.getL2Entity('profile')).toBeNull();
     const records = m.getL1Records();
