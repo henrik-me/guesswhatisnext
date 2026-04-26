@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main -- no PR required.
 
-> **Last updated:** 2026-04-26T21:30Z
+> **Last updated:** 2026-04-26T23:35Z
 
 ## Orchestrators
 
@@ -14,7 +14,7 @@ CS44-3 schema upgrade.
 | Agent ID | Machine | Repo Folder | Status | Last Seen |
 |----------|---------|-------------|--------|-----------|
 | yoga-gwn | HENRIKM-YOGA | C:\src\guesswhatisnext | 🟢 Active | 2026-04-25T18:15Z |
-| yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-26T21:30Z |
+| yoga-gwn-c2 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot2 | 🟢 Active | 2026-04-26T23:35Z |
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active | 2026-04-25T19:18Z |
 | yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | 2026-04-26T02:39Z |
 | yoga-gwn-c5 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot5 | 🟢 Active | 2026-04-26T03:05Z |
@@ -27,4 +27,5 @@ CS44-3 schema upgrade.
 |---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
 | CS53-19 | CS53 | claimed | yoga-gwn | C:\src\guesswhatisnext | -- | -- | 2026-04-26T21:30Z | Unblocked — CS53-23 merged at squash commit `819e3e1` (PR #255). Phase A (boot/focus/refresh HAR inventory) can start now; Phases C-G can use the boot-quiet contract foundation that just landed. **Awaiting user direction** before starting any new sub-task. | -- |
 | CS52-8 | CS52 — comprehensive E2E tests | copilot_review | yoga-gwn-c5 | C:\src\gwn-worktrees\wt-cs52-8 | yoga-gwn-c5/cs52-8-impl | #283 | 2026-04-26T23:25Z | PR #283 open. 5 new tests added (cs52-8-cross-task.test.js — MP match-end achievements; cs52-8-claim-decline.test.js — decline=no-op + re-surface). Suite: 924 → 929 passing. Container validation PASSED (port 8443). 4 local GPT-5.4 review iterations resolved (R1: vacuous spy; R2: WS try/finally hoist; R3: connectWS terminate-on-timeout; R4: parallel gameOver wait). Coverage matrix in PR body maps every CS52-8 acceptance criterion to a pinning test. Awaiting Copilot + CI green. | -- |
+| CS61 | Activate CS41 smoke + DB migration validation in staging | implementing | yoga-gwn-c2 | C:\src\guesswhatisnext_copilot2 | -- | -- | 2026-04-26T23:35Z | User-approved plan v3 (post-rubber-duck); 8 sub-tasks. **Wave 1**: dispatching CS61-0 (precondition: adapter-level `getMigrationState()` API). After CS61-0 merges → CS61-1 + CS61-2 in parallel. | -- |
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.

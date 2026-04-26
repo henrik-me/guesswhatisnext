@@ -1,6 +1,7 @@
 # CS61 — Activate CS41 smoke + DB migration validation in staging
 
-**Status:** ⬜ Planned — v3 (post-rubber-duck)
+**Status:** 🔄 In Progress — v3 (post-rubber-duck)
+**Owner:** yoga-gwn-c2 (claimed 2026-04-26T23:35Z)
 **Origin:** CS41 close-out (2026-04-26) surfaced two related staging gaps:
 1. Staging silently skips the entire CS41 validation chain (CS41-1 smoke, CS41-3 AI verify, CS41-12 old-rev smoke, CS41-5 rollback smoke) because staging uses container-local SQLite at `/tmp/game.db` ([staging-deploy.yml:476-477](../../../.github/workflows/staging-deploy.yml)) — every revision gets a fresh ephemeral DB, so `gwn-smoke-bot` (the user CS41-1''s smoke logs in as) cannot be pre-seeded once via `scripts/setup-smoke-user.js` the way it''s done for prod.
 2. The DB migration framework (`server/db/migrations/`, 8 migrations, called by [`server/app.js:46-49`](../../../server/app.js)) **runs against staging''s SQLite on every server startup, but no deploy gate validates that the migrations actually applied successfully.**
