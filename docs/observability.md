@@ -419,7 +419,7 @@ ContainerAppConsoleLogs_CL
 | extend pino = parse_json(Log_s)
 | where tostring(pino.event) in ("multiplayer_match_persisted", "multiplayer_match_replayed")
 | extend evt = tostring(pino.event),
-         path = tostring(pino.persistence_path),
+         path = iff(evt == "multiplayer_match_replayed", "replay", tostring(pino.persistence_path)),
          match_id = tostring(pino.match_id)
 | summarize matches = dcount(match_id) by evt, path, bin(TimeGenerated, 1h)
 | order by TimeGenerated desc

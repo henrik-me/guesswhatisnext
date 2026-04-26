@@ -933,7 +933,7 @@ async function insertMatchRows(tx, { matchId, roomCode, configSnapshot,
  * preserves the existing match-finished = score-recorded UX contract
  * even during a DB blip.
  */
-async function persistCompletedMatch(room, roomCode, userScores) {
+async function persistCompletedMatch(room, roomCode, _userScores) {
   const finishedAtIso = new Date().toISOString();
   const startedAtIso = room.startedAtIso || finishedAtIso;
   const configSnapshot = room.configSnapshot;
@@ -995,10 +995,18 @@ async function persistCompletedMatch(room, roomCode, userScores) {
         `UPDATE matches SET status = 'finished', finished_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [matchId]
       );
-      for (const { userId, total } of userScores) {
+      // CS52-7d (Copilot R6): derive legacy `match_players.score` from the
+      // canonical `participants` payload (which holds the
+      // `computeFinalScore`-derived score from the persisted events) rather
+      // than from `userScores`. This guarantees live and replay paths write
+      // the same legacy score and keeps the legacy + new tables internally
+      // consistent — `userScores` can diverge for dropped players (endMatch
+      // assigns them `total: 0` while `buildParticipantPayloads` may compute
+      // a non-zero score from earlier rounds' events).
+      for (const p of participants) {
         await tx.run(
           `UPDATE match_players SET score = ?, finished_at = CURRENT_TIMESTAMP WHERE match_id = ? AND user_id = ?`,
-          [total, matchId, userId]
+          [p.score, matchId, p.user_id]
         );
       }
       await insertMatchRows(tx, {

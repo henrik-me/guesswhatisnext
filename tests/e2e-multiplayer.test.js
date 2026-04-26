@@ -423,8 +423,23 @@ describe('Multiplayer E2E', () => {
     for (let round = 0; round < totalRounds; round++) {
       const hostRound = waitForMessage(hostWs, 'round');
       const joinerRound = waitForMessage(joinerWs, 'round');
-      const [hostMsg] = await Promise.all([hostRound, joinerRound]);
-      const correctId = hostMsg.puzzle.options[0].id;
+      await Promise.all([hostRound, joinerRound]);
+      // CS52-7d (Copilot R6): the broadcast `puzzle.options` is an array of
+      // strings (sendRound forwards the DB column verbatim), so
+      // `options[0].id` was `undefined` and both players were submitting
+      // an undefined answer — the parity assertion below was passing
+      // trivially with score=0 on both sides. Fetch the actual correct
+      // answer via `match_rounds.puzzle_id -> puzzles.answer` (the round
+      // INSERT into `match_rounds` happens before the broadcast, so the
+      // row is guaranteed to exist by the time we receive `round`) so
+      // both players answer correctly, exercise streak multipliers, and
+      // produce non-trivial scores for the parity check.
+      const mr = await db.get(
+        `SELECT puzzle_id FROM match_rounds WHERE match_id = ? AND round_num = ?`,
+        [matchId, round + 1]
+      );
+      const pz = await db.get(`SELECT answer FROM puzzles WHERE id = ?`, [mr.puzzle_id]);
+      const correctId = pz.answer;
       const hostResult = waitForMessage(hostWs, 'roundResult');
       const joinerResult = waitForMessage(joinerWs, 'roundResult');
       hostWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
@@ -550,8 +565,17 @@ describe('Multiplayer E2E', () => {
       for (let r = 0; r < totalRounds; r++) {
         const hostRound = waitForMessage(hostWs, 'round');
         const joinerRound = waitForMessage(joinerWs, 'round');
-        const [hostMsg] = await Promise.all([hostRound, joinerRound]);
-        const correctId = hostMsg.puzzle.options[0].id;
+        await Promise.all([hostRound, joinerRound]);
+        // CS52-7d (Copilot R6): same fix as the persistence test — fetch
+        // the correct answer from `match_rounds -> puzzles` so the test
+        // submits a real value (was binding `undefined` previously and
+        // weakening Variant C drain coverage).
+        const mr = await db.get(
+          `SELECT puzzle_id FROM match_rounds WHERE match_id = ? AND round_num = ?`,
+          [matchId, r + 1]
+        );
+        const pz = await db.get(`SELECT answer FROM puzzles WHERE id = ?`, [mr.puzzle_id]);
+        const correctId = pz.answer;
         if (r === totalRounds - 1) {
           setDbUnavailabilityState({ reason: 'capacity-exhausted', message: 'test' });
         }
