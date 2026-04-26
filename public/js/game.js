@@ -165,6 +165,7 @@ function submitAnswer(answer, ui) {
   if (state && state.ranked) {
     return submitRankedAnswer(answer, ui);
   }
+  if (!state || state.finished) return;
   stopTimer();
 
   const timeMs = Date.now() - roundStartTime;
@@ -205,6 +206,7 @@ function nextRound(ui) {
   if (state && state.ranked) {
     return nextRankedRound(ui);
   }
+  if (!state || state.finished) return;
   state.currentRound += 1;
   loadRound(ui);
 }

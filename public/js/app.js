@@ -461,14 +461,20 @@ const ui = {
       // surfaced by handleStartRanked, not here.
       const hasActiveRankedSession = !!(Game.state && Game.state.ranked && !Game.state.finished);
       if (hasActiveRankedSession) {
-        // apiFetch only updates connectivity for fetch responses (4xx/5xx);
-        // raw network failures (TypeError) bypass it. Synthesize the
-        // network-down transition here so the banner + ranked-entry gate
-        // stay consistent with the abandoned overlay/toast we're about to
-        // surface.
-        try { setConnectivityState('network-down', 'ranked-network-error'); } catch { /* ignore */ }
         showToast('Network error — your Ranked session was abandoned');
-        handleRankedDisconnect('network-down');
+        try {
+          // apiFetch only updates connectivity for fetch responses (4xx/5xx);
+          // raw network failures (TypeError) bypass it. Synthesize the
+          // network-down transition here so the banner + ranked-entry gate
+          // stay consistent — applyConnectivityState (the connectivity
+          // listener) then performs handleRankedDisconnect, so abandonment
+          // telemetry is emitted exactly once.
+          setConnectivityState('network-down', 'ranked-network-error');
+        } catch {
+          // setConnectivityState is best-effort; fall back to a direct
+          // disconnect so the session is still abandoned cleanly.
+          handleRankedDisconnect('network-down');
+        }
       }
       return;
     }
