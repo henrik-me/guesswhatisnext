@@ -254,15 +254,23 @@ function scanEnvObjectForm(relPath) {
     }
     for (let i = 0; i < lines.length; i += 1) {
       if (isComment(lines[i])) continue;
-      if (!BICEP_NAME_RE.test(lines[i])) continue;
-      const range = enclosingBraceLineRange(content, lineStarts, lineStarts[i]);
+      const nameMatch = lines[i].match(BICEP_NAME_RE);
+      if (!nameMatch) continue;
+      // Use the offset of the name match itself (not the line start) so that
+      // an opening `{` appearing earlier on the SAME line is included in the
+      // backward brace walk. `nameMatch.index` is set because BICEP_NAME_RE
+      // is non-global.
+      const nameOffset = lineStarts[i] + nameMatch.index;
+      const range = enclosingBraceLineRange(content, lineStarts, nameOffset);
       if (!range) continue;
-      const match = truthyValueLines.find((j) => j !== i && j >= range.open && j <= range.close);
+      // Allow same-line pairings: a `{ name: 'X', value: 'true' }` literal
+      // has both matches on the same line, which is still one object.
+      const match = truthyValueLines.find((j) => j >= range.open && j <= range.close);
       if (match !== undefined) {
         findings.push({
           file: relPath,
           line: i + 1,
-          snippet: `${lines[i].trim()} ... ${lines[match].trim()}`,
+          snippet: match === i ? lines[i].trim() : `${lines[i].trim()} ... ${lines[match].trim()}`,
         });
       }
     }

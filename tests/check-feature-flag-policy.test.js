@@ -217,6 +217,24 @@ describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', (
     const file = writeFixture('neighbours.bicep', bicep);
     expect(scanEnvObjectForm(file)).toEqual([]);
   });
+
+  it('detects truthy override on a single-line Bicep env-object literal', () => {
+    const bicep = `env: [ { name: '${OVERRIDE}', value: 'true' } ]`;
+    const file = writeFixture('inline.bicep', bicep);
+    const findings = scanEnvObjectForm(file);
+    expect(findings).toHaveLength(1);
+  });
+
+  it('detects truthy override when name and { are on the same line', () => {
+    const bicep = [
+      `env: [ { name: '${OVERRIDE}'`,
+      "    value: 'true'",
+      '  } ]',
+    ].join('\n');
+    const file = writeFixture('open-same-line.bicep', bicep);
+    const findings = scanEnvObjectForm(file);
+    expect(findings).toHaveLength(1);
+  });
 });
 
 describe('CS40-5 Policy 2 — FEATURE_<KEY>_PERCENTAGE=100 regex', () => {
