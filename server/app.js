@@ -33,6 +33,7 @@ const userRoutes = require('./routes/users');
 const telemetryRoutes = require('./routes/telemetry');
 const sessionRoutes = require('./routes/sessions');
 const adminGameConfigsRoutes = require('./routes/admin');
+const adminMigrationsRoutes = require('./routes/admin-migrations');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
@@ -394,6 +395,10 @@ function createServer() {
   // Mounted alongside the inline /api/admin/{drain,init-db} endpoints below;
   // shares the same SYSTEM_API_KEY auth pattern via requireSystem middleware.
   app.use('/api/admin/game-configs', adminGameConfigsRoutes);
+  // CS61-2 — admin route for migration tracker introspection (GET /api/admin/migrations).
+  // Surfaces adapter-level getMigrationState() (CS61-0) so the staging deploy
+  // smoke can assert all migrations applied cleanly. See routes/admin-migrations.js.
+  app.use('/api/admin/migrations', adminMigrationsRoutes);
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, async (req, res, next) => {
