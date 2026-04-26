@@ -1,0 +1,23 @@
+cs40-followup: skip commented Bicep lines in env-object scan
+
+Local GPT-5.4 re-review of PR #257 head 124a761 found a regression:
+the new Bicep name/value scan did not respect comment-prefixed lines,
+so a documentation block like
+
+  // {
+  //   name: 'FEATURE_FLAG_ALLOW_OVERRIDE'
+  //   value: 'true'
+  // }
+
+would produce a false positive. The original single-line OVERRIDE_TRUTHY_RE
+explicitly skipped lines starting with // or # via a negative lookahead.
+
+Fix: add an isComment() guard in the Bicep branch of scanEnvObjectForm()
+that skips lines whose first non-whitespace is // (Bicep line comment) or
+# (defensive). Applied symmetrically when indexing truthy-value lines and
+when iterating name lines.
+
+Tests: +1 case for commented-out Bicep block. 551 -> 552 tests, all pass.
+Script still reports 0 findings on clean repo.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

@@ -186,6 +186,17 @@ describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', (
     const findings = scanEnvObjectForm(file);
     expect(findings).toHaveLength(1);
   });
+
+  it('does NOT flag commented-out Bicep env-objects', () => {
+    const bicep = [
+      '// {',
+      `//   name: '${OVERRIDE}'`,
+      "//   value: 'true'",
+      '// }',
+    ].join('\n');
+    const file = writeFixture('commented.bicep', bicep);
+    expect(scanEnvObjectForm(file)).toEqual([]);
+  });
 });
 
 describe('CS40-5 Policy 2 — FEATURE_<KEY>_PERCENTAGE=100 regex', () => {

@@ -197,15 +197,17 @@ function scanEnvObjectForm(relPath) {
   }
   if (/\.bicep$/i.test(relPath)) {
     const lines = content.split(/\r?\n/);
-    // Index truthy-value lines once, then for each name-line look in BOTH
-    // directions within the lookahead window. Property order inside a Bicep
-    // object literal is not semantically significant, so `value` may legally
-    // appear before `name`.
+    // Skip commented-out lines (Bicep uses `//`; tolerate `#` for safety)
+    // so that documentation/example blocks do not produce false positives.
+    // This matches the comment-prefix rejection in OVERRIDE_TRUTHY_RE.
+    const isComment = (line) => /^\s*(\/\/|#)/.test(line);
     const truthyValueLines = [];
     for (let i = 0; i < lines.length; i += 1) {
+      if (isComment(lines[i])) continue;
       if (BICEP_VALUE_TRUTHY_RE.test(lines[i])) truthyValueLines.push(i);
     }
     for (let i = 0; i < lines.length; i += 1) {
+      if (isComment(lines[i])) continue;
       if (!BICEP_NAME_RE.test(lines[i])) continue;
       const lo = i - ENV_OBJECT_LOOKAHEAD_LINES;
       const hi = i + ENV_OBJECT_LOOKAHEAD_LINES;
