@@ -147,13 +147,17 @@ async function processRecord(db, userId, raw) {
     // - The value is parsed through `new Date(...)` first so a malformed
     //   `completed_at` surfaces as a deterministic rejection instead of
     //   corrupt DB state.
-    // - The mssql node driver implicitly converts a parameterized ISO-8601
-    //   string with a `Z` suffix into a SqlDateTime; the conversion path that
-    //   would reject a `Z` suffix (raw string concatenation into SQL text) is
-    //   never used here because all values are bound via `request.input(...)`.
-    // - SQLite stores TEXT verbatim; ISO-8601 with `T` and `Z` is the format
-    //   SQLite's date()/datetime() functions understand, so daily-leaderboard
-    //   bucketing works without an additional cast.
+    // - SQLite stores TEXT verbatim; ISO-8601 with `T` and `Z` is the
+    //   format SQLite's date()/datetime() functions understand, so
+    //   daily-leaderboard bucketing works without an additional cast.
+    // - The mssql adapter binds JS strings as NVARCHAR (no explicit
+    //   type), so an ISO-8601 string with a trailing `Z` would force
+    //   SQL Server to do an implicit NVARCHAR -> DATETIME conversion
+    //   (locale-sensitive in some configurations and intermittently
+    //   rejected in Azure SQL). To avoid that we bind a JS `Date`
+    //   instead — node-mssql infers it as a DateTime SQL type — while
+    //   SQLite (which doesn't accept `Date` bind values) keeps the
+    //   canonical string.
     let playedAt;
     if (raw.completed_at != null) {
       // Use the same normalizer the hash path uses so the persisted
@@ -164,13 +168,14 @@ async function processRecord(db, userId, raw) {
     } else {
       playedAt = new Date().toISOString();
     }
+    const playedAtParam = db.dialect === 'mssql' ? new Date(playedAt) : playedAt;
     await db.run(
       `INSERT INTO scores
          (user_id, mode, score, correct_count, total_rounds, best_streak,
           source, variant, client_game_id, schema_version, payload_hash, played_at)
        VALUES (?, ?, ?, ?, ?, ?, 'offline', ?, ?, ?, ?, ?)`,
       [userId, mode, score, correctCount, totalRounds, bestStreak,
-        variant, String(raw.client_game_id), schemaVersion, payloadHash, playedAt]
+        variant, String(raw.client_game_id), schemaVersion, payloadHash, playedAtParam]
     );
     return 'acked';
   } catch (err) {

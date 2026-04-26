@@ -1586,9 +1586,13 @@ async function maybeShowClaimPrompt() {
   const total = claimable.unattached.length + claimable.mismatched.length;
   if (total === 0) return;
   // Use confirm() for MVP — a richer custom-modal UI is CS52-4's screen scope.
+  // If explicit confirmation is unavailable (no `window.confirm`, e.g. test
+  // env or SSR), fail closed: leave the records untouched rather than
+  // silently auto-attributing offline plays to the signed-in user without
+  // consent. The next sign-in (in a confirm-capable context) will reprompt.
   const proceed = (typeof window !== 'undefined' && typeof window.confirm === 'function')
     ? window.confirm(`${total} pending offline games will be added to your account.`)
-    : true;
+    : false;
   if (proceed) {
     try { applyClaim(userId); } catch { /* ignore */ }
   }
