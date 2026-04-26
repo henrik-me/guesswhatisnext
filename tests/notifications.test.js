@@ -264,6 +264,12 @@ describe('GET /api/notifications/count', () => {
   });
 
   test('boot-quiet: no X-User-Activity + cache miss → returns 0 and does NOT touch DB', async () => {
+    // Scope: this test asserts the route-level guarantee — once the request
+    // reaches the handler (DB already initialized, requireAuth passed),
+    // header-less /count traffic does not call db.get/all/run. The pre-route
+    // cold-start init gate at server/app.js:258-280 is NOT exercised here;
+    // gating that path on X-User-Activity is CS53-19.D's scope, with a
+    // dedicated cold-start test once that lands.
     const { unreadCountCache } = require('../server/services/unread-count-cache');
     const { getDbAdapter } = require('../server/db');
     unreadCountCache.clear();

@@ -81,9 +81,21 @@ router.get('/', requireAuth, async (req, res, next) => {
 /**
  * GET /api/notifications/count — unread count for badge.
  *
- * Boot-quiet contract (CS53-23): the DB is touched ONLY when the request
- * carries `X-User-Activity: 1` AND the cache misses. Boot/focus/poller traffic
- * (no header) gets the cached value or `{ unread_count: 0 }` — never a DB query.
+ * Boot-quiet contract (CS53-23): for requests that reach this handler
+ * (i.e. after `requireAuth` and the global cold-start init gate in
+ * `server/app.js`), the DB is touched ONLY when the request carries
+ * `X-User-Activity: 1` AND the cache misses. Boot/focus/poller traffic
+ * (no header) gets the cached value or `{ unread_count: 0 }` from this
+ * handler — never a DB query at the route layer.
+ *
+ * Caveat — pre-route exceptions (CS53-19.D scope, not closed by this PR):
+ * the global `/api/*` request gate at `server/app.js:258-280` triggers
+ * `runInit()` for header-less requests when `!dbInitialized`, which can
+ * touch the DB before this handler runs. CS53-19.D will gate that path
+ * on `X-User-Activity: 1` (and update `scripts/container-validate.js` to
+ * send the header). Until then, the route-level guarantee is the one
+ * documented above.
+ *
  * System-key (operator) requests are exempt from the contract per
  * INSTRUCTIONS.md § Database & Data and may always read the DB on cache miss.
  * See INSTRUCTIONS.md § Database & Data (Boot-quiet rule).
