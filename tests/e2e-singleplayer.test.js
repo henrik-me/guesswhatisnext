@@ -44,12 +44,15 @@ describe('Single Player E2E', () => {
     expect(scoreRes.status).toBe(201);
     expect(scoreRes.body.id).toBeDefined();
     expect(Array.isArray(scoreRes.body.newAchievements)).toBe(true);
-    // first_game achievement should unlock
-    expect(scoreRes.body.newAchievements.length).toBeGreaterThan(0);
+    // CS52-7: legacy /api/scores does NOT unlock achievements (offline path).
+    expect(scoreRes.body.newAchievements.length).toBe(0);
 
     // 3. Check leaderboard — player should appear
+    // CS52-6: POST /api/scores tags rows as `offline` (self-reported);
+    // the public LB defaults to `ranked`, so explicitly filter for
+    // offline to see this row.
     const lbRes = await agent
-      .get('/api/scores/leaderboard?mode=freeplay&period=all')
+      .get('/api/scores/leaderboard?variant=freeplay&source=offline&period=all')
       .set('Authorization', `Bearer ${userToken}`);
     expect(lbRes.status).toBe(200);
     expect(lbRes.body.leaderboard.length).toBeGreaterThanOrEqual(1);
@@ -65,20 +68,20 @@ describe('Single Player E2E', () => {
     expect(myScoresRes.body.scores.length).toBe(1);
     expect(myScoresRes.body.stats.length).toBeGreaterThanOrEqual(1);
 
-    // 5. Check achievements unlocked
+    // 5. Check achievements — CS52-7: none unlocked from offline path.
     const achRes = await agent
       .get('/api/achievements/me')
       .set('Authorization', `Bearer ${userToken}`);
     expect(achRes.status).toBe(200);
-    expect(achRes.body.achievements.length).toBeGreaterThan(0);
+    expect(achRes.body.achievements.length).toBe(0);
 
-    // 6. Check all achievements list shows unlock status
+    // 6. All-achievements listing still works; nothing is unlocked yet.
     const allAchRes = await agent
       .get('/api/achievements')
       .set('Authorization', `Bearer ${userToken}`);
     expect(allAchRes.status).toBe(200);
     const unlocked = allAchRes.body.achievements.filter(a => a.unlocked);
-    expect(unlocked.length).toBeGreaterThan(0);
+    expect(unlocked.length).toBe(0);
   });
 
   test('daily challenge score submission', async () => {
@@ -116,7 +119,7 @@ describe('Single Player E2E', () => {
       .send({ mode: 'freeplay', score: 1200, correctCount: 10, totalRounds: 10, bestStreak: 10 });
 
     const lbRes = await agent
-      .get('/api/scores/leaderboard?mode=freeplay')
+      .get('/api/scores/leaderboard?variant=freeplay&source=offline')
       .set('Authorization', `Bearer ${userToken}`);
 
     expect(lbRes.body.leaderboard[0].username).toBe('sp_player2');

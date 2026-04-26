@@ -501,6 +501,193 @@ jobs:
           CANONICAL_HOST: ${{ vars.CANONICAL_HOST }}
           STAGING_URL: ${{ vars.STAGING_URL }}
 
+      # CS41-4: Apply DB migrations AFTER the new revision is deployed
+      # (at 0% traffic) but BEFORE `traffic set` shifts traffic to it.
+      # Per the v3 plan, staging uses multi-revision mode so this is the
+      # correct gate point — a migration failure here aborts the deploy
+      # without ever shifting traffic to the new revision.
+      #
+      # NOTE: the live Azure `gwn-staging` Container App currently runs
+      # SQLite at /tmp/game.db (ephemeral, recreated on every revision).
+      # If `secrets.STAGING_DATABASE_URL` is unset, the step is a documented
+      # no-op; once staging moves to managed MSSQL the operator sets the
+      # secret and migrations begin running automatically.
+      - name: Checkout repo (for scripts/migrate.js)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (production only)
+        run: npm ci --omit=dev
+
+      - name: Run DB migrations
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::secrets.STAGING_DATABASE_URL is unset — staging is still on container-local SQLite. Skipping pre-deploy migration step. Set the secret once staging moves to managed MSSQL."
+            echo "MIGRATION_STATUS=skipped" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          node scripts/migrate.js || {
+            echo "::error::Migration failed; aborting deploy before traffic shift"
+            echo "MIGRATION_STATUS=failed" >> "$GITHUB_ENV"
+            exit 1
+          }
+          echo "MIGRATION_STATUS=applied" >> "$GITHUB_ENV"
+
+      # CS41-12: smoke the OLD revision (still serving 100% of staging
+      # traffic at the apex hostname) against the just-migrated DB BEFORE
+      # we shift traffic to the new revision. Catches backward-incompatibility
+      # the static linter (CS41-11) cannot see — subtle query-shape changes,
+      # app-side schema introspection, trigger/index/default-value side effects.
+      #
+      # Skip conditions (each emits a notice, NOT a failure):
+      #   - MIGRATION_STATUS != 'applied'  → no schema change occurred
+      #     (staging still on SQLite, or migration step skipped).
+      #   - SMOKE_USER_PASSWORD_STAGING unset → mirror CS41-1 smoke skip behavior.
+      #   - steps.deploy.outputs.current-revision empty → first deploy ever.
+      #
+      # Failure mode (smoke fails): the migration HAS been applied to staging
+      # DB, but the OLD revision cannot serve against it. Aborting BEFORE
+      # the traffic-shift step keeps users on the OLD code — but reads/writes
+      # still hit the migrated schema, so this is degraded service. The
+      # existing "Rollback on failure" step deactivates the new revision;
+      # operator must EITHER promote the new revision manually OR hand-write
+      # inverse SQL to revert the migration. See PR body operator playbook.
+      - name: Resolve OLD revision FQDN (CS41-12 prep)
+        if: env.MIGRATION_STATUS == 'applied' && steps.deploy.outputs.current-revision != ''
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            OLD_REV="${{ steps.deploy.outputs.current-revision }}"
+            # In multi-revision mode, latestRevisionName already points at
+            # the new (0% traffic) revision. The deploy step captured
+            # current-revision from the apex traffic config — that is the
+            # one still serving 100%. Use it directly.
+            OLD_FQDN=$(az containerapp revision show \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision "$OLD_REV" \
+              --query "properties.fqdn" -o tsv 2>/dev/null || echo "")
+            if [ -z "$OLD_FQDN" ] || [ "$OLD_FQDN" = "None" ]; then
+              echo "::warning::Could not resolve FQDN for OLD revision $OLD_REV — CS41-12 will skip."
+              echo "OLD_REVISION_FQDN=" >> "$GITHUB_ENV"
+              echo "OLD_REVISION_NAME=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "OLD_REVISION_FQDN=$OLD_FQDN" >> "$GITHUB_ENV"
+            echo "OLD_REVISION_NAME=$OLD_REV" >> "$GITHUB_ENV"
+            echo "Captured OLD revision: $OLD_REV ($OLD_FQDN)"
+
+      - name: Smoke OLD revision against NEW schema (CS41-12)
+        if: env.MIGRATION_STATUS == 'applied' && env.OLD_REVISION_FQDN != ''
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+        run: |
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::notice::secrets.SMOKE_USER_PASSWORD_STAGING is unset — skipping CS41-12 old-revision smoke (mirrors CS41-1 skip behavior)."
+            exit 0
+          fi
+          node scripts/smoke.js "$OLD_REVISION_FQDN" || {
+            echo "::error::CS41-12: MIGRATION BREAKS OLD STAGING SERVER — aborting before traffic shift"
+            echo "::error::Migration applied to staging DB, but old revision $OLD_REVISION_NAME cannot serve against the new schema."
+            echo "::error::Operator action: either promote the new revision manually (az containerapp ingress traffic set --revision-weight $NEW_REV=100) OR revert the migration with hand-written inverse SQL. See PR body operator playbook."
+            exit 1
+          }
+          echo "✅ CS41-12: OLD revision $OLD_REVISION_NAME serves cleanly against the migrated schema."
+
+      # CS41-1 + CS41-2: smoke the new revision against its DIRECT FQDN
+      # BEFORE shifting traffic. Failure here aborts the deploy with no
+      # traffic shift — the existing rollback step (`if: failure()`) handles
+      # the cleanup. Direct-FQDN probes are critical: hitting the public
+      # ingress hostname here would either route to the old revision (0%
+      # traffic still on new) or interleave both, defeating the purpose.
+      - name: Get new revision FQDN (CS41-1)
+        id: rev
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            FQDN=$(az containerapp revision show \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision "$NEW_REV" \
+              --query "properties.fqdn" -o tsv)
+            if [ -z "$FQDN" ] || [ "$FQDN" = "None" ]; then
+              echo "::error::Could not resolve FQDN for revision $NEW_REV"
+              exit 1
+            fi
+            echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
+            echo "Smoke target FQDN: $FQDN"
+
+      - name: Smoke deployed revision (CS41-1+2)
+        id: smoke
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+          SMOKE_RESULTS_PATH: smoke-results.json
+        run: |
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::notice::secrets.SMOKE_USER_PASSWORD_STAGING is unset — skipping CS41-1 smoke. Operator action: set the secret per OPERATIONS.md to enable pre-cutover validation."
+            echo "smoke-exit=skipped" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          node scripts/smoke.js "${{ steps.rev.outputs.fqdn }}"
+          SMOKE_EXIT=$?
+          set -e
+          echo "smoke-exit=$SMOKE_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$SMOKE_EXIT" -ne 0 ]; then
+            echo "::error::CS41-1 smoke failed against $NEW_REV — aborting BEFORE traffic shift."
+            exit 1
+          fi
+
+      - name: AI telemetry verification (CS41-3)
+        id: ai-verify
+        # Only run when smoke succeeded (no point checking AI ingest of a
+        # smoke that didn't exercise the new revision). `continue-on-error`
+        # is critical: per CS41-3 plan, AI ingest delay is warning-only and
+        # MUST NOT block the deploy. The dedicated annotation step inside
+        # scripts/verify-ai.js surfaces the warning to the workflow run
+        # summary; a true mechanism failure (auth/network) would set
+        # `result.error` but still not block the deploy here.
+        if: steps.smoke.outputs.smoke-exit == '0'
+        continue-on-error: true
+        env:
+          NEW_REVISION_NAME: ${{ steps.deploy.outputs.new-revision }}
+          AI_RESOURCE: gwn-ai-staging
+          RESOURCE_GROUP: gwn-rg
+          EXPECTED_ROW_COUNT: '6'
+          AI_VERIFY_OUTPUT_PATH: ai-verification.json
+        run: node scripts/verify-ai.js
+
+
+      - name: Upload AI verification artifact (CS41-3)
+        if: always() && hashFiles('ai-verification.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: ai-verification-staging-${{ github.run_id }}
+          path: ai-verification.json
+          retention-days: 90
+
+      - name: Upload smoke results artifact (CS41-8)
+        if: always() && hashFiles('smoke-results.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: smoke-results-staging-${{ github.run_id }}
+          path: smoke-results.json
+          retention-days: 90
+
       - name: Switch traffic to new revision
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
@@ -576,6 +763,34 @@ jobs:
               echo "::error::DB initialization not confirmed in application logs after 300s"
               exit 1
             fi
+
+      # CS41-9: deploy summary renders AFTER traffic shift so it can report
+      # the post-cutover state (success path) or — via `if: always()` — the
+      # pre-cutover abort state (failure path; smoke / AI verify / verify
+      # staging failed and we never shifted traffic). Either way, the summary
+      # surfaces the right verdict in the workflow run summary.
+      - name: Render deploy summary (CS41-8)
+        if: always()
+        env:
+          IMAGE_SHA: ${{ env.IMAGE_TAG }}
+          REVISION_NAME: ${{ steps.deploy.outputs.new-revision }}
+          MIGRATION_STATUS: ${{ env.MIGRATION_STATUS }}
+          ENVIRONMENT: staging
+          AI_VERIFICATION_PATH: ai-verification.json
+        run: |
+          if [ -f smoke-results.json ]; then
+            node scripts/render-deploy-summary.js smoke-results.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Deploy Summary"
+              echo ""
+              echo "- **Environment:** `staging`"
+              echo "- **Image SHA:** `${IMAGE_SHA}`"
+              echo "- **Revision:** `${REVISION_NAME:-unknown}`"
+              echo "- **Migration:** ${MIGRATION_STATUS:-N/A}"
+              echo "- **Smoke verdict:** ⚠️ smoke skipped or did not produce results"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''

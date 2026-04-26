@@ -177,6 +177,119 @@ jobs:
               echo "Container App started"
             fi
 
+      # CS41-4: Apply DB migrations BEFORE traffic is shifted to the new
+      # revision. `prod-deploy.yml` runs in single-revision mode, so the
+      # `az containerapp update` step below moves traffic atomically — there
+      # is no post-deploy window to land schema changes safely. Running the
+      # idempotent migration script now means a migration failure aborts the
+      # deploy without ever serving the new image.
+      - name: Checkout repo (for scripts/migrate.js)
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ needs.validate-inputs.outputs.commit-sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (production only)
+        run: npm ci --omit=dev
+
+      # CS41-12 prep: capture the currently-serving (OLD) revision BEFORE
+      # the migration runs. Prod is single-revision mode, so once
+      # `az containerapp update` lands the new image, traffic shifts
+      # atomically — there is no post-update opportunity to verify the
+      # OLD code against the NEW schema. We capture now so the post-migration
+      # smoke (next step) can probe the OLD revision's direct FQDN while
+      # it is still serving traffic.
+      #
+      # First-deploy edge case: if no revision exists yet (latestRevisionName
+      # empty / FQDN missing), CS41-12 is skipped with a notice — there is
+      # no OLD server to break.
+      - name: Capture old revision (CS41-12 prep)
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            OLD_NAME=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+            if [ -z "$OLD_NAME" ] || [ "$OLD_NAME" = "None" ]; then
+              echo "::notice::No existing revision found — skipping CS41-12 (first deploy)."
+              echo "OLD_REVISION_NAME=" >> "$GITHUB_ENV"
+              echo "OLD_REVISION_FQDN=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            OLD_FQDN=$(az containerapp revision show \
+              --name gwn-production --resource-group gwn-rg \
+              --revision "$OLD_NAME" \
+              --query "properties.fqdn" -o tsv 2>/dev/null || echo "")
+            if [ -z "$OLD_FQDN" ] || [ "$OLD_FQDN" = "None" ]; then
+              echo "::warning::Could not resolve FQDN for $OLD_NAME — CS41-12 will skip."
+              echo "OLD_REVISION_NAME=" >> "$GITHUB_ENV"
+              echo "OLD_REVISION_FQDN=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "OLD_REVISION_NAME=$OLD_NAME" >> "$GITHUB_ENV"
+            echo "OLD_REVISION_FQDN=$OLD_FQDN" >> "$GITHUB_ENV"
+            echo "Captured OLD revision: $OLD_NAME ($OLD_FQDN)"
+
+      - name: Run DB migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::secrets.DATABASE_URL is unset; cannot apply prod migrations."
+            exit 1
+          fi
+          node scripts/migrate.js || {
+            echo "::error::Migration failed; aborting deploy before traffic shift"
+            exit 1
+          }
+
+      # CS41-12: smoke the OLD revision (still serving 100% of prod traffic)
+      # against the just-migrated DB BEFORE we ship the new image. This catches
+      # backward-incompatibility that the static linter (CS41-11) cannot:
+      #   - subtle query-shape changes (e.g. SELECT * widening unexpectedly)
+      #   - app-side schema introspection that breaks on new structure
+      #   - trigger / index / default-value side effects
+      #
+      # Failure mode here is NOT recoverable automatically:
+      #   - the migration HAS been applied to the DB
+      #   - the OLD revision CANNOT serve against the new schema
+      #   - traffic shift to the NEW revision has NOT happened yet
+      # Operator playbook (see PR body):
+      #   (a) Roll forward urgently: re-run this workflow from the
+      #       "Deploy to production Container App" step (or invoke
+      #       `az containerapp update` manually) to land the new image.
+      #       Service is degraded for the gap window.
+      #   (b) Manually revert the migration with hand-written inverse SQL.
+      #       Migrations are forward-only, so this is HARD; prefer (a)
+      #       unless the migration itself is also broken.
+      # Cold-start: the OLD revision may have scaled to zero. smoke.js
+      # already tolerates 503+Retry-After up to WARMUP_CAP_MS+COLD_START_MS,
+      # so we reuse the same budget as CS41-1 (steps.smoke env below).
+      - name: Smoke OLD revision against NEW schema (CS41-12)
+        if: env.OLD_REVISION_FQDN != ''
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_PROD }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+        run: |
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::error::secrets.SMOKE_USER_PASSWORD_PROD is unset; cannot run CS41-12 old-revision smoke."
+            exit 1
+          fi
+          node scripts/smoke.js "$OLD_REVISION_FQDN" || {
+            echo "::error::CS41-12: MIGRATION BREAKS OLD SERVER — manual recovery required"
+            echo "::error::The migration was applied to the DB, but old revision $OLD_REVISION_NAME cannot serve against the new schema."
+            echo "::error::Operator must EITHER roll forward urgently (re-run from 'Deploy to production Container App') OR manually revert the migration with hand-written inverse SQL. See the CS41-12 operator playbook in the PR body."
+            exit 1
+          }
+          echo "✅ CS41-12: OLD revision $OLD_REVISION_NAME serves cleanly against the migrated schema."
+
       - name: Deploy to production Container App
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
@@ -247,8 +360,121 @@ jobs:
       - name: Wait for deployment to stabilize
         run: sleep 120
 
+      # CS41-1 + CS41-2: deployed-revision smoke against the new revision's
+      # direct FQDN. Prod runs in single-revision mode so `az containerapp
+      # update` above already shifted traffic — if smoke fails, the existing
+      # rollback step further down handles the recovery. Smoke validates the
+      # full request/DB/auth path against THIS revision (not the public
+      # ingress) so rollback diagnostics distinguish "new revision broken"
+      # from "ingress / DNS / cert issue".
+      - name: Get new revision FQDN (CS41-1)
+        id: rev
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            REVISION=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv)
+            FQDN=$(az containerapp revision show \
+              --name gwn-production --resource-group gwn-rg \
+              --revision "$REVISION" \
+              --query "properties.fqdn" -o tsv)
+            if [ -z "$FQDN" ] || [ "$FQDN" = "None" ]; then
+              echo "::error::Could not resolve FQDN for revision $REVISION"
+              exit 1
+            fi
+            echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+            echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
+            echo "New revision: $REVISION  FQDN: $FQDN"
+
+      - name: Smoke deployed revision (CS41-1+2)
+        id: smoke
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_PROD }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+          SMOKE_RESULTS_PATH: smoke-results.json
+        run: |
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::error::secrets.SMOKE_USER_PASSWORD_PROD is unset; cannot run CS41-1 smoke. Operator action: set the secret per OPERATIONS.md."
+            exit 1
+          fi
+          set +e
+          node scripts/smoke.js "${{ steps.rev.outputs.fqdn }}"
+          SMOKE_EXIT=$?
+          set -e
+          echo "smoke-exit=$SMOKE_EXIT" >> "$GITHUB_OUTPUT"
+          # Do not exit non-zero here — render the summary first, then let
+          # the dedicated "Fail if smoke failed" step gate the rollback.
+          exit 0
+
+      - name: AI telemetry verification (CS41-3)
+        id: ai-verify
+        # Only run when smoke succeeded. `continue-on-error: true` is
+        # critical per CS41-3 plan: AI ingest delay is warning-only and
+        # MUST NOT block a healthy deploy or trigger rollback. The
+        # dedicated "Fail if smoke failed" gate (below) drives rollback
+        # decisions; this step does not participate in that gate.
+        if: steps.smoke.outputs.smoke-exit == '0'
+        continue-on-error: true
+        env:
+          NEW_REVISION_NAME: ${{ steps.rev.outputs.revision }}
+          AI_RESOURCE: gwn-ai-production
+          RESOURCE_GROUP: gwn-rg
+          EXPECTED_ROW_COUNT: '6'
+          AI_VERIFY_OUTPUT_PATH: ai-verification.json
+        run: node scripts/verify-ai.js
+
+      - name: Render deploy summary (CS41-8)
+        if: always()
+        env:
+          IMAGE_SHA: ${{ inputs.image-tag }}
+          REVISION_NAME: ${{ steps.rev.outputs.revision }}
+          MIGRATION_STATUS: applied
+          ENVIRONMENT: production
+          AI_VERIFICATION_PATH: ai-verification.json
+        run: |
+          if [ -f smoke-results.json ]; then
+            node scripts/render-deploy-summary.js smoke-results.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Deploy Summary"
+              echo ""
+              echo "- **Environment:** \`production\`"
+              echo "- **Image SHA:** \`${IMAGE_SHA}\`"
+              echo "- **Revision:** \`${REVISION_NAME:-unknown}\`"
+              echo "- **Smoke verdict:** ❌ smoke did not produce results (script crashed or env error)"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload AI verification artifact (CS41-3)
+        if: always() && hashFiles('ai-verification.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: ai-verification-production-${{ github.run_id }}
+          path: ai-verification.json
+          retention-days: 90
+
+      - name: Upload smoke results artifact (CS41-8)
+        if: always() && hashFiles('smoke-results.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: smoke-results-production-${{ github.run_id }}
+          path: smoke-results.json
+          retention-days: 90
+
+      - name: Fail if smoke failed (CS41-1)
+        if: steps.smoke.outputs.smoke-exit != '0'
+        run: |
+          echo "::error::CS41-1 smoke failed against revision ${{ steps.rev.outputs.revision }} — rollback step (below) will fire."
+          # Do not exit 1 here — the rollback step's `if:` already covers
+          # this condition via the smoke-exit output. Failing here would
+          # skip subsequent steps unless they all carry `if: always()`.
+
       - name: Verify production deployment
         id: healthcheck
+        if: steps.smoke.outputs.smoke-exit == '0'
         # CS53-22: Two-phase verify that respects Policy 1 (do not require eager DB init)
         # and supports deploys when Azure SQL is in capacity-exhausted (unavailable) mode.
         #
@@ -324,7 +550,7 @@ jobs:
           echo "healthy=true" >> "$GITHUB_OUTPUT"
 
       - name: Rollback on failure
-        if: steps.healthcheck.outputs.healthy != 'true'
+        if: steps.smoke.outputs.smoke-exit != '0' || steps.healthcheck.outputs.healthy != 'true'
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
@@ -394,9 +620,13 @@ jobs:
           PROD_URL: ${{ secrets.PROD_URL }}
 
       - name: Fail if unhealthy
-        if: steps.healthcheck.outputs.healthy != 'true'
+        if: steps.smoke.outputs.smoke-exit != '0' || steps.healthcheck.outputs.healthy != 'true'
         run: |
-          echo "::error::Production deployment failed health checks and was rolled back."
+          if [ "${{ steps.smoke.outputs.smoke-exit }}" != "0" ]; then
+            echo "::error::Production deploy failed CS41-1 smoke and was rolled back."
+          else
+            echo "::error::Production deployment failed health checks and was rolled back."
+          fi
           exit 1
 
   update-production-branch:

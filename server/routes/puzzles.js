@@ -6,6 +6,12 @@ const express = require('express');
 const router = express.Router();
 const { getDbAdapter } = require('../db');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { RESERVED_USERNAME_LIKE_PATTERNS } = require('../reserved-usernames');
+
+/** SQL fragment that excludes reserved-prefix submitter names from community puzzle listings. */
+const RESERVED_SUBMITTER_FILTER_SQL = RESERVED_USERNAME_LIKE_PATTERNS
+  .map(() => 'submitted_by NOT LIKE ?')
+  .join(' AND ');
 
 /** Parse DB row JSON fields back to arrays. */
 function parsePuzzleRow(row) {
@@ -76,8 +82,8 @@ router.get('/community', optionalAuth, async (req, res, next) => {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const offset = (page - 1) * limit;
 
-    let whereClauses = 'submitted_by IS NOT NULL AND active = 1';
-    const params = [];
+    let whereClauses = `submitted_by IS NOT NULL AND active = 1 AND ${RESERVED_SUBMITTER_FILTER_SQL}`;
+    const params = [...RESERVED_USERNAME_LIKE_PATTERNS];
 
     if (category) {
       whereClauses += ' AND category = ?';

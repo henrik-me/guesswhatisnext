@@ -390,6 +390,83 @@ Commit locally after every meaningful, working change — each commit should be 
 - **No DB-waking background work.** The database must only be touched in response to actual application usage: real user requests, operator-initiated health probes (curl), or batch jobs explicitly invoked by an operator. **Forbidden**: any timer, watchdog, scheduler, polling loop, or recurring mechanism that issues a DB query (including `SELECT 1`) on its own. This applies equally to pool health watchdogs, periodic warm-up pings, SPA pollers that hit DB-backed endpoints, and recovery loops that re-attempt initialization on a timer. If you need to detect a dead pool, do it lazily on the next real request. If you need a `/api/db-status` endpoint, it must read in-memory state ONLY (`dbInitialized` flag, init-guard `isInFlight()`, `getDbUnavailability` cached last-error) and never issue a DB query. Rationale: an idle DB (e.g. Azure SQL serverless on its way to auto-pause, or Free Tier with a finite monthly compute allowance) must be allowed to stay idle so it can pause cleanly; background DB-keepalive activity has historically caused both unnecessary cost and stuck-state failure modes (CS53).
 - **Cold-start container validation gates every check-in.** For any PR that changes server-side code, client-side runtime code, or DB-touching code (i.e., everything except docs/markdown/CI-config-only changes), the author must run a "cold-start container validation" cycle (`npm run container:validate`) before requesting local review, after local-review fixes are pushed, and after each Copilot review iteration's fixes are pushed. Capture pass/fail per cycle in the PR body under `## Container Validation`. The container restarts cleanly with `GWN_SIMULATE_COLD_START_MS=30000` so the warmup retry path is exercised on every restart, mimicking Azure SQL serverless cold-start behavior. See [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation) for the procedure.
 
+### Multi-PR pattern for backward-incompatible migrations
+
+**Principle.** The vast majority of schema changes can — and must — land as a single additive migration: new column with a `DEFAULT`, new table, new index. The migration framework is forward-only and the deploy sequence applies migrations *before* traffic shifts to the new image, so for a brief window the **old** server code runs against the **new** schema. An additive migration is invisible to the old code; a non-additive one is not.
+
+For changes that genuinely cannot be expressed additively — column rename, column drop, type change, tightening NOT-NULL on an existing column, FK removal — split the work across **three PRs and three deploys** so that each individual PR is backward-compatible against the previous deploy's running code.
+
+**The pattern.**
+
+- **PR A — Expand.** Add the new column / table / shape, always nullable / with a safe default. Update application code to **dual-write**: every write path writes to BOTH the old and the new shape, keeping them in sync row-by-row going forward. Reads still go to the old shape. Deploy. After this deploy, every newly-written row has the new shape populated; pre-existing rows do not.
+- **PR B — Migrate (data + reads).** Backfill the new shape from the old shape for any rows that pre-date PR A's dual-write (a one-shot operator-invoked script, or an idempotent migration step that updates `WHERE new_col IS NULL`). Cut READ paths to the new shape. The dual-write from PR A stays in place — old replicas during the rolling deploy are still reading the old shape, and the next PR will tear that down. Deploy.
+- **PR C — Contract.** Remove the dual-write so writes only go to the new shape. Drop the old column / table / constraint. By this point no live code reads or writes the old shape, so the drop is backward-compatible against the previous deploy (which was running PR B's image). Deploy.
+
+**Worked example: rename `users.username` to `users.handle`.**
+
+- **PR A (expand).** Migration: `ALTER TABLE users ADD handle NVARCHAR(50) NULL` (additive, passes the linter). Code: every `INSERT INTO users` and every `UPDATE users SET username = ?` is changed to also set `handle` to the same value. Reads still use `username`. Deploy → all newly-created users have `handle = username`; older users have `handle IS NULL`.
+- **PR B (migrate).** Migration: `UPDATE users SET handle = username WHERE handle IS NULL` (idempotent backfill, additive in linter terms — no schema change, just data). Code: read paths switch from `username` to `handle` (with `COALESCE(handle, username)` during the deploy window if you want belt-and-braces). Dual-write from PR A is retained. Deploy → all rows have `handle` populated; live code reads `handle`.
+- **PR C (contract).** Code: drop the dual-write — only `handle` is written. Migration: `ALTER TABLE users DROP COLUMN username`. This is the only PR in the sequence that trips the migration-policy linter ([`scripts/check-migration-policy.js`](scripts/check-migration-policy.js), CS41-11), and that's by design — it's safe **here** because PRs A and B already removed every code path that touches `username`. Deploy.
+
+**Linter override on the contract PR.** The `DROP COLUMN` in PR C is rejected by default; the override comment must reference the multi-PR plan so a future reviewer can verify the safety argument:
+
+```js
+// MIGRATION-POLICY-OVERRIDE: 3-PR rename sequence (A: PR #NNN expand, B: PR #NNN migrate-data, C: this PR contract). See CS41-13 docs and the PR description for the full plan.
+await db.exec('ALTER TABLE users DROP COLUMN username');
+```
+
+The linter requires the reason to be ≥ 20 characters AND contain either a URL or a CS-link (e.g. `CS41-13`); a properly-worded multi-PR-plan reference satisfies both. Override comments may sit inline on the offending line or on the line directly above. Use the override only on the contract PR — never to bypass the pattern itself.
+
+**When NOT to use this pattern.** Cosmetic schema improvements that don't affect correctness should be deferred indefinitely: a slightly-misnamed column or a redundant index that nothing depends on isn't worth three PRs and three deploys. Reserve the pattern for changes that genuinely **must** happen (semantics changing, integrity tightening, removing a column the new code truly cannot live with) but cannot be expressed in one additive shot.
+
+**Out of scope for this pattern.** Primary-key changes, splitting a table, or changing a column's storage type in a way that requires a copy + swap are substantially more involved than rename/drop and are not safely covered by the recipe above. Treat those as their own dedicated clickstop with explicit per-step rollback plans; do not try to shoehorn them into a 3-PR sequence.
+
+**Cross-references — the two enforcement layers that catch what this pattern protects against:**
+
+1. [`scripts/check-migration-policy.js`](scripts/check-migration-policy.js) (CS41-11) is the static gate: it rejects `DROP COLUMN`, `DROP TABLE` without `IF EXISTS`, `RENAME COLUMN`, non-rebuild `RENAME TO`, `ALTER COLUMN ... NOT NULL`, `ADD … NOT NULL` without `DEFAULT`, and FK drops — exactly the patterns that break old code. The override comment exists so the contract PR of a 3-PR plan can land legitimately.
+2. The **old-revision smoke** in the deploy YAMLs (CS41-12, in `.github/workflows/prod-deploy.yml` and the staging equivalent) is the runtime gate: after migrations apply but BEFORE traffic shifts to the new image, the still-serving OLD revision is smoked against the just-migrated DB. If a non-additive change slipped past the linter (e.g. a subtle query-shape mismatch the regex didn't catch), the smoke fails and the deploy aborts. The 3-PR pattern is the design discipline that ensures both gates stay green.
+
+### Achievement gating (CS52-7)
+
+Server achievements unlock **only from server-validated outcomes**:
+
+- `POST /api/sessions/:id/finish` — single-player ranked sessions per CS52-3.
+  Server holds the puzzle answer; `elapsed_ms` is server-derived; the score
+  the evaluator sees is computed by `services/scoringService.js` from
+  per-answer events, not accepted from the client. Logged with
+  `source: 'ranked_finish'`.
+- WebSocket multiplayer match-end (`server/ws/matchHandler.js`) — score is
+  derived from the server-driven round/answer state machine. Logged with
+  `source: 'mp_match_end'`.
+
+Achievement evaluation is **explicitly skipped** for:
+
+- `POST /api/sync` — offline-source records are self-reported and never
+  validated. The handler must not call `checkAndUnlockAchievements`.
+- `POST /api/scores` — legacy / offline submission path. Returns
+  `newAchievements: []` and emits an `achievement_evaluation_skipped`
+  log line so an operator can confirm the gate is holding.
+
+Rationale: achievements must be tied to outcomes the server can independently
+verify (server-held puzzle answers, server-derived timing). Self-reported
+offline scores cannot meet that bar — surfacing them as achievement unlocks
+would re-open the original F2 integrity gap.
+
+Cumulative-counting rules (e.g. `games_played`, `daily_count`,
+`categories_played`) inside `server/achievements.js` filter the `scores`
+table to `source = 'ranked'` so that pre-loaded offline history cannot be
+used to graduate a single ranked finish into a high-threshold server
+achievement (e.g. 2 offline daily rows + 1 ranked finish ≠ `daily-3`).
+Multiplayer-win counting (`mp_wins`) reads from `match_players` directly,
+which is server-validated by construction.
+
+Operationally: any future write path that persists a `scores` row should
+either (a) be a server-validated outcome and call `checkAndUnlockAchievements`
+with `source: '<descriptor>_finish'`, or (b) skip evaluation explicitly. The
+KQL invariant in `docs/observability.md` (`achievement_evaluation` events
+with `source ∉ {ranked_finish, mp_match_end}` should always return zero
+rows) is the production check that this rule is holding.
+
 ---
 
 ## Investigation artifacts

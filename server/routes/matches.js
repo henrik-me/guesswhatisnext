@@ -6,6 +6,16 @@ const express = require('express');
 const crypto = require('crypto');
 const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { getConfig } = require('../services/gameConfigLoader');
+const logger = require('../logger');
+const { RESERVED_USERNAME_LIKE_PATTERNS } = require('../reserved-usernames');
+
+/** SQL fragment: `<alias>.username NOT LIKE ?` joined with AND for every reserved prefix. */
+function reservedUsernameFilter(alias) {
+  return RESERVED_USERNAME_LIKE_PATTERNS
+    .map(() => `${alias}.username NOT LIKE ?`)
+    .join(' AND ');
+}
 
 const router = express.Router();
 
@@ -14,10 +24,18 @@ function generateRoomCode() {
   return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
-/** POST /api/matches — create a new match room */
+/**
+ * POST /api/matches — create a new match room.
+ *
+ * CS52-7b § Decision #8: `total_rounds` / `round_timer_ms` /
+ * `inter_round_delay_ms` are NOT client-configurable. Any such fields in the
+ * request body are ignored; the canonical multiplayer shape is sourced from
+ * the `game_configs` table via `getConfig('multiplayer')` (CS52-7c loader),
+ * with a code-level fallback in `gameConfigDefaults.js`.
+ */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { totalRounds = 5, maxPlayers = 2 } = req.body;
+    const { maxPlayers = 2 } = req.body;
     const db = await getDbAdapter();
 
     // Validate maxPlayers
@@ -30,6 +48,19 @@ router.post('/', requireAuth, async (req, res, next) => {
     const userExists = await db.get('SELECT 1 FROM users WHERE id = ?', [req.user.id]);
     if (!userExists) {
       return res.status(401).json({ error: 'User not found — please log in again' });
+    }
+
+    // CS52-7b: server-authoritative config. Ignore any client-supplied
+    // totalRounds / round_timer_ms / inter_round_delay_ms.
+    const mpConfig = await getConfig('multiplayer');
+    const totalRounds = mpConfig.rounds;
+
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'totalRounds')
+        && Number(req.body.totalRounds) !== totalRounds) {
+      logger.info(
+        { userId: req.user.id, attemptedTotalRounds: req.body.totalRounds, configRounds: totalRounds },
+        'multiplayer client totalRounds override ignored'
+      );
     }
 
     const id = crypto.randomUUID();
@@ -125,9 +156,10 @@ router.get('/history', requireAuth, async (req, res, next) => {
       LEFT JOIN match_players opp ON opp.match_id = m.id AND opp.user_id != mp.user_id
       LEFT JOIN users opp_u ON opp.user_id = opp_u.id
       WHERE mp.user_id = ? AND m.status = 'finished'
+        AND (opp_u.username IS NULL OR (${reservedUsernameFilter('opp_u')}))
       ORDER BY m.finished_at DESC
       LIMIT ?
-    `, [req.user.id, limit]);
+    `, [req.user.id, ...RESERVED_USERNAME_LIKE_PATTERNS, limit]);
 
     const history = rows.map(row => {
       let result = 'loss';
@@ -167,8 +199,8 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     const players = await db.all(
       `SELECT u.id, u.username, mp.score, mp.finished_at
        FROM match_players mp JOIN users u ON mp.user_id = u.id
-       WHERE mp.match_id = ?`,
-      [match.id]
+       WHERE mp.match_id = ? AND ${reservedUsernameFilter('u')}`,
+      [match.id, ...RESERVED_USERNAME_LIKE_PATTERNS]
     );
 
     res.json({ ...match, players });

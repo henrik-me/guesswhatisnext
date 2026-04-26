@@ -306,6 +306,84 @@ ContainerAppConsoleLogs_CL
 
 If multiple revisions are running side-by-side during a deploy, the same admin write lands on only one — the others will keep their cached values until their own TTL expires (per § Decision #10 operator caveat). Cross-reference with § B.9: a `game-configs updated` line should be followed within seconds by a `game-configs cache miss` line on the same `container` (the route busts the local cache), and within ≤24h by similar misses on every other live `container`.
 
+### B.11 Achievement gating invariant (CS52-7)
+
+Per CS52-7 / Decision #7, server achievements unlock **only** from
+server-validated outcomes. Two log events are emitted around the gate
+(see `server/routes/sessions.js` `/finish`, `server/ws/matchHandler.js`,
+and `server/routes/scores.js`):
+
+- `achievement_evaluation` — fields: `user_id`, `source ∈ {ranked_finish,
+  mp_match_end}`, `achievements_unlocked` (array of achievement ids).
+- `achievement_evaluation_skipped` — emitted by paths that deliberately
+  do NOT evaluate (legacy `POST /api/scores`; `POST /api/sync` skips
+  silently per its module header). Fields: `user_id`, `source` (e.g.
+  `legacy_scores_post`), `mode`.
+
+**Invariant query — should always return zero rows:**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "achievement_evaluation"
+| extend source = tostring(pino.source)
+| where source !in ("ranked_finish", "mp_match_end")
+| project TimeGenerated, container = ContainerName_s, source,
+          user_id = tostring(pino.user_id),
+          achievements_unlocked = pino.achievements_unlocked
+| order by TimeGenerated desc
+```
+
+Any row from this query is a CS52-7 regression — a write path is calling
+`checkAndUnlockAchievements` with an unsanctioned `source`. The fix is to
+remove the call (the path is self-reported) or to widen the allowed-source
+list here only after a code review confirms the new path is genuinely
+server-validated (server-held answer key + server-derived timing).
+
+**Daily volume sanity check (which sources are unlocking what):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "achievement_evaluation"
+| extend source = tostring(pino.source),
+         unlocked_count = array_length(pino.achievements_unlocked)
+| summarize evaluations = count(),
+            with_unlocks = countif(unlocked_count > 0)
+        by bin(TimeGenerated, 1d), source
+| order by TimeGenerated desc, source asc
+```
+
+Use this to confirm both expected sources keep firing post-deploy. If
+`mp_match_end` drops to zero unexpectedly, suspect the WS handler; if
+`ranked_finish` drops, suspect the `/finish` route.
+
+### B.12 Multiplayer matches per config shape (CS52-7b)
+
+`server/ws/matchHandler.js` emits one Pino INFO line per match start with the structured fields `{event: "multiplayer_match_started", match_id, room_code, config: {rounds, round_timer_ms, inter_round_delay_ms}, source}` (the human message is `"multiplayer match started"`). We key the query off `event` rather than `msg` because Pino's string-message argument always overwrites any object-level `msg` field. `source = "game_configs"` means a `game_configs.multiplayer` row supplied the values; `source = "code_default"` means the loader fell back to [`gameConfigDefaults.js`](../server/services/gameConfigDefaults.js).
+
+Use this query to verify a config rollout (e.g., after `PUT /api/admin/game-configs/multiplayer` flips `rounds` to 7) — within seconds you should see new matches starting with the new shape:
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "multiplayer_match_started"
+| extend rounds = toint(pino.config.rounds),
+         round_timer_ms = toint(pino.config.round_timer_ms),
+         inter_round_delay_ms = toint(pino.config.inter_round_delay_ms),
+         source = tostring(pino.source)
+| summarize matches = count(),
+            first = min(TimeGenerated),
+            last = max(TimeGenerated)
+            by rounds, round_timer_ms, inter_round_delay_ms, source
+| order by last desc
+```
+
+A healthy steady state shows one row (the canonical shape) with `source = "game_configs"` (or `"code_default"` if no row has been written for this environment). Two rows during a rollout — old shape then new shape — is the expected transitional pattern; both should disappear in favour of the new shape within a single TTL window. A persistent split with `source = "code_default"` after an admin write is the signal that the cache-bust didn't reach this revision (cross-reference § B.9 + § B.10 / Decision #10 operator caveat).
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:
@@ -369,6 +447,128 @@ customEvents
 | summarize n = count() by bin(timestamp, 15m), to_state
 | render timechart
 ```
+
+### D.2 CS52-7e `pending_writes` durable queue
+
+CS52-7e emits four structured pino events as the queue moves through enqueue → drain → replay (or dead-letter). The signal is what tells operators the DB went unavailable, how much traffic the queue absorbed, how long replay took once the DB came back, and whether anything got stuck.
+
+- `pending-writes: enqueued` — every `/api/sync` 202 response (Variant B) and every `/api/sessions/:id/finish` 202 response (Variant A); also CS52-7d's WS Variant C path. Carries `request_id`, `endpoint`, `user_id`, `queued_at`, `file_path`.
+- `pending-writes: drain started` — once per drain pass (post-response hook on a successful API request, or the unavailability-state-cleared listener). Carries `file_count`.
+- `pending-writes: replayed` — one per successfully replayed file. Carries `request_id`, `endpoint`, `replay_duration_ms`.
+- `pending-writes: dead-letter` — one per file moved to `<DATA_DIR>/pending-writes/dead/`. Carries `request_id`, `endpoint`, `error_class`. **This is the alarming signal**: any non-zero rate means a queue file's replay failed in a way the drain considers non-retryable (corrupt JSON, schema mismatch, etc.).
+
+Pino's `msg` is the human-readable form (`"pending-writes: enqueued"`), so the KQL queries below pivot on `tostring(log.event)` (e.g. `pending-writes-enqueued`).
+
+#### Queue depth over time (enqueue vs. replay rate)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) in ('pending-writes-enqueued', 'pending-writes-replayed', 'pending-writes-dead-letter')
+| where TimeGenerated > ago(24h)
+| summarize
+    enqueued = countif(tostring(log.event) == 'pending-writes-enqueued'),
+    replayed = countif(tostring(log.event) == 'pending-writes-replayed'),
+    dead     = countif(tostring(log.event) == 'pending-writes-dead-letter')
+  by bin(TimeGenerated, 5m)
+| extend backlog_delta = enqueued - replayed - dead
+| render timechart
+```
+
+Interpretation: `backlog_delta` is the per-bin change in queue depth — positive means the DB is unavailable and traffic is being absorbed; negative means a drain pass is catching up. Cumulative `sum(backlog_delta)` tracks live queue depth.
+
+#### Drain latency distribution (per-file replay duration)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'pending-writes-replayed'
+| where TimeGenerated > ago(24h)
+| extend replay_ms = toint(log.replay_duration_ms),
+         endpoint = tostring(log.endpoint)
+| summarize
+    p50 = percentile(replay_ms, 50),
+    p95 = percentile(replay_ms, 95),
+    p99 = percentile(replay_ms, 99),
+    n   = count()
+  by endpoint
+| order by n desc
+```
+
+Interpretation: `replay_duration_ms` is the per-file work (DB transaction + I/O). Healthy values are sub-100ms; sustained >1000ms suggests the DB is in a slow-recovery state and operators should consider explicit warm-up via `POST /api/admin/init-db`.
+
+#### Dead-letter rate (alarming)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'pending-writes-dead-letter'
+| where TimeGenerated > ago(7d)
+| summarize n = count() by tostring(log.endpoint), tostring(log.error_class), bin(TimeGenerated, 1h)
+| order by TimeGenerated desc
+```
+
+Any non-zero rate is worth investigating: it means a queue file's replay failed in a way the drain decided not to retry (corrupt JSON, FK violation, missing handler). Files are preserved under `<DATA_DIR>/pending-writes/dead/<request_id>.json` for operator inspection — pull the file and replay it manually after triage.
+
+### D.3 CS52-6 leaderboard source filter + provenance UI
+
+CS52-6 emits structured pino logs from [`server/routes/scores.js`](../server/routes/scores.js):
+
+- `lb_request` — one per `GET /api/scores/leaderboard*` with fields
+  `{variant, source, period, row_count, user_id}`. Lets you watch source-filter
+  popularity and Daily-vs-Free-Play traffic split.
+
+The client emits `lb_filter_change` to `console.info` (JSON) when the user
+flips the segmented control. Once CS54-9 wires the browser App Insights SDK,
+this will land in `customEvents`.
+
+#### Source-filter popularity (last 24h)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'lb_request'
+| where TimeGenerated > ago(24h)
+| summarize requests = count() by tostring(log.variant), tostring(log.source)
+| order by requests desc
+```
+
+#### Daily vs Free Play LB traffic split
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'lb_request'
+| where TimeGenerated > ago(7d)
+| where tostring(log.variant) in ('freeplay', 'daily')
+| summarize n = count() by bin(TimeGenerated, 1h), tostring(log.variant)
+| render timechart
+```
+
+#### Empty-result rate (signals seed/backfill issues)
+
+```kusto
+ContainerAppConsoleLogs_CL
+| extend log = parse_json(Log_s)
+| where tostring(log.event) == 'lb_request'
+| where TimeGenerated > ago(24h)
+| extend empty = toint(log.row_count) == 0
+| summarize total = count(), empties = countif(empty) by tostring(log.variant), tostring(log.source)
+| extend empty_pct = round(100.0 * empties / total, 1)
+| order by empty_pct desc
+```
+
+#### Filter-change behaviour (post-CS54-9)
+
+```kusto
+customEvents
+| where name == 'lb_filter_change'
+| where timestamp > ago(7d)
+| extend from_s = tostring(customDimensions.from), to_s = tostring(customDimensions.to)
+| summarize n = count() by from_s, to_s
+| order by n desc
+```
+
 
 ---
 

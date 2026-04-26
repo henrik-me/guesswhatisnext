@@ -158,6 +158,16 @@ If staging is still accumulating significant idle hours, check (in this order):
 | CS59-5 | Append the result table + verdict to `done_cs58_scale-staging-to-zero.md` under a new `## CS59 cost-soak verification` section so the CS58 audit trail is complete. | ⬜ Pending | Depends on CS59-4. Edit done file in place — do not move CS58. |
 | CS59-6 | If ❌ regressed: open a new investigation CS (suggested name `cs60_staging-cost-regression-investigation`), referencing the failure modes in § Investigation. If ✅ confirmed: close CS59 (move file to `done/`). If 🟡 partial: document the gap and decide with the user before closing. | ⬜ Pending | Depends on CS59-4. |
 | CS59-7 | Lift the two operational facts in § Notes & gotchas (the `az containerapp update` traffic-shift gotcha and the cross-agent warm-staging rule) into `LEARNINGS.md` so they're discoverable outside this CS. Cite the CS58-2 revision names (`gwn-staging--0000025` vs `gwn-staging--deploy-1777134427`) and the CS58-5 deferral as the evidence trail. Also add a one-liner to `OPERATIONS.md § Waking staging for ad-hoc validation` reminding operators to check WORKBOARD before probing staging when another agent's cold-state CS is in flight. | ⬜ Pending | Depends on CS59-4 (do this as part of closure regardless of verdict — the lessons hold either way). |
+| CS59-8 | **Decide and document the CS41 traffic-filtering approach** (filter `gwn-smoke-bot`-attributed requests vs require a quiescence window). Required BEFORE any cost-soak measurement is reported. See § CS41 deploy-traffic interaction below. | ⬜ Pending | Added 2026-04-26 by yoga-gwn-c2 as part of CS41-9b. Blocks CS59-2/CS59-3 result interpretation. |
+
+### CS41 deploy-traffic interaction (added 2026-04-26 by yoga-gwn-c2)
+
+CS41 staging deploys add deterministic smoke-test traffic on every deploy via `gwn-smoke-bot` (~6 requests per deploy, plus migration-step DB activity). CS59 measurements MUST EITHER:
+
+- Filter `gwn-smoke-bot`-attributed requests from staging cost queries (use `customDimensions.user_id` if available, OR correlate request count vs deploy count from the GitHub Actions API), OR
+- Document a "quiescence window" requirement (e.g., "no deploys for 24h before measurement") and execute measurements during such windows.
+
+This must be resolved by CS59-8 before reporting cost-soak verification results. Without this, idle-meter drops attributable to scale-to-zero will be mixed with deploy-driven warm windows and the verdict will be unactionable.
 
 ## Acceptance criteria
 

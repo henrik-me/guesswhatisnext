@@ -169,7 +169,13 @@
       <div class="personal-bests" data-bind="personal-bests" role="region" aria-label="Your personal bests"></div>
       <div class="leaderboard-mode-tabs" role="tablist" aria-label="Leaderboard mode">
         <button class="leaderboard-mode-tab active" data-action="leaderboard-mode" data-mode="freeplay" role="tab" aria-selected="true">🎮 Free Play</button>
+        <button class="leaderboard-mode-tab" data-action="leaderboard-mode" data-mode="daily" role="tab" aria-selected="false">📅 Daily</button>
         <button class="leaderboard-mode-tab" data-action="leaderboard-mode" data-mode="multiplayer" role="tab" aria-selected="false">⚔️ Multiplayer</button>
+      </div>
+      <div class="leaderboard-source-tabs" role="tablist" aria-label="Score source filter" data-bind="leaderboard-source-tabs">
+        <button class="leaderboard-source-tab active" data-action="leaderboard-source" data-source="ranked" role="tab" aria-selected="true">🏆 Ranked</button>
+        <button class="leaderboard-source-tab" data-action="leaderboard-source" data-source="offline" role="tab" aria-selected="false">📡 Offline</button>
+        <button class="leaderboard-source-tab" data-action="leaderboard-source" data-source="all" role="tab" aria-selected="false">All</button>
       </div>
       <div class="leaderboard-tabs" role="tablist" aria-label="Leaderboard period filter" data-bind="leaderboard-period-tabs">
         <button class="leaderboard-tab active" data-action="leaderboard-tab" data-period="alltime" role="tab" aria-selected="true">All Time</button>
@@ -231,14 +237,6 @@
               <option value="7">7</option>
               <option value="8">8</option>
               <option value="9">9</option>
-              <option value="10">10</option>
-            </select>
-          </div>
-          <div class="room-config-row">
-            <label class="room-config-label" for="room-rounds">🔄 Rounds</label>
-            <select class="room-config-select" id="room-rounds" aria-label="Number of rounds">
-              <option value="3">3</option>
-              <option value="5" selected>5</option>
               <option value="10">10</option>
             </select>
           </div>

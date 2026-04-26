@@ -152,7 +152,12 @@ async function checkAndUnlockAchievements(userId, context) {
 
     switch (req.type) {
       case 'games_played': {
-        const row = await db.get('SELECT COUNT(*) as c FROM scores WHERE user_id = ?', [userId]);
+        // CS52-7: count only server-validated rows. Offline/legacy
+        // rows are self-reported and must not gate server achievements.
+        const row = await db.get(
+          "SELECT COUNT(*) as c FROM scores WHERE user_id = ? AND source = 'ranked'",
+          [userId]
+        );
         met = row.c >= req.threshold;
         break;
       }
@@ -169,8 +174,9 @@ async function checkAndUnlockAchievements(userId, context) {
         break;
       }
       case 'daily_count': {
+        // CS52-7: count only server-validated daily finishes.
         const row = await db.get(
-          "SELECT COUNT(*) as c FROM scores WHERE user_id = ? AND mode = 'daily'",
+          "SELECT COUNT(*) as c FROM scores WHERE user_id = ? AND mode = 'daily' AND source = 'ranked'",
           [userId]
         );
         met = row.c >= req.threshold;
@@ -191,7 +197,11 @@ async function checkAndUnlockAchievements(userId, context) {
         break;
       }
       case 'categories_played': {
-        const row = await db.get('SELECT COUNT(*) as c FROM scores WHERE user_id = ?', [userId]);
+        // CS52-7: count only server-validated rows.
+        const row = await db.get(
+          "SELECT COUNT(*) as c FROM scores WHERE user_id = ? AND source = 'ranked'",
+          [userId]
+        );
         met = row.c >= req.threshold;
         break;
       }

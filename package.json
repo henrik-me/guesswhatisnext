@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node scripts/check-feature-flag-policy.js && vitest run",
+    "test": "node scripts/check-feature-flag-policy.js && node scripts/check-migration-policy.js && vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
@@ -29,6 +29,7 @@
     "check:docs": "node scripts/check-docs-consistency.js",
     "check:docs:strict": "node scripts/check-docs-consistency.js --strict",
     "check:feature-flag-policy": "node scripts/check-feature-flag-policy.js",
+    "check:migration-policy": "node scripts/check-migration-policy.js",
     "dev:full": "node scripts/dev-server.js",
     "dev:log": "node scripts/dev-server.js --no-https",
     "seed:ranked-puzzles": "node scripts/seed-ranked-puzzles.js"

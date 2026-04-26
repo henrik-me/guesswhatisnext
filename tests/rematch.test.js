@@ -3,9 +3,17 @@
  */
 
 const WebSocket = require('ws');
-const { getAgent, getServer, setup, teardown, registerUser } = require('./helper');
+const { getAgent, getServer, setup, teardown, registerUser, setGameConfig } = require('./helper');
 
-beforeAll(setup);
+beforeAll(async () => {
+  await setup();
+  // CS52-7b: rounds is server-authoritative. Override to 3 for fast tests.
+  await setGameConfig('multiplayer', {
+    rounds: 3,
+    round_timer_ms: 5000,
+    inter_round_delay_ms: 200,
+  });
+});
 afterAll(teardown);
 
 /** Helper: get the server's listening address. */
@@ -54,11 +62,19 @@ function waitForMessage(ws, type, timeoutMs = 5000) {
 async function playFullMatch(tokens, { totalRounds = 3, maxPlayers = 4 } = {}) {
   const agent = getAgent();
 
+  // CS52-7b: rounds is server-authoritative. Override per call so each test
+  // can choose its own match length.
+  await setGameConfig('multiplayer', {
+    rounds: totalRounds,
+    round_timer_ms: 5000,
+    inter_round_delay_ms: 200,
+  });
+
   // Host creates room
   const createRes = await agent
     .post('/api/matches')
     .set('Authorization', `Bearer ${tokens[0]}`)
-    .send({ totalRounds, maxPlayers });
+    .send({ maxPlayers });
   const { roomCode } = createRes.body;
 
   // All players connect and join
@@ -241,3 +257,4 @@ describe('N-player Rematch', () => {
     }
   });
 });
+

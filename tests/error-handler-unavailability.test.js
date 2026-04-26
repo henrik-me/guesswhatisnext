@@ -105,7 +105,7 @@ describe('Central error handler — permanent DB unavailability (CS53 Bug B)', (
       throw err;
     };
 
-    const res = await agent.get('/api/scores/leaderboard');
+    const res = await agent.get('/api/scores/leaderboard?variant=freeplay');
 
     expect(res.status).toBe(503);
     expect(res.body.unavailable).toBe(true);
@@ -135,7 +135,7 @@ describe('Central error handler — permanent DB unavailability (CS53 Bug B)', (
       throw err;
     };
 
-    const res = await agent.get('/api/scores/leaderboard');
+    const res = await agent.get('/api/scores/leaderboard?variant=freeplay');
 
     expect(res.status).toBe(503);
     expect(res.headers['retry-after']).toBe('5');
@@ -256,7 +256,7 @@ describe('Request gate — permanent DB unavailability before init succeeds (CS5
     // The gate at server/app.js's request-tracking middleware should now
     // return the unavailable shape, not the generic "not yet initialized"
     // + Retry-After response.
-    const gated = await agent2.get('/api/scores/leaderboard');
+    const gated = await agent2.get('/api/scores/leaderboard?variant=freeplay');
     expect(gated.status).toBe(503);
     expect(gated.body.unavailable).toBe(true);
     expect(gated.body.reason).toBe('capacity-exhausted');
@@ -277,7 +277,7 @@ describe('Request gate — permanent DB unavailability before init succeeds (CS5
       .set('X-API-Key', SYSTEM_KEY);
     expect(recoverRes.status).toBe(200);
 
-    const recovered = await agent2.get('/api/scores/leaderboard');
+    const recovered = await agent2.get('/api/scores/leaderboard?variant=freeplay');
     expect(recovered.status).toBe(200);
     expect(recovered.body.unavailable).toBeUndefined();
   });
