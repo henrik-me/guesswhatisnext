@@ -146,15 +146,27 @@ router.get('/count', requireAuth, async (req, res, next) => {
     res.set('X-Cache', outcome);
     // STALE-DROP signals a real concurrent-writer race (correctness preserved
     // but worth surfacing if it spikes); use warn so it stands out in queries.
-    const logFn = outcome === 'STALE-DROP' ? logger.warn.bind(logger) : logger.info.bind(logger);
-    logFn({
-      gate: 'boot-quiet',
-      route: '/api/notifications/count',
-      cacheOutcome: outcome,
-      userActivity,
-      isSystem,
-      userId,
-    }, 'unread-count cache outcome');
+    // Branch instead of `.bind` to avoid allocating a bound function on every
+    // request to this hot endpoint (Copilot R5).
+    if (outcome === 'STALE-DROP') {
+      logger.warn({
+        gate: 'boot-quiet',
+        route: '/api/notifications/count',
+        cacheOutcome: outcome,
+        userActivity,
+        isSystem,
+        userId,
+      }, 'unread-count cache outcome');
+    } else {
+      logger.info({
+        gate: 'boot-quiet',
+        route: '/api/notifications/count',
+        cacheOutcome: outcome,
+        userActivity,
+        isSystem,
+        userId,
+      }, 'unread-count cache outcome');
+    }
     res.json({ unread_count: count });
   } catch (err) {
     next(err);
