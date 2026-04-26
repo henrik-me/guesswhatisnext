@@ -184,6 +184,92 @@ ContainerAppConsoleLogs_CL
 
 A non-empty result confirms migration 008 was applied during the most recent boot/restart in that environment. An empty result on a freshly-deployed revision means either (a) the runner short-circuited because the migration was already applied in a prior revision (expected on rolling re-deploys) or (b) the runner errored before logging — in which case the boot would also have failed and would surface as an `app-startup` error in `requests`. Cross-check against `_migrations` table contents via the regular DB connection if uncertain.
 
+### B.8 Ranked session lifecycle (CS52-3)
+
+The ranked session API (`POST /api/sessions`, `/answer`, `/next-round`, `/finish`) emits structured Pino lines for every state transition + every anti-cheat rejection. All lines carry `sessionId`; anti-cheat rejections additionally carry `reason` (`out-of-order` | `puzzle-mismatch` | `timing-impossible` | `expired` | `not-in-progress` | `no-current-round` | `duplicate-answer` | `concurrent-active-session` | `already-played-daily` | `daily-already-finished`). The five queries below cover the most common Ranked investigations. All queries apply to both `gwn-ai-staging` and `gwn-ai-production` — pick the resource matching the environment under investigation.
+
+**Code path observed:** [`server/routes/sessions.js`](../server/routes/sessions.js) and [`server/services/scoringService.js`](../server/services/scoringService.js).
+
+**B.8.1 Session created — rate by mode (last hour):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(1h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session created"
+| extend mode = tostring(pino.mode), sessionId = tostring(pino.sessionId)
+| summarize sessions = count() by bin(TimeGenerated, 5m), mode
+| order by TimeGenerated desc
+```
+
+Healthy: ≥1 row per 5-minute bucket per active mode under normal traffic. An empty result for `mode == "ranked_freeplay"` for >15 min means the Ranked entry point is broken (or no users are playing — cross-check with `requests | where name has "/api/sessions"` for raw POST volume).
+
+**B.8.2 Session finished — score distribution (last 24h):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session finished"
+| extend score = toint(pino.score), correctCount = toint(pino.correctCount)
+| summarize sessions = count(),
+            p50_score = percentile(score, 50),
+            p90_score = percentile(score, 90),
+            avg_correct = avg(correctCount)
+  by bin(TimeGenerated, 1h)
+| order by TimeGenerated desc
+```
+
+Use this to spot regressions in the scoring service (sudden drop in `p50_score` while `avg_correct` stays the same → multiplier bug; both drop together → users hitting a UI/timing regression).
+
+**B.8.3 Anti-cheat rejections — rate by reason (last 1h):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(1h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session anti-cheat-rejection"
+| extend reason = tostring(pino.reason), sessionId = tostring(pino.sessionId)
+| summarize rejections = count() by bin(TimeGenerated, 5m), reason
+| order by TimeGenerated desc
+```
+
+Healthy: low background rate on `out-of-order` / `timing-impossible` (real users do occasionally race themselves). A sudden spike on `concurrent-active-session` typically means a client retry loop is hammering `POST /api/sessions` — investigate the client `connectivity.state` machine. Spikes on `already-played-daily` correlate with the start of a new UTC day (expected) but should taper within minutes.
+
+**B.8.4 Forged client_time_ms detection (defence-in-depth telemetry):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session answer-received"
+| extend elapsedMs = toint(pino.elapsedMs),
+         clientTimeMs = toint(pino.clientTimeMs),
+         clientDiff = toint(pino.clientTimeMsDiff),
+         sessionId = tostring(pino.sessionId)
+| where isnotnull(clientTimeMs) and abs(clientDiff) > 5000
+| project TimeGenerated, sessionId, elapsedMs, clientTimeMs, clientDiff
+| order by abs(clientDiff) desc
+| take 50
+```
+
+`clientTimeMsDiff = client_time_ms − elapsed_ms` (server-derived). Per CS52 Decision #7 the score is computed from `elapsedMs` regardless, so this query is for **detection only** — large diffs flag clients that are misreporting (broken clocks, intentional cheat attempts, or a client-bug regression). A consistently high background rate is fine if it correlates with a known clock-skew client; sudden spikes are interesting.
+
+**B.8.5 In-band reconciliation activity (cleanup of stale in_progress rows):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "ranked-session reconciled-by-request"
+| extend reconciledCount = toint(pino.reconciledCount), userId = toint(pino.userId)
+| summarize total_reconciled = sum(reconciledCount), users_reconciling = dcount(userId)
+  by bin(TimeGenerated, 1h)
+| order by TimeGenerated desc
+```
+
+The reconciliation rate doubles as a proxy for "users disconnect mid-Ranked-session" — high counts indicate the network/UX flow that strands sessions. Per CS52 Decision #9 this is benign (abandoned rows don't count against quotas); persistent volume above the historical baseline is worth investigating.
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:

@@ -14,12 +14,33 @@ let tmpDir;
 let originalDbPath;
 let originalNodeEnv;
 
-beforeAll(() => {
+beforeAll(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gwn-cs52-2-seed-'));
   originalDbPath = process.env.GWN_DB_PATH;
   originalNodeEnv = process.env.NODE_ENV;
   process.env.GWN_DB_PATH = path.join(tmpDir, 'seed.db');
   process.env.NODE_ENV = 'test';
+
+  // Defensive isolation: if another test file in the same vitest worker has
+  // already imported/initialized the server/db singleton, it will be holding a
+  // handle to the previous GWN_DB_PATH. Close any existing adapter and then
+  // purge the cached server modules so the next require('../server/db') gives
+  // us a fresh singleton bound to OUR temp DB. Mirrors tests/helper.js.
+  try {
+    const existing = require('../server/db');
+    if (typeof existing.closeDbAdapter === 'function') {
+      await existing.closeDbAdapter();
+    }
+  } catch {
+    /* ignore — module not yet loaded is fine */
+  }
+  const serverDir = path.resolve(__dirname, '..', 'server');
+  const scriptsDir = path.resolve(__dirname, '..', 'scripts');
+  for (const key of Object.keys(require.cache)) {
+    if (key.startsWith(serverDir) || key.startsWith(scriptsDir)) {
+      delete require.cache[key];
+    }
+  }
 });
 
 afterAll(async () => {
