@@ -10,6 +10,7 @@ const STATIC_ASSETS = [
   '/offline.html',
   '/css/style.css',
   '/js/app.js',
+  '/js/sync-client.js',
   '/js/game.js',
   '/js/puzzles.js',
   '/js/daily.js',
