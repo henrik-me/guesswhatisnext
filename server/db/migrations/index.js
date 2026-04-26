@@ -10,6 +10,7 @@ const migrations = [
   require('./005-add-submission-type'),
   require('./006-add-image-type'),
   require('./007-add-notifications'),
+  require('./008-cs52-ranked-schema'),
 ].sort((a, b) => a.version - b.version);
 
 module.exports = migrations;

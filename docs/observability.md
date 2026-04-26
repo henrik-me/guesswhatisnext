@@ -167,6 +167,23 @@ ContainerAppConsoleLogs_CL
 
 Field availability depends on what the server actually logs — `elapsedMs` only shows up on log lines where the adapter measured and emitted it. Treat the `project` list as a starting set and prune to whatever fields are populated for the runs you're investigating. This whole query lives in the workspace, not the AI app — run it from `workspace-gwnrg6bXt`'s Logs blade, or via `az monitor log-analytics query --workspace <customer-id>`.
 
+### B.7 Schema migration applied (CS52-2)
+
+Each successful migration emits one Pino INFO line via `server/db/migrations/_tracker.js` with the structured fields `{version, name, msg: "Migration applied"}`. The query below confirms migration 008 (`cs52-ranked-schema`) ran cleanly on a given environment after a release. Useful as a deploy gate after CS52-2's schema change ships, and reusable for any future migration by changing the `version` filter.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.msg) == "Migration applied"
+| extend version = toint(pino.version), name = tostring(pino.name)
+| where version == 8           // CS52-2; change to filter other migrations
+| project TimeGenerated, container = ContainerName_s, version, name, trace_id = tostring(pino.trace_id)
+| order by TimeGenerated desc
+```
+
+A non-empty result confirms migration 008 was applied during the most recent boot/restart in that environment. An empty result on a freshly-deployed revision means either (a) the runner short-circuited because the migration was already applied in a prior revision (expected on rolling re-deploys) or (b) the runner errored before logging — in which case the boot would also have failed and would surface as an `app-startup` error in `requests`. Cross-check against `_migrations` table contents via the regular DB connection if uncertain.
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:

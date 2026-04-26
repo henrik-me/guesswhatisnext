@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "description": "Initial ranked-puzzle pool for CS52 server-authoritative scoring. All content is freshly authored for the ranked deck and intentionally distinct from public/js/puzzles.js (the bundled local-mode deck) so a player cannot recognise a ranked puzzle from Local mode (per CS52 Decision #1). The `prompt` field is stored as a JSON-encoded object describing how to render the puzzle (sequence + explanation); the `answer` field holds the canonical correct option and is NEVER returned through any client-facing endpoint (per CS52 Decision #4).",
+  "puzzles": [
+    { "id": "rnk-nature-001", "category": "Nature", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["🌱", "🌿", "🌳"], "explanation": "Plant growth: seedling → leaves → tree → flower." }, "options": ["🌷", "⛰️", "🍂", "🪨"], "answer": "🌷" },
+    { "id": "rnk-nature-002", "category": "Nature", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["💧", "🧊", "💨"], "explanation": "States of water by temperature: liquid → solid → gas → plasma-adjacent fire." }, "options": ["🔥", "❄️", "🌊", "☁️"], "answer": "🔥" },
+    { "id": "rnk-nature-003", "category": "Nature", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["🥚", "🐛", "🦋"], "explanation": "Butterfly life cycle ends with the adult butterfly soaring." }, "options": ["🐝", "🪰", "🦋", "🐞"], "answer": "🦋" },
+    { "id": "rnk-nature-004", "category": "Nature", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["🌋", "🪨", "⛰️"], "explanation": "Geological formation: lava cools to rock, accumulates into mountains, and erodes into hills." }, "options": ["🏔️", "🌊", "🗻", "🏞️"], "answer": "🏞️" },
+    { "id": "rnk-nature-005", "category": "Nature", "difficulty": 3, "prompt": { "type": "emoji", "sequence": ["🌑", "🌘", "🌗"], "explanation": "Moon waning sequence: new → waning crescent → last quarter → waning gibbous." }, "options": ["🌖", "🌒", "🌕", "🌓"], "answer": "🌖" },
+
+    { "id": "rnk-math-001", "category": "Math & Numbers", "difficulty": 1, "prompt": { "type": "text", "sequence": ["3", "6", "9", "12"], "explanation": "Multiples of 3." }, "options": ["13", "14", "15", "16"], "answer": "15" },
+    { "id": "rnk-math-002", "category": "Math & Numbers", "difficulty": 2, "prompt": { "type": "text", "sequence": ["1", "4", "9", "16"], "explanation": "Perfect squares: 1², 2², 3², 4², 5²." }, "options": ["20", "24", "25", "32"], "answer": "25" },
+    { "id": "rnk-math-003", "category": "Math & Numbers", "difficulty": 2, "prompt": { "type": "text", "sequence": ["2", "3", "5", "7"], "explanation": "Prime numbers in order." }, "options": ["8", "9", "10", "11"], "answer": "11" },
+    { "id": "rnk-math-004", "category": "Math & Numbers", "difficulty": 3, "prompt": { "type": "text", "sequence": ["1", "1", "2", "3", "5"], "explanation": "Fibonacci sequence: each term is the sum of the previous two." }, "options": ["6", "7", "8", "13"], "answer": "8" },
+    { "id": "rnk-math-005", "category": "Math & Numbers", "difficulty": 1, "prompt": { "type": "text", "sequence": ["10", "20", "30", "40"], "explanation": "Multiples of 10." }, "options": ["45", "50", "55", "60"], "answer": "50" },
+    { "id": "rnk-math-006", "category": "Math & Numbers", "difficulty": 3, "prompt": { "type": "text", "sequence": ["1", "8", "27", "64"], "explanation": "Perfect cubes: 1³, 2³, 3³, 4³, 5³." }, "options": ["100", "125", "128", "216"], "answer": "125" },
+
+    { "id": "rnk-animals-001", "category": "Animals", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["🐟", "🐠", "🐡"], "explanation": "Aquatic creatures, ending with the largest mammal." }, "options": ["🐬", "🦈", "🐙", "🐳"], "answer": "🐳" },
+    { "id": "rnk-animals-002", "category": "Animals", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["🐜", "🐞", "🐝"], "explanation": "Increasing size of common insects." }, "options": ["🦋", "🪲", "🐛", "🦟"], "answer": "🦋" },
+    { "id": "rnk-animals-003", "category": "Animals", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["🐣", "🐥", "🐤"], "explanation": "A chick hatching, growing, and becoming an adult chicken." }, "options": ["🐦", "🦆", "🦉", "🐔"], "answer": "🐔" },
+    { "id": "rnk-animals-004", "category": "Animals", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["🐕", "🐈", "🐇"], "explanation": "Common household pets." }, "options": ["🐅", "🦒", "🐹", "🦓"], "answer": "🐹" },
+    { "id": "rnk-animals-005", "category": "Animals", "difficulty": 3, "prompt": { "type": "emoji", "sequence": ["🦎", "🐊", "🦖"], "explanation": "Reptilian size escalation, ending with the largest land predator ever." }, "options": ["🐢", "🐍", "🦕", "🐉"], "answer": "🦕" },
+
+    { "id": "rnk-tech-001", "category": "Technology", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["📞", "📱", "💻"], "explanation": "Computing devices in increasing display size." }, "options": ["⌚", "🖥️", "🖨️", "📺"], "answer": "🖥️" },
+    { "id": "rnk-tech-002", "category": "Technology", "difficulty": 2, "prompt": { "type": "text", "sequence": ["bit", "byte", "kilobyte", "megabyte"], "explanation": "Increasing units of digital information." }, "options": ["yottabyte", "petabyte", "gigabyte", "terabyte"], "answer": "gigabyte" },
+    { "id": "rnk-tech-003", "category": "Technology", "difficulty": 2, "prompt": { "type": "text", "sequence": ["GET", "POST", "PUT"], "explanation": "Common HTTP verbs in CRUD ordering." }, "options": ["DELETE", "OPTIONS", "PATCH", "HEAD"], "answer": "DELETE" },
+    { "id": "rnk-tech-004", "category": "Technology", "difficulty": 3, "prompt": { "type": "text", "sequence": ["TCP", "IP", "HTTP"], "explanation": "Network stack ascending the OSI model toward the application layer." }, "options": ["DNS", "SSH", "FTP", "HTTPS"], "answer": "HTTPS" },
+
+    { "id": "rnk-color-001", "category": "Colors & Patterns", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["🟥", "🟧", "🟨"], "explanation": "First three colors of the rainbow." }, "options": ["🟪", "🟦", "🟩", "🟫"], "answer": "🟩" },
+    { "id": "rnk-color-002", "category": "Colors & Patterns", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["🟢", "🟡", "🔴"], "explanation": "Traffic light progression: go → caution → stop." }, "options": ["🔵", "⚫", "⚪", "🟠"], "answer": "🟠" },
+    { "id": "rnk-color-003", "category": "Colors & Patterns", "difficulty": 2, "prompt": { "type": "text", "sequence": ["red", "orange", "yellow", "green"], "explanation": "ROYGBIV — the rainbow in order." }, "options": ["purple", "blue", "indigo", "pink"], "answer": "blue" },
+
+    { "id": "rnk-letters-001", "category": "Letter & Word Patterns", "difficulty": 1, "prompt": { "type": "text", "sequence": ["A", "C", "E", "G"], "explanation": "Every other letter of the alphabet." }, "options": ["H", "I", "J", "K"], "answer": "I" },
+    { "id": "rnk-letters-002", "category": "Letter & Word Patterns", "difficulty": 2, "prompt": { "type": "text", "sequence": ["Z", "Y", "X", "W"], "explanation": "Alphabet in reverse." }, "options": ["U", "V", "T", "S"], "answer": "V" },
+    { "id": "rnk-letters-003", "category": "Letter & Word Patterns", "difficulty": 3, "prompt": { "type": "text", "sequence": ["one", "two", "three", "four"], "explanation": "Counting numbers spelled out." }, "options": ["six", "seven", "five", "ten"], "answer": "five" },
+
+    { "id": "rnk-geo-001", "category": "Geography", "difficulty": 1, "prompt": { "type": "text", "sequence": ["Asia", "Africa", "North America"], "explanation": "Continents by population, highest first." }, "options": ["Antarctica", "Australia", "South America", "Europe"], "answer": "South America" },
+    { "id": "rnk-geo-002", "category": "Geography", "difficulty": 2, "prompt": { "type": "text", "sequence": ["Mercury", "Venus", "Earth"], "explanation": "Planets in order from the Sun." }, "options": ["Saturn", "Jupiter", "Mars", "Uranus"], "answer": "Mars" },
+    { "id": "rnk-geo-003", "category": "Geography", "difficulty": 2, "prompt": { "type": "text", "sequence": ["Pacific", "Atlantic", "Indian"], "explanation": "World's oceans by surface area, largest first." }, "options": ["Mediterranean", "Caspian", "Southern", "Baltic"], "answer": "Southern" },
+    { "id": "rnk-geo-004", "category": "Geography", "difficulty": 3, "prompt": { "type": "text", "sequence": ["Tokyo", "Delhi", "Shanghai"], "explanation": "Some of the world's largest urban areas by population." }, "options": ["Reykjavik", "Wellington", "São Paulo", "Tallinn"], "answer": "São Paulo" },
+
+    { "id": "rnk-history-001", "category": "History", "difficulty": 2, "prompt": { "type": "text", "sequence": ["Stone Age", "Bronze Age", "Iron Age"], "explanation": "Major prehistoric eras by tool material, ending with the era of mass production." }, "options": ["Industrial Age", "Ice Age", "Space Age", "Digital Age"], "answer": "Industrial Age" },
+    { "id": "rnk-history-002", "category": "History", "difficulty": 3, "prompt": { "type": "text", "sequence": ["1066", "1492", "1776"], "explanation": "Famous historical years: Norman conquest, Columbus, US independence, French Revolution." }, "options": ["1812", "1789", "1914", "1969"], "answer": "1789" },
+
+    { "id": "rnk-music-001", "category": "Music", "difficulty": 1, "prompt": { "type": "text", "sequence": ["Do", "Re", "Mi", "Fa"], "explanation": "Solfège syllables of the major scale." }, "options": ["Si", "Sol", "Ti", "La"], "answer": "Sol" },
+    { "id": "rnk-music-002", "category": "Music", "difficulty": 2, "prompt": { "type": "text", "sequence": ["whole", "half", "quarter"], "explanation": "Musical note durations, halving each step." }, "options": ["thirty-second", "double", "eighth", "sixteenth"], "answer": "eighth" },
+
+    { "id": "rnk-food-001", "category": "Food", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["🍎", "🍐", "🍊"], "explanation": "Common round fruits." }, "options": ["🥕", "🥖", "🍌", "🥚"], "answer": "🍌" },
+    { "id": "rnk-food-002", "category": "Food", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["🌾", "🍞", "🥪"], "explanation": "Wheat → flour → bread → sandwich → toaster." }, "options": ["🍕", "🥐", "🍔", "🥯"], "answer": "🍔" },
+    { "id": "rnk-food-003", "category": "Food", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["☕", "🍵", "🥛"], "explanation": "Common breakfast beverages." }, "options": ["🧃", "🍷", "🥃", "🍺"], "answer": "🧃" },
+
+    { "id": "rnk-sports-001", "category": "Sports", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["🥉", "🥈", "🥇"], "explanation": "Olympic medal podium ascending." }, "options": ["🏆", "🎖️", "🏅", "🎗️"], "answer": "🏆" },
+    { "id": "rnk-sports-002", "category": "Sports", "difficulty": 2, "prompt": { "type": "text", "sequence": ["100m", "400m", "1500m"], "explanation": "Standard track running distances, increasing." }, "options": ["50m", "5000m", "200m", "800m"], "answer": "5000m" },
+
+    { "id": "rnk-science-001", "category": "Science", "difficulty": 2, "prompt": { "type": "text", "sequence": ["H", "He", "Li"], "explanation": "First elements of the periodic table by atomic number." }, "options": ["Na", "Be", "C", "B"], "answer": "Be" },
+    { "id": "rnk-science-002", "category": "Science", "difficulty": 3, "prompt": { "type": "text", "sequence": ["solid", "liquid", "gas"], "explanation": "States of matter, ending with the ionized state at the highest energy." }, "options": ["plasma", "crystal", "vapor", "fluid"], "answer": "plasma" },
+    { "id": "rnk-science-003", "category": "Science", "difficulty": 2, "prompt": { "type": "text", "sequence": ["mm", "cm", "m"], "explanation": "Metric units of length, increasing." }, "options": ["dm", "ft", "yd", "km"], "answer": "km" },
+
+    { "id": "rnk-flags-001", "category": "Flags", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["🇺🇸", "🇨🇦", "🇲🇽"], "explanation": "Countries of North America from north to south, ending with Central American neighbour." }, "options": ["🇧🇷", "🇫🇷", "🇬🇹", "🇨🇳"], "answer": "🇬🇹" },
+    { "id": "rnk-flags-002", "category": "Flags", "difficulty": 3, "prompt": { "type": "emoji", "sequence": ["🇯🇵", "🇰🇷", "🇨🇳"], "explanation": "East Asian neighbours, ending with another major regional country." }, "options": ["🇻🇳", "🇮🇳", "🇪🇬", "🇿🇦"], "answer": "🇻🇳" },
+
+    { "id": "rnk-logic-001", "category": "Logic Sequences", "difficulty": 2, "prompt": { "type": "text", "sequence": ["Mon", "Wed", "Fri"], "explanation": "Every other weekday." }, "options": ["Sat", "Tue", "Sun", "Thu"], "answer": "Sun" },
+    { "id": "rnk-logic-002", "category": "Logic Sequences", "difficulty": 3, "prompt": { "type": "text", "sequence": ["Jan", "Apr", "Jul"], "explanation": "Every third month — start of each calendar quarter." }, "options": ["Sep", "Oct", "Nov", "Dec"], "answer": "Oct" },
+    { "id": "rnk-logic-003", "category": "Logic Sequences", "difficulty": 1, "prompt": { "type": "text", "sequence": ["spring", "summer", "autumn"], "explanation": "Seasons of the year in temperate climates." }, "options": ["monsoon", "dry", "winter", "wet"], "answer": "winter" },
+
+    { "id": "rnk-language-001", "category": "Language & Grammar", "difficulty": 2, "prompt": { "type": "text", "sequence": ["I", "you", "he"], "explanation": "Singular subject pronouns: 1st, 2nd, 3rd person." }, "options": ["them", "we", "she", "us"], "answer": "she" },
+    { "id": "rnk-language-002", "category": "Language & Grammar", "difficulty": 3, "prompt": { "type": "text", "sequence": ["walk", "walked", "walking"], "explanation": "Verb forms: base, past tense, present participle, third-person singular present." }, "options": ["walker", "walks", "walkable", "wall"], "answer": "walks" },
+
+    { "id": "rnk-emoji-001", "category": "Emoji Sequences", "difficulty": 1, "prompt": { "type": "emoji", "sequence": ["1️⃣", "2️⃣", "3️⃣"], "explanation": "Counting up." }, "options": ["7️⃣", "0️⃣", "4️⃣", "9️⃣"], "answer": "4️⃣" },
+    { "id": "rnk-emoji-002", "category": "Emoji Sequences", "difficulty": 2, "prompt": { "type": "emoji", "sequence": ["🕐", "🕑", "🕒"], "explanation": "Clock faces advancing one hour at a time." }, "options": ["🕘", "🕓", "🕔", "🕕"], "answer": "🕓" },
+
+    { "id": "rnk-art-001", "category": "Art & Design", "difficulty": 2, "prompt": { "type": "text", "sequence": ["sketch", "outline", "color"], "explanation": "Stages of producing a finished illustration." }, "options": ["frame", "shade", "erase", "scan"], "answer": "shade" },
+
+    { "id": "rnk-popculture-001", "category": "Pop Culture", "difficulty": 2, "prompt": { "type": "text", "sequence": ["VHS", "DVD", "Blu-ray"], "explanation": "Home video formats by chronological release." }, "options": ["LaserDisc", "Betamax", "Streaming", "8-track"], "answer": "Streaming" },
+
+    { "id": "rnk-creative-001", "category": "Creative & Mixed", "difficulty": 3, "prompt": { "type": "emoji", "sequence": ["🌅", "☀️", "🌇"], "explanation": "A day in the sky: sunrise → midday → sunset → night." }, "options": ["🌃", "🌌", "🌠", "🌙"], "answer": "🌃" }
+  ]
+}
