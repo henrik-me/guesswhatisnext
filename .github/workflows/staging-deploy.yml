@@ -530,12 +530,93 @@ jobs:
         run: |
           if [ -z "$DATABASE_URL" ]; then
             echo "::notice::secrets.STAGING_DATABASE_URL is unset — staging is still on container-local SQLite. Skipping pre-deploy migration step. Set the secret once staging moves to managed MSSQL."
+            echo "MIGRATION_STATUS=skipped" >> "$GITHUB_ENV"
             exit 0
           fi
           node scripts/migrate.js || {
             echo "::error::Migration failed; aborting deploy before traffic shift"
+            echo "MIGRATION_STATUS=failed" >> "$GITHUB_ENV"
             exit 1
           }
+          echo "MIGRATION_STATUS=applied" >> "$GITHUB_ENV"
+
+      # CS41-1 + CS41-2: smoke the new revision against its DIRECT FQDN
+      # BEFORE shifting traffic. Failure here aborts the deploy with no
+      # traffic shift — the existing rollback step (`if: failure()`) handles
+      # the cleanup. Direct-FQDN probes are critical: hitting the public
+      # ingress hostname here would either route to the old revision (0%
+      # traffic still on new) or interleave both, defeating the purpose.
+      - name: Get new revision FQDN (CS41-1)
+        id: rev
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            FQDN=$(az containerapp revision show \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision "$NEW_REV" \
+              --query "properties.fqdn" -o tsv)
+            if [ -z "$FQDN" ] || [ "$FQDN" = "None" ]; then
+              echo "::error::Could not resolve FQDN for revision $NEW_REV"
+              exit 1
+            fi
+            echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
+            echo "Smoke target FQDN: $FQDN"
+
+      - name: Smoke deployed revision (CS41-1+2)
+        id: smoke
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+          SMOKE_RESULTS_PATH: smoke-results.json
+        run: |
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::notice::secrets.SMOKE_USER_PASSWORD_STAGING is unset — skipping CS41-1 smoke. Operator action: set the secret per OPERATIONS.md to enable pre-cutover validation."
+            echo "smoke-exit=skipped" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          node scripts/smoke.js "${{ steps.rev.outputs.fqdn }}"
+          SMOKE_EXIT=$?
+          set -e
+          echo "smoke-exit=$SMOKE_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$SMOKE_EXIT" -ne 0 ]; then
+            echo "::error::CS41-1 smoke failed against $NEW_REV — aborting BEFORE traffic shift."
+            exit 1
+          fi
+
+      - name: Render deploy summary (CS41-8)
+        if: always()
+        env:
+          IMAGE_SHA: ${{ env.IMAGE_TAG }}
+          REVISION_NAME: ${{ steps.deploy.outputs.new-revision }}
+          MIGRATION_STATUS: ${{ env.MIGRATION_STATUS }}
+          ENVIRONMENT: staging
+        run: |
+          if [ -f smoke-results.json ]; then
+            node scripts/render-deploy-summary.js smoke-results.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Deploy Summary"
+              echo ""
+              echo "- **Environment:** \`staging\`"
+              echo "- **Image SHA:** \`${IMAGE_SHA}\`"
+              echo "- **Revision:** \`${REVISION_NAME:-unknown}\`"
+              echo "- **Migration:** ${MIGRATION_STATUS:-N/A}"
+              echo "- **Smoke verdict:** ⚠️ smoke skipped or did not produce results"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload smoke results artifact (CS41-8)
+        if: always() && hashFiles('smoke-results.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: smoke-results-staging-${{ github.run_id }}
+          path: smoke-results.json
+          retention-days: 90
 
       - name: Switch traffic to new revision
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3

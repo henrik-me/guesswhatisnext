@@ -280,8 +280,95 @@ jobs:
       - name: Wait for deployment to stabilize
         run: sleep 120
 
+      # CS41-1 + CS41-2: deployed-revision smoke against the new revision's
+      # direct FQDN. Prod runs in single-revision mode so `az containerapp
+      # update` above already shifted traffic — if smoke fails, the existing
+      # rollback step further down handles the recovery. Smoke validates the
+      # full request/DB/auth path against THIS revision (not the public
+      # ingress) so rollback diagnostics distinguish "new revision broken"
+      # from "ingress / DNS / cert issue".
+      - name: Get new revision FQDN (CS41-1)
+        id: rev
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            REVISION=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv)
+            FQDN=$(az containerapp revision show \
+              --name gwn-production --resource-group gwn-rg \
+              --revision "$REVISION" \
+              --query "properties.fqdn" -o tsv)
+            if [ -z "$FQDN" ] || [ "$FQDN" = "None" ]; then
+              echo "::error::Could not resolve FQDN for revision $REVISION"
+              exit 1
+            fi
+            echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+            echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
+            echo "New revision: $REVISION  FQDN: $FQDN"
+
+      - name: Smoke deployed revision (CS41-1+2)
+        id: smoke
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_PROD }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+          SMOKE_RESULTS_PATH: smoke-results.json
+        run: |
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::error::secrets.SMOKE_USER_PASSWORD_PROD is unset; cannot run CS41-1 smoke. Operator action: set the secret per OPERATIONS.md."
+            exit 1
+          fi
+          set +e
+          node scripts/smoke.js "${{ steps.rev.outputs.fqdn }}"
+          SMOKE_EXIT=$?
+          set -e
+          echo "smoke-exit=$SMOKE_EXIT" >> "$GITHUB_OUTPUT"
+          # Do not exit non-zero here — render the summary first, then let
+          # the dedicated "Fail if smoke failed" step gate the rollback.
+          exit 0
+
+      - name: Render deploy summary (CS41-8)
+        if: always()
+        env:
+          IMAGE_SHA: ${{ inputs.image-tag }}
+          REVISION_NAME: ${{ steps.rev.outputs.revision }}
+          MIGRATION_STATUS: applied
+          ENVIRONMENT: production
+        run: |
+          if [ -f smoke-results.json ]; then
+            node scripts/render-deploy-summary.js smoke-results.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Deploy Summary"
+              echo ""
+              echo "- **Environment:** \`production\`"
+              echo "- **Image SHA:** \`${IMAGE_SHA}\`"
+              echo "- **Revision:** \`${REVISION_NAME:-unknown}\`"
+              echo "- **Smoke verdict:** ❌ smoke did not produce results (script crashed or env error)"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload smoke results artifact (CS41-8)
+        if: always() && hashFiles('smoke-results.json') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: smoke-results-production-${{ github.run_id }}
+          path: smoke-results.json
+          retention-days: 90
+
+      - name: Fail if smoke failed (CS41-1)
+        if: steps.smoke.outputs.smoke-exit != '0'
+        run: |
+          echo "::error::CS41-1 smoke failed against revision ${{ steps.rev.outputs.revision }} — rollback step (below) will fire."
+          # Do not exit 1 here — the rollback step's `if:` already covers
+          # this condition via the smoke-exit output. Failing here would
+          # skip subsequent steps unless they all carry `if: always()`.
+
       - name: Verify production deployment
         id: healthcheck
+        if: steps.smoke.outputs.smoke-exit == '0'
         # CS53-22: Two-phase verify that respects Policy 1 (do not require eager DB init)
         # and supports deploys when Azure SQL is in capacity-exhausted (unavailable) mode.
         #
@@ -357,7 +444,7 @@ jobs:
           echo "healthy=true" >> "$GITHUB_OUTPUT"
 
       - name: Rollback on failure
-        if: steps.healthcheck.outputs.healthy != 'true'
+        if: steps.smoke.outputs.smoke-exit != '0' || steps.healthcheck.outputs.healthy != 'true'
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
         with:
           inlineScript: |
@@ -427,9 +514,13 @@ jobs:
           PROD_URL: ${{ secrets.PROD_URL }}
 
       - name: Fail if unhealthy
-        if: steps.healthcheck.outputs.healthy != 'true'
+        if: steps.smoke.outputs.smoke-exit != '0' || steps.healthcheck.outputs.healthy != 'true'
         run: |
-          echo "::error::Production deployment failed health checks and was rolled back."
+          if [ "${{ steps.smoke.outputs.smoke-exit }}" != "0" ]; then
+            echo "::error::Production deploy failed CS41-1 smoke and was rolled back."
+          else
+            echo "::error::Production deployment failed health checks and was rolled back."
+          fi
           exit 1
 
   update-production-branch:
