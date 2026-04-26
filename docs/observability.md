@@ -669,3 +669,48 @@ Where `<PREV_DEPLOY_ISO>` is auto-derived by the workflow via `gh run list --wor
 - Empty / missing rows for an `itemType` that is normally non-zero (e.g., `requests`) indicates a telemetry-export regression — check CS54 wiring and § E.1 above.
 
 CS60-1/2/3 operators consume these artifacts at measurement-window time via `gh run download` rather than re-running the KQL — the artifacts are the historical record.
+
+---
+
+## F. CS52-4 — Client telemetry signals (Ranked + claim prompt)
+
+CS52-4 emits structured `console.info(...)` lines from the browser. These are
+not (yet) forwarded to App Insights — see § D.1 for the AI client SDK gap
+(tracked under CS54-9). The signal names are stable so the queries below will
+work once the bridge ships.
+
+Signals emitted from `public/js/app.js`, `public/js/game.js`, and
+`public/js/claim-modal.js`:
+
+| Signal | Where | Payload |
+| --- | --- | --- |
+| `ranked_session_started` | game.js | `{ mode, sessionId }` |
+| `ranked_session_abandoned_due_to_disconnect` | app.js | `{ mode, sessionId, connectivityState }` |
+| `claim_prompt_shown` | claim-modal.js | `{ unattachedCount, mismatchedCount }` |
+| `claim_prompt_accepted` | claim-modal.js | `{ claimedCount }` |
+| `claim_prompt_declined` | claim-modal.js | `{ pendingCount }` |
+
+### Ranked-session abandonment rate (mid-session disconnect frequency)
+
+Once browser AI is wired, this trend reveals how often Ranked sessions die
+mid-stream — a high rate suggests Free Tier connectivity instability or
+auth-token expiry tuning needs revisiting.
+
+```kusto
+customEvents
+| where timestamp > ago(7d)
+| where name in ('ranked_session_started', 'ranked_session_abandoned_due_to_disconnect')
+| summarize n = count() by bin(timestamp, 1h), name
+| evaluate pivot(name, sum(n))
+| extend rate = todouble(ranked_session_abandoned_due_to_disconnect) / todouble(ranked_session_started)
+| render timechart
+```
+
+### Claim-prompt accept rate
+
+```kusto
+customEvents
+| where timestamp > ago(30d)
+| where name in ('claim_prompt_shown', 'claim_prompt_accepted', 'claim_prompt_declined')
+| summarize n = count() by name
+```

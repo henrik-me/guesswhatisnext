@@ -9,6 +9,12 @@ import { Storage } from './storage.js';
 import { GameAudio } from './audio.js';
 import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError } from './progressive-loader.js';
 import { validateStoredAuthToken } from './auth-boot.js';
+import { showClaimPromptModal } from './claim-modal.js';
+import {
+  CONNECTIVITY_BANNER_COPY,
+  renderConnectivityBanner as renderBanner,
+  applyRankedEntryGate as applyGate,
+} from './connectivity-ui.js';
 import {
   buildRecord as syncBuildRecord,
   enqueueRecord as syncEnqueueRecord,
@@ -19,6 +25,9 @@ import {
   applyClaim,
   migrateLegacyQueues,
   installConnectivityListeners,
+  connectivity,
+  onConnectivityChange,
+  setConnectivityState,
 } from './sync-client.js';
 
 /**
@@ -297,13 +306,19 @@ const ui = {
     const breakdown = document.querySelector('[data-bind="score-breakdown"]');
     if (result.correct) {
       let html = `
-        <div class="score-row"><span class="label">Base</span><span class="value">+${result.score.points}</span></div>
-        <div class="score-row"><span class="label">Speed bonus</span><span class="value">+${result.score.speedBonus}</span></div>`;
+        <div class="score-row"><span class="label">Base</span><span class="value">+${result.score.points}</span></div>`;
+      if (!result.rankedHidden) {
+        html += `<div class="score-row"><span class="label">Speed bonus</span><span class="value">+${result.score.speedBonus}</span></div>`;
+      }
       if (result.score.multiplier > 1) {
         html += `<div class="score-row"><span class="label">Streak ×${result.score.multiplier}</span><span class="value"><span class="streak-badge">🔥 ×${result.score.multiplier}</span></span></div>`;
       }
       html += `<div class="score-row total"><span class="label">Total</span><span class="value">+${result.score.total}</span></div>`;
       breakdown.innerHTML = html;
+    } else if (result.rankedHidden) {
+      // Ranked: server says incorrect, but we never reveal the canonical answer.
+      breakdown.innerHTML = `
+        <div class="score-row"><span class="label">No points</span><span class="value">+0</span></div>`;
     } else {
       breakdown.innerHTML = `
         <div class="score-row"><span class="label">No points</span><span class="value">+0</span></div>
@@ -344,32 +359,39 @@ const ui = {
       bestStreak: summary.bestStreak,
     });
 
-    // CS52-5: enqueue every completed game into the unified L1 store, then
-    // fire a gesture-driven sync. Replaces the legacy gwn_pending_scores +
-    // ProgressiveLoader queues.
+    // CS52-4: Ranked sessions are persisted server-side by /api/sessions/:id/finish
+    // — the score row already exists in `scores` with `source='ranked'`. Do NOT
+    // double-write into the offline L1 queue (would create a phantom `offline`
+    // row with the same gameplay). Local Practice modes still flow through
+    // CS52-5's L1 + /api/sync path below.
     let enqueued = false;
-    try {
-      const userId = (() => {
-        try { return getCurrentUserId(); } catch { return null; }
-      })();
-      const record = syncBuildRecord(summary, userId);
-      // enqueueRecord returns false on either (a) idempotent dedup (record
-      // already in L1, fine) or (b) L1 cap hit. Distinguish via post-state.
-      const ok = syncEnqueueRecord(record);
-      if (ok) {
-        enqueued = true;
-      } else {
-        // Check whether the record is now in L1 (dedup) or was refused (cap).
-        const present = getL1Records().some(r => r.client_game_id === record.client_game_id);
-        if (present) {
-          enqueued = true; // dedup is benign — record is already queued
+    if (summary.ranked) {
+      enqueued = true; // server-persisted; skip L1 enqueue
+      if (authToken) showSyncIndicator('Ranked score recorded ✓');
+    } else {
+      try {
+        const userId = (() => {
+          try { return getCurrentUserId(); } catch { return null; }
+        })();
+        const record = syncBuildRecord(summary, userId);
+        // enqueueRecord returns false on either (a) idempotent dedup (record
+        // already in L1, fine) or (b) L1 cap hit. Distinguish via post-state.
+        const ok = syncEnqueueRecord(record);
+        if (ok) {
+          enqueued = true;
         } else {
-          showSyncIndicator('Score not saved (offline cache full)');
+          // Check whether the record is now in L1 (dedup) or was refused (cap).
+          const present = getL1Records().some(r => r.client_game_id === record.client_game_id);
+          if (present) {
+            enqueued = true; // dedup is benign — record is already queued
+          } else {
+            showSyncIndicator('Score not saved (offline cache full)');
+          }
         }
-      }
-    } catch { /* localStorage unavailable — score is still on screen */ }
+      } catch { /* localStorage unavailable — score is still on screen */ }
+    }
 
-    if (authToken && enqueued) {
+    if (authToken && enqueued && !summary.ranked) {
       showSyncIndicator('Score saved ✓');
       // Submit score to server if logged in (single-flight via syncNow).
       // Score-submission IS a user gesture per CS52-5 § Sync triggers (#2).
@@ -391,7 +413,7 @@ const ui = {
       }).catch(() => {
         showSyncIndicator('Will sync later');
       });
-    } else if (!authToken) {
+    } else if (!authToken && !summary.ranked) {
       showToast('Log in to save your score to the leaderboard');
     }
     // (authToken && !enqueued) → cap-overflow indicator was already shown above.
@@ -425,37 +447,116 @@ const ui = {
 
     showScreen('gameover');
   },
+
+  /**
+   * CS52-4 § Ranked error surface. Called by game.js for HTTP/network/425
+   * errors mid-session. Network/auth-expired during a session is also handled
+   * by the connectivity state machine (hard fail overlay); this provides a
+   * narrower toast for HTTP-level errors that don't trip connectivity.
+   */
+  showRankedError(info) {
+    if (!info) return;
+    if (info.kind === 'network') {
+      // Only treat as a mid-session disconnect if there is an in-flight
+      // ranked session to abandon. Session-creation network failures are
+      // surfaced by handleStartRanked, not here.
+      const hasActiveRankedSession = !!(Game.state && Game.state.ranked && !Game.state.finished);
+      if (hasActiveRankedSession) {
+        showToast('Network error — your Ranked session was abandoned');
+        try {
+          // apiFetch only updates connectivity for fetch responses (4xx/5xx);
+          // raw network failures (TypeError) bypass it. Synthesize the
+          // network-down transition here so the banner + ranked-entry gate
+          // stay consistent — applyConnectivityState (the connectivity
+          // listener) then performs handleRankedDisconnect, so abandonment
+          // telemetry is emitted exactly once.
+          setConnectivityState('network-down', 'ranked-network-error');
+        } catch {
+          // setConnectivityState is best-effort; fall back to a direct
+          // disconnect so the session is still abandoned cleanly.
+          handleRankedDisconnect('network-down');
+        }
+      }
+      return;
+    }
+    if (info.kind === 'too-early-retry-exhausted') {
+      showToast('Server is busy — please try again');
+      return;
+    }
+    if (info.kind === 'http') {
+      if (info.status === 410) {
+        showToast('Session expired — please start a new Ranked game');
+        if (Game.abortRanked) Game.abortRanked();
+        showScreen('home');
+        return;
+      }
+      if (info.status === 401) {
+        // apiFetch already handled global sign-out; connectivity SM will
+        // surface the auth-expired banner and trigger hard-fail overlay.
+        return;
+      }
+      if (info.status === 202) {
+        // Server enqueued the finalize for later (db-unavailable path). The
+        // session can't be summarized synchronously; abort cleanly so the
+        // user isn't shown an undefined score.
+        showToast('Server is catching up — your Ranked result will sync shortly');
+        if (Game.abortRanked) Game.abortRanked();
+        showScreen('home');
+        return;
+      }
+      showToast(`Ranked error (HTTP ${info.status})`);
+    }
+  },
 };
 
 /** Handle an option button click — briefly show correct/wrong, then submit. */
 function handleOptionClick(answer, btnEl) {
+  // Defensive guard: a connectivity-driven hard-fail (or any other async
+  // abort) can null Game.state between render and click. Bail before
+  // dereferencing so the click can't throw mid-overlay.
+  if (!Game.state || !Game.state.currentPuzzle) return;
+
+  // Stop the round timer immediately so a timer-expiry can't fire
+  // submitAnswer(null) during the 50–600 ms feedback delay below and cause
+  // a double-submit.
+  Game.lockRound && Game.lockRound();
+
   // Disable all option buttons immediately
   const allBtns = document.querySelectorAll('.option-btn');
   allBtns.forEach(b => { b.disabled = true; });
 
-  // Highlight correct/wrong
   const puzzle = Game.state.currentPuzzle;
-  const isCorrect = answer === puzzle.answer;
-  allBtns.forEach(b => {
-    if (b === btnEl && !isCorrect) {
-      b.classList.add('wrong');
-    }
-    if ((b.textContent === puzzle.answer) || (b.querySelector('img')?.src === puzzle.answer)) {
-      b.classList.add('correct');
-    }
-  });
+  const isRanked = !!Game.state.ranked;
 
-  // Play sound feedback
-  if (isCorrect) {
-    GameAudio.playCorrect();
+  // Practice mode: pre-highlight correct/wrong locally (we have the answer
+  // bundled with the puzzle). Ranked mode: we DO NOT have the canonical
+  // answer client-side (CS52 Decision #1), so we cannot pre-color the buttons
+  // — wait for the server's verdict from /answer.
+  if (!isRanked) {
+    const isCorrect = answer === puzzle.answer;
+    allBtns.forEach(b => {
+      if (b === btnEl && !isCorrect) {
+        b.classList.add('wrong');
+      }
+      if ((b.textContent === puzzle.answer) || (b.querySelector('img')?.src === puzzle.answer)) {
+        b.classList.add('correct');
+      }
+    });
+    if (isCorrect) {
+      GameAudio.playCorrect();
+    } else {
+      GameAudio.playWrong();
+    }
   } else {
-    GameAudio.playWrong();
+    // Mark the chosen button "selected" so the user gets click feedback even
+    // without local correctness highlighting.
+    btnEl.classList.add('selected');
   }
 
   // Brief delay to show feedback, then submit
   setTimeout(() => {
     Game.submitAnswer(answer, ui);
-  }, 600);
+  }, isRanked ? 50 : 600);
 }
 
 /** Render category selection buttons. */
@@ -507,6 +608,209 @@ function showToast(message) {
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2200);
 }
+
+/**
+ * CS52-4 § Connectivity state machine — UI surface.
+ *
+ * Renders the per-state banner above the main app and toggles the
+ * `data-bind="ranked-entry"` buttons disabled state. Subscribes to
+ * sync-client's onConnectivityChange so transitions re-render. The pure
+ * helpers (CONNECTIVITY_BANNER_COPY + renderBanner + applyGate) live in
+ * ./connectivity-ui.js so tests can import them directly.
+ */
+
+function renderConnectivityBanner(stateName) {
+  renderBanner(document, stateName);
+}
+
+function applyRankedEntryGate(canRank, stateName) {
+  applyGate(document, canRank, stateName);
+}
+
+function applyConnectivityState(stateName) {
+  // canRank is derived by sync-client's connectivity state machine —
+  // use the getter rather than re-implementing the (stateName === 'ok')
+  // mapping here so the UI gate stays consistent if the SM ever adds
+  // an "ok-but-cannot-rank" state.
+  const canRank = connectivity.canRank;
+  renderConnectivityBanner(stateName);
+  applyRankedEntryGate(canRank, stateName);
+  // CS52-4: if a Ranked session is in flight and ranking is no longer
+  // allowed, hard-fail the session and show the abandoned overlay.
+  if (!canRank && Game.state && Game.state.ranked && !Game.state.finished) {
+    handleRankedDisconnect(stateName);
+  }
+}
+
+let connectivityUnsubscribe = null;
+function installConnectivityUI() {
+  applyConnectivityState(connectivity.state);
+  if (connectivityUnsubscribe) connectivityUnsubscribe();
+  connectivityUnsubscribe = onConnectivityChange((next) => {
+    applyConnectivityState(next);
+  });
+}
+
+/**
+ * CS52-4 § Mid-Ranked-disconnect = hard fail (per CS52 Decision #9).
+ * Aborts any in-flight session, clears Game state, shows the abandoned overlay.
+ * Server-side reconciliation flips status='abandoned' on the user's next
+ * session-mutating request — no client → server signal needed here.
+ */
+function handleRankedDisconnect(stateName) {
+  // Capture mode/sessionId BEFORE abortRanked() clears state — abort runs
+  // first to stop the timer + in-flight fetches.
+  const priorMode = (Game.state && Game.state.mode) || null;
+  const priorSessionId = (Game.state && Game.state.sessionId) || null;
+  if (Game.abortRanked) Game.abortRanked();
+  try {
+    console.info('[client] ranked_session_abandoned_due_to_disconnect', {
+      mode: priorMode,
+      sessionId: priorSessionId,
+      connectivityState: stateName,
+    });
+  } catch { /* ignore */ }
+  showRankedAbandonedOverlay(stateName);
+}
+
+const RANKED_ABANDONED_REASON_COPY = {
+  'network-down': 'Lost connection — Ranked session abandoned, no score recorded.',
+  'auth-expired': 'Signed out — Ranked session abandoned, no score recorded.',
+  'db-unavailable': 'Server unavailable — Ranked session abandoned, no score recorded.',
+};
+
+let rankedAbandonedPriorFocus = null;
+let rankedAbandonedKeyHandler = null;
+
+function showRankedAbandonedOverlay(stateName) {
+  // De-dup: if an overlay is already up, just re-focus its primary action.
+  let overlay = document.querySelector('.ranked-abandoned-overlay');
+  if (overlay) {
+    const primary = overlay.querySelector('.btn-primary');
+    if (primary) primary.focus();
+    return;
+  }
+  const message = RANKED_ABANDONED_REASON_COPY[stateName]
+    || 'Ranked session abandoned, no score recorded.';
+  rankedAbandonedPriorFocus = document.activeElement;
+  overlay = document.createElement('div');
+  overlay.className = 'ranked-abandoned-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'ranked-abandoned-title');
+  overlay.setAttribute('aria-describedby', 'ranked-abandoned-message');
+  overlay.innerHTML = `
+    <div class="ranked-abandoned-modal" tabindex="-1">
+      <div class="ranked-abandoned-icon" aria-hidden="true">📡</div>
+      <h2 class="ranked-abandoned-title" id="ranked-abandoned-title">Session abandoned</h2>
+      <p class="ranked-abandoned-message" id="ranked-abandoned-message">${message}</p>
+      <div class="ranked-abandoned-actions">
+        <button type="button" class="btn btn-primary" data-action="ranked-abandoned-practice">Play Practice</button>
+        <button type="button" class="btn btn-secondary" data-action="ranked-abandoned-home">Back to home</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.ranked-abandoned-modal');
+  const primary = overlay.querySelector('.btn-primary');
+  const secondary = overlay.querySelector('.btn-secondary');
+  const focusables = [primary, secondary].filter(Boolean);
+
+  // Modal keyboard handling — Tab cycles within the overlay (focus trap),
+  // Escape dismisses to home, focus is restored to the prior element on close.
+  rankedAbandonedKeyHandler = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      dismissRankedAbandonedOverlay();
+      showScreen('home');
+      return;
+    }
+    if (e.key === 'Tab' && focusables.length > 0) {
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+  overlay.addEventListener('keydown', rankedAbandonedKeyHandler);
+  if (primary) primary.focus();
+  else if (modal) modal.focus();
+}
+
+function dismissRankedAbandonedOverlay() {
+  const overlay = document.querySelector('.ranked-abandoned-overlay');
+  if (overlay) {
+    if (rankedAbandonedKeyHandler) {
+      overlay.removeEventListener('keydown', rankedAbandonedKeyHandler);
+      rankedAbandonedKeyHandler = null;
+    }
+    overlay.remove();
+  }
+  if (rankedAbandonedPriorFocus && typeof rankedAbandonedPriorFocus.focus === 'function') {
+    try { rankedAbandonedPriorFocus.focus(); } catch { /* ignore */ }
+  }
+  rankedAbandonedPriorFocus = null;
+}
+
+/**
+ * CS52-4 § Ranked entry handler. Validates auth + connectivity, surfaces the
+ * appropriate friendly toast on the common failure modes (not-signed-in,
+ * connectivity gate, 409 already-played-today), and otherwise hands off to
+ * Game.startRanked for the streaming flow.
+ */
+let rankedStartInFlight = false;
+async function handleStartRanked(mode) {
+  if (rankedStartInFlight) return; // ignore double-clicks while a start is in progress
+  if (!isLoggedIn()) {
+    authReturnScreen = currentScreen;
+    showToast('Sign in to play Ranked');
+    showScreen('auth');
+    return;
+  }
+  if (!connectivity.canRank) {
+    const copy = CONNECTIVITY_BANNER_COPY[connectivity.state];
+    showToast(copy ? copy.text : 'Ranked is unavailable right now');
+    return;
+  }
+  rankedStartInFlight = true;
+  let result;
+  try {
+    result = await Game.startRanked({ mode, apiFetch, ui });
+  } catch {
+    rankedStartInFlight = false;
+    showToast('Couldn\u2019t start Ranked — please try again');
+    return;
+  }
+  rankedStartInFlight = false;
+  if (!result || result.ok || result.aborted) return;
+  if (result.error === 'http') {
+    if (result.status === 409) {
+      showToast('You already played today\u2019s Ranked Daily');
+    } else if (result.status === 401) {
+      showToast('Signed out — please sign in again');
+    } else if (result.status === 503) {
+      showToast('Ranked is warming up — try again in a moment');
+    } else {
+      showToast('Couldn\u2019t start Ranked — please try again');
+    }
+  } else if (result.error === 'network') {
+    // Connectivity listeners will surface the banner; show a quick toast too.
+    showToast('Network error — Ranked unavailable');
+  } else if (result.error === 'bad-json') {
+    showToast('Couldn\u2019t start Ranked — please try again');
+  }
+  // result.aborted → silent (overlay shown by handleRankedDisconnect)
+}
+
+/**
+ * CS52-4 § Claim prompt — implementation extracted to claim-modal.js
+ * for unit testability. See public/js/claim-modal.js +
+ * tests/cs52-4-claim-modal.test.js.
+ */
 
 /** Show a non-blocking sign-in banner for unauthenticated players. */
 function showSignInBanner() {
@@ -576,6 +880,11 @@ function init() {
   // network-down — it does NOT auto-fire a sync. The next user gesture
   // is what triggers the actual /api/sync RPC (boot-quiet contract).
   try { installConnectivityListeners(); } catch { /* test env may lack window */ }
+
+  // CS52-4: install the connectivity-banner + ranked-entry gate. Renders
+  // current state once, subscribes to onConnectivityChange so transitions
+  // re-render and (when ok→non-ok mid-Ranked-session) trigger hard fail.
+  try { installConnectivityUI(); } catch { /* DOM may be absent in tests */ }
 
   // Validate stored token on startup (non-blocking).
   //
@@ -702,6 +1011,16 @@ function init() {
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (!action) return;
 
+    // While a Ranked create-session request is in flight, any navigation
+    // action (anything that isn't another start-ranked-* click) means the
+    // user has lost interest in Ranked. Abort the in-flight session so its
+    // resolution doesn't hijack the user away with showScreen('game'),
+    // then fall through and run the action they actually clicked.
+    if (rankedStartInFlight && !/^start-ranked-/.test(action)) {
+      try { Game.abortRanked && Game.abortRanked(); } catch { /* ignore */ }
+      rankedStartInFlight = false;
+    }
+
     switch (action) {
       case 'start-freeplay':
         if (!isLoggedIn()) showSignInBanner();
@@ -711,6 +1030,23 @@ function init() {
       case 'start-daily':
         if (!isLoggedIn()) showSignInBanner();
         Game.startDaily(localPuzzles, ui);
+        break;
+      case 'start-ranked-freeplay':
+      case 'start-ranked-daily':
+        handleStartRanked(action === 'start-ranked-daily' ? 'ranked_daily' : 'ranked_freeplay');
+        break;
+      case 'connectivity-sign-in':
+        authReturnScreen = currentScreen;
+        showScreen('auth');
+        break;
+      case 'ranked-abandoned-practice':
+        dismissRankedAbandonedOverlay();
+        showScreen('category');
+        renderCategories();
+        break;
+      case 'ranked-abandoned-home':
+        dismissRankedAbandonedOverlay();
+        showScreen('home');
         break;
       case 'go-home':
         disconnectWebSocket();
@@ -1671,15 +2007,14 @@ async function maybeShowClaimPrompt() {
   catch { return; }
   const total = claimable.unattached.length + claimable.mismatched.length;
   if (total === 0) return;
-  // Use confirm() for MVP — a richer custom-modal UI is CS52-4's screen scope.
-  // If explicit confirmation is unavailable (no `window.confirm`, e.g. test
-  // env or SSR), fail closed: leave the records untouched rather than
-  // silently auto-attributing offline plays to the signed-in user without
-  // consent. The next sign-in (in a confirm-capable context) will reprompt.
-  const proceed = (typeof window !== 'undefined' && typeof window.confirm === 'function')
-    ? window.confirm(`${total} pending offline games will be added to your account.`)
-    : false;
-  if (proceed) {
+  // CS52-4 § Claim prompt — accessible custom modal (replaces MVP confirm()).
+  // Decline leaves records untouched; they re-surface on next sign-in.
+  const decision = await showClaimPromptModal({
+    total,
+    unattachedCount: claimable.unattached.length,
+    mismatchedCount: claimable.mismatched.length,
+  });
+  if (decision === 'accept') {
     try { applyClaim(userId); } catch { /* ignore */ }
   }
 }

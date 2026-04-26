@@ -16,6 +16,12 @@
 <body>
   <div id="app">
 
+    <!-- Connectivity banner (CS52-4 § Connectivity state machine) -->
+    <div id="connectivity-banner" class="connectivity-banner" role="status" aria-live="polite" data-bind="connectivity-banner" data-state="ok" style="display:none">
+      <span class="connectivity-banner-text" data-bind="connectivity-banner-text"></span>
+      <button type="button" class="connectivity-banner-action" data-action="connectivity-sign-in" style="display:none" aria-label="Sign in to save your games">Sign in</button>
+    </div>
+
     <!-- Persistent Auth Top Bar (positioned top-right, overlays header) -->
     <header id="auth-top-bar" class="auth-top-bar" aria-label="Account">
       <div class="auth-top-bar-logged-out" data-bind="auth-bar-logged-out">
@@ -36,8 +42,10 @@
         <p class="game-subtitle">Can you spot the pattern?</p>
       </header>
       <nav class="home-menu" aria-label="Game modes">
-        <button class="btn btn-primary" data-action="start-freeplay" aria-label="Start Free Play mode">🎮 Free Play</button>
-        <button class="btn btn-secondary" data-action="start-daily" aria-label="Start Daily Challenge">📅 Daily Challenge</button>
+        <button class="btn btn-primary" data-action="start-freeplay" aria-label="Start Practice Free Play (offline-friendly local mode)">🎮 Practice — Free Play</button>
+        <button class="btn btn-primary" data-action="start-ranked-freeplay" data-bind="ranked-entry" aria-label="Start Ranked Free Play (online, server-validated)">🏆 Ranked — Free Play</button>
+        <button class="btn btn-secondary" data-action="start-daily" aria-label="Start Practice Daily Challenge">📅 Practice — Daily Challenge</button>
+        <button class="btn btn-secondary" data-action="start-ranked-daily" data-bind="ranked-entry" aria-label="Start Ranked Daily (one verified attempt per day)">🏆 Ranked — Daily</button>
         <button class="btn btn-secondary" data-action="start-multiplayer" aria-label="Start Multiplayer">⚔️ Multiplayer</button>
         <button class="btn btn-secondary" data-action="show-leaderboard" aria-label="View Leaderboard">🏆 Leaderboard</button>
         <button class="btn btn-secondary" data-action="show-achievements" aria-label="View Achievements">🏅 Achievements</button>

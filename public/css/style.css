@@ -1605,6 +1605,15 @@ body::before {
   animation: optionWrongShake 0.4s ease-out;
 }
 
+/* CS52-4: Ranked mode never reveals correctness locally (anti-cheat),
+ * so we use a neutral "selected" state to give the user click feedback
+ * during the brief pre-submit delay. */
+.option-btn.selected {
+  border-color: var(--color-accent, #74b9ff);
+  background-color: rgba(116, 185, 255, 0.15);
+  box-shadow: 0 0 12px rgba(116, 185, 255, 0.4);
+}
+
 .option-btn img {
   width: 60px;
   height: 60px;
@@ -4194,4 +4203,126 @@ body::before {
   .sync-indicator {
     transition: none;
   }
+}
+
+/* ===========================
+   CS52-4 — Connectivity banner + Ranked modals
+   =========================== */
+.connectivity-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--color-surface-border);
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.connectivity-banner[data-state="network-down"] {
+  background: #2d3436;
+  color: #fdcb6e;
+}
+.connectivity-banner[data-state="auth-expired"] {
+  background: #2d3436;
+  color: #74b9ff;
+}
+.connectivity-banner[data-state="db-unavailable"] {
+  background: #2d3436;
+  color: #a29bfe;
+}
+.connectivity-banner-action {
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.connectivity-banner-action:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.ranked-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  position: relative;
+}
+.ranked-disabled::after {
+  content: " 🔒";
+  font-size: 0.85em;
+}
+
+/* Claim prompt modal (replaces window.confirm) */
+.claim-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  animation: claimFadeIn 0.15s ease-out;
+}
+@keyframes claimFadeIn { from { opacity: 0 } to { opacity: 1 } }
+.claim-modal {
+  background: var(--color-surface, #2d3436);
+  color: var(--color-text, #f5f6fa);
+  border: 1px solid var(--color-surface-border, #444);
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 1.5rem;
+  max-width: 28rem;
+  width: 90%;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  outline: none;
+}
+.claim-modal-title {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem 0;
+}
+.claim-modal-message {
+  margin: 0 0 1.25rem 0;
+  line-height: 1.45;
+}
+.claim-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.claim-modal-actions .btn {
+  min-width: 9rem;
+}
+
+/* Ranked-abandoned hard-fail overlay */
+.ranked-abandoned-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9100;
+}
+.ranked-abandoned-modal {
+  background: var(--color-surface, #2d3436);
+  color: var(--color-text, #f5f6fa);
+  border: 1px solid var(--color-wrong, #d63031);
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 1.5rem;
+  max-width: 28rem;
+  width: 90%;
+  text-align: center;
+  outline: none;
+}
+.ranked-abandoned-icon { font-size: 2.5rem; }
+.ranked-abandoned-title { margin: 0.5rem 0; font-size: 1.15rem; }
+.ranked-abandoned-message { margin: 0 0 1.25rem 0; line-height: 1.45; }
+.ranked-abandoned-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
 }
