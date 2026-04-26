@@ -8,6 +8,8 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/auth');
 const { getDbAdapter } = require('../db');
 const { checkAndUnlockAchievements } = require('../achievements');
+const { getConfig } = require('../services/gameConfigLoader');
+const { GAME_CONFIG_DEFAULTS } = require('../services/gameConfigDefaults');
 const logger = require('../logger');
 
 /** Active rooms: Map<roomCode, RoomState> */
@@ -22,14 +24,25 @@ const rematchRequests = new Map();
 /** Finished rooms: Map<roomCode, { players, hostId, maxPlayers, totalRounds }> */
 const finishedRooms = new Map();
 
-const ROUND_TIMEOUT_MS = 20000;
+/**
+ * CS52-7b — resolve the active multiplayer config from `game_configs`
+ * (CS52-7c loader). Returned shape: `{ rounds, round_timer_ms,
+ * inter_round_delay_ms, source }`. `source` is `'game_configs'` when a DB
+ * row supplied the values and `'code_default'` when the loader fell back to
+ * `GAME_CONFIG_DEFAULTS.multiplayer` — distinguished by reference equality
+ * (the loader returns the frozen defaults object as-is on fallback).
+ */
+async function loadMultiplayerConfig() {
+  const cfg = await getConfig('multiplayer');
+  const source = cfg === GAME_CONFIG_DEFAULTS.multiplayer ? 'code_default' : 'game_configs';
+  return { ...cfg, source };
+}
 
 /** Gameplay message types that spectators are NOT allowed to send. */
 const SPECTATOR_BLOCKED_ACTIONS = new Set([
   'answer', 'start-match', 'rematch-request', 'rematch-start-confirm',
 ]);
 const ROOM_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
-const NEXT_ROUND_DELAY_MS = 3000;
 const RECONNECT_WINDOW_MS = 30000;
 
 /** Select `count` random puzzles from the database. */
@@ -207,6 +220,8 @@ async function handleJoin(ws, roomCode) {
   }
 
   if (!rooms.has(code)) {
+    // CS52-7b: pre-seed defaults; startMatch() snapshots the live config.
+    const mpDefaults = GAME_CONFIG_DEFAULTS.multiplayer;
     rooms.set(code, {
       players: new Map(),
       spectators: new Map(),
@@ -214,7 +229,10 @@ async function handleJoin(ws, roomCode) {
       maxPlayers: 2,
       droppedPlayers: new Map(),
       round: 0,
-      totalRounds: 5,
+      totalRounds: mpDefaults.rounds,
+      roundTimerMs: mpDefaults.round_timer_ms,
+      interRoundDelayMs: mpDefaults.inter_round_delay_ms,
+      configSource: 'code_default',
       scores: {},
       started: false,
       puzzles: [],
@@ -443,6 +461,23 @@ async function startMatch(roomCode) {
 
   room.starting = true;
 
+  // CS52-7b: snapshot the active multiplayer config at match-start so
+  // mid-match admin edits don't desync rounds-in-flight. The matches table
+  // stores `total_rounds` only (pre-CS52-7d); timer/delay live on the room.
+  let configSource = 'code_default';
+  try {
+    const mpConfig = await loadMultiplayerConfig();
+    room.totalRounds = mpConfig.rounds;
+    room.roundTimerMs = mpConfig.round_timer_ms;
+    room.interRoundDelayMs = mpConfig.inter_round_delay_ms;
+    room.configSource = mpConfig.source;
+    configSource = mpConfig.source;
+  } catch (err) {
+    // Loader failure is non-fatal: defaults baked into the room at handleJoin
+    // remain in force. Log so operators see it.
+    logger.warn({ err, roomCode }, 'Failed to load multiplayer config; using room defaults');
+  }
+
   try {
     room.puzzles = await selectRandomPuzzles(room.totalRounds);
   } catch (err) {
@@ -455,16 +490,48 @@ async function startMatch(roomCode) {
   room.started = true;
   room.starting = false;
 
-  logger.info({ roomCode, playerCount: room.players.size }, 'Match started');
+  // Resolve match_id (best-effort) for the structured config-snapshot log line.
+  let matchId = null;
+  try {
+    const db = await getDbAdapter();
+    const m = await db.get('SELECT id FROM matches WHERE room_code = ?', [roomCode]);
+    if (m) matchId = m.id;
+  } catch { /* non-fatal */ }
+
+  // CS52-7b telemetry signal: structured config-snapshot at match start.
+  // Cross-references docs/observability.md § B.11 (matches per config shape).
+  // Note: use `event` (not `msg`) for the structured discriminator — Pino
+  // overwrites object-level `msg` with the string message argument, so KQL
+  // filters must key off `event` to be reliable.
+  logger.info(
+    {
+      event: 'multiplayer_match_started',
+      match_id: matchId,
+      room_code: roomCode,
+      config: {
+        rounds: room.totalRounds,
+        round_timer_ms: room.roundTimerMs,
+        inter_round_delay_ms: room.interRoundDelayMs,
+      },
+      source: configSource,
+      playerCount: room.players.size,
+    },
+    'multiplayer match started'
+  );
 
   // Build player name list
   const playerNames = [];
   room.players.forEach((ws) => playerNames.push(ws.user.username));
 
-  // Update match status in DB
+  // Update match status in DB. CS52-7b: also persist the live snapshotted
+  // total_rounds so the matches row matches what the room actually plays
+  // (admin edits between room creation and start would otherwise diverge).
   try {
     const db = await getDbAdapter();
-    await db.run(`UPDATE matches SET status = 'active' WHERE room_code = ?`, [roomCode]);
+    await db.run(
+      `UPDATE matches SET status = 'active', total_rounds = ? WHERE room_code = ?`,
+      [room.totalRounds, roomCode]
+    );
   } catch {
     // Non-fatal: match can proceed without DB update
   }
@@ -518,10 +585,10 @@ async function sendRound(roomCode) {
 
   room.roundStartedAt = Date.now();
 
-  // Set timeout for players who don't answer
+  // CS52-7b: round timeout from snapshotted config (loader → game_configs).
   room.roundTimer = setTimeout(() => {
     resolveRound(roomCode);
-  }, ROUND_TIMEOUT_MS);
+  }, room.roundTimerMs);
 }
 
 /** Handle a player's answer. */
@@ -541,7 +608,7 @@ function handleAnswer(ws, msg) {
 
   roundAnswers[ws.user.id] = {
     answerId: msg.answerId,
-    timeMs: typeof msg.timeMs === 'number' ? msg.timeMs : ROUND_TIMEOUT_MS,
+    timeMs: typeof msg.timeMs === 'number' ? msg.timeMs : room.roundTimerMs,
     userId: ws.user.id,
     username: ws.user.username,
   };
@@ -575,7 +642,7 @@ function resolveRound(roomCode) {
   room.players.forEach((ws, userId) => {
     const answer = roundAnswers[userId];
     const correct = answer ? answer.answerId === puzzle.answer : false;
-    const timeMs = answer ? answer.timeMs : ROUND_TIMEOUT_MS;
+    const timeMs = answer ? answer.timeMs : room.roundTimerMs;
     const points = calculateScore(correct, timeMs);
 
     room.scores[userId] = (room.scores[userId] || 0) + points;
@@ -599,9 +666,9 @@ function resolveRound(roomCode) {
 
   // Check if match is over
   if (room.round >= room.totalRounds) {
-    setTimeout(() => endMatch(roomCode).catch(() => {}), NEXT_ROUND_DELAY_MS);
+    setTimeout(() => endMatch(roomCode).catch(() => {}), room.interRoundDelayMs);
   } else {
-    setTimeout(() => sendRound(roomCode).catch(() => {}), NEXT_ROUND_DELAY_MS);
+    setTimeout(() => sendRound(roomCode).catch(() => {}), room.interRoundDelayMs);
   }
 }
 
@@ -1168,6 +1235,19 @@ async function handleRematchStartConfirm(ws) {
   const crypto = require('crypto');
   let newCode = crypto.randomBytes(3).toString('hex').toUpperCase();
 
+  // CS52-7b: re-fetch live multiplayer config for the rematch — an admin
+  // edit between matches should take effect on the next match.
+  let rematchConfig;
+  try {
+    rematchConfig = await loadMultiplayerConfig();
+  } catch {
+    rematchConfig = {
+      ...GAME_CONFIG_DEFAULTS.multiplayer,
+      source: 'code_default',
+    };
+  }
+  const rematchTotalRounds = rematchConfig.rounds;
+
   try {
     const db = await getDbAdapter();
     while (await db.get('SELECT 1 FROM matches WHERE room_code = ?', [newCode])) {
@@ -1176,7 +1256,7 @@ async function handleRematchStartConfirm(ws) {
     const matchId = crypto.randomUUID();
     await db.run(
       `INSERT INTO matches (id, room_code, status, total_rounds, max_players, created_by, host_user_id) VALUES (?, ?, 'waiting', ?, ?, ?, ?)`,
-      [matchId, newCode, finished.totalRounds, finished.maxPlayers, readyPlayers[0].userId, finished.hostId]
+      [matchId, newCode, rematchTotalRounds, finished.maxPlayers, readyPlayers[0].userId, finished.hostId]
     );
     for (const p of readyPlayers) {
       await db.run(
@@ -1195,7 +1275,10 @@ async function handleRematchStartConfirm(ws) {
     maxPlayers: finished.maxPlayers,
     droppedPlayers: new Map(),
     round: 0,
-    totalRounds: finished.totalRounds,
+    totalRounds: rematchTotalRounds,
+    roundTimerMs: rematchConfig.round_timer_ms,
+    interRoundDelayMs: rematchConfig.inter_round_delay_ms,
+    configSource: rematchConfig.source,
     scores: {},
     started: false,
     puzzles: [],

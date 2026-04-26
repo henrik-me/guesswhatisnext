@@ -5,12 +5,19 @@
  */
 
 const WebSocket = require('ws');
-const { getAgent, getServer, setup, teardown, registerUser } = require('./helper');
+const { getAgent, getServer, setup, teardown, registerUser, setGameConfig } = require('./helper');
 
 let tokens = {};
 
 beforeAll(async () => {
   await setup();
+  // CS52-7b: rounds is server-authoritative. Override to 3 (matches the
+  // existing reconnection test expectations that totalRounds=3 in payloads).
+  await setGameConfig('multiplayer', {
+    rounds: 3,
+    round_timer_ms: 5000,
+    inter_round_delay_ms: 200,
+  });
   for (const name of ['rc_host', 'rc_p2', 'rc_p3', 'rc_p4']) {
     const { token } = await registerUser(name, 'password123');
     tokens[name] = token;
@@ -58,10 +65,16 @@ function waitForMessage(ws, type, timeoutMs = 10000) {
 }
 
 async function createRoom(hostToken, maxPlayers, totalRounds = 3) {
+  // CS52-7b: client-supplied totalRounds is ignored. Override server config.
+  await setGameConfig('multiplayer', {
+    rounds: totalRounds,
+    round_timer_ms: 5000,
+    inter_round_delay_ms: 200,
+  });
   const res = await getAgent()
     .post('/api/matches')
     .set('Authorization', `Bearer ${hostToken}`)
-    .send({ maxPlayers, totalRounds });
+    .send({ maxPlayers });
   return res.body.roomCode;
 }
 
@@ -277,3 +290,4 @@ describe('Reconnection & Edge Cases', () => {
     hostWs.close();
   }, 30000);
 });
+

@@ -5,12 +5,20 @@
  */
 
 const WebSocket = require('ws');
-const { getAgent, getServer, setup, teardown, registerUser } = require('./helper');
+const { getAgent, getServer, setup, teardown, registerUser, setGameConfig } = require('./helper');
 
 let tokens = {};
 
 beforeAll(async () => {
   await setup();
+  // CS52-7b: rounds is server-authoritative. Default to 5 (the canonical MP
+  // shape) for most spectator tests; the short-match test below overrides
+  // to 2 in its own scope.
+  await setGameConfig('multiplayer', {
+    rounds: 5,
+    round_timer_ms: 5000,
+    inter_round_delay_ms: 200,
+  });
   for (const name of ['spec_host', 'spec_p2', 'spec_viewer']) {
     const { token } = await registerUser(name, 'password123');
     tokens[name] = token;
@@ -86,12 +94,20 @@ function waitForMessage(ws, type, timeoutMs = 10000) {
 }
 
 async function createRoom(hostToken, totalRounds) {
-  const body = {};
-  if (totalRounds) body.totalRounds = totalRounds;
+  // CS52-7b: client-supplied totalRounds is now ignored by the server. Tests
+  // that need a non-default rounds count must call `setGameConfig('multiplayer',
+  // {...})` from helper.js to override the canonical config before creating.
+  if (totalRounds !== undefined) {
+    await setGameConfig('multiplayer', {
+      rounds: totalRounds,
+      round_timer_ms: 5000,
+      inter_round_delay_ms: 200,
+    });
+  }
   const res = await getAgent()
     .post('/api/matches')
     .set('Authorization', `Bearer ${hostToken}`)
-    .send(body);
+    .send({});
   return res.body.roomCode;
 }
 
@@ -356,3 +372,4 @@ describe('Spectator Mode', () => {
     ws3.close();
   }, 30000);
 });
+

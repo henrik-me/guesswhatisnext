@@ -1,15 +1,28 @@
 /**
  * E2E tests — Multiplayer flow.
  * Tests: register → create room → join room → WebSocket match flow.
+ *
+ * CS52-7b note: rounds / timer / inter-round delay are server-authoritative
+ * (sourced from `game_configs.multiplayer`). To keep this suite fast, the
+ * `multiplayer` config is overridden to small values in beforeAll via the
+ * test helper — clients no longer pick rounds.
  */
 
 const WebSocket = require('ws');
-const { getAgent, getServer, setup, teardown, registerUser } = require('./helper');
+const { getAgent, getServer, setup, teardown, registerUser, setGameConfig } = require('./helper');
 
 let hostToken, joinerToken;
+const TEST_ROUNDS = 3;
+const TEST_TIMER_MS = 5000;
+const TEST_DELAY_MS = 200;
 
 beforeAll(async () => {
   await setup();
+  await setGameConfig('multiplayer', {
+    rounds: TEST_ROUNDS,
+    round_timer_ms: TEST_TIMER_MS,
+    inter_round_delay_ms: TEST_DELAY_MS,
+  });
   const host = await registerUser('mp_host', 'password123');
   const joiner = await registerUser('mp_joiner', 'password123');
   hostToken = host.token;
@@ -62,16 +75,17 @@ function waitForMessage(ws, type, timeoutMs = 5000) {
 }
 
 describe('Multiplayer E2E', () => {
-  test('create room returns valid room code', async () => {
+  test('create room returns server-authoritative config', async () => {
     const agent = getAgent();
     const res = await agent
       .post('/api/matches')
       .set('Authorization', `Bearer ${hostToken}`)
-      .send({ totalRounds: 3, maxPlayers: 4 });
+      .send({ totalRounds: 999, maxPlayers: 4 }); // CS52-7b: totalRounds ignored
 
     expect(res.status).toBe(201);
     expect(res.body.roomCode).toMatch(/^[0-9A-F]{6}$/);
-    expect(res.body.totalRounds).toBe(3);
+    // Server uses game_configs, NOT the client's 999.
+    expect(res.body.totalRounds).toBe(TEST_ROUNDS);
     expect(res.body.maxPlayers).toBe(4);
   });
 
@@ -353,3 +367,4 @@ describe('Multiplayer E2E', () => {
     joinerWs.close();
   });
 });
+
