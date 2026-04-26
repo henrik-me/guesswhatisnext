@@ -1605,6 +1605,15 @@ body::before {
   animation: optionWrongShake 0.4s ease-out;
 }
 
+/* CS52-4: Ranked mode never reveals correctness locally (anti-cheat),
+ * so we use a neutral "selected" state to give the user click feedback
+ * during the brief pre-submit delay. */
+.option-btn.selected {
+  border-color: var(--color-accent, #74b9ff);
+  background-color: rgba(116, 185, 255, 0.15);
+  box-shadow: 0 0 12px rgba(116, 185, 255, 0.4);
+}
+
 .option-btn img {
   width: 60px;
   height: 60px;

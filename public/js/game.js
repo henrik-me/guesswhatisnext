@@ -478,7 +478,7 @@ async function submitRankedAnswer(answer, ui) {
     puzzleId,
     answer,
     correct,
-    timeMs: data.elapsed_ms || clientTimeMs,
+    timeMs: Number.isFinite(data.elapsed_ms) ? data.elapsed_ms : clientTimeMs,
     score: { points: 0, speedBonus: 0, multiplier: 1, total: 0 },
   });
 
