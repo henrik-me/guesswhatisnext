@@ -341,6 +341,14 @@ The two-step rollout is deliberate. Flipping a checker to a hard gate while viol
 
 ---
 
+### Expand → migrate → contract — codifying multi-PR migrations
+
+**Date:** 2026-04-26
+
+During CS41 (production deploy validation) the user surfaced that the migration framework is forward-only and the deploy sequence applies migrations *before* traffic shifts to the new image — so for a brief window the **old** server runs against the **new** schema. An additive migration is invisible to the old code; a non-additive one is not, and historically that was the unwritten rule rather than an enforced one. CS41-11 added the static linter (`scripts/check-migration-policy.js`) to reject `DROP COLUMN` / `RENAME` / `NOT NULL` tightening, and CS41-12 added the runtime old-revision smoke against the just-migrated DB. CS41-13 then codified the **expand → migrate → contract** pattern in [INSTRUCTIONS.md § Multi-PR pattern for backward-incompatible migrations](INSTRUCTIONS.md#multi-pr-pattern-for-backward-incompatible-migrations) so that backward-incompat changes (rename, drop, type change) land as three individually-additive PRs rather than one unsafe one. The linter override comment on the contract PR must reference the multi-PR plan, which is what makes the safety argument auditable later.
+
+---
+
 ## Tools & Versions
 
 ### Adopted Tools & Minimum Versions
