@@ -73,6 +73,49 @@ On every heartbeat (still ≤ 10 min cadence per the idle-poll floor above), if 
 
 This subsection does **not** change the sub-agent's reporting duties. Sub-agents must still emit `STATE:` lines per the canonical vocabulary above. This is purely about what the orchestrator does *additionally* to compensate when that contract is not honored, so that a sub-agent's reporting lapse never degrades into a user-visible "nothing is happening" claim when in fact a lot is happening.
 
+### Background polling-loop watcher prompts
+
+Background sub-agents are the canonical pattern for watching long-running CI runs, awaiting a Copilot review, or polling for a state change on a PR (see the existing rule about always launching a background watcher for long-running CI). The agent runs a polling loop in its own session and stops when a strict trigger fires or the loop times out.
+
+Three failure modes have been observed and **must be defended against in every watcher prompt**:
+
+1. **Loop runs in a child process and the agent exits.** A watcher that "sets up" a sub-shell or daemon and reports back in <1 minute has not actually monitored anything — the moment the agent exits, that child process is orphaned. **Prompt language fix:** "YOU MUST EXECUTE THE POLLING LOOP YOURSELF in this session, calling the powershell tool N times. Do NOT spawn a sub-shell. Do NOT exit early without a STRICT trigger."
+
+2. **`>=` instead of `>` on timestamp comparisons triggers on the existing state.** If the threshold equals the current latest review's `submittedAt`, a `>=` comparison fires immediately and reports "new review!" when there is none. **Prompt language fix:** "Use STRICT (`>`) lexicographic string comparison, NOT `>=`. The current latest review IS AT the threshold — that is NOT a new review. Only strictly-newer values count."
+
+3. **Over-eager triggering on transient or steady states.** GitHub's `mergeStateStatus` cycles through `BEHIND` (main moved), `BLOCKED` (waiting on review), `UNKNOWN` (transient during CI), `CLEAN` (transient), and `DIRTY` (real conflict). A watcher that triggers on `BEHIND` will fire constantly in a churning-main environment; a watcher that triggers on `BLOCKED` will fire as soon as CI finishes and the human-approval gate becomes the only blocker. **Prompt language fix:** explicitly enumerate which states do NOT trigger ("DO NOT TRIGGER ON: BEHIND, BLOCKED, UNKNOWN, IN_PROGRESS/QUEUED, SUCCESS"). Trigger only on actionable states: `MERGED`, `CLOSED`, `DIRTY` (real conflict), `FAILURE`, or a strictly-new review/comment.
+
+**Canonical watcher loop shape (PowerShell):**
+
+```text
+Loop EXACTLY N iterations (e.g. 18). Sleep 80 seconds between each via
+`Start-Sleep -Seconds 80` (powershell tool, mode=sync, initial_wait=90).
+
+At each iteration:
+1. Run a single `gh pr view ... --jq '...'` to capture current state.
+2. Print one summary line: `poll N: head=<short> state=<X> mergeState=<X> ...`.
+3. Check STRICT triggers. STOP and report only if one fires.
+4. Otherwise sleep and continue to next iteration.
+
+If all N iterations complete without a strict trigger, report "TIMEOUT-CLEAN"
+with the final state from the last poll.
+```
+
+**Always inspect the watcher's report against the live PR state before acting on it.** Watchers built on smaller models (e.g. Haiku) occasionally false-trigger; cross-checking with `gh pr view ...` from the orchestrator's session before, for example, force-pushing a rebase prevents wasted cycles on phantom triggers.
+
+### Windows PowerShell agents — non-interactive git
+
+`git rebase` / `git rebase --continue` / `git commit --amend` launch the user's editor (vim by default on Windows Git installations) for commit-message editing, which hangs the agent's PowerShell session indefinitely. **Always set `$env:GIT_EDITOR="true"`** (a no-op editor that exits 0) before any rebase or commit-amend sequence:
+
+```powershell
+$env:GIT_EDITOR = "true"
+git rebase origin/main
+# ... resolve conflicts ...
+git rebase --continue   # accepts the existing commit message without prompting
+```
+
+This is unrelated to the user's `~/.gitconfig` editor preference — the env var override is scoped to the agent's session. Equivalent on Unix-like agents: `export GIT_EDITOR=true`.
+
 **Worked example — bad vs good heartbeat.** Sub-agent in slot wt-N has been silent on `STATE:` for ~70 minutes but has pushed 4 commits and turned PR #N's CI green:
 
 | ❌ Bad heartbeat (the failure mode) | ✅ Good heartbeat (what the user should see) |
@@ -81,7 +124,7 @@ This subsection does **not** change the sub-agent's reporting duties. Sub-agents
 
 The bad version is technically true but operationally useless: it tells the user only what the agent failed to say, not what the agent did. The good version uses fallback signals to reconstruct the actual state of the work, flags the inference explicitly, and ends with a concrete next-transition expectation.
 
-**Workboard transitions are push-gated too.**The sub-agent `STATE:` discipline above is only half the contract: orchestrator-driven workboard state transitions (notably `claimed`, but also any orchestrator-side column update such as reclamation) are not effective until the corresponding commit has landed on `origin/main`. See [§ WORKBOARD.md — Live Coordination, "Claim effectiveness" in TRACKING.md](TRACKING.md#workboardmd--live-coordination) for the gating rule and the push-rejected recovery procedure.
+**Workboard transitions are push-gated too.** The sub-agent `STATE:` discipline above is only half the contract: orchestrator-driven workboard state transitions (notably `claimed`, but also any orchestrator-side column update such as reclamation) are not effective until the corresponding commit has landed on `origin/main`. See [§ WORKBOARD.md — Live Coordination, "Claim effectiveness" in TRACKING.md](TRACKING.md#workboardmd--live-coordination) for the gating rule and the push-rejected recovery procedure.
 
 **Milestone timing table:** Sub-agents must include a timing table in their final completion report. This tracks elapsed time from session start for each major milestone (e.g., "npm install", "implementation", "validation", "PR created", "review clean"). This was identified as a process improvement during CS25 to help identify workflow bottlenecks.
 
@@ -274,6 +317,37 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 - ❌ Never parallelize two tasks that both rewrite the same function
 
 For deployment environments, CI/CD pipeline, and rollback policy, see [CONTEXT.md](CONTEXT.md) and [README.md](README.md).
+
+## Long-running PRs in fast-churning main
+
+Branch protection requires the head branch to be up-to-date with `main` before merge. When `main` is being actively churned by parallel agents (5+ orchestrators landing commits per hour during a CS-wave), an in-flight PR can spend hours in a `BEHIND → rebase → push → CI green → BEHIND again` loop without ever satisfying the up-to-date requirement at the moment merge is attempted. CS53-23 (PR #255) hit this — ~10 rebase cycles, none of which produced a strictly-mergeable window.
+
+**`gh pr merge --auto` is disabled in this repo** (`enablePullRequestAutoMerge = false`), so the auto-queue escape hatch GitHub normally provides isn't available.
+
+**Escalation rule (owner / admin only, only after explicit user approval).**
+
+This is an **exception path**, not default merge procedure. Per [§ WORKBOARD.md — Live Coordination in TRACKING.md](TRACKING.md#workboardmd--live-coordination) and the broader "no self-decided shortcuts" rule in [§ Quick Reference Checklist in INSTRUCTIONS.md](INSTRUCTIONS.md#quick-reference-checklist), a non-owner orchestrator must NOT use `--admin`. Once a PR satisfies all of the criteria below AND the user (or a delegated authority with admin rights) has explicitly approved the merge, the owner / admin may use `gh pr merge --squash --admin`:
+
+- All required CI checks SUCCESS on the latest head commit
+- All required reviews approved (Copilot for code/config; local review for docs-only — see [REVIEWS.md](REVIEWS.md))
+- The PR has been ready-to-merge for ≥30 minutes AND `main` has moved ≥3 times since the last successful CI
+
+The `--admin` flag bypasses the up-to-date requirement; the squash strategy keeps `main` history clean. Do **not** use `--admin` to bypass actual content conflicts (`mergeStateStatus = DIRTY`) — that path requires a real rebase and conflict resolution.
+
+**When using `--admin`, post a PR comment** documenting why the bypass was used, who approved it, and which CI sha was last successful (e.g., "Admin merge after 10 rebase cycles in churning main; CI green on `<sha>`, all reviews approved, user approved at `<time>`"). This preserves the audit trail for branch-protection exceptions.
+
+**Pre-merge sanity check via the merge tree**, even when bypassing the up-to-date check, to catch silent semantic conflicts that GitHub's mergeStateStatus wouldn't flag (e.g. two concurrent PRs both rewriting the same JSDoc):
+
+```powershell
+git fetch origin main
+$mb = git merge-base origin/main HEAD
+git merge-tree $mb origin/main HEAD |
+  Select-String 'CONFLICT|<<<<<<<' |
+  Select-Object -First 10
+# Empty output = the squash-merge tree is clean
+```
+
+If non-empty, fall back to a real rebase before `--admin`-merging.
 
 ## Staging environment (scale-to-zero)
 
