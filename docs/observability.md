@@ -636,15 +636,16 @@ not (yet) forwarded to App Insights — see § D.1 for the AI client SDK gap
 (tracked under CS54-9). The signal names are stable so the queries below will
 work once the bridge ships.
 
-Signals emitted from `public/js/app.js` and `public/js/game.js`:
+Signals emitted from `public/js/app.js`, `public/js/game.js`, and
+`public/js/claim-modal.js`:
 
 | Signal | Where | Payload |
 | --- | --- | --- |
 | `ranked_session_started` | game.js | `{ mode, sessionId }` |
 | `ranked_session_abandoned_due_to_disconnect` | app.js | `{ mode, sessionId, connectivityState }` |
-| `claim_prompt_shown` | app.js | `{ unattachedCount, mismatchedCount }` |
-| `claim_prompt_accepted` | app.js | `{ claimedCount }` |
-| `claim_prompt_declined` | app.js | `{ pendingCount }` |
+| `claim_prompt_shown` | claim-modal.js | `{ unattachedCount, mismatchedCount }` |
+| `claim_prompt_accepted` | claim-modal.js | `{ claimedCount }` |
+| `claim_prompt_declined` | claim-modal.js | `{ pendingCount }` |
 
 ### Ranked-session abandonment rate (mid-session disconnect frequency)
 

@@ -314,6 +314,21 @@ let rankedAbortController = null;
  * expects. The `answer` field is intentionally absent — the client never sees
  * the correct answer in Ranked.
  */
+
+/**
+ * Defensive JSON parse helper for Ranked endpoints. Returns the parsed body
+ * on success, or `undefined` if parsing throws (non-JSON proxy error pages,
+ * truncated bodies, …). Callers compare against `undefined` (not falsy) so
+ * a legitimate `null` / `0` / `false` JSON body is preserved.
+ */
+async function safeJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeRankedPuzzle(p) {
   const puzzle = (p && typeof p === 'object') ? p : {};
   const prompt = puzzle.prompt;
@@ -424,11 +439,15 @@ async function startRanked({ mode, apiFetch, ui }) {
   // Defensive defaults — server should always supply config, but guard
   // anyway so a missing/partial response doesn't throw at runtime when
   // nextRankedRound()/finishRankedSession() read state.config.rounds.
+  // Spread the raw config FIRST and then layer validated coercions on top
+  // so that null / undefined / non-numeric server values can't overwrite
+  // sane defaults.
+  const rawConfig = (data.config && typeof data.config === 'object') ? data.config : {};
   const safeConfig = {
-    rounds: (data.config && data.config.rounds) || 10,
-    roundTimerMs: (data.config && data.config.roundTimerMs) || 15000,
-    interRoundDelayMs: (data.config && data.config.interRoundDelayMs) || 0,
-    ...(data.config || {}),
+    ...rawConfig,
+    rounds: (Number.isInteger(rawConfig.rounds) && rawConfig.rounds > 0) ? rawConfig.rounds : 10,
+    roundTimerMs: (Number.isFinite(rawConfig.roundTimerMs) && rawConfig.roundTimerMs > 0) ? rawConfig.roundTimerMs : 15000,
+    interRoundDelayMs: (Number.isFinite(rawConfig.interRoundDelayMs) && rawConfig.interRoundDelayMs >= 0) ? rawConfig.interRoundDelayMs : 0,
   };
   const totalRounds = safeConfig.rounds;
   state = createState(new Array(totalRounds).fill(null), mode);
@@ -482,8 +501,12 @@ async function submitRankedAnswer(answer, ui) {
     return;
   }
 
-  const data = await res.json();
+  const data = await safeJson(res);
   if (!state || !state.ranked || state.sessionId !== sessionId) return;
+  if (data === undefined) {
+    if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body: null });
+    return;
+  }
   const correct = !!data.correct;
   if (correct) {
     state.streak += 1;
@@ -565,8 +588,12 @@ async function nextRankedRound(ui) {
       if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body });
       return;
     }
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!state || !state.ranked || state.sessionId !== sessionId) return;
+    if (data === undefined) {
+      if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body: null });
+      return;
+    }
     presentRankedRound(data, ui);
     return;
   }
@@ -619,8 +646,12 @@ async function finishRankedSession(ui) {
     if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body });
     return;
   }
-  const data = await res.json();
+  const data = await safeJson(res);
   if (!state || !state.ranked || state.sessionId !== sessionId) return;
+  if (data === undefined) {
+    if (ui.showRankedError) ui.showRankedError({ kind: 'http', status: res.status, body: null });
+    return;
+  }
   state.finished = true;
   const summary = {
     score: data.score,
