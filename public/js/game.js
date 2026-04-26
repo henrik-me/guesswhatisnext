@@ -348,6 +348,13 @@ async function startRanked({ mode, apiFetch, ui }) {
   if (mode !== 'ranked_freeplay' && mode !== 'ranked_daily') {
     throw new Error(`startRanked: unsupported mode ${mode}`);
   }
+  // Defensive cleanup: a non-ranked round (for example Practice) may still
+  // have an active timer when the user navigates Home and starts Ranked.
+  // abortRanked() only stops the timer when the current state is ranked,
+  // so explicitly stop any timer here before the async session-create
+  // request — otherwise a stale Practice timeout could fire submitAnswer()
+  // and overwrite the UI mid-launch.
+  stopTimer();
   abortRanked(); // ensure no stale session
 
   rankedAbortController = new AbortController();
@@ -534,7 +541,13 @@ async function nextRankedRound(ui) {
 
 async function finishRankedSession(ui) {
   if (!state || !state.ranked) return;
-  state.finished = true;
+  // NOTE: state.finished is intentionally NOT set here. We need the
+  // session to remain "active" (ranked && !finished) while the /finish
+  // request is in flight so that:
+  //   - applyConnectivityState() still hard-fails on ok→non-ok mid-finalize
+  //   - ui.showRankedError({kind:'network'}) still surfaces the abandoned
+  //     overlay if /finish itself fails with a network error
+  // The flag is set only after the server confirms the finalize call.
   stopTimer();
   const sessionId = state.sessionId;
   const apiFetch = state.apiFetch;
@@ -560,6 +573,7 @@ async function finishRankedSession(ui) {
     return;
   }
   const data = await res.json();
+  state.finished = true;
   const summary = {
     score: data.score,
     correctCount: data.correctCount,

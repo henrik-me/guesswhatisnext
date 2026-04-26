@@ -595,11 +595,16 @@ function applyRankedEntryGate(canRank, stateName) {
 }
 
 function applyConnectivityState(stateName) {
+  // canRank is derived by sync-client's connectivity state machine —
+  // use the getter rather than re-implementing the (stateName === 'ok')
+  // mapping here so the UI gate stays consistent if the SM ever adds
+  // an "ok-but-cannot-rank" state.
+  const canRank = connectivity.canRank;
   renderConnectivityBanner(stateName);
-  applyRankedEntryGate(stateName === 'ok', stateName);
-  // CS52-4: if a Ranked session is in flight and the state transitions to
-  // anything non-ok, hard-fail the session and show the abandoned overlay.
-  if (stateName !== 'ok' && Game.state && Game.state.ranked && !Game.state.finished) {
+  applyRankedEntryGate(canRank, stateName);
+  // CS52-4: if a Ranked session is in flight and ranking is no longer
+  // allowed, hard-fail the session and show the abandoned overlay.
+  if (!canRank && Game.state && Game.state.ranked && !Game.state.finished) {
     handleRankedDisconnect(stateName);
   }
 }
