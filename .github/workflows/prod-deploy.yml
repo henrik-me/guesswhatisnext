@@ -197,6 +197,43 @@ jobs:
       - name: Install dependencies (production only)
         run: npm ci --omit=dev
 
+      # CS41-12 prep: capture the currently-serving (OLD) revision BEFORE
+      # the migration runs. Prod is single-revision mode, so once
+      # `az containerapp update` lands the new image, traffic shifts
+      # atomically — there is no post-update opportunity to verify the
+      # OLD code against the NEW schema. We capture now so the post-migration
+      # smoke (next step) can probe the OLD revision's direct FQDN while
+      # it is still serving traffic.
+      #
+      # First-deploy edge case: if no revision exists yet (latestRevisionName
+      # empty / FQDN missing), CS41-12 is skipped with a notice — there is
+      # no OLD server to break.
+      - name: Capture old revision (CS41-12 prep)
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            OLD_NAME=$(az containerapp show --name gwn-production --resource-group gwn-rg \
+              --query "properties.latestRevisionName" -o tsv 2>/dev/null || echo "")
+            if [ -z "$OLD_NAME" ] || [ "$OLD_NAME" = "None" ]; then
+              echo "::notice::No existing revision found — skipping CS41-12 (first deploy)."
+              echo "OLD_REVISION_NAME=" >> "$GITHUB_ENV"
+              echo "OLD_REVISION_FQDN=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            OLD_FQDN=$(az containerapp revision show \
+              --name gwn-production --resource-group gwn-rg \
+              --revision "$OLD_NAME" \
+              --query "properties.fqdn" -o tsv 2>/dev/null || echo "")
+            if [ -z "$OLD_FQDN" ] || [ "$OLD_FQDN" = "None" ]; then
+              echo "::warning::Could not resolve FQDN for $OLD_NAME — CS41-12 will skip."
+              echo "OLD_REVISION_NAME=" >> "$GITHUB_ENV"
+              echo "OLD_REVISION_FQDN=" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "OLD_REVISION_NAME=$OLD_NAME" >> "$GITHUB_ENV"
+            echo "OLD_REVISION_FQDN=$OLD_FQDN" >> "$GITHUB_ENV"
+            echo "Captured OLD revision: $OLD_NAME ($OLD_FQDN)"
+
       - name: Run DB migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -209,6 +246,49 @@ jobs:
             echo "::error::Migration failed; aborting deploy before traffic shift"
             exit 1
           }
+
+      # CS41-12: smoke the OLD revision (still serving 100% of prod traffic)
+      # against the just-migrated DB BEFORE we ship the new image. This catches
+      # backward-incompatibility that the static linter (CS41-11) cannot:
+      #   - subtle query-shape changes (e.g. SELECT * widening unexpectedly)
+      #   - app-side schema introspection that breaks on new structure
+      #   - trigger / index / default-value side effects
+      #
+      # Failure mode here is NOT recoverable automatically:
+      #   - the migration HAS been applied to the DB
+      #   - the OLD revision CANNOT serve against the new schema
+      #   - traffic shift to the NEW revision has NOT happened yet
+      # Operator playbook (see PR body):
+      #   (a) Roll forward urgently: re-run this workflow from the
+      #       "Deploy to production Container App" step (or invoke
+      #       `az containerapp update` manually) to land the new image.
+      #       Service is degraded for the gap window.
+      #   (b) Manually revert the migration with hand-written inverse SQL.
+      #       Migrations are forward-only, so this is HARD; prefer (a)
+      #       unless the migration itself is also broken.
+      # Cold-start: the OLD revision may have scaled to zero. smoke.js
+      # already tolerates 503+Retry-After up to WARMUP_CAP_MS+COLD_START_MS,
+      # so we reuse the same budget as CS41-1 (steps.smoke env below).
+      - name: Smoke OLD revision against NEW schema (CS41-12)
+        if: env.OLD_REVISION_FQDN != ''
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_PROD }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+        run: |
+          if [ -z "$SMOKE_USER_PASSWORD" ]; then
+            echo "::error::secrets.SMOKE_USER_PASSWORD_PROD is unset; cannot run CS41-12 old-revision smoke."
+            exit 1
+          fi
+          node scripts/smoke.js "$OLD_REVISION_FQDN" || {
+            echo "::error::CS41-12: MIGRATION BREAKS OLD SERVER — manual recovery required"
+            echo "::error::The migration was applied to the DB, but old revision $OLD_REVISION_NAME cannot serve against the new schema."
+            echo "::error::Operator must EITHER roll forward urgently (re-run from 'Deploy to production Container App') OR manually revert the migration with hand-written inverse SQL. See the CS41-12 operator playbook in the PR body."
+            exit 1
+          }
+          echo "✅ CS41-12: OLD revision $OLD_REVISION_NAME serves cleanly against the migrated schema."
 
       - name: Deploy to production Container App
         uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
