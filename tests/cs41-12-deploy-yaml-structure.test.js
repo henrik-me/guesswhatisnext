@@ -143,3 +143,57 @@ describe('CS41-12 deploy YAML structure (staging-deploy.yml)', () => {
     expect(yaml).toMatch(/MIGRATION BREAKS OLD STAGING SERVER/);
   });
 });
+
+describe('CS41-9 deploy YAML structure (staging-deploy.yml pre-cutover gates)', () => {
+  // The CS41-9 invariant: any failure in smoke / AI-verify on the new
+  // revision must abort the deploy BEFORE the traffic-shift step so the
+  // OLD revision keeps serving real (smoke-test) traffic. The render-
+  // deploy-summary step, conversely, must run AFTER the traffic shift so
+  // the summary can describe the post-cutover state on the success path
+  // (and, via `if: always()`, the pre-cutover-abort state on failure).
+  // If a future edit reorders any of these, the pre-cutover guarantee is
+  // silently lost — only the YAML order encodes the contract.
+  const yaml = readFileSync(join(WF_DIR, 'staging-deploy.yml'), 'utf8');
+
+  const lineMigrate = lineOf(yaml, '- name: Run DB migrations');
+  const lineSmokeOld = lineOf(yaml, '- name: Smoke OLD revision against NEW schema (CS41-12)');
+  const lineNewFqdn = lineOf(yaml, '- name: Get new revision FQDN (CS41-1)');
+  const lineSmokeNew = lineOf(yaml, '- name: Smoke deployed revision (CS41-1+2)');
+  const lineAiVerify = lineOf(yaml, '- name: AI telemetry verification (CS41-3)');
+  const lineTraffic = lineOf(yaml, '- name: Switch traffic to new revision');
+  const lineSummary = lineOf(yaml, '- name: Render deploy summary (CS41-8)');
+
+  it('contains all gate steps relevant to CS41-9', () => {
+    expect(lineMigrate).toBeGreaterThan(0);
+    expect(lineSmokeOld).toBeGreaterThan(0);
+    expect(lineNewFqdn).toBeGreaterThan(0);
+    expect(lineSmokeNew).toBeGreaterThan(0);
+    expect(lineAiVerify).toBeGreaterThan(0);
+    expect(lineTraffic).toBeGreaterThan(0);
+    expect(lineSummary).toBeGreaterThan(0);
+  });
+
+  it('Smoke OLD revision runs AFTER Run DB migrations (CS41-12 contract)', () => {
+    expect(lineSmokeOld).toBeGreaterThan(lineMigrate);
+  });
+
+  it('Smoke OLD revision runs BEFORE Smoke NEW revision', () => {
+    expect(lineSmokeOld).toBeLessThan(lineSmokeNew);
+  });
+
+  it('Smoke NEW revision runs BEFORE traffic set (pre-cutover gate)', () => {
+    expect(lineSmokeNew).toBeLessThan(lineTraffic);
+  });
+
+  it('AI telemetry verification runs AFTER Smoke NEW revision', () => {
+    expect(lineAiVerify).toBeGreaterThan(lineSmokeNew);
+  });
+
+  it('AI telemetry verification runs BEFORE traffic set (pre-cutover gate)', () => {
+    expect(lineAiVerify).toBeLessThan(lineTraffic);
+  });
+
+  it('Render deploy summary runs AFTER traffic set (post-cutover semantic)', () => {
+    expect(lineSummary).toBeGreaterThan(lineTraffic);
+  });
+});
