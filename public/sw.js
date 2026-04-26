@@ -4,7 +4,7 @@
  * Cache-first for static assets, network-first for API calls.
  */
 
-const CACHE_NAME = 'gwn-80b46376';
+const CACHE_NAME = 'gwn-d43d92a4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -12,6 +12,7 @@ const STATIC_ASSETS = [
   '/css/style.css',
   '/js/app.js',
   '/js/sync-client.js',
+  '/js/connectivity-ui.js',
   '/js/game.js',
   '/js/puzzles.js',
   '/js/daily.js',

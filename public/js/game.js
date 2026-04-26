@@ -402,12 +402,21 @@ async function startRanked({ mode, apiFetch, ui }) {
   // catches the rare race where the server response arrives first.
   if (signal && signal.aborted) return { aborted: true };
 
-  const totalRounds = (data.config && data.config.rounds) || 10;
+  // Defensive defaults — server should always supply config, but guard
+  // anyway so a missing/partial response doesn't throw at runtime when
+  // nextRankedRound()/finishRankedSession() read state.config.rounds.
+  const safeConfig = {
+    rounds: (data.config && data.config.rounds) || 10,
+    roundTimerMs: (data.config && data.config.roundTimerMs) || 15000,
+    interRoundDelayMs: (data.config && data.config.interRoundDelayMs) || 0,
+    ...(data.config || {}),
+  };
+  const totalRounds = safeConfig.rounds;
   state = createState(new Array(totalRounds).fill(null), mode);
   state.ranked = true;
   state.sessionId = data.sessionId;
-  state.config = data.config;
-  state.roundTimeMs = (data.config && data.config.roundTimerMs) || 15000;
+  state.config = safeConfig;
+  state.roundTimeMs = safeConfig.roundTimerMs;
   state.expiresAt = data.expiresAt;
   state.apiFetch = apiFetch;
   presentRankedRound(data.round0, ui);
