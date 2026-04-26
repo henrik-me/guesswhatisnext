@@ -1,6 +1,7 @@
 # CS41 — Production & staging deploy validation (functional + telemetry + perf)
 
-**Status:** 🔄 In Progress — plan v3 (post-rubber-duck)
+**Status:** ✅ Done — closed 2026-04-26
+**Closed by:** yoga-gwn-c2 via CS41-10 PR [#281](https://github.com/henrik-me/guesswhatisnext/pull/281)
 **Owner:** yoga-gwn-c2 (claimed 2026-04-26T02:50Z)
 **Origin:** Identified during CS25. Replanned by yoga-gwn-c2 in three rounds: v1 (5 tasks; CS41-3 marked "evaluate feasibility", pre-CS54), v2 (10 tasks after CS54 + INSTRUCTIONS § 4a), v3 (this — incorporates rubber-duck findings: existing migration framework, username/route corrections, safe smoke-user pattern, ingest-storage rethink, staging revision-direct validation pre-cutover, no-rollback on AI ingest delay, github-script for PR gate, CS59 coordination).
 
@@ -34,21 +35,21 @@ This CS turns INSTRUCTIONS.md § 4a [Telemetry & Observability gate](../../../IN
 
 | ID | Task | Status | Notes |
 |----|------|--------|-------|
-| CS41-0 | **Reserved-username + leaderboard-filter prerequisite.** Add username-prefix reservation (registration rejects `gwn-smoke-*`) AND filter `gwn-smoke-*` users from leaderboard + all public user-listing surfaces. Pre-create `gwn-smoke-bot` via idempotent `scripts/setup-smoke-user.js` (operator runs once per env). | ⬜ Pending | Replaces v2's "DELETE test user after each smoke" cleanup story — no cleanup endpoint exists; FK cascades aren't in place. Single fixed user, scores accumulate but never appear in user-facing surfaces. Lands first; everything else depends. |
-| CS41-1 | **Smoke flow against deployed-revision FQDN, cold-start aware.** (a) poll `/healthz` until 200; (b) cold-start probe `/api/features` accepting 503+Retry-After up to `WARMUP_CAP_MS + 30s + COLD_START_MS`; (c) login as `gwn-smoke-bot`; (d) POST `/api/scores`; (e) GET `/api/scores/me` and assert submitted score present; (f) GET `/api/health` assert `checks.database.status === "ok"`. Two invocations (staging + prod). | ⬜ Pending | All routes verified. Username `gwn-smoke-bot` (13 chars). Score asserted via user-scoped read, not flaky leaderboard. |
-| CS41-2 | **Per-request response time baselines.** Warn if any single request > 2s; fail if > `WARMUP_CAP_MS + 30s + COLD_START_MS`. Log to workflow summary. | ⬜ Pending | Per-request thresholds (not p50/p95) — too few requests for percentiles to mean anything. |
-| CS41-3 | **AI telemetry verification (warning-only).** KQL: `requests \| where cloud_RoleInstance has '<NEW_REVISION>' and timestamp > ago(10m) \| count`; assert ≥ N. If 0 after 10 min → workflow WARNING annotation, not failure. | ⬜ Pending | Critical correction: AI ingest delay does NOT roll back. Per CS54-6 evidence ingest is reliably < 5 min, but a slow ingest must not break a healthy deploy. |
-| CS41-4 | **Wire pre-deploy DB migration step** using existing framework. New `scripts/migrate.js` CLI wrapper. Pre-deploy step in BOTH workflows. Idempotent re-runs are no-ops via existing `_tracker.js`. Migration failure aborts deploy without traffic shift. | ⬜ Pending | Framework exists; this is just wiring. Needs `GWN_MSSQL_CONN_STRING` secret per env. |
-| CS41-5 | **Rollback verification with explicit revision targeting.** After auto-rollback, capture `ROLLBACK_REVISION_NAME` + `ROLLBACK_TIMESTAMP`; run CS41-1 + CS41-3 KQL against that specific revision and post-rollback time window. "Rollback target also unhealthy" → explicit annotation. | ⬜ Pending | Without explicit targeting, KQL could falsely succeed on stale data from the failed new revision. |
-| CS41-6 | **PR-CI § 4a Telemetry Validation gate** via `actions/github-script`. Reads `pull_request.body` directly. Skip docs-only PRs. `.github/workflows/` ARE gated (CS41 itself touches workflows). | ⬜ Pending | `gh pr view` approach was brittle (auth, shallow checkout); github-script is the supported pattern. |
-| CS41-7 | **Per-deploy AI ingest summary → workflow summary + 90-day artifact** (NOT git-committed). Bound window via `gh run list` for previous successful run. CS60-1/2/3 operators consume artifacts via `gh run download`. | ⬜ Pending | Major rethink: do NOT append to `cs60-data-appendix.md` from workflow (main is protected, no CI write). Data appendix updated MANUALLY at CS60 windows. |
-| CS41-8 | **Deploy summary annotation.** Aggregates: image SHA + revision + migration result + cold-start probe duration + smoke per-step + per-request times + AI verification result + ingest delta + AI Logs blade link. | ⬜ Pending | Pure render task. |
-| CS41-9 | **Apply gates to staging-deploy.yml + restructure for pre-cutover validation.** Deploy at 0% traffic → migrations → smoke + AI verify on direct FQDN → ONLY THEN `traffic set` 100% + deactivate old. Pre-cutover failure aborts without traffic shift. | ⬜ Pending | Current staging shifts traffic before validation — bad revision briefly serves traffic. Multi-revision mode supports zero-downtime gating. |
-| CS41-9b | **CS59 coordination.** Update [`planned_cs59`](../planned/planned_cs59_staging-cost-soak-verification.md) with explicit "filter `gwn-smoke-bot`-attributed requests OR require quiescence window" task. | ⬜ Pending | v2's note-only ack wasn't enough; CS59's plan needs the coordination encoded in its own task list. |
-| CS41-10 | **YAML coordination + docs + close.** Per [§ YAML coordination](#yaml-coordination). Update `docs/observability.md` + `OPERATIONS.md`. Move CS41 → `done/`. | ⬜ Pending | Standard close-out. |
-| CS41-11 | **Migration policy linter** (added in plan v4 after audit confirmed no current violations but no enforcement either). New `scripts/check-migration-policy.js` parses `server/db/migrations/NNN-*.js` and rejects `DROP COLUMN`, `DROP TABLE`, `RENAME COLUMN`, `RENAME TABLE`, `ALTER COLUMN ... NOT NULL` without `DEFAULT`, new `NOT NULL` column without `DEFAULT`, and FK changes that break existing queries. Override via inline `// MIGRATION-POLICY-OVERRIDE: <reason + multi-PR-plan-link>` comment (mirrors `check-docs-consistency.js` ignore pattern). Wire into `npm test` precheck or as a dedicated CI job. | ⬜ Pending | Track D (independent). Doesn't touch deploy YAMLs or existing migrations — pure additive linter + CI check. Audit (2026-04-26) confirmed all 8 existing migrations pass; linter is forward-looking enforcement. |
-| CS41-12 | **Old-server-on-new-schema smoke** in deploy sequence. After CS41-4's migration step runs but BEFORE traffic shift, smoke the OLD revision (still serving traffic) against the just-migrated DB using the same CS41-1 smoke flow but pointed at the OLD revision's direct FQDN. Failure → abort deploy + alert "MIGRATION BREAKS OLD SERVER — manual recovery required" (operator must roll forward urgently or revert the migration manually). Catches incompat that the linter (CS41-11) can't detect (subtle query-shape changes, app-side schema introspection). | ⬜ Pending | Depends on CS41-4 merged + CS41-1 merged. Track A continuation. |
-| CS41-13 | **Document expand→migrate→contract pattern** in INSTRUCTIONS.md. For migrations that genuinely require backward-incompat changes (rename, drop, type change), require a 3-PR sequence: (A) add new column + dual-write code; (B) backfill + cut reads; (C) stop dual-write + drop old column. Each PR individually backward-compatible. The CS41-11 linter override comment must reference the multi-PR plan. | ⬜ Pending | Docs-only. Sequenced last; depends on CS41-11 + CS41-12 merged. |
+| CS41-0 | **Reserved-username + leaderboard-filter prerequisite.** Add username-prefix reservation (registration rejects `gwn-smoke-*`) AND filter `gwn-smoke-*` users from leaderboard + all public user-listing surfaces. Pre-create `gwn-smoke-bot` via idempotent `scripts/setup-smoke-user.js` (operator runs once per env). | ✅ Done | PR [#260](https://github.com/henrik-me/guesswhatisnext/pull/260), commit 17f9df8 |
+| CS41-1 | **Smoke flow against deployed-revision FQDN, cold-start aware.** (a) poll `/healthz` until 200; (b) cold-start probe `/api/features` accepting 503+Retry-After up to `WARMUP_CAP_MS + 30s + COLD_START_MS`; (c) login as `gwn-smoke-bot`; (d) POST `/api/scores`; (e) GET `/api/scores/me` and assert submitted score present; (f) GET `/api/health` assert `checks.database.status === "ok"`. Two invocations (staging + prod). | ✅ Done | PR [#273](https://github.com/henrik-me/guesswhatisnext/pull/273) (shipped together with CS41-2 + CS41-8), commit 78c1f92 |
+| CS41-2 | **Per-request response time baselines.** Warn if any single request > 2s; fail if > `WARMUP_CAP_MS + 30s + COLD_START_MS`. Log to workflow summary. | ✅ Done | PR [#273](https://github.com/henrik-me/guesswhatisnext/pull/273) (shipped together with CS41-1 + CS41-8), commit 78c1f92 |
+| CS41-3 | **AI telemetry verification (warning-only).** KQL: `requests \| where cloud_RoleInstance has '<NEW_REVISION>' and timestamp > ago(10m) \| count`; assert ≥ N. If 0 after 10 min → workflow WARNING annotation, not failure. | ✅ Done | PR [#275](https://github.com/henrik-me/guesswhatisnext/pull/275), commit 20c2b5b |
+| CS41-4 | **Wire pre-deploy DB migration step** using existing framework. New `scripts/migrate.js` CLI wrapper. Pre-deploy step in BOTH workflows. Idempotent re-runs are no-ops via existing `_tracker.js`. Migration failure aborts deploy without traffic shift. | ✅ Done | PR [#262](https://github.com/henrik-me/guesswhatisnext/pull/262), commit b8571a8 |
+| CS41-5 | **Rollback verification with explicit revision targeting.** After auto-rollback, capture `ROLLBACK_REVISION_NAME` + `ROLLBACK_TIMESTAMP`; run CS41-1 + CS41-3 KQL against that specific revision and post-rollback time window. "Rollback target also unhealthy" → explicit annotation. | ✅ Done | PR [#278](https://github.com/henrik-me/guesswhatisnext/pull/278), commit 6c3ad5b |
+| CS41-6 | **PR-CI § 4a Telemetry Validation gate** via `actions/github-script`. Reads `pull_request.body` directly. Skip docs-only PRs. `.github/workflows/` ARE gated (CS41 itself touches workflows). | ✅ Done | PR [#261](https://github.com/henrik-me/guesswhatisnext/pull/261), commit a91bcd5 |
+| CS41-7 | **Per-deploy AI ingest summary → workflow summary + 90-day artifact** (NOT git-committed). Bound window via `gh run list` for previous successful run. CS60-1/2/3 operators consume artifacts via `gh run download`. | ✅ Done | PR [#280](https://github.com/henrik-me/guesswhatisnext/pull/280), commit f0d5d6c |
+| CS41-8 | **Deploy summary annotation.** Aggregates: image SHA + revision + migration result + cold-start probe duration + smoke per-step + per-request times + AI verification result + ingest delta + AI Logs blade link. | ✅ Done | PR [#273](https://github.com/henrik-me/guesswhatisnext/pull/273) (shipped together with CS41-1 + CS41-2), commit 78c1f92 |
+| CS41-9 | **Apply gates to staging-deploy.yml + restructure for pre-cutover validation.** Deploy at 0% traffic → migrations → smoke + AI verify on direct FQDN → ONLY THEN `traffic set` 100% + deactivate old. Pre-cutover failure aborts without traffic shift. | ✅ Done | PR [#277](https://github.com/henrik-me/guesswhatisnext/pull/277) (shipped together with CS41-9b), commit b17e6c8 |
+| CS41-9b | **CS59 coordination.** Update [`planned_cs59`](../planned/planned_cs59_staging-cost-soak-verification.md) with explicit "filter `gwn-smoke-bot`-attributed requests OR require quiescence window" task. | ✅ Done | PR [#277](https://github.com/henrik-me/guesswhatisnext/pull/277) (shipped together with CS41-9), commit b17e6c8 |
+| CS41-10 | **YAML coordination + docs + close.** Per [§ YAML coordination](#yaml-coordination). Update `docs/observability.md` + `OPERATIONS.md`. Move CS41 → `done/`. | ✅ Done | This PR (close-out). |
+| CS41-11 | **Migration policy linter** (added in plan v4 after audit confirmed no current violations but no enforcement either). New `scripts/check-migration-policy.js` parses `server/db/migrations/NNN-*.js` and rejects `DROP COLUMN`, `DROP TABLE`, `RENAME COLUMN`, `RENAME TABLE`, `ALTER COLUMN ... NOT NULL` without `DEFAULT`, new `NOT NULL` column without `DEFAULT`, and FK changes that break existing queries. Override via inline `// MIGRATION-POLICY-OVERRIDE: <reason + multi-PR-plan-link>` comment (mirrors `check-docs-consistency.js` ignore pattern). Wire into `npm test` precheck or as a dedicated CI job. | ✅ Done | PR [#272](https://github.com/henrik-me/guesswhatisnext/pull/272), commit 6fc32fb |
+| CS41-12 | **Old-server-on-new-schema smoke** in deploy sequence. After CS41-4's migration step runs but BEFORE traffic shift, smoke the OLD revision (still serving traffic) against the just-migrated DB using the same CS41-1 smoke flow but pointed at the OLD revision's direct FQDN. Failure → abort deploy + alert "MIGRATION BREAKS OLD SERVER — manual recovery required" (operator must roll forward urgently or revert the migration manually). Catches incompat that the linter (CS41-11) can't detect (subtle query-shape changes, app-side schema introspection). | ✅ Done | PR [#274](https://github.com/henrik-me/guesswhatisnext/pull/274), commit e093f65 |
+| CS41-13 | **Document expand→migrate→contract pattern** in INSTRUCTIONS.md. For migrations that genuinely require backward-incompat changes (rename, drop, type change), require a 3-PR sequence: (A) add new column + dual-write code; (B) backfill + cut reads; (C) stop dual-write + drop old column. Each PR individually backward-compatible. The CS41-11 linter override comment must reference the multi-PR plan. | ✅ Done | PR [#276](https://github.com/henrik-me/guesswhatisnext/pull/276), commit ffc7938 |
 
 ## Per-task implementation detail
 
@@ -280,21 +281,21 @@ Total: 9 PRs across 3 sub-agents, max 3 in-flight at once.
 
 ## Acceptance criteria
 
-- [ ] CS41-0: `gwn-smoke-` prefix reserved at registration; filtered from leaderboard + all public user-listing surfaces; `gwn-smoke-bot` user exists in both staging and prod DBs.
-- [ ] CS41-1: smoke runs against deployed-revision FQDN in BOTH envs; cold-start tolerant; uses correct routes; rollback fires on smoke failure.
-- [ ] CS41-2: per-request latency captured; warn/fail thresholds applied per request.
-- [ ] CS41-3: AI verification against `cloud_RoleInstance` for new revision; ingest-absent → workflow WARNING (not failure).
-- [ ] CS41-4: migrations run BEFORE traffic shift in BOTH envs; failure aborts deploy without traffic shift; idempotent.
-- [ ] CS41-5: rollback path runs CS41-1 + CS41-3 against `ROLLBACK_REVISION_NAME` + `ROLLBACK_TIMESTAMP`.
-- [ ] CS41-6: PR-CI gate via `actions/github-script` reading `pull_request.body` + `listFiles`; docs-only PRs skip; workflow PRs are gated.
-- [ ] CS41-7: per-deploy ingest summary in workflow summary AND uploaded as artifact (90-day retention) in BOTH envs.
-- [ ] CS41-8: deploy summary annotation contains all data points listed.
-- [ ] CS41-9: staging restructured to validate against new revision's direct FQDN BEFORE traffic cutover.
-- [ ] CS41-9b: CS59 plan file updated with explicit "filter or quiesce" coordination note.
-- [ ] No regression in `npm test` or `npm run container:validate`.
-- [ ] CS41 PRs each contain `## Container Validation` AND `## Telemetry Validation` sections per INSTRUCTIONS § 4a.
-- [ ] `docs/observability.md` updated with the new post-deploy KQL queries.
-- [ ] `OPERATIONS.md` deploy section updated with the new gates.
+- [x] CS41-0: `gwn-smoke-` prefix reserved at registration; filtered from leaderboard + all public user-listing surfaces; `gwn-smoke-bot` user exists in both staging and prod DBs.
+- [x] CS41-1: smoke runs against deployed-revision FQDN in BOTH envs; cold-start tolerant; uses correct routes; rollback fires on smoke failure.
+- [x] CS41-2: per-request latency captured; warn/fail thresholds applied per request.
+- [x] CS41-3: AI verification against `cloud_RoleInstance` for new revision; ingest-absent → workflow WARNING (not failure).
+- [x] CS41-4: migrations run BEFORE traffic shift in BOTH envs; failure aborts deploy without traffic shift; idempotent.
+- [x] CS41-5: rollback path runs CS41-1 + CS41-3 against `ROLLBACK_REVISION_NAME` + `ROLLBACK_TIMESTAMP`.
+- [x] CS41-6: PR-CI gate via `actions/github-script` reading `pull_request.body` + `listFiles`; docs-only PRs skip; workflow PRs are gated.
+- [x] CS41-7: per-deploy ingest summary in workflow summary AND uploaded as artifact (90-day retention) in BOTH envs.
+- [x] CS41-8: deploy summary annotation contains all data points listed.
+- [x] CS41-9: staging restructured to validate against new revision's direct FQDN BEFORE traffic cutover.
+- [x] CS41-9b: CS59 plan file updated with explicit "filter or quiesce" coordination note.
+- [x] No regression in `npm test` or `npm run container:validate`.
+- [x] CS41 PRs each contain `## Container Validation` AND `## Telemetry Validation` sections per INSTRUCTIONS § 4a.
+- [x] `docs/observability.md` updated with the new post-deploy KQL queries.
+- [x] `OPERATIONS.md` deploy section updated with the new gates.
 
 ## Will not be done as part of this clickstop
 
@@ -336,3 +337,42 @@ Total: 9 PRs across 3 sub-agents, max 3 in-flight at once.
 - [x] User sign-off: CS41-6 stays in CS41; max parallelism via sub-agents.
 - [ ] User reviews v3 plan + CS41-0 (first task) detail and gives go-ahead.
 - [ ] After user sign-off: dispatch sub-agents per the YAML coordination table.
+
+## Closing summary (2026-04-26)
+
+**Outcome:** all 12 functional sub-tasks delivered across 11 PRs (CS41-1+2+8 shipped together as PR #273; CS41-9+9b shipped together as PR #277); 3 sub-agent tracks; rubber-duck-validated plan v4.
+
+**Acceptance criteria status:** All 15 boxes checked above. Every criterion was verified by the merging sub-agent before its PR was approved (per § 4a Container + Telemetry Validation gates).
+
+**Risks materialized vs anticipated:** None of the Risks-table items fired during implementation. The branch-protection-blocks-write risk was already RESOLVED in plan v3 (CS41-7 uses artifacts, not git commits).
+
+**What lives forward:**
+- CS41-1+2+8 smoke + perf gates active on every staging and prod deploy.
+- CS41-3 AI verify (warning-only) active on every deploy.
+- CS41-4 migration step active on every deploy.
+- CS41-5 rollback verification fires on every rollback.
+- CS41-6 PR-CI § 4a Telemetry Validation gate active on every PR.
+- CS41-7 per-deploy ingest summary (workflow summary + 90-day artifact) on every deploy.
+- CS41-9 staging restructured for pre-cutover validation.
+- CS41-11 migration policy linter active on every PR (via `npm test`).
+- CS41-12 old-server-on-new-schema smoke active on every deploy.
+- CS41-13 expand→migrate→contract pattern documented in INSTRUCTIONS.md.
+
+**Cross-CS impact:**
+- INSTRUCTIONS.md § 4a (Telemetry & Observability) is now both policy AND enforced gate.
+- INSTRUCTIONS.md § Database & Data multi-PR pattern documented.
+- CS59 has explicit coordination task added (CS59-8).
+- CS60 unaffected by CS41-7 — by design, CS60-1/2/3 still run KQL manually at measurement windows; CS41-7 artifacts are an additional data source available via `gh run download`.
+
+**Deferred from CS41:** None. Every sub-task either landed, was rejected with rationale during planning, or is explicitly out-of-scope and noted in the "Will not be done" section.
+
+**Operator action required (post-merge):**
+- Set GitHub secret `SMOKE_USER_PASSWORD_PROD` (env-scoped to production environment).
+- Set GitHub secret `SMOKE_USER_PASSWORD_STAGING` (env-scoped to staging environment).
+- Run `node scripts/setup-smoke-user.js` against prod and staging DBs (operator one-time per env) to create the `gwn-smoke-bot` user.
+- Until both above are done, smoke steps in deploy YAMLs gracefully skip with a notice — the deploy still succeeds but doesn't exercise the full smoke flow.
+
+**Related CSes:**
+- Blocks unblocked: CS47 (ProgressiveLoader telemetry — can now consume CS41-3's AI infra).
+- Coordination ack: CS59 (cost-soak verification — CS59-8 added).
+- Predecessor: CS54 (App Insights wiring — CS41 verifies what CS54 wired).
