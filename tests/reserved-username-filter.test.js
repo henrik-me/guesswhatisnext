@@ -125,4 +125,31 @@ describe("CS41-0: 'gwn-smoke-*' prefix filtered from public surfaces", () => {
       expect(p.submitted_by).not.toMatch(/^gwn-smoke-/i);
     }
   });
+
+  test('GET /api/matches/history hides smoke-bot opponent + GET /api/matches/:id hides smoke-bot players', async () => {
+    // Reuse the match injected by the multiplayer-leaderboard test above
+    // (regular vs smoke-bot, smoke-bot wins). Get a token for the regular user.
+    const login = await getAgent()
+      .post('/api/auth/login')
+      .send({ username: 'regular-cs41', password: 'password123' });
+    const token = login.body.token;
+    expect(token).toBeTruthy();
+
+    const history = await getAgent()
+      .get('/api/matches/history')
+      .set('Authorization', `Bearer ${token}`);
+    expect(history.status).toBe(200);
+    // The smoke-bot match must NOT appear in the regular user's history
+    // (filtered by `opp_u.username NOT LIKE 'gwn-smoke-%'`).
+    const opponents = history.body.history.map((h) => h.opponent);
+    expect(opponents).not.toContain('gwn-smoke-bot');
+
+    const detail = await getAgent()
+      .get('/api/matches/match-cs41-1')
+      .set('Authorization', `Bearer ${token}`);
+    expect(detail.status).toBe(200);
+    const playerNames = detail.body.players.map((p) => p.username);
+    expect(playerNames).toContain('regular-cs41');
+    expect(playerNames).not.toContain('gwn-smoke-bot');
+  });
 });
