@@ -353,8 +353,9 @@ async function startRanked({ mode, apiFetch, ui }) {
   rankedAbortController = new AbortController();
   const signal = rankedAbortController.signal;
 
-  // Telemetry: session start.
-  try { console.info('[client] ranked_session_started', { mode }); } catch { /* ignore */ }
+  // Telemetry: session-creation request fired (the actual session_started
+  // event is emitted from game.js after the server returns success — this
+  // pre-flight log avoids inflating the denominator with failed starts).
 
   let res;
   try {
@@ -378,6 +379,18 @@ async function startRanked({ mode, apiFetch, ui }) {
   }
 
   const data = await res.json();
+  // CS52-4 telemetry: emit ranked_session_started exactly once, AFTER the
+  // server confirms session creation. (handleStartRanked deliberately does
+  // not pre-emit; that would inflate the denominator with failed starts
+  // like 409 "already played today" / 503 / 401.)
+  try { console.info('[client] ranked_session_started', { mode, sessionId: data.sessionId }); } catch { /* ignore */ }
+
+  // Stale-launch guard: if a newer abortRanked() landed between the request
+  // and now (e.g. user double-clicked Ranked), bail out without binding the
+  // UI to this stale session. The signal would have been aborted; this
+  // catches the rare race where the server response arrives first.
+  if (signal && signal.aborted) return { aborted: true };
+
   const totalRounds = (data.config && data.config.rounds) || 10;
   state = createState(new Array(totalRounds).fill(null), mode);
   state.ranked = true;

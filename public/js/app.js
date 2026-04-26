@@ -639,11 +639,15 @@ function installConnectivityUI() {
  * session-mutating request — no client → server signal needed here.
  */
 function handleRankedDisconnect(stateName) {
-  const sessionId = Game.abortRanked && Game.abortRanked();
+  // Capture mode/sessionId BEFORE abortRanked() clears state — abort runs
+  // first to stop the timer + in-flight fetches.
+  const priorMode = (Game.state && Game.state.mode) || null;
+  const priorSessionId = (Game.state && Game.state.sessionId) || null;
+  if (Game.abortRanked) Game.abortRanked();
   try {
     console.info('[client] ranked_session_abandoned_due_to_disconnect', {
-      mode: (Game.state && Game.state.mode) || null,
-      sessionId,
+      mode: priorMode,
+      sessionId: priorSessionId,
       connectivityState: stateName,
     });
   } catch { /* ignore */ }
@@ -689,7 +693,9 @@ function dismissRankedAbandonedOverlay() {
  * connectivity gate, 409 already-played-today), and otherwise hands off to
  * Game.startRanked for the streaming flow.
  */
+let rankedStartInFlight = false;
 async function handleStartRanked(mode) {
+  if (rankedStartInFlight) return; // ignore double-clicks while a start is in progress
   if (!isLoggedIn()) {
     authReturnScreen = currentScreen;
     showToast('Sign in to play Ranked');
@@ -701,16 +707,16 @@ async function handleStartRanked(mode) {
     showToast(copy ? copy.text : 'Ranked is unavailable right now');
     return;
   }
-  try {
-    console.info('[client] ranked_session_started', { mode });
-  } catch { /* ignore */ }
+  rankedStartInFlight = true;
   let result;
   try {
     result = await Game.startRanked({ mode, apiFetch, ui });
   } catch {
+    rankedStartInFlight = false;
     showToast('Couldn\u2019t start Ranked — please try again');
     return;
   }
+  rankedStartInFlight = false;
   if (!result || result.ok) return;
   if (result.error === 'http') {
     if (result.status === 409) {
