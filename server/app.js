@@ -10,6 +10,12 @@ const pinoHttp = require('pino-http');
 const { config } = require('./config');
 const { isTransientDbError, getDbUnavailability } = require('./lib/transient-db-error');
 const { createInitGuard } = require('./lib/db-init-guard');
+const {
+  getDbUnavailabilityState,
+  setDbUnavailabilityState,
+  onUnavailabilityCleared,
+} = require('./lib/db-unavailability-state');
+const pendingWrites = require('./lib/pending-writes');
 const logger = require('./logger');
 const { getDbAdapter, closeDbAdapter, isAdapterInitialized } = require('./db');
 const migrations = require('./db/migrations');
@@ -140,6 +146,11 @@ function createServer() {
       await initGuard.runOnce();
       dbInitialized = true;
       dbUnavailability = null;
+      // CS52-7e — clear the shared unavailability state, which fires any
+      // registered drain listeners (the pending_writes drain runs once
+      // off the back of this transition, in addition to the per-request
+      // post-response trigger below).
+      setDbUnavailabilityState(null);
       return { ok: true };
     } catch (err) {
       dbInitialized = false;
@@ -156,6 +167,9 @@ function createServer() {
       // Tier exhaustion; clears stale value on a transient failure that
       // follows a previous unavailability).
       dbUnavailability = getDbUnavailability(err, dialect);
+      // CS52-7e — keep the shared state in sync for routes/middleware that
+      // consult getDbUnavailabilityState() directly.
+      setDbUnavailabilityState(dbUnavailability);
       // Stamp the backoff timer NOW so the very next request after the
       // failure does not immediately re-attempt; the gate's backoff window
       // (`unavailabilityRetryBackoffMs`) is measured from this point.
@@ -167,6 +181,19 @@ function createServer() {
       return { ok: false, err };
     }
   }
+
+  // CS52-7e — drain the pending_writes queue when the DB transitions back
+  // to available (state non-null → null). Runs in a fire-and-forget async
+  // chain that does NOT block the request that triggered the transition.
+  // Per [INSTRUCTIONS.md § Database & Data], this is request-bound work
+  // (driven off the runInit success path inside an actual incoming
+  // request), not a timer.
+  const { REPLAY_HANDLERS } = require('./services/pending-writes-replay');
+  onUnavailabilityCleared(() => {
+    pendingWrites
+      .drainOnce({ replayHandlers: REPLAY_HANDLERS })
+      .catch((err) => logger.error({ err }, 'pending-writes drain (state-cleared) failed'));
+  });
 
   // Security middleware — HTTPS redirect (production only) and headers
   app.use(httpsRedirect);
@@ -251,6 +278,18 @@ function createServer() {
   // attempt. There is NO timer/poller/watchdog issuing DB queries on its
   // own — DB contact only happens in response to real traffic, an operator
   // POST /api/admin/init-db, or the eager non-Azure boot path below.
+  //
+  // CS52-7e exception: when the gate's `dbUnavailability` is set (DB
+  // permanently unavailable per CS53 Bug B), POST /api/sync and POST
+  // /api/sessions/:id/finish are allowed past the gate so their route
+  // handlers can persist a `pending_writes` file and return 202. All
+  // other paths still get the structured 503 (no-Retry-After) "render the
+  // unavailable banner" shape so the SPA stops cycling its warmup loop.
+  const FINISH_PATH_RE = /^\/api\/sessions\/[^/]+\/finish$/;
+  function isPendingWritesEnqueueablePath(req) {
+    if (req.method !== 'POST') return false;
+    return req.path === '/api/sync' || FINISH_PATH_RE.test(req.path);
+  }
   app.use((req, res, next) => {
     if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/') || req.path.startsWith('/api/telemetry/')) return next();
 
@@ -260,27 +299,34 @@ function createServer() {
 
     if (!dbInitialized && req.path.startsWith('/api/')) {
       if (dbUnavailability) {
-        // Backoff-gated retry: a permanent-unavailability state may clear
-        // later (capacity renews). Allow a real request to trigger one
-        // re-attempt per backoff window without changing the response shape
-        // — the SPA still stops retrying for this request.
-        if (isAzure && !initGuard.isInFlight()
-            && Date.now() - lastUnavailabilityRetryAt >= unavailabilityRetryBackoffMs) {
-          lastUnavailabilityRetryAt = Date.now();
+        // CS52-7e: let queueable POSTs through to enqueue a pending_writes
+        // file; they handle their own 202 response.
+        if (isPendingWritesEnqueueablePath(req)) {
+          // fall through to the activeRequests++ branch below
+        } else {
+          // Backoff-gated retry: a permanent-unavailability state may clear
+          // later (capacity renews). Allow a real request to trigger one
+          // re-attempt per backoff window without changing the response shape
+          // — the SPA still stops retrying for this request.
+          if (isAzure && !initGuard.isInFlight()
+              && Date.now() - lastUnavailabilityRetryAt >= unavailabilityRetryBackoffMs) {
+            lastUnavailabilityRetryAt = Date.now();
+            runInit().catch(() => { /* errors already logged inside runInit */ });
+          }
+          return sendDbUnavailable(res, dbUnavailability);
+        }
+      } else {
+        // Lazy init — only kick off when in Azure mode (production/staging).
+        // Non-Azure environments init eagerly via the IIFE below; if init
+        // failed there the process has already exited.
+        if (isAzure && !initGuard.isInFlight()) {
+          // Fire-and-forget; runInit() catches its own errors. The current
+          // request still gets 503 + Retry-After — the next retry from the
+          // client will land after init either completes or fails.
           runInit().catch(() => { /* errors already logged inside runInit */ });
         }
-        return sendDbUnavailable(res, dbUnavailability);
+        return res.set('Retry-After', '5').status(503).json({ error: 'Database not yet initialized', retryAfter: 5, phase: 'cold-start' });
       }
-      // Lazy init — only kick off when in Azure mode (production/staging).
-      // Non-Azure environments init eagerly via the IIFE below; if init
-      // failed there the process has already exited.
-      if (isAzure && !initGuard.isInFlight()) {
-        // Fire-and-forget; runInit() catches its own errors. The current
-        // request still gets 503 + Retry-After — the next retry from the
-        // client will land after init either completes or fails.
-        runInit().catch(() => { /* errors already logged inside runInit */ });
-      }
-      return res.set('Retry-After', '5').status(503).json({ error: 'Database not yet initialized', retryAfter: 5, phase: 'cold-start' });
     }
 
     activeRequests++;
@@ -308,6 +354,23 @@ function createServer() {
     }
     res.on('finish', decrement);
     res.on('close', decrement);
+
+    // CS52-7e — post-response drain hook. After any successful API
+    // request completes, if the DB-unavailability state is clear, kick a
+    // single pending_writes drain pass. Cheap when nothing is queued
+    // (one readdir against a small dir). Per [INSTRUCTIONS.md § Database
+    // & Data] this is request-bound and not a timer.
+    if (req.path.startsWith('/api/') && !req.path.startsWith('/api/health')
+        && !req.path.startsWith('/api/telemetry/')) {
+      res.on('finish', () => {
+        if (res.statusCode >= 400) return;
+        if (getDbUnavailabilityState()) return;
+        if (!dbInitialized) return;
+        pendingWrites
+          .drainOnce({ replayHandlers: REPLAY_HANDLERS })
+          .catch((err) => logger.error({ err }, 'pending-writes drain (post-response) failed'));
+      });
+    }
     next();
   });
 

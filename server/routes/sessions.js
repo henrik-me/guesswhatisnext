@@ -36,6 +36,12 @@ const {
   computeFinalScore,
   validateAnswerEvent,
 } = require('../services/scoringService');
+const { getDbUnavailability } = require('../lib/transient-db-error');
+const {
+  getDbUnavailabilityState,
+  setDbUnavailabilityState,
+} = require('../lib/db-unavailability-state');
+const pendingWrites = require('../lib/pending-writes');
 
 const router = express.Router();
 
@@ -580,7 +586,26 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
   const sessionId = req.params.id;
   return withSessionLock(sessionId, async () => {
     try {
-      const db = await getDbAdapter();
+      // CS52-7e — preflight DB-unavailable check. If a previous request
+      // (or the cold-start init) flagged the DB as unavailable, persist a
+      // Variant A pending_writes file and return 202. Replay drains when
+      // the DB is back; idempotency is handled by the replay handler.
+      const preState = getDbUnavailabilityState();
+      if (preState) {
+        return await enqueueFinishAndRespond(req, res, sessionId, preState);
+      }
+
+      let db;
+      try {
+        db = await getDbAdapter();
+      } catch (err) {
+        const u = getDbUnavailability(err);
+        if (u) {
+          setDbUnavailabilityState(u);
+          return await enqueueFinishAndRespond(req, res, sessionId, u);
+        }
+        throw err;
+      }
       const nowMs = Date.now();
       const userId = req.user.id;
 
@@ -702,9 +727,6 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
         'ranked-session finished'
       );
 
-      // TODO(CS52-7e): when getDbUnavailability() is non-null, persist to
-      // the pending_writes queue and return 202. For now the request gate's
-      // 503 covers this case.
       return res.status(200).json({
         score: final.score,
         correctCount: final.correctCount,
@@ -712,11 +734,58 @@ router.post('/:id/finish', requireAuth, async (req, res, next) => {
         fastestAnswerMs: final.fastestAnswerMs,
       });
     } catch (err) {
+      // CS52-7e — if a DB op inside the handler surfaces a permanent
+      // unavailability descriptor, set the shared state and enqueue a
+      // Variant A file (matches the preflight 202 path so the client
+      // sees a single response shape regardless of when the DB went
+      // down). Any other error continues to the central handler.
+      const u = getDbUnavailability(err);
+      if (u) {
+        setDbUnavailabilityState(u);
+        try {
+          return await enqueueFinishAndRespond(req, res, sessionId, u);
+        } catch (enqueueErr) {
+          next(enqueueErr);
+          return undefined;
+        }
+      }
       next(err);
       return undefined;
     }
   });
 });
+
+/**
+ * CS52-7e — enqueue a Variant A `pending_writes` file and return 202.
+ *
+ * The 202 carries `queuedRequestId` and `retryAfterMs: 5000`. No score /
+ * correctCount / bestStreak fields — the client will surface the result
+ * once a subsequent /api/sync (or another GET) returns a finalised state.
+ */
+async function enqueueFinishAndRespond(req, res, sessionId, descriptor) {
+  const { request_id } = await pendingWrites.enqueue({
+    endpoint: 'POST /api/sessions/:id/finish',
+    concrete_route: { session_id: sessionId },
+    user_id: req.user.id,
+    payload: {},
+  });
+  logger.info(
+    {
+      event: 'finish_request_queued_202',
+      sessionId,
+      user_id: req.user.id,
+      request_id,
+      reason: descriptor.reason,
+    },
+    'POST /api/sessions/:id/finish 202 — queued for replay (db-unavailable)'
+  );
+  return res.status(202).json({
+    queuedRequestId: request_id,
+    retryAfterMs: 5000,
+    unavailable: true,
+    reason: descriptor.reason,
+  });
+}
 
 /**
  * POST /api/sessions/:id/finish (legacy duplicate removed in local-review fix R1)

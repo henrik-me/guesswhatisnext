@@ -30,6 +30,11 @@ const crypto = require('crypto');
 const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { getDbUnavailability } = require('../lib/transient-db-error');
+const {
+  getDbUnavailabilityState,
+  setDbUnavailabilityState,
+} = require('../lib/db-unavailability-state');
+const pendingWrites = require('../lib/pending-writes');
 const logger = require('../logger');
 
 const router = express.Router();
@@ -64,6 +69,56 @@ function sendUnavailable(res, descriptor) {
   return res.status(503).json({
     error: 'Database temporarily unavailable',
     message: descriptor.message,
+    unavailable: true,
+    reason: descriptor.reason,
+  });
+}
+
+/**
+ * CS52-7e — enqueue a Variant B `pending_writes` file and return 202.
+ *
+ * The 202 response is **mutually exclusive** with the 200 response shape:
+ * it intentionally does NOT contain `acked` / `rejected` / `entities`
+ * fields. Clients must treat 202 as "ack pending — replay will eventually
+ * succeed", not as an immediate write outcome.
+ */
+async function enqueueSyncAndRespond(req, res, descriptor, queuedRecords) {
+  // Filter out records the live route would have synchronously rejected
+  // with `reason='invalid_payload'`. Without this, the 202 path would
+  // queue records that are guaranteed to be skipped at replay anyway,
+  // wasting disk + drain CPU and confusing the queue depth metric.
+  const validRecords = queuedRecords.filter((r) => {
+    if (!r || typeof r !== 'object' || !r.client_game_id) return false;
+    if (!isValidCompletedAt(r.completed_at)) return false;
+    if (r.mode != null && !VALID_MODES.has(String(r.mode))) return false;
+    return true;
+  });
+  const clientGameIds = validRecords.map((r) => String(r.client_game_id));
+  const { request_id } = await pendingWrites.enqueue({
+    endpoint: 'POST /api/sync',
+    concrete_route: {},
+    user_id: req.user.id,
+    payload: {
+      queuedRecords: validRecords,
+      revalidate: (req.body && typeof req.body.revalidate === 'object')
+        ? req.body.revalidate
+        : {},
+    },
+    client_game_ids: clientGameIds,
+  });
+  logger.info(
+    {
+      event: 'sync_request_queued_202',
+      user_id: req.user.id,
+      queued_count: validRecords.length,
+      request_id,
+      reason: descriptor.reason,
+    },
+    'POST /api/sync 202 — queued for replay (db-unavailable)'
+  );
+  return res.status(202).json({
+    queuedRequestIds: [request_id],
+    retryAfterMs: 5000,
     unavailable: true,
     reason: descriptor.reason,
   });
@@ -279,14 +334,27 @@ router.post('/', requireAuth, async (req, res, next) => {
       return res.status(400).json({ error: `queuedRecords exceeds max ${MAX_QUEUED_RECORDS}` });
     }
 
+    // CS52-7e — preflight DB-unavailable check. If the request gate has
+    // already classified the DB as permanently unavailable (or a previous
+    // request did), enqueue a Variant B pending_writes file and return 202
+    // without touching the DB. The 202 body is mutually exclusive with
+    // the 200 fields (no acked/rejected/entities).
+    const preState = getDbUnavailabilityState();
+    if (preState) {
+      return await enqueueSyncAndRespond(req, res, preState, queuedRecords);
+    }
+
     let db;
     try {
       db = await getDbAdapter();
     } catch (err) {
-      // TODO(CS52-7e): persist queuedRecords to durable per-request file and
-      // return 202 with queuedRequestIds (mutually exclusive with 200 fields).
       const u = getDbUnavailability(err);
-      if (u) return sendUnavailable(res, u);
+      if (u) {
+        // Surface the descriptor to other request handlers and to the
+        // gate so subsequent traffic also routes to the 202 path.
+        setDbUnavailabilityState(u);
+        return await enqueueSyncAndRespond(req, res, u, queuedRecords);
+      }
       throw err;
     }
 
@@ -370,8 +438,13 @@ router.post('/', requireAuth, async (req, res, next) => {
       } catch (err) {
         const u = getDbUnavailability(err);
         if (u) {
-          // TODO(CS52-7e): partial enqueue + 202.
-          return sendUnavailable(res, u);
+          // CS52-7e: DB became unavailable mid-batch. Set the shared state
+          // so future requests route directly to the 202 path, then enqueue
+          // the WHOLE original batch — processRecord is idempotent on
+          // (user_id, client_game_id), so already-acked records will be
+          // recognised on replay and not double-inserted.
+          setDbUnavailabilityState(u);
+          return await enqueueSyncAndRespond(req, res, u, queuedRecords);
         }
         // Per-record failure — log + continue so the rest of the batch succeeds.
         logger.error({
@@ -390,7 +463,15 @@ router.post('/', requireAuth, async (req, res, next) => {
         entities[key] = await fetchEntity(db, key, userId);
       } catch (err) {
         const u = getDbUnavailability(err);
-        if (u) return sendUnavailable(res, u);
+        if (u) {
+          // Mid-revalidate DB-unavailability: queuedRecords have already
+          // been processed (acked/rejected accumulated). Surface a 503
+          // for this request rather than masquerading the partial 200 as
+          // a 202 — the client retries and we'll either get a clean 200
+          // or fall through to the preflight 202 path.
+          setDbUnavailabilityState(u);
+          return sendUnavailable(res, u);
+        }
         logger.warn({ err, key }, 'sync revalidate entity failed; partial response');
       }
     }
@@ -403,3 +484,4 @@ router.post('/', requireAuth, async (req, res, next) => {
 
 module.exports = router;
 module.exports.computePayloadHash = computePayloadHash;
+module.exports.processRecord = processRecord;
