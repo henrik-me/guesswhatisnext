@@ -63,23 +63,18 @@ describe('CS40-5 Policy 1 — FEATURE_FLAG_ALLOW_OVERRIDE truthy regex', () => {
 // exercise the file-scanning code path of `scanEnvObjectForm` directly.
 describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', () => {
   let tmpDir;
-  const written = [];
 
   beforeAll(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs40fu-'));
   });
 
   afterAll(() => {
-    for (const f of written) {
-      try { fs.unlinkSync(f); } catch { /* best-effort */ }
-    }
-    try { fs.rmdirSync(tmpDir); } catch { /* best-effort */ }
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ }
   });
 
   function writeFixture(name, content) {
     const p = path.join(tmpDir, name);
     fs.writeFileSync(p, content, 'utf8');
-    written.push(p);
     return p;
   }
 
