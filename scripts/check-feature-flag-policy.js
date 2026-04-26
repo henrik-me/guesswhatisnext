@@ -184,19 +184,27 @@ const BICEP_VALUE_TRUTHY_RE = new RegExp(
 
 // Replace line-comment (`//...` and `#...`) and block-comment (`/* ... */`)
 // regions in `src` with spaces of equal length so character offsets are
-// preserved for downstream brace-walking. This is a coarse strip — it does
-// not understand string literals, so a `//` or `#` inside a quoted string
-// will also be blanked out. That is acceptable here because the brace walker
-// already cannot see into string literals; the goal is to avoid pairing a
-// real `name:` with a `value:` from a `{ ... }` literal that lives inside a
-// commented-out example block.
+// preserved for downstream brace-walking. The walker is string-literal
+// aware: it does not treat `//`, `#`, or `/*` as comment introducers when
+// they appear inside a `'...'` or `"..."` string. This matters because a
+// real Bicep value like `'http://example'` contains `//` and the closing
+// `}` of the enclosing env object must NOT be blanked out.
 function stripCommentsPreservingOffsets(src) {
   const out = src.split('');
   let i = 0;
   const n = out.length;
+  let inStr = null; // null | "'" | '"'
   while (i < n) {
     const c = out[i];
     const next = i + 1 < n ? out[i + 1] : '';
+    if (inStr) {
+      if (c === '\\' && i + 1 < n) { i += 2; continue; }
+      if (c === inStr) inStr = null;
+      else if (c === '\n') inStr = null;
+      i += 1;
+      continue;
+    }
+    if (c === "'" || c === '"') { inStr = c; i += 1; continue; }
     if (c === '/' && next === '*') {
       out[i] = ' '; out[i + 1] = ' ';
       let j = i + 2;

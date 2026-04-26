@@ -262,9 +262,21 @@ describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', (
     expect(scanEnvObjectForm(file)).toEqual([]);
   });
 
+  // GPT-5.4 review of the R4 fix: the comment stripper must not blank
+  // `//` / `#` characters that appear *inside* a quoted string literal,
+  // otherwise a real value like `'http://example'` could cause the
+  // enclosing object's closing `}` to be wiped out and the override entry
+  // would silently escape the policy guard.
+  it('detects truthy override even when sibling string contains comment-like chars', () => {
+    const bicep = `env: [ { name: '${OVERRIDE}', value: 'true', note: 'http://example #1' } ]`;
+    const file = writeFixture('strings-with-comment-chars.bicep', bicep);
+    const findings = scanEnvObjectForm(file);
+    expect(findings).toHaveLength(1);
+  });
+
   // R4 Copilot finding: braces inside a `//` line comment must NOT throw off
   // the brace-pairing walk in `enclosingBraceLineRange`. Here the comment on
-  // the line above the real env entry contains an unbalanced `{` that, before
+  // the line between two env entries contains an unbalanced `{` that, before
   // the comment-strip pass was added, caused the walker to pair the override
   // `name:` with the truthy `value:` from a *different* (sibling) object.
   it('does NOT mis-pair across braces hidden inside line comments', () => {
