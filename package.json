@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "vitest run",
+    "test": "node scripts/check-feature-flag-policy.js && vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
@@ -28,6 +28,7 @@
     "lint": "eslint . --max-warnings 50",
     "check:docs": "node scripts/check-docs-consistency.js",
     "check:docs:strict": "node scripts/check-docs-consistency.js --strict",
+    "check:feature-flag-policy": "node scripts/check-feature-flag-policy.js",
     "dev:full": "node scripts/dev-server.js",
     "dev:log": "node scripts/dev-server.js --no-https"
   },
