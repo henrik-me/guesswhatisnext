@@ -671,28 +671,6 @@ jobs:
           AI_VERIFY_OUTPUT_PATH: ai-verification.json
         run: node scripts/verify-ai.js
 
-      - name: Render deploy summary (CS41-8)
-        if: always()
-        env:
-          IMAGE_SHA: ${{ env.IMAGE_TAG }}
-          REVISION_NAME: ${{ steps.deploy.outputs.new-revision }}
-          MIGRATION_STATUS: ${{ env.MIGRATION_STATUS }}
-          ENVIRONMENT: staging
-          AI_VERIFICATION_PATH: ai-verification.json
-        run: |
-          if [ -f smoke-results.json ]; then
-            node scripts/render-deploy-summary.js smoke-results.json >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              echo "## Deploy Summary"
-              echo ""
-              echo "- **Environment:** \`staging\`"
-              echo "- **Image SHA:** \`${IMAGE_SHA}\`"
-              echo "- **Revision:** \`${REVISION_NAME:-unknown}\`"
-              echo "- **Migration:** ${MIGRATION_STATUS:-N/A}"
-              echo "- **Smoke verdict:** ⚠️ smoke skipped or did not produce results"
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
 
       - name: Upload AI verification artifact (CS41-3)
         if: always() && hashFiles('ai-verification.json') != ''
@@ -785,6 +763,34 @@ jobs:
               echo "::error::DB initialization not confirmed in application logs after 300s"
               exit 1
             fi
+
+      # CS41-9: deploy summary renders AFTER traffic shift so it can report
+      # the post-cutover state (success path) or — via `if: always()` — the
+      # pre-cutover abort state (failure path; smoke / AI verify / verify
+      # staging failed and we never shifted traffic). Either way, the summary
+      # surfaces the right verdict in the workflow run summary.
+      - name: Render deploy summary (CS41-8)
+        if: always()
+        env:
+          IMAGE_SHA: ${{ env.IMAGE_TAG }}
+          REVISION_NAME: ${{ steps.deploy.outputs.new-revision }}
+          MIGRATION_STATUS: ${{ env.MIGRATION_STATUS }}
+          ENVIRONMENT: staging
+          AI_VERIFICATION_PATH: ai-verification.json
+        run: |
+          if [ -f smoke-results.json ]; then
+            node scripts/render-deploy-summary.js smoke-results.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Deploy Summary"
+              echo ""
+              echo "- **Environment:** `staging`"
+              echo "- **Image SHA:** `${IMAGE_SHA}`"
+              echo "- **Revision:** `${REVISION_NAME:-unknown}`"
+              echo "- **Migration:** ${MIGRATION_STATUS:-N/A}"
+              echo "- **Smoke verdict:** ⚠️ smoke skipped or did not produce results"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Rollback on failure
         if: failure() && steps.deploy.outputs.current-revision != ''
