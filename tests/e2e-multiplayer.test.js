@@ -595,7 +595,7 @@ describe('Multiplayer E2E', () => {
 
       // While unavailable, no ranked_sessions rows for this match yet.
       const beforeRows = await db.all(
-        `SELECT id FROM ranked_sessions WHERE match_id = ?`, [matchId]
+        `SELECT id FROM ranked_sessions WHERE match_id = ?`, [String(matchId)]
       );
       expect(beforeRows).toHaveLength(0);
 
@@ -609,7 +609,7 @@ describe('Multiplayer E2E', () => {
         async () => {
           const rows = await db.all(
             `SELECT id, mode, status, score FROM ranked_sessions WHERE match_id = ?`,
-            [matchId]
+            [String(matchId)]
           );
           return rows.length === 2 ? rows : null;
         },
@@ -623,7 +623,7 @@ describe('Multiplayer E2E', () => {
       const eventRows = await db.all(
         `SELECT session_id FROM ranked_session_events
           WHERE session_id IN (SELECT id FROM ranked_sessions WHERE match_id = ?)`,
-        [matchId]
+        [String(matchId)]
       );
       expect(eventRows.length).toBe(2 * totalRounds);
 
