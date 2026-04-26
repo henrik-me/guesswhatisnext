@@ -82,7 +82,7 @@ function computePayloadHash(userId, raw) {
       total_rounds: Number(raw.total_rounds) || 0,
       best_streak: Number(raw.best_streak) || 0,
       fastest_answer_ms: raw.fastest_answer_ms == null ? null : Number(raw.fastest_answer_ms),
-      completed_at: raw.completed_at ? String(raw.completed_at) : null,
+      completed_at: raw.completed_at != null ? String(raw.completed_at) : null,
       schema_version: Number(raw.schema_version) || 1,
     }))
     .digest('hex');
@@ -136,7 +136,7 @@ async function processRecord(db, userId, raw) {
     //   SQLite's date()/datetime() functions understand, so daily-leaderboard
     //   bucketing works without an additional cast.
     let playedAt;
-    if (raw.completed_at) {
+    if (raw.completed_at != null) {
       const parsed = new Date(raw.completed_at);
       if (Number.isNaN(parsed.getTime())) {
         return 'rejected';

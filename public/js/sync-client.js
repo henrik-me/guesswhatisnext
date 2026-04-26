@@ -194,10 +194,10 @@ export function buildRecord(summary, userId) {
     user_id: userId == null ? null : userId,
     mode: summary.mode || 'freeplay',
     variant: summary.variant || summary.mode || 'freeplay',
-    score: summary.score | 0,
-    correct_count: summary.correctCount | 0,
-    total_rounds: summary.totalRounds | 0,
-    best_streak: summary.bestStreak | 0,
+    score: Math.trunc(Number(summary.score)) || 0,
+    correct_count: Math.trunc(Number(summary.correctCount)) || 0,
+    total_rounds: Math.trunc(Number(summary.totalRounds)) || 0,
+    best_streak: Math.trunc(Number(summary.bestStreak)) || 0,
     fastest_answer_ms: fastestAnswerMs === Infinity ? null : fastestAnswerMs,
     completed_at: summary.completed_at || new Date().toISOString(),
     schema_version: SCHEMA_VERSION,
@@ -253,6 +253,11 @@ export function migrateLegacyQueues() {
       if (items != null) safeRemove(k);
       continue;
     }
+    // Track items we couldn't migrate (L1 cap reached or persist failed)
+    // so we can rewrite the legacy key with the remainder. Removing the
+    // key while items are still pending would silently drop scores —
+    // the same no-silent-drop guarantee enqueueRecord enforces.
+    const unmigrated = [];
     for (const item of items) {
       const enqueued = enqueueRecord(buildRecord({
         score: item.score,
@@ -262,9 +267,20 @@ export function migrateLegacyQueues() {
         bestStreak: item.bestStreak,
         results: [],
       }, null));
-      if (enqueued) migrated++;
+      if (enqueued) {
+        migrated++;
+      } else {
+        unmigrated.push(item);
+      }
     }
-    safeRemove(k);
+    if (unmigrated.length === 0) {
+      safeRemove(k);
+    } else {
+      // Best-effort: rewrite the legacy key with what we couldn't drain.
+      // If THAT write also fails (storage quota exhausted), we leave the
+      // original payload untouched — better duplicates than silent loss.
+      safeWrite(k, unmigrated);
+    }
   }
   return migrated;
 }
