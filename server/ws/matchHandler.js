@@ -792,7 +792,25 @@ function buildParticipantPayloads(room) {
     const events = [];
     for (let r = 0; r < room.totalRounds; r++) {
       const meta = room.roundsMeta[r];
-      if (!meta) continue;
+      if (!meta) {
+        // Defensive (Copilot R2): emit a visible structured error and drop
+        // the round rather than silently shortening `events`. A missing
+        // `roundsMeta[r]` here would mean the live `endRound` never ran for
+        // that round, which should never happen on a normal completion path
+        // — but if it ever does, the discrepancy must be observable in logs
+        // rather than buried as a 0-event gap.
+        logger.error(
+          {
+            event: 'multiplayer_match_persist_meta_missing',
+            user_id: userId,
+            round_num: r,
+            total_rounds: room.totalRounds,
+            match_id: room.matchId,
+          },
+          'multiplayer: roundsMeta[r] missing while building participant payload — round dropped'
+        );
+        continue;
+      }
       const answer = room.answers[r] && room.answers[r][userId];
       if (answer) {
         const correct = answer.answerId === meta.answer_key ? 1 : 0;
@@ -917,6 +935,19 @@ async function persistCompletedMatch(room, roomCode, userScores) {
   // /api/sessions/:id/finish route's preflight short-circuit.
   const preState = getDbUnavailabilityState();
   if (preState) {
+    // Best-effort matchId rehydration before short-circuiting (Copilot R2 —
+    // ensure the Variant C file has its idempotency key even if startMatch
+    // didn't manage to populate `room.matchId`). The DB is known unavailable
+    // here so the lookup is unlikely to succeed, but it costs little and
+    // helps in the narrow window where preState was set by a peer route
+    // while this room's DB connection might still answer.
+    if (!room.matchId) {
+      try {
+        const db = await getDbAdapter();
+        const m = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
+        if (m) room.matchId = m.id;
+      } catch { /* expected while DB unavailable; enqueueVariantC will log loudly */ }
+    }
     await enqueueVariantC(room, roomCode, {
       configSnapshot, startedAtIso, finishedAtIso, participants,
     }, preState);
@@ -991,9 +1022,20 @@ async function enqueueVariantC(room, roomCode, planned, descriptor, matchIdHint)
   const matchId = matchIdHint || room.matchId;
   if (!matchId) {
     // Without a match_id the Variant C row would have no idempotency key.
-    // Log + drop rather than queueing a malformed file.
-    logger.error({ roomCode },
-      'multiplayer: Variant C enqueue skipped — no match_id available');
+    // Log + drop loudly rather than queueing a malformed file. Emit the
+    // structured `multiplayer_match_persist_dropped` event (Copilot R2 —
+    // make the loss observable in App Insights so on-call can grep) so
+    // missing-matchId is symmetric with the queue-full drop path below.
+    logger.error(
+      {
+        event: 'multiplayer_match_persist_dropped',
+        reason: 'missing_match_id',
+        room_code: roomCode,
+        participant_count: planned && planned.participants && planned.participants.length,
+        descriptor_reason: descriptor && descriptor.reason,
+      },
+      'multiplayer: Variant C enqueue skipped — no match_id available'
+    );
     return;
   }
   try {

@@ -492,6 +492,7 @@ describe('Multiplayer E2E', () => {
     // kicks in after several registerUser calls in this suite.
     const hToken = hostToken;
     const jToken = joinerToken;
+    const pendingWrites = require('../server/lib/pending-writes');
 
     const agent2 = getAgent();
     const createRes = await agent2
@@ -548,9 +549,9 @@ describe('Multiplayer E2E', () => {
       // Pending file exists with our endpoint + match_id — poll for the
       // file to appear instead of using a fixed sleep (Copilot R1 — flake
       // resistance). While the unavailability flag is set, no ranked_sessions
-      // rows are written yet.
-      const dbPath = process.env.GWN_DB_PATH;
-      const pendingDir = path.join(path.dirname(dbPath), 'pending-writes');
+      // rows are written yet. Resolve the queue dir via the same helper
+      // production code uses (Copilot R2 — honour `GWN_DATA_DIR` precedence).
+      const pendingDir = pendingWrites.pendingDir();
       const mpRecord = await waitFor(
         async () => {
           let entries;
