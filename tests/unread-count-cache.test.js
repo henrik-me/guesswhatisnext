@@ -97,16 +97,19 @@ describe('UnreadCountCache', () => {
     expect(cache.get(1)).toBe(0); // fresh value preserved
   });
 
-  test('multiple concurrent readers: only first-finishing wins, stale ones rejected', () => {
-    // Reader A captures gen=0
+  test('writer-vs-reader precedence: invalidate between concurrent reader stores rejects the later one', () => {
+    // Two readers both captured the same generation before any writer ran.
     const tokA = cache.beginRead(1);
-    // Reader B captures gen=0 too
     const tokB = cache.beginRead(1);
-    // A finishes first and stores 3
+    // Reader A's setIfFresh wins because no writer has bumped the generation yet.
     expect(cache.setIfFresh(1, 3, tokA)).toBe(true);
-    // Writer fires (e.g. notification insert)
+    // A writer fires between the two stores (e.g. notification insert) and
+    // bumps the generation via invalidate().
     cache.invalidate(1);
-    // B finishes with stale data (was scheduled before invalidate)
+    // Reader B's setIfFresh is now stale (its captured gen != current gen)
+    // and is rejected, so the cache stays empty until the next user-activity
+    // reader recomputes — preventing a stale reader from clobbering the
+    // writer's invalidation.
     expect(cache.setIfFresh(1, 3, tokB)).toBe(false);
     expect(cache.get(1)).toBeNull();
   });

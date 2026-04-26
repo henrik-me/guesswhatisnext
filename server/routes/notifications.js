@@ -34,8 +34,8 @@ router.get('/', requireAuth, async (req, res, next) => {
       query += ' LIMIT 50';
     }
 
-    // Capture cache generation BEFORE the count query so we can race-safely
-    // seed the cache from this request's authoritative count.
+    // Capture cache generation BEFORE any DB work for this request (list + count)
+    // so we can race-safely seed the cache from this request's authoritative count.
     const token = unreadCountCache.beginRead(userId);
     const notifications = await db.all(query, params);
 

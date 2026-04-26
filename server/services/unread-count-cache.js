@@ -79,9 +79,14 @@ class UnreadCountCache {
   }
 
   /**
-   * Unconditional set used by writers that KNOW the fresh value
-   * (e.g. mark-all-read knows the count is now 0). Bumps the generation
-   * so any in-flight reader's setIfFresh() will be rejected.
+   * Unconditional set used only by writers that independently know the exact
+   * fresh unread count without re-reading the DB. Writers that do not know
+   * the exact post-write value (the common case — e.g. mark-all-read after
+   * R4, notification insert, mark-single-read) should call `invalidate()`
+   * instead, so the next user-activity read recomputes from the DB and
+   * avoids the race where a concurrent writer's value gets overwritten by
+   * a stale `set(0)`. Bumps the generation so any in-flight reader's
+   * `setIfFresh()` will be rejected.
    */
   set(userId, count) {
     this._bumpGen(userId);
