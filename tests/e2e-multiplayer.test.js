@@ -366,5 +366,221 @@ describe('Multiplayer E2E', () => {
     hostWs.close();
     joinerWs.close();
   });
+
+  test('CS52-7d: completed match writes one ranked_sessions row per player + N events', async () => {
+    const { getDbAdapter } = require('../server/db');
+    const agent = getAgent();
+    const totalRounds = TEST_ROUNDS;
+
+    // Fresh user pair so we're not entangled with the rematch chain above.
+    const { token: hToken } = await registerUser('mp_persist_h', 'password123');
+    const { token: jToken } = await registerUser('mp_persist_j', 'password123');
+
+    const createRes = await agent
+      .post('/api/matches')
+      .set('Authorization', `Bearer ${hToken}`)
+      .send({ maxPlayers: 2 });
+    const { roomCode } = createRes.body;
+
+    await agent
+      .post('/api/matches/join')
+      .set('Authorization', `Bearer ${jToken}`)
+      .send({ roomCode });
+
+    const db = await getDbAdapter();
+    const matchRow = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
+    const matchId = matchRow.id;
+
+    const hostWs = await connectWS(hToken);
+    const joinerWs = await connectWS(jToken);
+
+    hostWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(hostWs, 'joined');
+    joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(joinerWs, 'joined');
+
+    const hostStartPromise = waitForMessage(hostWs, 'match-start');
+    const joinerStartPromise = waitForMessage(joinerWs, 'match-start');
+    hostWs.send(JSON.stringify({ type: 'start-match' }));
+    await Promise.all([hostStartPromise, joinerStartPromise]);
+
+    for (let round = 0; round < totalRounds; round++) {
+      const hostRound = waitForMessage(hostWs, 'round');
+      const joinerRound = waitForMessage(joinerWs, 'round');
+      const [hostMsg] = await Promise.all([hostRound, joinerRound]);
+      const correctId = hostMsg.puzzle.options[0].id;
+      const hostResult = waitForMessage(hostWs, 'roundResult');
+      const joinerResult = waitForMessage(joinerWs, 'roundResult');
+      hostWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
+      joinerWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
+      await Promise.all([hostResult, joinerResult]);
+    }
+
+    await waitForMessage(hostWs, 'gameOver');
+    await waitForMessage(joinerWs, 'gameOver');
+
+    // Allow async persist to settle (endMatch -> persistCompletedMatch).
+    await new Promise((r) => setTimeout(r, 250));
+
+    const sessions = await db.all(
+      `SELECT id, user_id, mode, status, score, correct_count, best_streak, room_code,
+              match_id, config_snapshot
+         FROM ranked_sessions
+        WHERE match_id = ?
+        ORDER BY user_id`,
+      [matchId]
+    );
+    expect(sessions).toHaveLength(2);
+    for (const s of sessions) {
+      expect(s.mode).toBe('multiplayer');
+      expect(s.status).toBe('finished');
+      expect(s.room_code).toBe(roomCode);
+      const cfg = JSON.parse(s.config_snapshot);
+      expect(cfg.rounds).toBe(totalRounds);
+      expect(typeof cfg.round_timer_ms).toBe('number');
+
+      const events = await db.all(
+        `SELECT round_num, correct, elapsed_ms, client_time_ms
+           FROM ranked_session_events
+          WHERE session_id = ?
+          ORDER BY round_num`,
+        [s.id]
+      );
+      expect(events).toHaveLength(totalRounds);
+      for (const e of events) {
+        expect(typeof e.elapsed_ms).toBe('number');
+        expect(e.elapsed_ms).toBeGreaterThanOrEqual(0);
+        // client_time_ms preserved separately from server-derived elapsed_ms.
+        expect(e.client_time_ms).toBe(500);
+      }
+    }
+
+    hostWs.close();
+    joinerWs.close();
+  });
+
+  test('CS52-7d: db-unavailable at endMatch enqueues Variant C pending_writes file (drains idempotently)', async () => {
+    const path = require('path');
+    const fsp = require('fs/promises');
+    const { getDbAdapter } = require('../server/db');
+    const { setDbUnavailabilityState } =
+      require('../server/lib/db-unavailability-state');
+
+    const totalRounds = TEST_ROUNDS;
+    // Reuse existing test tokens to avoid the auth-rate-limit ceiling that
+    // kicks in after several registerUser calls in this suite.
+    const hToken = hostToken;
+    const jToken = joinerToken;
+
+    const agent2 = getAgent();
+    const createRes = await agent2
+      .post('/api/matches')
+      .set('Authorization', `Bearer ${hToken}`)
+      .send({ maxPlayers: 2 });
+    expect(createRes.status).toBe(201);
+    const { roomCode } = createRes.body;
+    const joinResp = await agent2
+      .post('/api/matches/join')
+      .set('Authorization', `Bearer ${jToken}`)
+      .send({ roomCode });
+    expect(joinResp.status).toBe(200);
+
+    const db = await getDbAdapter();
+    const matchRow = await db.get(`SELECT id FROM matches WHERE room_code = ?`, [roomCode]);
+    expect(matchRow).toBeTruthy();
+    const matchId = matchRow.id;
+
+    const hostWs = await connectWS(hToken);
+    const joinerWs = await connectWS(jToken);
+    hostWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(hostWs, 'joined');
+    joinerWs.send(JSON.stringify({ type: 'join', roomCode }));
+    await waitForMessage(joinerWs, 'joined');
+
+    const hStart = waitForMessage(hostWs, 'match-start');
+    const jStart = waitForMessage(joinerWs, 'match-start');
+    hostWs.send(JSON.stringify({ type: 'start-match' }));
+    await Promise.all([hStart, jStart]);
+
+    // Play through all rounds; flip the DB-unavailability flag right before
+    // the last answer so endMatch's preflight short-circuits to Variant C.
+    for (let r = 0; r < totalRounds; r++) {
+      const hostRound = waitForMessage(hostWs, 'round');
+      const joinerRound = waitForMessage(joinerWs, 'round');
+      const [hostMsg] = await Promise.all([hostRound, joinerRound]);
+      const correctId = hostMsg.puzzle.options[0].id;
+      if (r === totalRounds - 1) {
+        setDbUnavailabilityState({ reason: 'capacity-exhausted', message: 'test' });
+      }
+      const hostResult = waitForMessage(hostWs, 'roundResult');
+      const joinerResult = waitForMessage(joinerWs, 'roundResult');
+      hostWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
+      joinerWs.send(JSON.stringify({ type: 'answer', answerId: correctId, timeMs: 500 }));
+      await Promise.all([hostResult, joinerResult]);
+    }
+    await waitForMessage(hostWs, 'gameOver');
+    await waitForMessage(joinerWs, 'gameOver');
+
+    // Allow async persist/enqueue to settle.
+    await new Promise((r) => setTimeout(r, 300));
+
+    // While unavailable, no ranked_sessions rows for this match yet.
+    const beforeRows = await db.all(
+      `SELECT id FROM ranked_sessions WHERE match_id = ?`, [matchId]
+    );
+    expect(beforeRows).toHaveLength(0);
+
+    // Pending file exists with our endpoint + match_id.
+    const dbPath = process.env.GWN_DB_PATH;
+    const pendingDir = path.join(path.dirname(dbPath), 'pending-writes');
+    const files = (await fsp.readdir(pendingDir)).filter((f) => f.endsWith('.json'));
+    expect(files.length).toBeGreaterThanOrEqual(1);
+    let mpRecord = null;
+    for (const f of files) {
+      const rec = JSON.parse(await fsp.readFile(path.join(pendingDir, f), 'utf8'));
+      if (rec.endpoint === 'INTERNAL multiplayer-match-completion'
+          && rec.concrete_route.match_id === matchId) {
+        mpRecord = rec;
+        break;
+      }
+    }
+    expect(mpRecord).not.toBeNull();
+    expect(mpRecord.payload.participants).toHaveLength(2);
+
+    // Clear unavailability + trigger drain via any successful request.
+    setDbUnavailabilityState(null);
+    const trig = await agent2.get('/api/features');
+    expect(trig.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 400));
+
+    const afterRows = await db.all(
+      `SELECT id, mode, status, score FROM ranked_sessions WHERE match_id = ?`,
+      [matchId]
+    );
+    expect(afterRows).toHaveLength(2);
+    for (const row of afterRows) {
+      expect(row.mode).toBe('multiplayer');
+      expect(row.status).toBe('finished');
+    }
+    const eventRows = await db.all(
+      `SELECT session_id FROM ranked_session_events
+        WHERE session_id IN (SELECT id FROM ranked_sessions WHERE match_id = ?)`,
+      [matchId]
+    );
+    expect(eventRows.length).toBe(2 * totalRounds);
+
+    // The MP record file should be gone after successful drain.
+    const remaining = (await fsp.readdir(pendingDir)).filter((f) => f.endsWith('.json'));
+    const stillThere = [];
+    for (const f of remaining) {
+      const rec = JSON.parse(await fsp.readFile(path.join(pendingDir, f), 'utf8'));
+      if (rec.endpoint === 'INTERNAL multiplayer-match-completion'
+          && rec.concrete_route.match_id === matchId) stillThere.push(f);
+    }
+    expect(stillThere).toHaveLength(0);
+
+    hostWs.close();
+    joinerWs.close();
+  });
 });
 

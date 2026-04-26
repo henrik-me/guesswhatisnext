@@ -407,6 +407,25 @@ ContainerAppConsoleLogs_CL
 Healthy steady state: predominantly `HIT` (warm cache) and `MISS-NO-ACTIVITY` (cold tabs); occasional `MISS` after writers invalidate; `STALE-DROP` should be rare (single-digit per hour at most under normal user load). Empty result for >15 min on a busy environment means the route stopped being hit — investigate whether SPA is making the call at all.
 
 To drill into a specific request, grab `trace_id` from the Pino row and feed into § B.5 to bridge to the matching AI `requests` row. Code path: [`server/routes/notifications.js`](../server/routes/notifications.js) (the `router.get('/count', ...)` handler).
+### B.13 Multiplayer match persistence path (CS52-7d)
+
+When a multiplayer match completes, [`server/ws/matchHandler.js`](../server/ws/matchHandler.js) emits one Pino INFO line with `{event: "multiplayer_match_persisted", match_id, room_code, participant_count, persistence_path}`. `persistence_path` is `"live"` for the normal (single-transaction) write of `ranked_sessions` + `ranked_session_events`, or `"pending_writes_variant_c"` when the DB was unavailable at match-end and the rows were enqueued to the durable queue (CS52-7e Variant C). The matching drain handler in [`server/services/pending-writes-replay.js`](../server/services/pending-writes-replay.js) emits `{event: "multiplayer_match_replayed", match_id, drain_request_id, participant_count}` once the queued file is replayed successfully.
+
+Use this query to confirm that completed matches are being persisted (live path) and to spot any sustained Variant C fallback (which signals a real DB outage rather than a single cold-start blip):
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(24h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) in ("multiplayer_match_persisted", "multiplayer_match_replayed")
+| extend evt = tostring(pino.event),
+         path = tostring(pino.persistence_path),
+         match_id = tostring(pino.match_id)
+| summarize matches = dcount(match_id) by evt, path, bin(TimeGenerated, 1h)
+| order by TimeGenerated desc
+```
+
+A healthy environment shows almost all rows with `evt = "multiplayer_match_persisted"` / `path = "live"`. A `pending_writes_variant_c` spike that is not followed within minutes by a matching `multiplayer_match_replayed` count is the operational signal that the drain isn't keeping up — cross-reference § B.10 (DB unavailability state transitions) and the `pending-writes-*` log family.
 
 ## C. Staging vs prod filtering
 
