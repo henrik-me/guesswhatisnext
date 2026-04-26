@@ -26,6 +26,7 @@ import {
   installConnectivityListeners,
   connectivity,
   onConnectivityChange,
+  setConnectivityState,
 } from './sync-client.js';
 
 /**
@@ -460,6 +461,12 @@ const ui = {
       // surfaced by handleStartRanked, not here.
       const hasActiveRankedSession = !!(Game.state && Game.state.ranked && !Game.state.finished);
       if (hasActiveRankedSession) {
+        // apiFetch only updates connectivity for fetch responses (4xx/5xx);
+        // raw network failures (TypeError) bypass it. Synthesize the
+        // network-down transition here so the banner + ranked-entry gate
+        // stay consistent with the abandoned overlay/toast we're about to
+        // surface.
+        try { setConnectivityState('network-down', 'ranked-network-error'); } catch { /* ignore */ }
         showToast('Network error — your Ranked session was abandoned');
         handleRankedDisconnect('network-down');
       }
@@ -794,9 +801,17 @@ function showClaimPromptModal({ total, unattachedCount, mismatchedCount, onAccep
     const acceptBtn = backdrop.querySelector('[data-action="claim-accept"]');
     const declineBtn = backdrop.querySelector('[data-action="claim-decline"]');
 
-    const focusables = [declineBtn, acceptBtn];
-    let focusIdx = 1;
-    const setFocus = () => focusables[focusIdx]?.focus();
+    const focusables = [declineBtn, acceptBtn].filter(Boolean);
+    let focusIdx = focusables.length > 1 ? 1 : 0;
+    const setFocus = () => {
+      if (focusables.length === 0) {
+        // Fallback: keep focus inside the modal so keyboard users can still
+        // dismiss with Escape / backdrop click.
+        modal?.focus?.();
+        return;
+      }
+      focusables[focusIdx]?.focus();
+    };
 
     function cleanup() {
       backdrop.removeEventListener('keydown', onKey);
@@ -819,6 +834,7 @@ function showClaimPromptModal({ total, unattachedCount, mismatchedCount, onAccep
       if (e.key === 'Escape') { e.preventDefault(); decline(); return; }
       if (e.key === 'Tab') {
         e.preventDefault();
+        if (focusables.length === 0) return;
         focusIdx = (focusIdx + (e.shiftKey ? -1 : 1) + focusables.length) % focusables.length;
         setFocus();
         return;
@@ -1049,6 +1065,12 @@ function init() {
 
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (!action) return;
+
+    // While a Ranked create-session request is in flight, ignore other
+    // navigation/start actions: when the Ranked request resolves it will
+    // call ui.showScreen('game') and would otherwise hijack the user away
+    // from whatever screen they navigated to in the meantime.
+    if (rankedStartInFlight && /^(start-|go-home$)/.test(action)) return;
 
     switch (action) {
       case 'start-freeplay':
