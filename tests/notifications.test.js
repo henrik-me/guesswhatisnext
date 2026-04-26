@@ -222,36 +222,93 @@ describe('GET /api/notifications/count', () => {
     expect(res.body.unread_count).toBe(1);
   });
 
-  test('telemetry: emits structured boot-quiet log line per cache outcome', async () => {
+  test('telemetry: emits structured boot-quiet log line per cache outcome (all 4)', async () => {
     // CS53-23 telemetry gate (INSTRUCTIONS.md § 4a): the route must emit a
-    // Pino line with gate="boot-quiet" + cacheOutcome on every request, so
-    // the documented KQL query (docs/observability.md § B.7) can observe
-    // contract behavior in App Insights via ContainerAppConsoleLogs_CL.
+    // Pino line with gate="boot-quiet" + cacheOutcome on every authorized
+    // request that reaches the handler, so the documented KQL query
+    // (docs/observability.md § B.7) can observe contract behavior in App
+    // Insights via ContainerAppConsoleLogs_CL. This test exercises ALL FOUR
+    // outcomes (MISS-NO-ACTIVITY, HIT, MISS, STALE-DROP) and verifies both
+    // the info-level and warn-level (STALE-DROP) emission paths.
     const { unreadCountCache } = require('../server/services/unread-count-cache');
     const logger = require('../server/logger');
     unreadCountCache.clear();
 
     const infoSpy = vi.spyOn(logger, 'info');
+    const warnSpy = vi.spyOn(logger, 'warn');
 
-    // 1. MISS-NO-ACTIVITY (cold cache, no header, non-system caller)
+    // Make sure the user has a known unread count > 0 so MISS returns a
+    // non-zero count and the COUNT(*) query path is exercised.
+    await getAgent()
+      .put('/api/notifications/read-all')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    const subId = await createSubmission(userToken);
+    await reviewSubmission(subId, 'approved');
+    unreadCountCache.invalidate(userId);
+
+    // 1. MISS-NO-ACTIVITY (cold cache, no header, non-system caller).
     await getAgent()
       .get('/api/notifications/count')
       .set('Authorization', `Bearer ${userToken}`);
-    // 2. HIT (seed cache then re-read without header)
-    unreadCountCache.set(userId, 4);
+
+    // 2. MISS (cold cache, header present → DB read seeds the cache).
+    await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+
+    // 3. HIT (re-read after seeding, no header).
     await getAgent()
       .get('/api/notifications/count')
       .set('Authorization', `Bearer ${userToken}`);
 
-    const calls = infoSpy.mock.calls.filter(c => c[0] && c[0].gate === 'boot-quiet');
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    // 4. STALE-DROP — simulate a writer firing while a reader was mid-flight
+    //    by manually invalidating between beginRead and setIfFresh.
+    const tok = unreadCountCache.beginRead(userId);
+    unreadCountCache.invalidate(userId);
+    expect(unreadCountCache.setIfFresh(userId, 99, tok)).toBe(false);
+    // Now drive the route under conditions that produce STALE-DROP via the
+    // handler itself: pre-invalidate the cache, then race a real handler
+    // call against an in-test invalidate that fires before setIfFresh.
+    // We achieve this deterministically by wrapping db.get with a hook that
+    // invalidates the cache mid-query, so the route's setIfFresh is rejected.
+    const { getDbAdapter } = require('../server/db');
+    const db = await getDbAdapter();
+    const realGet = db.get.bind(db);
+    const getStub = vi.spyOn(db, 'get').mockImplementation(async (...args) => {
+      const r = await realGet(...args);
+      // Bump generation between the route's beginRead and setIfFresh.
+      unreadCountCache.invalidate(userId);
+      return r;
+    });
+    const r4 = await getAgent()
+      .get('/api/notifications/count')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('X-User-Activity', '1');
+    expect(r4.headers['x-cache']).toBe('STALE-DROP');
+    getStub.mockRestore();
 
-    const outcomes = calls.map(c => c[0].cacheOutcome);
+    // Assertions across both spies.
+    const infoCalls = infoSpy.mock.calls.filter(c => c[0] && c[0].gate === 'boot-quiet');
+    const warnCalls = warnSpy.mock.calls.filter(c => c[0] && c[0].gate === 'boot-quiet');
+    const allCalls = [...infoCalls, ...warnCalls];
+
+    const outcomes = allCalls.map(c => c[0].cacheOutcome);
     expect(outcomes).toContain('MISS-NO-ACTIVITY');
+    expect(outcomes).toContain('MISS');
     expect(outcomes).toContain('HIT');
+    expect(outcomes).toContain('STALE-DROP');
 
-    // Each line must carry the fields the KQL query in observability.md uses.
-    for (const c of calls) {
+    // STALE-DROP must use warn (so it stands out in queries), the other
+    // three must use info.
+    expect(warnCalls.map(c => c[0].cacheOutcome)).toEqual(
+      expect.arrayContaining(['STALE-DROP'])
+    );
+    expect(infoCalls.map(c => c[0].cacheOutcome)).not.toContain('STALE-DROP');
+
+    // Every line must carry the fields the KQL query in observability.md uses.
+    for (const c of allCalls) {
       expect(c[0]).toMatchObject({
         gate: 'boot-quiet',
         route: '/api/notifications/count',

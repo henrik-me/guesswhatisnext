@@ -14,9 +14,13 @@
  *     "just in case" would itself wake an idle DB and violates the
  *     no-DB-waking-background-work policy (INSTRUCTIONS.md § Database & Data).
  *   - Cache is invalidated ONLY by writers (notification insert, mark-read,
- *     mark-all-read). Cold start (process restart) means the cache is empty
- *     until either (a) the first writer runs, seeding implicitly, or (b) a
- *     user-activity-marked read seeds it from the DB.
+ *     mark-all-read). Writers do NOT call `set()` to seed a fresh count
+ *     (R4 moved mark-all-read off `set(0)` to avoid a race with concurrent
+ *     inserts), so the cache is only populated by user-activity (or
+ *     system) reads that miss and recompute from the DB. Cold start
+ *     (process restart) therefore means the cache is empty until the
+ *     first such read seeds it; until then, header-less /count requests
+ *     return the empty default per the boot-quiet contract.
  *   - Per-user GENERATION counter prevents read-vs-write races: a concurrent
  *     writer that fires while a reader is mid-DB-query bumps the gen; the
  *     reader's subsequent `setIfFresh` is rejected because its captured gen

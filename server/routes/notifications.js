@@ -127,8 +127,11 @@ router.get('/count', requireAuth, async (req, res, next) => {
 
     if (!userActivity && !isSystem) {
       // Cache miss + no user-activity marker + not a system caller → MUST NOT
-      // touch the DB. Returns the empty default; any in-flight writer will
-      // seed the cache.
+      // touch the DB. Returns the empty default. Writers in this PR only
+      // call invalidate() (they do NOT set() a fresh count), so the cache
+      // stays empty until a later user-activity (or system) read seeds it
+      // from the DB. A brief undercount is acceptable per the documented
+      // option (a) cold-cache miss policy.
       res.set('X-Cache', 'MISS-NO-ACTIVITY');
       logger.info({
         gate: 'boot-quiet',
