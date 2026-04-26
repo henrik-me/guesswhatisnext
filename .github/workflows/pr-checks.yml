@@ -1,0 +1,73 @@
+name: PR Telemetry Gate
+
+# CS41-6: PR-CI gate enforcing INSTRUCTIONS.md § 4a "Telemetry & Observability".
+# Every PR that touches code (anything outside the docs-only allowlist below)
+# MUST include a `## Telemetry Validation` section in the PR body. Docs-only
+# PRs are skipped. The `edited` event type is critical so PR-body edits
+# (adding the missing section) re-trigger the gate without a code change.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review, reopened]
+
+concurrency:
+  group: pr-telemetry-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  telemetry-validation-gate:
+    name: § 4a Telemetry Validation gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const pull_number = context.payload.pull_request.number;
+
+            // Paginate through all changed files (PRs may have > 100).
+            let allFiles = [];
+            for (let page = 1; ; page += 1) {
+              const { data } = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number,
+                per_page: 100,
+                page,
+              });
+              if (data.length === 0) break;
+              allFiles = allFiles.concat(data);
+              if (data.length < 100) break;
+            }
+
+            // Docs-only allowlist. NOTE: `.github/workflows/` is intentionally
+            // NOT in this list — workflow changes ARE code changes for
+            // purposes of this gate (CS41 itself touches workflows).
+            const docsOnlyPattern = /^(docs\/|README\.md|INSTRUCTIONS\.md|TRACKING\.md|OPERATIONS\.md|REVIEWS\.md|CONTEXT\.md|LEARNINGS\.md|WORKBOARD\.md|project\/clickstops\/)/;
+            const codeFiles = allFiles.filter(f => !docsOnlyPattern.test(f.filename));
+
+            if (codeFiles.length === 0) {
+              core.info(`PR is docs-only (${allFiles.length} files, all matched docs-only pattern); skipping § 4a gate`);
+              return;
+            }
+
+            core.info(`PR touches ${codeFiles.length} code file(s); requiring '## Telemetry Validation' section in body`);
+            const preview = codeFiles.slice(0, 10).map(f => f.filename).join(', ');
+            core.info(`Code files: ${preview}${codeFiles.length > 10 ? ' (...)' : ''}`);
+
+            if (!/^## Telemetry Validation/m.test(body)) {
+              core.setFailed(
+                "PR body missing required '## Telemetry Validation' section. " +
+                "See INSTRUCTIONS.md § 4a Telemetry & Observability — this gate enforces " +
+                "that every code-touching PR documents the local + staging + production " +
+                "validation of any added telemetry. Add a '## Telemetry Validation' " +
+                "section to the PR body and push (no code change needed; PR body edit " +
+                "re-triggers the check)."
+              );
+            } else {
+              core.info("✅ '## Telemetry Validation' section found in PR body");
+            }
