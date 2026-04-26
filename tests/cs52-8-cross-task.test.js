@@ -59,7 +59,16 @@ function connectWS(token) {
     const ws = new WebSocket(
       `ws://${getServerAddr()}/ws?token=${encodeURIComponent(token)}`
     );
-    const timeout = setTimeout(() => reject(new Error('WS connect timeout')), 5000);
+    const cleanupAndReject = (err) => {
+      // Close the (possibly already upgraded) socket so it cannot leak
+      // even when the caller never receives the reference.
+      try { ws.terminate(); } catch { /* ignore */ }
+      reject(err);
+    };
+    const timeout = setTimeout(
+      () => cleanupAndReject(new Error('WS connect timeout')),
+      5000
+    );
     ws.on('message', function onFirst(data) {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'connected') {
@@ -68,7 +77,7 @@ function connectWS(token) {
         resolve(ws);
       }
     });
-    ws.on('error', (err) => { clearTimeout(timeout); reject(err); });
+    ws.on('error', (err) => { clearTimeout(timeout); cleanupAndReject(err); });
   });
 }
 
