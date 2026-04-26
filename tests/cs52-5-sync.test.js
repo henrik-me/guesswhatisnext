@@ -252,6 +252,15 @@ describe('GET /api/scores/leaderboard — source filter (CS52-5/6)', () => {
     expect(res.status).toBe(200);
     expect(res.body.source).toBeNull();
   });
+
+  test('invalid source is normalized to null (not echoed back unvalidated)', async () => {
+    // Regression for Copilot R2 #6: previously the route echoed the raw
+    // unvalidated query value back, which could mislead clients into thinking
+    // a filter had been applied.
+    const res = await getAgent().get('/api/scores/leaderboard?mode=freeplay&source=garbage-value');
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBeNull();
+  });
 });
 
 describe('completed_at persistence', () => {

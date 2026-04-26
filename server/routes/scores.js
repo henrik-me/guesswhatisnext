@@ -66,21 +66,27 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
       dateFilter = "AND s.played_at >= datetime('now', '-7 days')";
     }
 
-    // CS52-5/CS52-6: source filter is opt-in. When omitted, behaviour is
-    // unchanged (returns all rows including legacy) so the existing CS52-pre
-    // /leaderboard contract keeps working. When source is supplied:
+    // CS52-5/CS52-6: source filter is opt-in. When omitted (or unrecognized),
+    // behaviour is unchanged (returns all rows including legacy) so the
+    // existing CS52-pre /leaderboard contract keeps working. When source is
+    // supplied:
     //   - 'ranked' or 'offline' → exact match on s.source
     //   - 'all' → union of ranked + offline (legacy excluded)
     //   - 'legacy' → exact match on s.source (pre-CS52 rows; public read-only,
     //                 useful for ops dashboards and migration verification —
     //                 no auth gate, since legacy rows contain no PII beyond
     //                 username + score, same as ranked/offline)
+    // Any other value is normalized to null so the response's `source` field
+    // never echoes back an unvalidated string the client might think was
+    // applied as a filter.
+    const VALID_SOURCES = new Set(['ranked', 'offline', 'all', 'legacy']);
+    const normalizedSource = VALID_SOURCES.has(source) ? source : null;
     let sourceFilter = '';
     const params = [mode];
-    if (source === 'ranked' || source === 'offline' || source === 'legacy') {
+    if (normalizedSource === 'ranked' || normalizedSource === 'offline' || normalizedSource === 'legacy') {
       sourceFilter = 'AND s.source = ?';
-      params.push(source);
-    } else if (source === 'all') {
+      params.push(normalizedSource);
+    } else if (normalizedSource === 'all') {
       sourceFilter = "AND s.source IN ('ranked','offline')";
     }
     params.push(safeLimit);
@@ -109,7 +115,7 @@ router.get('/leaderboard', optionalAuth, async (req, res, next) => {
       isCurrentUser: req.user?.id === row.user_id,
     }));
 
-    res.json({ leaderboard, mode, period, source: source || null });
+    res.json({ leaderboard, mode, period, source: normalizedSource });
   } catch (err) {
     next(err);
   }

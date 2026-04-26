@@ -164,8 +164,8 @@ export function getL1Rejected() {
 }
 
 function setL1Records(records) {
-  if (records.length === 0) safeRemove(L1_RECORDS_KEY);
-  else safeWrite(L1_RECORDS_KEY, records);
+  if (records.length === 0) { safeRemove(L1_RECORDS_KEY); return true; }
+  return safeWrite(L1_RECORDS_KEY, records);
 }
 
 function setL1Rejected(rejected) {
@@ -219,7 +219,16 @@ export function enqueueRecord(record) {
     return false;
   }
   records.push(record);
-  setL1Records(records);
+  if (!setL1Records(records)) {
+    // localStorage write failed (quota / serialization). Roll back the
+    // in-memory push so getL1Records() doesn't lie to callers, and signal
+    // the failure so submitGameOver can show the cache-full indicator.
+    records.pop();
+    if (typeof console !== 'undefined') {
+      console.warn(`[sync] L1 persist failed for ${record.client_game_id}; refusing enqueue`);
+    }
+    return false;
+  }
   return true;
 }
 
@@ -371,7 +380,10 @@ function buildRevalidateMap(keys) {
 
 /**
  * Trigger a sync. Gesture-driven. Returns a Promise that resolves when the
- * sync (and any coalesced follow-up) completes.
+ * primary sync RPC completes. A coalesced follow-up (if a trigger fired
+ * while this sync was in flight) runs in the background and is NOT awaited
+ * by this promise — that pass is bounded by user gestures, not by this
+ * call's lifetime.
  *
  * @param {object} opts
  * @param {Function} opts.apiFetch - the app's apiFetch wrapper (auth-aware)
@@ -381,8 +393,10 @@ function buildRevalidateMap(keys) {
  * @param {number} [opts.currentUserId] - for client-side filter when signed-in
  */
 export async function syncNow({ apiFetch, trigger, revalidateKeys = REVALIDATE_KEYS, currentUserId = null }) {
-  if (!connectivity.canSync && connectivity.state === 'auth-expired') {
-    return { skipped: 'auth-expired' };
+  if (!connectivity.canSync) {
+    // Skip both auth-expired and network-down — neither will succeed and
+    // we don't want to drain offline gestures into doomed RPCs.
+    return { skipped: connectivity.state };
   }
 
   if (inFlight) {

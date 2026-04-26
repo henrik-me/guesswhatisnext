@@ -161,10 +161,15 @@ describe('single-flight + coalesce', () => {
 });
 
 describe('connectivity state machine precedence', () => {
-  it('401 wins over network-down', async () => {
+  it('401 wins over db-unavailable (lower precedence)', async () => {
+    // Start from a lower-precedence state where canSync is still true so the
+    // RPC actually fires; the 401 path must escalate to auth-expired
+    // regardless of prior state. (network-down skips at the syncNow gate by
+    // design — see "syncNow connectivity gate" suite — so we use
+    // db-unavailable here to exercise the 401 escalation path.)
     const m = await loadFresh();
-    m.setConnectivityState('network-down', 'manual-test');
-    expect(m.connectivity.state).toBe('network-down');
+    m.setConnectivityState('db-unavailable', 'manual-test');
+    expect(m.connectivity.state).toBe('db-unavailable');
     const apiFetch = vi.fn(() => fakeStatus(401, { error: 'expired' }));
     await m.syncNow({ apiFetch, trigger: 'sync-now-button' });
     expect(m.connectivity.state).toBe('auth-expired');
@@ -187,7 +192,7 @@ describe('connectivity state machine precedence', () => {
 });
 
 describe('db-unavailable (503 unavailable body) + client-side dedupe', () => {
-  it('first call sets lastQueuedAt; rapid follow-ups within retryAfterMs skip dedupe', async () => {
+  it('first call sets lastQueuedAt; rapid follow-ups within retryAfterMs are deduped (queuedRecords becomes empty)', async () => {
     const m = await loadFresh();
     m.enqueueRecord(m.buildRecord({ score: 50 }, 1));
     const apiFetch = vi.fn(() => fakeStatus(
@@ -331,6 +336,40 @@ describe('batching: large L1 backlog drained across requests', () => {
     expect(m.getL1Records().length).toBe(500);
     // Oldest record (score=0) must still be present (no shift).
     expect(m.getL1Records()[0].score).toBe(0);
+  });
+
+  it('rolls back the in-memory push when localStorage persist fails', async () => {
+    // Regression for Copilot R2 #3: enqueueRecord used to return true even
+    // when safeWrite returned false, so callers thought an offline score was
+    // saved while it had actually been silently dropped.
+    const m = await loadFresh();
+    m.enqueueRecord(m.buildRecord({ score: 1 }, 1));
+    expect(m.getL1Records().length).toBe(1);
+    const origSet = localStorage.setItem;
+    localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+    const origWarn = console.warn;
+    console.warn = () => {};
+    const ok = m.enqueueRecord(m.buildRecord({ score: 2 }, 1));
+    console.warn = origWarn;
+    localStorage.setItem = origSet;
+    expect(ok).toBe(false);
+    // In-memory state must reflect the rollback so subsequent reads don't lie.
+    expect(m.getL1Records().length).toBe(1);
+    expect(m.getL1Records()[0].score).toBe(1);
+  });
+});
+
+describe('syncNow connectivity gate', () => {
+  it('skips when state is network-down (canSync is false)', async () => {
+    // Regression for Copilot R2 #5: previously the early-return only fired
+    // for auth-expired, so network-down still attempted an RPC despite
+    // canSync being false.
+    const m = await loadFresh();
+    m.setConnectivityState('network-down', 'manual-test');
+    const apiFetch = vi.fn();
+    const result = await m.syncNow({ apiFetch, trigger: 'sync-now-button' });
+    expect(result).toEqual({ skipped: 'network-down' });
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 });
 

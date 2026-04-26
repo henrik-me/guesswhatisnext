@@ -48,6 +48,19 @@ const MAX_QUEUED_RECORDS = 50;
 const LB_ROW_LIMIT = 100;
 const NOTIF_ROW_LIMIT = 20;
 
+// Match server/app.js sendDbUnavailable shape so client-side handlers see a
+// single consistent 503 body across the unified-sync route and the central
+// error path. Includes the `error` field and intentionally omits Retry-After
+// (its absence signals the SPA to stop retrying and render the banner).
+function sendUnavailable(res, descriptor) {
+  return res.status(503).json({
+    error: 'Database temporarily unavailable',
+    message: descriptor.message,
+    unavailable: true,
+    reason: descriptor.reason,
+  });
+}
+
 /** Stable JSON serialization (sorted keys) for hashing immutable record fields. */
 function canonicalJson(obj) {
   const keys = Object.keys(obj).sort();
@@ -251,7 +264,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       // TODO(CS52-7e): persist queuedRecords to durable per-request file and
       // return 202 with queuedRequestIds (mutually exclusive with 200 fields).
       const u = getDbUnavailability(err);
-      if (u) return res.status(503).json({ unavailable: true, reason: u.reason, message: u.message });
+      if (u) return sendUnavailable(res, u);
       throw err;
     }
 
@@ -311,7 +324,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         const u = getDbUnavailability(err);
         if (u) {
           // TODO(CS52-7e): partial enqueue + 202.
-          return res.status(503).json({ unavailable: true, reason: u.reason, message: u.message });
+          return sendUnavailable(res, u);
         }
         // Per-record failure — log + continue so the rest of the batch succeeds.
         logger.error({
@@ -330,7 +343,7 @@ router.post('/', requireAuth, async (req, res, next) => {
         entities[key] = await fetchEntity(db, key, userId);
       } catch (err) {
         const u = getDbUnavailability(err);
-        if (u) return res.status(503).json({ unavailable: true, reason: u.reason, message: u.message });
+        if (u) return sendUnavailable(res, u);
         logger.warn({ err, key }, 'sync revalidate entity failed; partial response');
       }
     }
