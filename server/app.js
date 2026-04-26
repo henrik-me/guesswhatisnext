@@ -24,6 +24,7 @@ const submissionRoutes = require('./routes/submissions');
 const notificationRoutes = require('./routes/notifications');
 const userRoutes = require('./routes/users');
 const telemetryRoutes = require('./routes/telemetry');
+const sessionRoutes = require('./routes/sessions');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
@@ -319,6 +320,7 @@ function createServer() {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/telemetry', telemetryRoutes);
+  app.use('/api/sessions', sessionRoutes);
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, async (req, res, next) => {
