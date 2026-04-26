@@ -156,10 +156,11 @@ function jsonHasOverrideTruthy(node) {
 }
 
 // Bicep regex pair: locate name+value lines for the override flag within
-// the same object literal. We accept either property ordering (Bicep does
-// not enforce a name-before-value convention) by checking both directions
-// within ENV_OBJECT_LOOKAHEAD_LINES of each name line.
-const ENV_OBJECT_LOOKAHEAD_LINES = 3;
+// the SAME object literal `{ ... }`. We accept either property ordering
+// (Bicep does not enforce a name-before-value convention) by checking both
+// directions, and we constrain the pairing to the enclosing braces so that
+// a truthy value in a *neighbouring* env object cannot create a false
+// positive on a falsy override entry.
 const BICEP_NAME_RE = /name\s*:\s*['"]FEATURE_FLAG_ALLOW_OVERRIDE['"]/;
 // Require either a closing quote (when quoted) or a word boundary (when
 // unquoted) after the truthy token so values like `'trueish'` or `100` do
@@ -168,6 +169,45 @@ const BICEP_VALUE_TRUTHY_RE = new RegExp(
   String.raw`value\s*:\s*(?:'` + TRUTHY_TOKEN + String.raw`'|"` + TRUTHY_TOKEN + String.raw`"|` + TRUTHY_TOKEN + String.raw`\b)`,
   'i',
 );
+
+// Given a character offset, return the line range [openLine, closeLine] of
+// the nearest enclosing `{ ... }` block, or null if the offset is not inside
+// a balanced brace pair. Brace counting is character-level and ignores the
+// possibility of `{`/`}` inside string literals — Bicep env objects we care
+// about contain only the override flag name (no braces), so this is safe in
+// practice and keeps the implementation parser-free.
+function enclosingBraceLineRange(content, lineStarts, charOffset) {
+  let depth = 0;
+  let openOff = -1;
+  for (let i = charOffset - 1; i >= 0; i -= 1) {
+    const c = content[i];
+    if (c === '}') depth += 1;
+    else if (c === '{') {
+      if (depth === 0) { openOff = i; break; }
+      depth -= 1;
+    }
+  }
+  if (openOff < 0) return null;
+  let d = 0;
+  let closeOff = -1;
+  for (let i = openOff; i < content.length; i += 1) {
+    const c = content[i];
+    if (c === '{') d += 1;
+    else if (c === '}') {
+      d -= 1;
+      if (d === 0) { closeOff = i; break; }
+    }
+  }
+  if (closeOff < 0) return null;
+  let openLine = 0;
+  let closeLine = 0;
+  for (let i = 0; i < lineStarts.length; i += 1) {
+    if (lineStarts[i] <= openOff) openLine = i;
+    if (lineStarts[i] <= closeOff) closeLine = i;
+    else break;
+  }
+  return { open: openLine, close: closeLine };
+}
 
 function scanEnvObjectForm(relPath) {
   const abs = path.isAbsolute(relPath) ? relPath : path.join(REPO_ROOT, relPath);
@@ -197,6 +237,12 @@ function scanEnvObjectForm(relPath) {
   }
   if (/\.bicep$/i.test(relPath)) {
     const lines = content.split(/\r?\n/);
+    // Precompute character offsets of each line start so we can map line
+    // indices to absolute offsets for brace-range lookups.
+    const lineStarts = [0];
+    for (let i = 0; i < content.length; i += 1) {
+      if (content[i] === '\n') lineStarts.push(i + 1);
+    }
     // Skip commented-out lines (Bicep uses `//`; tolerate `#` for safety)
     // so that documentation/example blocks do not produce false positives.
     // This matches the comment-prefix rejection in OVERRIDE_TRUTHY_RE.
@@ -209,9 +255,9 @@ function scanEnvObjectForm(relPath) {
     for (let i = 0; i < lines.length; i += 1) {
       if (isComment(lines[i])) continue;
       if (!BICEP_NAME_RE.test(lines[i])) continue;
-      const lo = i - ENV_OBJECT_LOOKAHEAD_LINES;
-      const hi = i + ENV_OBJECT_LOOKAHEAD_LINES;
-      const match = truthyValueLines.find((j) => j !== i && j >= lo && j <= hi);
+      const range = enclosingBraceLineRange(content, lineStarts, lineStarts[i]);
+      if (!range) continue;
+      const match = truthyValueLines.find((j) => j !== i && j >= range.open && j <= range.close);
       if (match !== undefined) {
         findings.push({
           file: relPath,

@@ -197,6 +197,26 @@ describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', (
     const file = writeFixture('commented.bicep', bicep);
     expect(scanEnvObjectForm(file)).toEqual([]);
   });
+
+  it('does NOT cross object boundaries: truthy value in neighbouring env object stays isolated', () => {
+    // First object has a truthy value but is NOT the override flag; second
+    // object IS the override flag but is falsy. Brace-bounded pairing must
+    // keep them separate.
+    const bicep = [
+      'env: [',
+      '  {',
+      "    name: 'NODE_ENV'",
+      "    value: 'true'",
+      '  }',
+      '  {',
+      `    name: '${OVERRIDE}'`,
+      "    value: 'false'",
+      '  }',
+      ']',
+    ].join('\n');
+    const file = writeFixture('neighbours.bicep', bicep);
+    expect(scanEnvObjectForm(file)).toEqual([]);
+  });
 });
 
 describe('CS40-5 Policy 2 — FEATURE_<KEY>_PERCENTAGE=100 regex', () => {
