@@ -9,6 +9,8 @@ CS60 carries all of that forward as discoverable, claimable tasks. CS60 was file
 
 **Predecessor:** [CS54 (done)](../done/done_cs54_enable-app-insights-in-prod.md). The qualitative analysis for CS60-4/5/6 lives in [§ CS54-9 Deferred Work Evaluation appendix](../done/done_cs54_enable-app-insights-in-prod.md#cs54-9--deferred-work-evaluation-appendix) — read it before claiming any of those tasks; it documents the options + recommendations that CS60 implements (or rejects, with rationale).
 
+**Companion data file:** [`cs60-data-appendix.md`](cs60-data-appendix.md) is the durable, append-only record of empirical observability data — baseline from CS54-6, per-deploy ingest summaries appended by CS41 deploys, the windowed measurements for CS60-1/2/3, and CS60-4/5/6 disposition evidence. CS60's task descriptions point at sections of that file for actual recording of values; CS60 itself stays a planning doc.
+
 ## Goal
 
 Resolve every piece of observability follow-up from CS54 to either ✅ done, ✅ no-action-needed (with rationale), or ✅ split-into-new-CS (with link). Nothing that was deferred from CS54 may end CS60 in an "unaddressed" state.
