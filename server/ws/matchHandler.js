@@ -867,6 +867,15 @@ function buildParticipantPayloads(room) {
 async function insertMatchRows(tx, { matchId, roomCode, configSnapshot,
                                        startedAtIso, finishedAtIso, participants }) {
   const configJson = JSON.stringify(configSnapshot);
+  // CS52-7d (Copilot R4): `ranked_sessions.match_id` is NVARCHAR(255) on
+  // MSSQL / TEXT on SQLite (migration 008). `matches.id` is INT on MSSQL,
+  // so the driver would otherwise bind `matchId` as INT here, forcing an
+  // implicit INT→NVARCHAR conversion on the column and degrading the
+  // partial index `idx_ranked_sessions_match_id`. Coerce to string at
+  // every ranked_sessions bind site (writes here, reads in
+  // pending-writes-replay) while keeping INT for legacy `matches`/
+  // `match_players` updates which use the native INT `id`/`match_id`.
+  const matchIdStr = String(matchId);
   for (const p of participants) {
     await tx.run(
       `INSERT INTO ranked_sessions
@@ -876,7 +885,7 @@ async function insertMatchRows(tx, { matchId, roomCode, configSnapshot,
       [
         p.ranked_session_id,
         p.user_id,
-        matchId,
+        matchIdStr,
         roomCode,
         configJson,
         p.score,

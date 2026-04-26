@@ -271,7 +271,7 @@ async function replayMpMatch(record) {
   try {
     existing = await db.get(
       `SELECT id FROM ranked_sessions WHERE match_id = ?`,
-      [matchId]
+      [String(matchId)]
     );
   } catch (err) {
     throw tagTransientIfDbUnavailable(err);
@@ -318,7 +318,7 @@ async function replayMpMatch(record) {
           [
             p.ranked_session_id,
             p.user_id,
-            matchId,
+            String(matchId),
             roomCode,
             configJson,
             p.score || 0,

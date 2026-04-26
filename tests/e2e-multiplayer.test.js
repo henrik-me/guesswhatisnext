@@ -445,7 +445,7 @@ describe('Multiplayer E2E', () => {
              FROM ranked_sessions
             WHERE match_id = ?
             ORDER BY user_id`,
-          [matchId]
+          [String(matchId)]
         );
         return rows.length === 2 ? rows : null;
       },
