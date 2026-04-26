@@ -10,9 +10,16 @@
  * obfuscation is documented here, not hidden.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const { OVERRIDE_TRUTHY_RE, PERCENTAGE_100_RE } = require('../scripts/check-feature-flag-policy.js');
+const {
+  OVERRIDE_TRUTHY_RE,
+  PERCENTAGE_100_RE,
+  scanEnvObjectForm,
+} = require('../scripts/check-feature-flag-policy.js');
 
 // Built via concatenation so the policy script (which scans this file as
 // part of tests/**) does not flag these literals. Runtime value is
@@ -47,6 +54,111 @@ describe('CS40-5 Policy 1 — FEATURE_FLAG_ALLOW_OVERRIDE truthy regex', () => {
     expect(`  # ${OVERRIDE}: "true"`).not.toMatch(OVERRIDE_TRUTHY_RE);
     expect(`// ${OVERRIDE}=true`).not.toMatch(OVERRIDE_TRUTHY_RE);
     expect(`    // ${OVERRIDE}=enabled`).not.toMatch(OVERRIDE_TRUTHY_RE);
+  });
+});
+
+// CS40 follow-up (GPT-5.4 review HIGH): ARM/Bicep env-object form
+//   { name: 'FEATURE_FLAG_ALLOW_OVERRIDE', value: 'true' }
+// crosses multiple lines and is invisible to OVERRIDE_TRUTHY_RE. These tests
+// exercise the file-scanning code path of `scanEnvObjectForm` directly.
+describe('CS40 follow-up Policy 1 — ARM/Bicep env-object form (name/value)', () => {
+  let tmpDir;
+  const written = [];
+
+  beforeAll(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs40fu-'));
+  });
+
+  afterAll(() => {
+    for (const f of written) {
+      try { fs.unlinkSync(f); } catch { /* best-effort */ }
+    }
+    try { fs.rmdirSync(tmpDir); } catch { /* best-effort */ }
+  });
+
+  function writeFixture(name, content) {
+    const p = path.join(tmpDir, name);
+    fs.writeFileSync(p, content, 'utf8');
+    written.push(p);
+    return p;
+  }
+
+  it('detects truthy override in JSON env-object form (ARM template shape)', () => {
+    const arm = {
+      properties: {
+        template: {
+          containers: [{
+            name: 'app',
+            env: [
+              { name: 'NODE_ENV', value: 'production' },
+              { name: OVERRIDE, value: 'true' },
+            ],
+          }],
+        },
+      },
+    };
+    const file = writeFixture('aca.json', JSON.stringify(arm, null, 2));
+    const findings = scanEnvObjectForm(file);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].file).toBe(file);
+  });
+
+  it('does NOT flag JSON env-objects without the override flag', () => {
+    const arm = {
+      env: [
+        { name: 'NODE_ENV', value: 'production' },
+        { name: 'PORT', value: '3000' },
+        { name: 'FEATURE_SUBMIT_PUZZLE_PERCENTAGE', value: '50' },
+      ],
+    };
+    const file = writeFixture('clean.json', JSON.stringify(arm, null, 2));
+    expect(scanEnvObjectForm(file)).toEqual([]);
+  });
+
+  it('does NOT flag JSON env-objects with the flag set falsy', () => {
+    const arm = { env: [{ name: OVERRIDE, value: 'false' }] };
+    const file = writeFixture('falsy.json', JSON.stringify(arm, null, 2));
+    expect(scanEnvObjectForm(file)).toEqual([]);
+  });
+
+  it('detects truthy override in Bicep env-object form (multi-line name/value)', () => {
+    // Hand-crafted to mirror what a Container App bicep authoring would produce.
+    const bicep = [
+      "resource app 'Microsoft.App/containerApps@2023-05-01' = {",
+      '  properties: {',
+      '    template: {',
+      '      containers: [',
+      '        {',
+      '          name: \'app\'',
+      '          env: [',
+      '            {',
+      `              name: '${OVERRIDE}'`,
+      "              value: 'true'",
+      '            }',
+      '          ]',
+      '        }',
+      '      ]',
+      '    }',
+      '  }',
+      '}',
+    ].join('\n');
+    const file = writeFixture('aca.bicep', bicep);
+    const findings = scanEnvObjectForm(file);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].snippet).toMatch(/value:\s*'true'/);
+  });
+
+  it('does NOT flag Bicep env-objects with the flag set falsy', () => {
+    const bicep = [
+      'env: [',
+      '  {',
+      `    name: '${OVERRIDE}'`,
+      "    value: 'false'",
+      '  }',
+      ']',
+    ].join('\n');
+    const file = writeFixture('falsy.bicep', bicep);
+    expect(scanEnvObjectForm(file)).toEqual([]);
   });
 });
 

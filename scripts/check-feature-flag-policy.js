@@ -19,6 +19,12 @@
  *                - infra/**\/*.bicep
  *                - infra/**\/*.json    (Container App ARM/JSON templates)
  *
+ *              Detection covers two assignment shapes:
+ *                - single-line `KEY=value` / `KEY: value` (shell, dotenv, YAML)
+ *                - ARM/Bicep env-object form `{ name: 'KEY', value: 'value' }`
+ *                  where name and value sit on separate lines (.json via
+ *                  structural parse; .bicep via name+value regex pair).
+ *
  *   POLICY 2 — `FEATURE_<KEY>_PERCENTAGE=100` (the deprecated blunt-enable
  *              E2E workaround from CS25; see CS40 origin notes) must NOT
  *              appear in test-oriented configs. Real production rollouts
@@ -110,6 +116,102 @@ const OVERRIDE_TRUTHY_RE = new RegExp(
   'i',
 );
 
+// ARM/Bicep Container App env entries use the object form
+//   { name: 'FEATURE_FLAG_ALLOW_OVERRIDE', value: 'true' }
+// where `name` and `value` typically sit on separate lines. The single-line
+// `OVERRIDE_TRUTHY_RE` above misses this entirely. We detect it two ways:
+//   - .json templates: structural JSON.parse + walk (precise, no false positives)
+//   - .bicep templates: regex pair (no native bicep parser available)
+const TRUTHY_VALUES = new Set(['true', 'yes', 'on', '1', 'enable', 'enabled']);
+
+function isTruthyEnvValue(v) {
+  if (v === true || v === 1) return true;
+  if (typeof v !== 'string') return false;
+  return TRUTHY_VALUES.has(v.trim().toLowerCase());
+}
+
+// Walk an arbitrary JSON value looking for objects shaped like
+// `{ name: 'FEATURE_FLAG_ALLOW_OVERRIDE', value: <truthy> }`. Returns true on
+// first hit; the caller does not need a count, only a finding.
+function jsonHasOverrideTruthy(node) {
+  if (node === null || typeof node !== 'object') return false;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      if (jsonHasOverrideTruthy(item)) return true;
+    }
+    return false;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(node, 'name')
+    && Object.prototype.hasOwnProperty.call(node, 'value')
+    && node.name === 'FEATURE_FLAG_ALLOW_OVERRIDE'
+    && isTruthyEnvValue(node.value)
+  ) {
+    return true;
+  }
+  for (const k of Object.keys(node)) {
+    if (jsonHasOverrideTruthy(node[k])) return true;
+  }
+  return false;
+}
+
+// Bicep regex pair: locate any line whose name is the override flag, then
+// look ahead within ENV_OBJECT_LOOKAHEAD_LINES for a value: '<truthy>' line.
+// Bicep object literals normally place these within 1-2 lines of each other.
+const ENV_OBJECT_LOOKAHEAD_LINES = 3;
+const BICEP_NAME_RE = /name\s*:\s*['"]FEATURE_FLAG_ALLOW_OVERRIDE['"]/;
+const BICEP_VALUE_TRUTHY_RE = new RegExp(
+  String.raw`value\s*:\s*['"]?` + TRUTHY_TOKEN + String.raw`['"]?`,
+  'i',
+);
+
+function scanEnvObjectForm(relPath) {
+  const abs = path.isAbsolute(relPath) ? relPath : path.join(REPO_ROOT, relPath);
+  let content;
+  try {
+    content = fs.readFileSync(abs, 'utf8');
+  } catch {
+    return [];
+  }
+  const findings = [];
+  if (/\.json$/i.test(relPath)) {
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      // Malformed JSON — silently skip; other tooling will flag the parse error.
+      return [];
+    }
+    if (jsonHasOverrideTruthy(parsed)) {
+      findings.push({
+        file: relPath,
+        line: 1,
+        snippet: `{ name: "FEATURE_FLAG_ALLOW_OVERRIDE", value: <truthy> } found in JSON template`,
+      });
+    }
+    return findings;
+  }
+  if (/\.bicep$/i.test(relPath)) {
+    const lines = content.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!BICEP_NAME_RE.test(lines[i])) continue;
+      const end = Math.min(lines.length, i + 1 + ENV_OBJECT_LOOKAHEAD_LINES);
+      for (let j = i + 1; j < end; j += 1) {
+        if (BICEP_VALUE_TRUTHY_RE.test(lines[j])) {
+          findings.push({
+            file: relPath,
+            line: i + 1,
+            snippet: `${lines[i].trim()} ... ${lines[j].trim()}`,
+          });
+          break;
+        }
+      }
+    }
+    return findings;
+  }
+  return findings;
+}
+
 // Match `FEATURE_<KEY>_PERCENTAGE` (any feature key) set to literal 100.
 // Allow the same `=` / `:` and optional quoting. We intentionally only flag
 // the literal 100 — that is the workaround pattern. Any other value is a
@@ -150,15 +252,21 @@ function runPolicy1() {
   }
 
   const findings = [];
+  const policy1Message =
+    'POLICY 1 violation: FEATURE_FLAG_ALLOW_OVERRIDE must NEVER be truthy in live-deploy assets. ' +
+    'Override is a test/dev affordance only. Remove this env var from live-deploy config. ' +
+    'See INSTRUCTIONS.md "Feature flag testing across environments" and CS40.';
   for (const t of targets) {
     for (const f of scanFile(t, OVERRIDE_TRUTHY_RE)) {
-      findings.push({
-        ...f,
-        message:
-          'POLICY 1 violation: FEATURE_FLAG_ALLOW_OVERRIDE must NEVER be truthy in live-deploy assets. ' +
-          'Override is a test/dev affordance only. Remove this env var from live-deploy config. ' +
-          'See INSTRUCTIONS.md "Feature flag testing across environments" and CS40.',
-      });
+      findings.push({ ...f, message: policy1Message });
+    }
+    // ARM/Bicep templates also use a multi-line {name, value} env-object
+    // shape that single-line regex above does not catch. Scan those forms
+    // for .bicep / .json templates only (the live-deploy IaC files).
+    if (/\.(bicep|json)$/i.test(t)) {
+      for (const f of scanEnvObjectForm(t)) {
+        findings.push({ ...f, message: policy1Message });
+      }
     }
   }
   return findings;
@@ -208,4 +316,12 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { runPolicy1, runPolicy2, OVERRIDE_TRUTHY_RE, PERCENTAGE_100_RE };
+module.exports = {
+  runPolicy1,
+  runPolicy2,
+  OVERRIDE_TRUTHY_RE,
+  PERCENTAGE_100_RE,
+  scanEnvObjectForm,
+  jsonHasOverrideTruthy,
+  isTruthyEnvValue,
+};
