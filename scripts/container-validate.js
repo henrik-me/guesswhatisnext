@@ -527,7 +527,13 @@ async function runCs53_10Mode(mode) {
 
   // Step 2: bring up the stack with the right env-var combination.
   // No cold-start delay (the CS53-10 sims own the connect-time behavior).
+  // The arming gate `GWN_ENABLE_DB_CONNECT_SIMULATORS=1` is REQUIRED here
+  // — without it the SIMULATE_* vars are inert (audit-only). This is the
+  // belt-and-suspenders that prevents an accidentally-leaked SIMULATE_*
+  // env in a real deploy from converting the live DB into a fake-failure
+  // surface (GPT-5.4 PR #301 review).
   const env = {
+    GWN_ENABLE_DB_CONNECT_SIMULATORS: '1',
     GWN_SIMULATE_COLD_START_MS: '',
     GWN_SIMULATE_COLD_START_FAILS: '',
     GWN_SIMULATE_DB_UNAVAILABLE: '',

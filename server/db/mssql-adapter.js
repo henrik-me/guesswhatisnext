@@ -440,14 +440,23 @@ MssqlAdapter._resetColdStart = () => { MssqlAdapter._coldStartConsumed = false; 
 
 // CS53-10 — DB-unavailable + cold-start-fails simulators. All off-by-default;
 // activated by env vars (`GWN_SIMULATE_DB_UNAVAILABLE`,
-// `GWN_SIMULATE_COLD_START_FAILS`). Audit-trail logger is loaded lazily so
-// this module stays cheap to require in tests that don't exercise the sims.
+// `GWN_SIMULATE_COLD_START_FAILS`) AND a separate arming gate
+// `GWN_ENABLE_DB_CONNECT_SIMULATORS=1` so an accidentally-leaked simulator
+// var in a real deploy cannot convert a healthy DB into a fake-failure
+// surface (GPT-5.4 PR #301 review). NODE_ENV is NOT a safe gate because
+// docker-compose.mssql.yml intentionally runs with NODE_ENV=production.
+// Audit-trail logger is loaded lazily so this module stays cheap to require
+// in tests that don't exercise the sims.
 MssqlAdapter._connectAttemptCount = 0;
 MssqlAdapter._resetConnectAttemptCount = () => { MssqlAdapter._connectAttemptCount = 0; };
 MssqlAdapter._resetSimulators = () => {
   MssqlAdapter._coldStartConsumed = false;
   MssqlAdapter._connectAttemptCount = 0;
 };
+
+function _simulatorsArmed() {
+  return process.env.GWN_ENABLE_DB_CONNECT_SIMULATORS === '1';
+}
 
 // CS53-10 — synthetic Azure SQL Free Tier "capacity exhausted" error.
 // Message text intentionally matches the prod regex in
@@ -492,6 +501,16 @@ function _logSimulatorActivation(payload) {
 MssqlAdapter._maybeSimulateUnavailable = function _maybeSimulateUnavailable() {
   const mode = process.env.GWN_SIMULATE_DB_UNAVAILABLE;
   if (!mode) return;
+  if (!_simulatorsArmed()) {
+    // Arming gate not set — refuse to fire. Log so a misconfigured deploy
+    // (sim var leaked without the gate) is still surfaced via KQL § B.16.
+    _logSimulatorActivation({
+      gate: 'simulated-unavailable',
+      mode: `unarmed:${mode}`,
+      attempt: MssqlAdapter._connectAttemptCount,
+    });
+    return;
+  }
   if (mode === 'capacity_exhausted') {
     _logSimulatorActivation({
       gate: 'simulated-unavailable',
@@ -522,6 +541,16 @@ MssqlAdapter._maybeSimulateColdStartFails = function _maybeSimulateColdStartFail
   // Strict numeric parsing — same convention as GWN_SIMULATE_COLD_START_MS.
   const limit = typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : 0;
   if (limit <= 0 || attemptCount > limit) return;
+  if (!_simulatorsArmed()) {
+    // Arming gate not set — refuse to fire. Same audit-trail rationale.
+    _logSimulatorActivation({
+      gate: 'simulated-unavailable',
+      mode: `unarmed:cold-start-fails`,
+      attempt: attemptCount,
+      limit,
+    });
+    return;
+  }
   _logSimulatorActivation({
     gate: 'simulated-unavailable',
     mode: 'cold-start-fails',

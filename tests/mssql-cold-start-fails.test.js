@@ -41,6 +41,7 @@ describe('GWN_SIMULATE_COLD_START_FAILS (CS53-10)', () => {
     delete process.env.GWN_SIMULATE_COLD_START_FAILS;
     delete process.env.GWN_SIMULATE_COLD_START_MS;
     delete process.env.GWN_SIMULATE_DB_UNAVAILABLE;
+    process.env.GWN_ENABLE_DB_CONNECT_SIMULATORS = '1';
     MssqlAdapter._resetSimulators();
   });
 
