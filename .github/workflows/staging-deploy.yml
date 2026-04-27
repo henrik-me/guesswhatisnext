@@ -337,9 +337,144 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # CS53-20 — cold-start assertion smoke. The regular smoke-test job
+  # tolerates cold-start 503s (polls /api/health until 200) but does NOT
+  # *assert* that any 503+Retry-After actually fired, so a regression
+  # that breaks the warmup-retry path could ship undetected. This job
+  # boots the same image with the CS53-10 simulator turned on
+  # (GWN_SIMULATE_COLD_START_FAILS=3) and asserts the warmup path is
+  # exercised AND recovers within budget. Deliberately uses /healthz
+  # (not /api/health) for the service-container readiness check because
+  # /api/health touches the DB and would fail until the simulator's
+  # 4th connect succeeds.
+  cold-start-assert-smoke-test:
+    name: Cold-start assertion smoke (CS53-20)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+    services:
+      mssql:
+        image: ghcr.io/henrik-me/mssql-server:2022-CU17-ubuntu-22.04
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "GwnTest1!"
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'GwnTest1!' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 30s
+
+      app:
+        image: ghcr.io/henrik-me/guesswhatisnext:${{ needs.build-and-push.outputs.image-tag }}
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 3000:3000
+        env:
+          NODE_ENV: staging
+          PORT: 3000
+          JWT_SECRET: cs53-20-cold-start-secret
+          SYSTEM_API_KEY: cs53-20-cold-start-key
+          CANONICAL_HOST: localhost:3000
+          DATABASE_URL: "Server=mssql,1433;Database=gwn;User Id=sa;Password=GwnTest1!;Encrypt=false;TrustServerCertificate=true"
+          FEATURE_FLAG_ALLOW_OVERRIDE: "true"
+          TRUST_PROXY: "2"
+          # CS53-10 simulator — first 3 _connect() attempts throw transient
+          # ETIMEOUT, 4th proceeds. Requires the arming gate; without it
+          # the SIMULATE_* var is inert (audit-logged only).
+          GWN_ENABLE_DB_CONNECT_SIMULATORS: "1"
+          GWN_SIMULATE_COLD_START_FAILS: "3"
+        options: >-
+          --health-cmd "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/healthz', (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1));\""
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 12
+          --health-start-period 30s
+    steps:
+      - name: Create MSSQL database
+        run: |
+          echo "Creating gwn database in MSSQL..."
+          docker exec ${{ job.services.mssql.id }} /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P 'GwnTest1!' -C \
+            -Q "IF DB_ID('gwn') IS NULL CREATE DATABASE [gwn]"
+          echo "Database gwn created."
+
+      - name: Probe DB-touching endpoint and assert ≥1× 503+Retry-After then 200
+        run: |
+          set -euo pipefail
+          URL="http://localhost:3000/api/scores/leaderboard?variant=freeplay"
+          BUDGET_S=90
+          INTERVAL_S=2
+          DEADLINE=$(( $(date +%s) + BUDGET_S ))
+          ATTEMPTS=0
+          SAW_503=0
+          FIRST_RETRY_AFTER=""
+          FIRST_200_ELAPSED_S=""
+          START=$(date +%s)
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            HEADERS_FILE=$(mktemp)
+            STATUS=$(curl -s -o /dev/null -D "$HEADERS_FILE" -w '%{http_code}' \
+              --connect-timeout 5 --max-time 10 \
+              -H "X-User-Activity: 1" "$URL" || echo "000")
+            ELAPSED=$(( $(date +%s) - START ))
+            RETRY_AFTER=$(grep -i '^retry-after:' "$HEADERS_FILE" | head -1 | awk -F': ' '{print $2}' | tr -d '\r' || true)
+            rm -f "$HEADERS_FILE"
+            echo "  attempt ${ATTEMPTS} (+${ELAPSED}s): HTTP ${STATUS}${RETRY_AFTER:+ Retry-After=${RETRY_AFTER}}"
+            if [ "$STATUS" = "503" ]; then
+              SAW_503=1
+              if [ -z "$FIRST_RETRY_AFTER" ] && [ -n "$RETRY_AFTER" ]; then
+                FIRST_RETRY_AFTER="$RETRY_AFTER"
+              fi
+            elif [ "$STATUS" = "200" ]; then
+              FIRST_200_ELAPSED_S="$ELAPSED"
+              break
+            fi
+            sleep "$INTERVAL_S"
+          done
+          echo "Result: attempts=${ATTEMPTS} saw503=${SAW_503} firstRetryAfter=${FIRST_RETRY_AFTER:-<none>} first200ElapsedS=${FIRST_200_ELAPSED_S:-<never>}"
+          if [ "$SAW_503" != "1" ]; then
+            echo "::error::Cold-start retry path NOT exercised — never observed a 503. The simulator did not fire (env vars may not be plumbed through the image), or the warmup-retry path is broken."
+            exit 1
+          fi
+          if [ -z "$FIRST_RETRY_AFTER" ]; then
+            echo "::error::503 response did not include a Retry-After header — transient classifier or central error handler regression."
+            exit 1
+          fi
+          if [ -z "$FIRST_200_ELAPSED_S" ]; then
+            echo "::error::Never recovered to 200 within ${BUDGET_S}s — sim did not stop at limit (simulator counter regression?), or warmup-retry loop never reattempts init."
+            exit 1
+          fi
+          echo "✅ CS53-20 cold-start assertion PASSED."
+
+      - name: Audit — confirm CS53-10 simulator audit log fired
+        # Belt-and-suspenders for KQL § B.16: the simulator must emit a
+        # Pino warn `gate=simulated-unavailable, mode=cold-start-fails`
+        # for each of the 3 throws. If the audit log isn't in the
+        # container stdout, KQL § B.16 won't catch a real prod leak
+        # either — fail the job so the regression is visible.
+        run: |
+          set -euo pipefail
+          LOGS=$(docker logs ${{ job.services.app.id }} 2>&1 || true)
+          MATCHES=$(printf '%s' "$LOGS" | grep -c '"gate":"simulated-unavailable"' || true)
+          echo "Found $MATCHES Pino warn line(s) with gate=simulated-unavailable in app stdout."
+          if [ "$MATCHES" -lt 1 ]; then
+            echo "::error::CS53-10 audit log line gate=simulated-unavailable not found in app stdout — KQL § B.16 would miss a real prod leak."
+            printf '%s\n' "--- last 100 lines of app stdout ---"
+            printf '%s\n' "$LOGS" | tail -100
+            exit 1
+          fi
+          echo "✅ CS53-10 audit log present — KQL § B.16 tripwire path is wired."
+
   update-staging-branch:
     name: Fast-Forward release/staging
-    needs: smoke-test
+    needs: [smoke-test, cold-start-assert-smoke-test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
