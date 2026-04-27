@@ -453,24 +453,35 @@ jobs:
           fi
           echo "✅ CS53-20 cold-start assertion PASSED."
 
-      - name: Audit — confirm CS53-10 simulator audit log fired
-        # Belt-and-suspenders for KQL § B.16: the simulator must emit a
-        # Pino warn `gate=simulated-unavailable, mode=cold-start-fails`
-        # for each of the 3 throws. If the audit log isn't in the
-        # container stdout, KQL § B.16 won't catch a real prod leak
-        # either — fail the job so the regression is visible.
+      - name: Audit — confirm CS53-10 simulator audit log fired (armed mode)
+        # Belt-and-suspenders for KQL § B.16 + arming-gate regression cover.
+        # The audit log line MUST carry `mode:"cold-start-fails"` (NOT
+        # `mode:"unarmed:..."` — that would mean the arming gate broke and
+        # the simulator silently no-op'd, while the probe still saw 503s
+        # from the request gate's "not yet initialized" path: a real
+        # false-negative that GPT-5.4 PR #305 R1 caught). And we expect
+        # EXACTLY 3 matches (one per configured failure attempt;
+        # GWN_SIMULATE_COLD_START_FAILS=3) — fewer means the gate broke,
+        # more means the counter regressed.
         run: |
           set -euo pipefail
           LOGS=$(docker logs ${{ job.services.app.id }} 2>&1 || true)
-          MATCHES=$(printf '%s' "$LOGS" | grep -c '"gate":"simulated-unavailable"' || true)
-          echo "Found $MATCHES Pino warn line(s) with gate=simulated-unavailable in app stdout."
-          if [ "$MATCHES" -lt 1 ]; then
-            echo "::error::CS53-10 audit log line gate=simulated-unavailable not found in app stdout — KQL § B.16 would miss a real prod leak."
+          ARMED_MATCHES=$(printf '%s\n' "$LOGS" | grep -c '"mode":"cold-start-fails"' || true)
+          UNARMED_MATCHES=$(printf '%s\n' "$LOGS" | grep -c '"mode":"unarmed:cold-start-fails"' || true)
+          echo "Found ${ARMED_MATCHES} armed and ${UNARMED_MATCHES} unarmed cold-start-fails audit lines."
+          if [ "$UNARMED_MATCHES" -gt 0 ]; then
+            echo "::error::CS53-10 arming gate regression — saw mode=unarmed:cold-start-fails. The SIMULATE_* env reached the container but GWN_ENABLE_DB_CONNECT_SIMULATORS=1 did NOT, so the simulator is inert. The probe's 503s came from the request gate, NOT from a real simulator throw — meaning this assertion is effectively no-op."
             printf '%s\n' "--- last 100 lines of app stdout ---"
             printf '%s\n' "$LOGS" | tail -100
             exit 1
           fi
-          echo "✅ CS53-10 audit log present — KQL § B.16 tripwire path is wired."
+          if [ "$ARMED_MATCHES" -ne 3 ]; then
+            echo "::error::Expected exactly 3 armed cold-start-fails audit lines (GWN_SIMULATE_COLD_START_FAILS=3); got ${ARMED_MATCHES}. Either the simulator counter regressed, the warmup-retry loop is over- or under-firing, or the env var was not picked up."
+            printf '%s\n' "--- last 100 lines of app stdout ---"
+            printf '%s\n' "$LOGS" | tail -100
+            exit 1
+          fi
+          echo "✅ CS53-10 audit log present with mode=cold-start-fails ×3 — KQL § B.16 tripwire path is wired AND arming gate is honored."
 
   update-staging-branch:
     name: Fast-Forward release/staging
