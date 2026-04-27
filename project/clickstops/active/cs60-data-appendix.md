@@ -204,6 +204,8 @@ Window basis: baseline marker `2026-04-25T22:39Z` → capture `2026-04-26T23:50Z
 | staging | 1003 | 0.88 | ≈0.84 | ≈25 |
 | prod    | 1160 | 0.87 | ≈0.83 | ≈25 |
 
+> **Why cumulative `rows` ≠ sum of per-day `rows`:** the cumulative figures are pulled by a single workspace query over the 25.18h baseline→capture window, while the per-day tables bucket by UTC day. The Day-0 bucket starts at 00:00Z 2026-04-25 (partial — AI was activated mid-day at 22:39Z, so very little Day-0-bucket data) and the Day-1 bucket ends at 23:50Z 2026-04-26 (capture time, ~10 min short of midnight). The 25.18h cumulative window crosses both buckets but doesn't align with their boundaries, so per-day-sum vs cumulative differs by the 22:39→23:59 sliver on Day 0 plus the trailing minutes on Day 1. Same explanation applies to the whole-workspace cumulative table further below (AppDependencies 2,360 cumulative vs 2,082 sum-of-days, etc.). All projections use the cumulative figures, which match the workspace-direct billing window.
+
 **Free-tier headroom (5 GB / month workspace cap, AI tables only):** ≫ 4 GB headroom in both envs at current run-rate (~0.5% of cap).
 
 #### ⚠️ Operational finding — staging exception storm

@@ -51,9 +51,12 @@ az monitor app-insights query `
   -o table
 
 # Cross-table query that bridges 'requests' (AI) with 'ContainerAppConsoleLogs_CL'
-# (workspace) — runs in AI scope; the workspace(...) function reaches the bound workspace
+# (workspace) — runs in AI scope; the workspace(...) function reaches the bound workspace.
+# Use gwn-ai-production here (the AI-scope variant works for prod). For staging, use
+# the workspace-direct AppRequests variant in § B.5 instead — the staging asymmetry
+# above also affects the AI side of this bridge query.
 az monitor app-insights query `
-  --app gwn-ai-staging --resource-group gwn-rg `
+  --app gwn-ai-production --resource-group gwn-rg `
   --analytics-query '<kql from § B.5>' `
   -o table
 ```
