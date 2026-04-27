@@ -128,7 +128,7 @@ After hitting `gwn-ai-staging` with ≥ 20 `/api/scores/leaderboard` probes, run
 
 ```powershell
 $cust = '<workspace-customer-id>'   # see § KQL — cost measurement for how to resolve
-az monitor log-analytics query --workspace $cust --analytics-query 'AppDependencies | where TimeGenerated > ago(15m) and _ResourceId has "gwn-ai-staging" | summarize n = count() by Type, Name | order by n desc' -o json
+az monitor log-analytics query --workspace $cust --analytics-query 'AppDependencies | where TimeGenerated > ago(15m) and _ResourceId contains "gwn-ai-staging" | summarize n = count() by Type, Name | order by n desc' -o json
 ```
 
 If empty, pull the local span shape for comparison (run from a `dev:mssql` container):

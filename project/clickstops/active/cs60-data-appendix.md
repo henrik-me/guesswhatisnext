@@ -127,7 +127,7 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 | workspace-gwnrg6bXt | **0.02** | Whole workspace logs — well below 5GB/month free tier. |
 | gwn-sqldb (production) | 0.00 | Free tier. |
 | gwn-ai-staging / gwn-ai-production | 0.00 | Workspace-mode AI components have no separate cost line; ingest cost rolls into the workspace meter. |
-| **Day 0 total** | **2.24 DKK** | ≈$0.32 USD at ~7 DKK/USD. |
+| **Day 0 total** | **4.24 DKK** | ≈$0.61 USD at ~7 DKK/USD. |
 
 #### Container Apps compute / memory / requests — Day 0
 
@@ -140,7 +140,7 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 - Both apps essentially idle — vCPU usage at 1/10000th of a core average, memory pinned around 65-69 MiB (well below the configured limit).
 - Day-0 staging AI ingest dominates because CS54-6 verification + CS58 scale-to-zero work both happened on staging that day. Prod was barely touched until late 22:28Z.
 - No `AppExceptions`, `AppTraces`, `AppPageViews`, `AppBrowserTimings`, `AppAvailabilityResults`, or `AppSystemEvents` rows on Day 0.
-- `gwn-staging` Requests (233) ≫ AI `AppRequests` rows (73) for the same day — request-instrumentation sampling or the staging classic-query asymmetry both plausible explanations; investigate under CS60-4.
+- `gwn-staging` Requests (233) ≫ AI `AppRequests` rows (73) for the same day — likely request-instrumentation sampling or metric-vs-telemetry semantics (e.g., `Requests` metric counts include `/healthz`-style probes that may not be captured as AI `AppRequests`); investigate under CS60-4. (Note: the staging classic AI-scope asymmetry doesn't explain this gap because the `AppRequests` count is already from the workspace-direct path.)
 
 ---
 
@@ -238,7 +238,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 
 | Day | gwn-staging $ (DKK) | gwn-production $ (DKK) | workspace $ (DKK) | Day total $ (DKK) | Notes |
 |---|---:|---:|---:|---:|---|
-| Day 0 — 2026-04-25 | 2.13 | 2.09 | 0.02 | **2.24** | CS58 partial (scale-to-zero applied 18:30Z) + CS54-6 verification traffic. |
+| Day 0 — 2026-04-25 | 2.13 | 2.09 | 0.02 | **4.24** | CS58 partial (scale-to-zero applied 18:30Z) + CS54-6 verification traffic. |
 | Day 1 — 2026-04-26 | 0.00 | 1.36 | 0.01 | **1.37** | First full day at CS58 scale-to-zero. |
 | Day 2 — 2026-04-27 | _pending CS60-1c_ | _pending_ | _pending_ | _pending_ | _Append at next daily tick._ |
 | Day 3 — 2026-04-28 | _pending CS60-2c_ | _pending_ | _pending_ | _pending_ | |
