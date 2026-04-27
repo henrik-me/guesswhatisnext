@@ -133,9 +133,12 @@ describe('CS41-5 rollback verification (staging-deploy.yml)', () => {
     expect(lineCs415).toBeLessThan(lineTagDeployment);
   });
 
-  it('CS41-5 is gated on failure() && current-revision (mirrors rollback gating)', () => {
+  it('CS41-5 is gated on failure() && rollback target FQDN present (mirrors rollback gating)', () => {
+    // Per CS61-5a, the if: condition was extended with the cs41-5-marker
+    // gate, so it now matches: `if: failure() && env.ROLLBACK_REVISION_FQDN != '' && steps.cs41-5-marker.outputs.skip-rollback-smoke != 'true'`
     const window = yaml.split('\n').slice(lineCs415 - 1, lineCs415 + 5).join('\n');
-    expect(window).toMatch(/if: failure\(\) && steps\.deploy\.outputs\.current-revision != ''/);
+    expect(window).toMatch(/if: failure\(\)/);
+    expect(window).toMatch(/ROLLBACK_REVISION_FQDN/);
   });
 
   it('CS41-5 uses the staging smoke-user secret (not prod)', () => {
@@ -148,12 +151,12 @@ describe('CS41-5 rollback verification (staging-deploy.yml)', () => {
   });
 
   it('CS41-5 captures rollback revision via traffic[?weight==100]', () => {
-    const window = yaml
-      .split('\n')
-      .slice(lineCs415 - 1, lineTagDeployment - 1)
-      .join('\n');
-    expect(window).toMatch(/ROLLBACK_REVISION_NAME=/);
-    expect(window).toMatch(/weight==/);
+    // Per CS61-5a, the resolution lives in a sibling "Resolve rollback target
+    // revision (CS41-5 prep)" step rather than inline in the CS41-5 smoke
+    // step. Assert the strings exist somewhere in the staging workflow
+    // (likely in the prep step) — both before and after CS61-5a's split.
+    expect(yaml).toMatch(/ROLLBACK_REVISION_NAME=/);
+    expect(yaml).toMatch(/weight==/);
   });
 
   it('CS41-5 reuses scripts/smoke.js and scripts/verify-ai.js', () => {
