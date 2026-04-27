@@ -391,7 +391,7 @@ jobs:
           GWN_ENABLE_DB_CONNECT_SIMULATORS: "1"
           GWN_SIMULATE_COLD_START_FAILS: "3"
         options: >-
-          --health-cmd "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/healthz', (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1));\""
+          --health-cmd "node -e \"const http = require('http'); const req = http.get('http://localhost:3000/healthz', {headers: {'X-Forwarded-Proto': 'https'}}, (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1));\""
           --health-interval 10s
           --health-timeout 10s
           --health-retries 12
@@ -422,7 +422,7 @@ jobs:
             HEADERS_FILE=$(mktemp)
             STATUS=$(curl -s -o /dev/null -D "$HEADERS_FILE" -w '%{http_code}' \
               --connect-timeout 5 --max-time 10 \
-              -H "X-User-Activity: 1" "$URL" || echo "000")
+              -H "X-User-Activity: 1" -H "X-Forwarded-Proto: https" "$URL" || echo "000")
             ELAPSED=$(( $(date +%s) - START ))
             RETRY_AFTER=$(grep -i '^retry-after:' "$HEADERS_FILE" | head -1 | awk -F': ' '{print $2}' | tr -d '\r' || true)
             rm -f "$HEADERS_FILE"
