@@ -329,12 +329,39 @@ Branch protection requires the head branch to be up-to-date with `main` before m
 This is an **exception path**, not default merge procedure. Per [§ WORKBOARD.md — Live Coordination in TRACKING.md](TRACKING.md#workboardmd--live-coordination) and the broader "no self-decided shortcuts" rule in [§ Quick Reference Checklist in INSTRUCTIONS.md](INSTRUCTIONS.md#quick-reference-checklist), a non-owner orchestrator must NOT use `--admin`. Once a PR satisfies all of the criteria below AND the user (or a delegated authority with admin rights) has explicitly approved the merge, the owner / admin may use `gh pr merge --squash --admin`:
 
 - All required CI checks SUCCESS on the latest head commit
-- All required reviews approved (Copilot for code/config; local review for docs-only — see [REVIEWS.md](REVIEWS.md))
+- All required reviews satisfied per [§ Review state on the `--admin` exception path](#review-state-on-the---admin-exception-path) below (Copilot for code/config; local review for docs-only — see [REVIEWS.md](REVIEWS.md))
 - The PR has been ready-to-merge for ≥30 minutes AND `main` has moved ≥3 times since the last successful CI
 
 The `--admin` flag bypasses the up-to-date requirement; the squash strategy keeps `main` history clean. Do **not** use `--admin` to bypass actual content conflicts (`mergeStateStatus = DIRTY`) — that path requires a real rebase and conflict resolution.
 
-**When using `--admin`, post a PR comment** documenting why the bypass was used, who approved it, and which CI sha was last successful (e.g., "Admin merge after 10 rebase cycles in churning main; CI green on `<sha>`, all reviews approved, user approved at `<time>`"). This preserves the audit trail for branch-protection exceptions.
+**When using `--admin`, post a PR comment** documenting why the bypass was used, who approved it, and which CI sha was last successful (e.g., "Admin merge after 10 rebase cycles in churning main; CI green on `<sha>`, all reviews satisfied per OPERATIONS § Review state on the `--admin` exception path, user approved at `<time>`"). The comment **must** link to (or paraphrase) the review-state criteria below so the audit trail records exactly which gate was relied on. This preserves the audit trail for branch-protection exceptions.
+
+### Review state on the `--admin` exception path
+
+Branch protection nominally requires an `APPROVED` review, but the only configured PR reviewer (the Copilot bot) does not reliably issue `APPROVED` — in practice it almost always finishes a clean round as `COMMENTED`. CS53-21 surfaced this; CS53-21.A resolves which review state actually suffices on the `--admin` exception path so the rule above (`All required reviews satisfied`) is not underspecified.
+
+**Scope.** Everything below about *Copilot* review state applies to **code/config PRs** — the PR types where [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop-gpt-54-or-higher) (and the "Copilot PR Review Policy" paragraph that follows it) requires Copilot review. **Docs-only PRs** (per the same REVIEWS.md table) skip Copilot review by design, so the Copilot-evidence and Copilot-inline-thread criteria below do **not** apply to them; for docs-only PRs the `--admin` review-state gate reduces to **(a)** local review (GPT-5.4 or higher) is clean and **(b)** all required CI checks are `SUCCESS` on the latest head commit. The CI prohibition below applies to *all* PR types. Note: in practice, docs-only PRs almost never need `--admin` (they do not invoke long Copilot review cycles), so this branch of the gate exists for completeness rather than as a routine path.
+
+**Recommended landing position (code/config PRs).** The latest Copilot review may be `COMMENTED` (rather than `APPROVED`) **provided all** of the following hold:
+
+- All inline comment threads on the latest commit are resolved (no open `pending` threads — verify via the GraphQL `reviewThreads` query in [REVIEWS.md](REVIEWS.md)).
+- Local review (GPT-5.4 or higher, per [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop-gpt-54-or-higher)) is clean — no open findings.
+- All required CI checks are `SUCCESS` on the latest head commit.
+- The orchestrator has explicitly tracked addressing each Copilot finding in commits visible in the PR thread (the per-thread "Fixed in `<commit>`" replies described in [REVIEWS.md](REVIEWS.md) are the audit trail for this).
+
+If the latest review is `APPROVED`, that of course also satisfies the gate; the point of this sub-section is that `COMMENTED` + the four conditions above is **explicitly acceptable** and is in fact the normal converged end state for Copilot-reviewed PRs in this repo.
+
+**Reading the broader workflow consistently.** Other docs use the shorthand "all reviews approved" when describing the `ready_to_merge` state (e.g. [§ Agent Progress Reporting in OPERATIONS.md](#agent-progress-reporting), and [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine)). On the `--admin` exception path, "approved" should be read as "satisfies the criteria above" — i.e. a clean `COMMENTED` round meeting the four conditions counts as `ready_to_merge` for the purpose of this exception path. The normal (non-`--admin`) merge path still requires whatever branch protection itself enforces.
+
+**Hard prohibition — `--admin` MUST NOT be used when any of the following hold:**
+
+- **(Code/config PRs only.)** Zero Copilot review evidence exists on the PR (i.e., the bot never ran — no review record at all from `copilot-pull-request-reviewer`). Request the review and wait; do not bypass. (Does not apply to docs-only PRs, which legitimately skip Copilot review per [REVIEWS.md](REVIEWS.md).)
+- **(All PR types.)** Any required CI check is in `FAILURE` or `PENDING`. `--admin` exists to bypass the *up-to-date* requirement during main churn, **not** to bypass red or in-flight CI.
+- **(Code/config PRs only.)** Any Copilot inline comment on the latest commit is unresolved (open `pending` thread). Resolve or reply-and-resolve first; an unresolved thread means a finding has not been dispositioned.
+
+These prohibitions are absolute — owner approval does **not** override them, because they are about the *evidence base* for the merge, not about who is authorised to bypass branch protection.
+
+**Audit-trail restatement (see also the bullet above).** Every `--admin` use must be accompanied by a PR comment that (a) explains why the bypass was needed (typically: long-running PR, churning main, ≥N rebase cycles), (b) names the user / authority who approved the merge, (c) records the CI sha that was last `SUCCESS`, and (d) links to or paraphrases the four "Recommended landing position" criteria above so a future reader can verify the gate was actually satisfied.
 
 **Pre-merge sanity check via the merge tree**, even when bypassing the up-to-date check, to catch silent semantic conflicts that GitHub's mergeStateStatus wouldn't flag (e.g. two concurrent PRs both rewriting the same JSDoc):
 
