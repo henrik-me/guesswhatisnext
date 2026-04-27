@@ -15,78 +15,33 @@
  * (per CS52 Decision #4).
  */
 
-const path = require('path');
-const fs = require('fs');
 const { getDbAdapter, closeDbAdapter } = require('../server/db');
 const logger = require('../server/logger');
+const {
+  seedRankedPuzzles: seedRankedPuzzlesCore,
+  SEED_FILE,
+} = require('../server/services/seedRankedPuzzles');
 
-const SEED_FILE = path.join(
-  __dirname,
-  '..',
-  'server',
-  'db',
-  'seeds',
-  'ranked-puzzles-v1.json'
-);
-
+/**
+ * CLI/test entrypoint — opens its own adapter, runs the shared core, emits
+ * the structured `Ranked puzzles seeded` log line, and returns the result.
+ * Argument-less to preserve the CS52-2 test contract
+ * (`tests/cs52-2-seed-ranked-puzzles.test.js`); the route calls the core
+ * directly with an already-opened adapter.
+ */
 async function seedRankedPuzzles() {
-  const raw = fs.readFileSync(SEED_FILE, 'utf-8');
-  const data = JSON.parse(raw);
-  if (!Array.isArray(data.puzzles)) {
-    throw new Error(`Seed file missing "puzzles" array: ${SEED_FILE}`);
-  }
-
   const db = await getDbAdapter();
-  let inserted = 0;
-  let skipped = 0;
-
-  await db.transaction(async (tx) => {
-    for (const p of data.puzzles) {
-      // created_at is intentionally omitted — the column DEFAULT
-      // (GETDATE() on MSSQL, CURRENT_TIMESTAMP on SQLite) supplies a
-      // proper datetime value. Sending an ISO-Z string into a DATETIME
-      // column on Azure SQL is brittle (implicit-conversion failures).
-      const params = [
-        p.id,
-        p.category,
-        typeof p.prompt === 'string' ? p.prompt : JSON.stringify(p.prompt),
-        JSON.stringify(p.options),
-        p.answer,
-        p.difficulty ?? null,
-      ];
-      let result;
-      if (db.dialect === 'mssql') {
-        // Single-statement idempotent insert; pass id twice for the WHERE NOT EXISTS check.
-        // Mirrors server/db/seed-puzzles.js — race-safe (no SELECT-then-INSERT window).
-        result = await tx.run(
-          `INSERT INTO ranked_puzzles
-             (id, category, prompt, options, answer, difficulty, status)
-           SELECT ?, ?, ?, ?, ?, ?, 'active'
-           WHERE NOT EXISTS (SELECT 1 FROM ranked_puzzles WHERE id = ?)`,
-          [...params, p.id]
-        );
-      } else {
-        result = await tx.run(
-          `INSERT OR IGNORE INTO ranked_puzzles
-             (id, category, prompt, options, answer, difficulty, status)
-           VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-          params
-        );
-      }
-      const changes = result && typeof result.changes === 'number' ? result.changes : 0;
-      if (changes > 0) {
-        inserted += 1;
-      } else {
-        skipped += 1;
-      }
-    }
-  });
-
+  const result = await seedRankedPuzzlesCore(db);
   logger.info(
-    { inserted, skipped, total: data.puzzles.length, version: data.version },
+    {
+      inserted: result.inserted,
+      skipped: result.skipped,
+      total: result.total,
+      version: result.version,
+    },
     'Ranked puzzles seeded'
   );
-  return { inserted, skipped };
+  return result;
 }
 
 if (require.main === module) {
@@ -111,3 +66,4 @@ if (require.main === module) {
 }
 
 module.exports = { seedRankedPuzzles, SEED_FILE };
+
