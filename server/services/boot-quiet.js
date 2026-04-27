@@ -32,26 +32,37 @@ function bootQuietContext(req) {
 /**
  * Emit one boot-quiet telemetry line for `route` after the handler has decided
  * whether it touched the DB. `extra` may include `cacheOutcome` for endpoints
- * that have an in-process cache (currently `/api/notifications/count`). The
- * field set is the union of CS53-23's existing log line and the new
- * `dbTouched` signal CS53-19 adds for the cache-less endpoints.
+ * that have an in-process cache (currently `/api/notifications/count`), or
+ * `level: 'warn'` to bump the log level. The field set is the union of
+ * CS53-23's existing log line and the new `dbTouched` signal CS53-19 adds
+ * for the cache-less endpoints.
+ *
+ * Reserved keys (`gate`, `route`, `dbTouched`, `userActivity`, `isSystem`,
+ * `userId`) are protected — `extra` cannot override them, even by accident.
+ * This keeps the telemetry contract observable from the KQL query in
+ * `docs/observability.md § B.14` regardless of how a caller misuses `extra`.
+ * (Copilot R2 finding.)
  */
 function logBootQuiet(route, ctx, dbTouched, extra) {
-  const payload = {
-    gate: 'boot-quiet',
-    route,
-    dbTouched: !!dbTouched,
-    userActivity: ctx.userActivity,
-    isSystem: ctx.isSystem,
-    userId: ctx.userId,
-  };
+  const payload = {};
+  // Apply caller-supplied extras FIRST so canonical fields below win on key
+  // collision — protects the telemetry contract from accidental override.
   if (extra && typeof extra === 'object') {
     for (const k of Object.keys(extra)) {
       if (extra[k] !== undefined) payload[k] = extra[k];
     }
   }
-  if (extra && extra.level === 'warn') {
-    delete payload.level;
+  // Canonical fields (last write wins).
+  payload.gate = 'boot-quiet';
+  payload.route = route;
+  payload.dbTouched = !!dbTouched;
+  payload.userActivity = ctx.userActivity;
+  payload.isSystem = ctx.isSystem;
+  payload.userId = ctx.userId;
+  // `level` is a control field, not a payload field — strip before logging.
+  const wantWarn = extra && extra.level === 'warn';
+  if ('level' in payload) delete payload.level;
+  if (wantWarn) {
     logger.warn(payload, 'boot-quiet endpoint accessed');
   } else {
     logger.info(payload, 'boot-quiet endpoint accessed');
