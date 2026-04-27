@@ -736,7 +736,7 @@ function checkOwnerInOrchestratorsTable(wbPath, lines, ignores) {
   return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
 }
 
-// ---------- check 8 & 9: active-row-stale / active-row-reclaimable ----------
+// ---------- checks 11 & 12: active-row-stale / active-row-reclaimable -------
 // CS44-5b. Threshold-based freshness check for individual Active Work rows.
 // Conditional: only fires when the Active Work table has a `Last Updated`
 // column (added by CS44-3 schema upgrade, now the canonical schema).
@@ -931,11 +931,6 @@ function findClickstopFilesByCs(repoRoot, cs) {
   return out;
 }
 
-function findClickstopFileByCs(repoRoot, cs) {
-  const all = findClickstopFilesByCs(repoRoot, cs);
-  return all.length > 0 ? all[0] : null;
-}
-
 function extractTitleCellLine1(cellRaw) {
   // Title cell is multi-line `**Title**<br>WT: ...<br>B:&nbsp; ...`.
   // Take the substring before the first `<br>`, strip surrounding `**`,
@@ -964,13 +959,14 @@ function checkWorkboardTitleMatchesH1(repoRoot, lines, wbPath, ignores) {
     if (!csMatch) continue;
     const cs = csMatch[1].toUpperCase();
     const matches = findClickstopFilesByCs(repoRoot, cs);
-    const file = matches.length > 0 ? matches[0] : null;
     if (matches.length > 1) {
       const rels = matches.map(m => path.relative(repoRoot, m).replace(/\\/g, '/')).join(', ');
       findings.push({ rule: 'workboard-title-matches-h1', file: wbPath, line: row.lineNo,
         severity: 'warning',
-        message: `${taskIdCell}: ambiguous — ${matches.length} clickstop files match ${cs}: ${rels}. The H1 comparison uses the first match (\`planned\` > \`active\` > \`done\` order); resolve by deleting/renaming duplicates.` });
+        message: `${taskIdCell}: ambiguous — ${matches.length} clickstop files match ${cs}: ${rels}. Resolve by deleting/renaming duplicates; H1 comparison is skipped until the ambiguity is resolved.` });
+      continue; // short-circuit: don't compare against an arbitrary first match
     }
+    const file = matches[0] || null;
     if (!file) {
       findings.push({ rule: 'workboard-title-matches-h1', file: wbPath, line: row.lineNo,
         severity: 'warning',
