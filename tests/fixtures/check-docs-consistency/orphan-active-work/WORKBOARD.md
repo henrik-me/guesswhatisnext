@@ -4,6 +4,6 @@
 
 ## Active Work
 
-| Task | CS | Title | Owner |
-|------|-----|-------|-------|
-| CS9-1 | CS9 | Already complete | someone |
+| CS-Task ID | Title | Owner |
+|------------|-------|-------|
+| CS9-1 | Done | someone |

@@ -4,6 +4,6 @@
 
 ## Active Work
 
-| Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
-|---------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
+| CS-Task ID | Clickstop | State | Owner | Worktree | Branch | PR | Last Updated | Next Action | Blocked Reason |
+|------------|-----------|-------|-------|----------|--------|----|--------------|-------------|----------------|
 | CS99-3 | CS99 | implementing | yoga-gwn | wt-3 | branch | — | 2098-12-28T00:00Z | code | — |

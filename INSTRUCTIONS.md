@@ -12,9 +12,9 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Never do implementation work in main checkout — dispatch to worktree sub-agents
 - Never modify files related to another agent's active task — check WORKBOARD.md first
 - Maximize parallelism — dispatch independent tasks simultaneously
-- Update WORKBOARD.md Active Work when starting ANY work, not just clickstop tasks — use "—" for Task ID/Clickstop on non-CS work
+- Update WORKBOARD.md Active Work when starting ANY work, not just clickstop tasks — use a non-empty `CS-Task ID` placeholder (e.g. `OPS-…`) for non-CS work; see [§ WORKBOARD entry template in TRACKING.md](TRACKING.md#workboard-entry-template) for the canonical 6-column / 2-row-per-entry shape
 - Update WORKBOARD.md immediately on task claim/complete — commit AND push (use ISO datetime: `2026-04-12T18:27Z`)
-- Only modify your own rows in WORKBOARD.md Active Work
+- Only modify your own rows in WORKBOARD.md Active Work (both the status row and its description-continuation row count as your row)
 - Check CS number conflicts before creating new clickstops
 - Commit clickstop plan file to main BEFORE starting implementation work
 - Deferred items → must land in a CS via one of four dispositions (add to current CS / file new `planned_` CS / add to existing planned-or-active CS / cancel with reason). Appendix-in-done-file alone is INSUFFICIENT — see [§ Deferred work policy in TRACKING.md](TRACKING.md#clickstop-completion-checklist). Never silently drop.
@@ -382,7 +382,7 @@ Commit locally after every meaningful, working change — each commit should be 
 
 **Scope:** this rule applies to all `.md` files in the repository, including `README.md`, `CONTEXT.md`, `WORKBOARD.md`, `LEARNINGS.md`, `infra/README.md`, every file under `project/`, and every clickstop file. It does *not* apply to source-code comments, where local restatement is often the clearest option.
 
-**Automated check:** `npm run check:docs` (script: [`scripts/check-docs-consistency.js`](scripts/check-docs-consistency.js)) enforces the mechanical half of this rule on every PR via the `Docs Consistency` workflow. The check runs in **warn-only** mode today (CS43-2) and will be flipped to a hard gate by CS43-7 once the baseline is cleaned up. Rule names: `link-resolves`, `clickstop-link-resolves`, `prefix-matches-status`, `unique-cs-state`, `done-task-count`, `no-orphan-active-work`, `workboard-stamp-fresh`. For a legitimate exception, add an `<!-- check:ignore <rule-name> -->` HTML comment either inline on the offending line or on its own line directly above the affected markdown block. Use sparingly — every escape-hatch comment is an admission that the principle is not being upheld.
+**Automated check:** `npm run check:docs` (script: [`scripts/check-docs-consistency.js`](scripts/check-docs-consistency.js)) enforces the mechanical half of this rule on every PR via the `Docs Consistency` workflow. The check runs in **warn-only** mode today (CS43-2) and will be flipped to a hard gate by CS43-7 once the baseline is cleaned up. Rule names: `link-resolves`, `clickstop-link-resolves`, `prefix-matches-status`, `unique-cs-state`, `done-task-count`, `no-orphan-active-work`, `workboard-stamp-fresh`, `clickstop-h1-matches-filename` (warn-only, CS62-2), `workboard-title-matches-h1` (warn-only, CS62-3). For a legitimate exception, add an `<!-- check:ignore <rule-name> -->` HTML comment either inline on the offending line or on its own line directly above the affected markdown block. Use sparingly — every escape-hatch comment is an admission that the principle is not being upheld.
 
 ---
 

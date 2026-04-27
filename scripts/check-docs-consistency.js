@@ -7,6 +7,20 @@
  * (or project/clickstops/done/done_cs43_*.md once archived) for the why.
  *
  * Checks:
+ *   New in CS62 (warn-only on landing — flipped to error in a follow-up CS
+ *   once the baseline is clean, mirroring the CS43-2 / CS43-7 pattern):
+ *     - clickstop-h1-matches-filename  — every file under
+ *         project/clickstops/{planned,active,done}/ whose name matches
+ *         `(planned|active|done)_cs<n>_<slug>.md` has an H1 of the form
+ *         `# CSnn — Human Title` whose CSID matches the filename CSID and
+ *         whose kebab-cased title matches the filename slug. Files in
+ *         those directories that do NOT match the clickstop naming
+ *         convention (e.g. `cs60-data-appendix.md`) are NOT covered by
+ *         this rule — they are companion docs, not clickstop files.
+ *     - workboard-title-matches-h1     — each Active Work row's Title cell
+ *         (line 1, before the first <br>, ** stripped) equals the human
+ *         title of its parent CS file's H1.
+ *
  *   1. link-resolves           — every relative link [text](path[#anchor]) in
  *                                 any *.md resolves to an existing file (and
  *                                 anchor exists in that file when present).
@@ -35,10 +49,10 @@
  *                              — every Active Work `Owner` (or `Agent ID`)
  *                                 value appears in the Orchestrators
  *                                 table's agent-ID column.
- *   8. active-row-stale        — WORKBOARD.md Active Work row whose
+ *  11. active-row-stale        — WORKBOARD.md Active Work row whose
  *                                 `Last Updated` cell is > 24h old (warn).
  *                                 Conditional on the column existing.
- *   9. active-row-reclaimable  — same row > 7d old (error). Conditional on
+ *  12. active-row-reclaimable  — same row > 7d old (error). Conditional on
  *                                 the column existing. (CS44-5b)
  *
  * Escape hatch:`<!-- check:ignore <rule-name> -->` on the line itself or on
@@ -70,6 +84,17 @@ const SKIP_PATH_FRAGMENTS = ['tests/fixtures'];
 
 const STATUS_ICON = { '✅': 'done', '🔄': 'active', '⬜': 'planned' };
 const PREFIX_FOR_STATE = { done: 'done_', active: 'active_', planned: 'planned_' };
+
+// CS62: WORKBOARD.md Active Work column-1 header is `CS-Task ID` (rename
+// from the pre-CS62 `Task ID`). The regex tolerates a missing or
+// whitespace separator so `CSTaskID` / `CS Task ID` also match.
+const CS_TASK_ID_HEADER_RE = /^cs[-\s]*task\s*id$/i;
+
+// CS62: clickstop H1 must be `# CSnn — Human Title` with a real em-dash
+// (U+2014). `-` and `--` are not accepted; the rule is intentionally strict
+// so that the H1 ↔ filename-slug check has a single canonical shape.
+const CLICKSTOP_H1_RE = /^#\s+(CS\d+)\s+\u2014\s+(.+?)\s*$/i;
+const CLICKSTOP_FILENAME_RE = /^(planned|active|done)_(cs\d+)_([a-z0-9-]+)\.md$/i;
 
 // Canonical WORKBOARD Active Work states (CS44-1). The human-readable source
 // of truth lives in INSTRUCTIONS.md § "WORKBOARD State Machine"; this
@@ -115,6 +140,58 @@ function walkMarkdown(root) {
 
 function readLines(p) {
   return fs.readFileSync(p, 'utf8').split(/\r?\n/);
+}
+
+// CS62: kebab-case a clickstop human title for comparison against the
+// filename slug. Rules: lowercase, ampersand → `and`, runs of any
+// non-alphanumeric chars collapse to a single `-`, leading/trailing `-`
+// stripped. Must stay in lockstep with the slug rules used by humans
+// when authoring the filename — see project/clickstops/ examples.
+function kebabSlug(s) {
+  return String(s)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function parseClickstopFilename(name) {
+  const m = CLICKSTOP_FILENAME_RE.exec(name);
+  if (!m) return null;
+  return {
+    state: m[1].toLowerCase(),
+    cs: m[2].toUpperCase(),
+    slug: m[3].toLowerCase(),
+  };
+}
+
+function parseClickstopH1WithLine(text) {
+  // Like parseClickstopH1 but also returns the 1-based line number where
+  // the eligible-content line was found (used to anchor warnings so the
+  // existing `<!-- check:ignore ... -->` block-scope semantics suppress
+  // them when the directive is placed above the H1).
+  const lines = String(text).split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (t === '') continue;
+    if (/^<!--.*-->\s*$/.test(t)) continue;
+    const m = CLICKSTOP_H1_RE.exec(lines[i]);
+    if (m) return { cs: m[1].toUpperCase(), title: m[2].trim(), line: i + 1 };
+    return { cs: null, title: null, line: i + 1 };
+  }
+  return null;
+}
+
+function parseClickstopH1(text) {
+  // Returns { cs, title } from the first non-blank, non-comment line if it
+  // matches CLICKSTOP_H1_RE; { cs:null, title:null } if such a line exists
+  // but doesn't match (malformed); null if the file has no eligible content.
+  // Leading blank lines and standalone HTML comment lines (e.g. an
+  // `<!-- check:ignore ... -->` directive placed above the H1) are skipped
+  // so authors can keep escape-hatch comments at the top of a CS file.
+  const r = parseClickstopH1WithLine(text);
+  if (!r) return null;
+  return { cs: r.cs, title: r.title };
 }
 
 function slugify(heading) {
@@ -431,12 +508,22 @@ function checkDoneTaskCount(rows, contextPath, repoRoot, ignores) {
 // truth for clickstop status. The `rows` parameter is intentionally
 // unused here (kept for signature stability and other table-dependent
 // rules).
+//
+// CS62: reads the `CS-Task ID` column by header lookup (was: hard-coded
+// `cells[2]` index, which depended on the pre-CS62 column order) and
+// extracts the `^CS\d+` parent CSID for the done-set comparison. Rows
+// whose `CS-Task ID` cell is empty are description-continuation rows and
+// are skipped.
 function checkNoOrphanActiveWork(repoRoot, _rows) {
   const findings = [];
   const wbPath = path.join(repoRoot, 'WORKBOARD.md');
   if (!fs.existsSync(wbPath)) return findings;
   const lines = readLines(wbPath);
   const wbIgnores = parseIgnores(lines);
+  const tbl = getActiveWorkTable(lines);
+  if (!tbl) return findings;
+  const csTaskIdx = colIndex(tbl.headers, h => CS_TASK_ID_HEADER_RE.test(h));
+  if (csTaskIdx === -1) return findings;
   const doneCs = new Set();
   const doneDir = path.join(repoRoot, 'project', 'clickstops', 'done');
   if (fs.existsSync(doneDir)) {
@@ -445,20 +532,14 @@ function checkNoOrphanActiveWork(repoRoot, _rows) {
       if (m) doneCs.add(m[1].toUpperCase());
     }
   }
-  let inActive = false;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^##\s+Active Work/.test(line)) { inActive = true; continue; }
-    if (inActive && /^##\s+/.test(line)) break;
-    if (!inActive) continue;
-    const cells = line.split('|').map(s => s.trim());
-    if (cells.length < 3) continue;
-    const csCell = cells[2];
-    const m = /^CS\d+$/i.exec(csCell);
+  for (const row of tbl.rows) {
+    const csCell = (row.cells[csTaskIdx] || '').trim();
+    if (!csCell) continue; // description-continuation row
+    const m = /^(CS\d+)/i.exec(csCell);
     if (!m) continue;
-    const cs = csCell.toUpperCase();
+    const cs = m[1].toUpperCase();
     if (doneCs.has(cs)) {
-      findings.push({ rule: 'no-orphan-active-work', file: wbPath, line: i + 1,
+      findings.push({ rule: 'no-orphan-active-work', file: wbPath, line: row.lineNo,
         severity: 'error',
         message: `Active Work row references ${cs} which has a done_${cs.toLowerCase()}_*.md file under project/clickstops/done/` });
     }
@@ -496,10 +577,11 @@ function checkWorkboardStampFresh(repoRoot, now) {
 // ---------- checks 8/9/10: WORKBOARD state-vocabulary, ISO 8601, owner ------
 //
 // All three rules are conditional: they activate only when the relevant
-// columns exist in the WORKBOARD.md Active Work header. Until CS44-3
-// upgrades the schema (today the columns are `Task ID | Clickstop |
-// Description | Agent ID | Worktree | Branch | PR | Started`) these rules
-// emit nothing.
+// columns exist in the WORKBOARD.md Active Work header. CS44-3 introduced
+// `State`, `Last Updated`, `Owner`/`Agent ID`; CS62 renamed column 1 from
+// `Task ID` to `CS-Task ID` and introduced description-continuation rows
+// (rows whose `CS-Task ID` cell is blank). When the `CS-Task ID` column
+// is present, every per-row check skips description-continuation rows.
 
 function findSection(lines, headingRe) {
   // Returns {start, end} (0-based, end exclusive) for lines under a `##`
@@ -516,32 +598,45 @@ function findSection(lines, headingRe) {
   return { start, end };
 }
 
+function splitMarkdownRow(line) {
+  // Split on `|` that is not preceded by a backslash, then unescape `\|`.
+  const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  return trimmed.split(/(?<!\\)\|/).map(s => s.trim().replace(/\\\|/g, '|'));
+}
+
 function parseMarkdownTable(lines, start, end) {
   // Find the first markdown table inside lines[start..end). Returns
   // { headers: [...], rows: [{cells, lineNo (1-based), raw}] } or null.
-  let headerIdx = -1;
-  for (let i = start; i < end - 1; i++) {
+  return parseMarkdownTableMatching(lines, start, end, () => true);
+}
+
+function parseMarkdownTableMatching(lines, start, end, headerPredicate) {
+  // Walk all markdown tables inside lines[start..end). Returns the first
+  // table whose parsed headers satisfy `headerPredicate(headers)`, or null.
+  // CS62 leading-table case: a notes/legend table may precede the real
+  // Active Work data table; using the first-table-only `parseMarkdownTable`
+  // would silently skip the data table. Callers that need the data table
+  // specifically should use this with a header predicate.
+  let i = start;
+  while (i < end - 1) {
     const cur = lines[i];
     const next = lines[i + 1];
     if (/^\s*\|.*\|\s*$/.test(cur) && /^\s*\|[\s:|-]+\|\s*$/.test(next)) {
-      headerIdx = i;
-      break;
+      const headers = splitMarkdownRow(cur);
+      const rows = [];
+      let j = i + 2;
+      for (; j < end; j++) {
+        const line = lines[j];
+        if (!/^\s*\|/.test(line)) break;
+        rows.push({ cells: splitMarkdownRow(line), lineNo: j + 1, raw: line });
+      }
+      if (headerPredicate(headers)) return { headers, rows };
+      i = j; // continue scanning past this table
+      continue;
     }
+    i++;
   }
-  if (headerIdx === -1) return null;
-  const splitRow = (line) => {
-    // Split on `|` that is not preceded by a backslash, then unescape `\|`.
-    const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
-    return trimmed.split(/(?<!\\)\|/).map(s => s.trim().replace(/\\\|/g, '|'));
-  };
-  const headers = splitRow(lines[headerIdx]);
-  const rows = [];
-  for (let i = headerIdx + 2; i < end; i++) {
-    const line = lines[i];
-    if (!/^\s*\|/.test(line)) break;
-    rows.push({ cells: splitRow(line), lineNo: i + 1, raw: line });
-  }
-  return { headers, rows };
+  return null;
 }
 
 function colIndex(headers, predicate) {
@@ -552,8 +647,22 @@ function colIndex(headers, predicate) {
 }
 
 function getActiveWorkTable(lines) {
+  // CS62: the `## Active Work` section may contain a leading legend/notes
+  // table before the real data table. Walk all tables in the section and
+  // return the first one whose headers contain `CS-Task ID`, with a
+  // sensible fallback to header sets that include both `State` and `Owner`
+  // (or `Agent ID`) for forward-compat with future schema tweaks. Falls
+  // back to the first-table-found as a last resort so existing fixtures
+  // keep their behavior when no candidate matches.
   const sec = findSection(lines, /^##\s+Active Work/);
   if (!sec) return null;
+  const byCsTaskId = parseMarkdownTableMatching(lines, sec.start, sec.end,
+    (hs) => hs.some(h => CS_TASK_ID_HEADER_RE.test(h)));
+  if (byCsTaskId) return byCsTaskId;
+  const byStateOwner = parseMarkdownTableMatching(lines, sec.start, sec.end,
+    (hs) => hs.some(h => /^state$/i.test(h)) &&
+            hs.some(h => /^(owner|agent\s*id)$/i.test(h)));
+  if (byStateOwner) return byStateOwner;
   return parseMarkdownTable(lines, sec.start, sec.end);
 }
 
@@ -563,14 +672,25 @@ function getOrchestratorsTable(lines) {
   return parseMarkdownTable(lines, sec.start, sec.end);
 }
 
+function isDescriptionRow(cells, csTaskIdx) {
+  // CS62: description-continuation rows are identified by a blank
+  // `CS-Task ID` cell. When the column isn't present (csTaskIdx === -1)
+  // we can't distinguish, so don't skip.
+  if (csTaskIdx === -1) return false;
+  const v = (cells[csTaskIdx] || '').trim();
+  return v === '';
+}
+
 function checkStateInVocabulary(wbPath, lines, ignores) {
   const findings = [];
   const tbl = getActiveWorkTable(lines);
   if (!tbl) return findings;
   const idx = colIndex(tbl.headers, h => /^state$/i.test(h));
   if (idx === -1) return findings; // schema not upgraded yet — silent.
+  const csTaskIdx = colIndex(tbl.headers, h => CS_TASK_ID_HEADER_RE.test(h));
   const allowed = new Set(CANONICAL_STATES);
   for (const row of tbl.rows) {
+    if (isDescriptionRow(row.cells, csTaskIdx)) continue;
     const value = (row.cells[idx] || '').trim();
     if (!value) continue;
     if (!allowed.has(value)) {
@@ -596,7 +716,9 @@ function checkLastUpdatedIso8601(wbPath, lines, ignores) {
   if (!tbl) return findings;
   const idx = colIndex(tbl.headers, h => /^last\s*updated$/i.test(h));
   if (idx === -1) return findings; // silent until schema upgrade.
+  const csTaskIdx = colIndex(tbl.headers, h => CS_TASK_ID_HEADER_RE.test(h));
   for (const row of tbl.rows) {
+    if (isDescriptionRow(row.cells, csTaskIdx)) continue;
     const value = (row.cells[idx] || '').trim();
     if (!value || value === '—' || value === '-') continue;
     if (!ISO_8601_RE.test(value) || Number.isNaN(Date.parse(value))) {
@@ -614,7 +736,10 @@ function checkOwnerInOrchestratorsTable(wbPath, lines, ignores) {
   const findings = [];
   const active = getActiveWorkTable(lines);
   if (!active) return findings;
-  // Accept either the post-CS44-3 `Owner` column or today's `Agent ID`.
+  // CS62 schema: `Owner` column. Pre-CS62 schemas used `Agent ID`; both
+  // are accepted here so old fixtures still pass and so any drift in old
+  // CS files surfaces the same way. The `Task ID` → `CS-Task ID`
+  // header rename is hard-cut elsewhere (see CS_TASK_ID_HEADER_RE).
   const ownerIdx = colIndex(active.headers, h => /^(owner|agent\s*id)$/i.test(h));
   if (ownerIdx === -1) return findings;
   const orch = getOrchestratorsTable(lines);
@@ -622,7 +747,9 @@ function checkOwnerInOrchestratorsTable(wbPath, lines, ignores) {
   const orchIdx = colIndex(orch.headers, h => /^(agent\s*id|orchestrator|owner)$/i.test(h));
   if (orchIdx === -1) return findings;
   const known = new Set(orch.rows.map(r => (r.cells[orchIdx] || '').trim()).filter(Boolean));
+  const csTaskIdx = colIndex(active.headers, h => CS_TASK_ID_HEADER_RE.test(h));
   for (const row of active.rows) {
+    if (isDescriptionRow(row.cells, csTaskIdx)) continue;
     const value = (row.cells[ownerIdx] || '').trim();
     if (!value || value === '—' || value === '-') continue;
     if (!known.has(value)) {
@@ -636,23 +763,25 @@ function checkOwnerInOrchestratorsTable(wbPath, lines, ignores) {
   return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
 }
 
-// ---------- check 8 & 9: active-row-stale / active-row-reclaimable ----------
+// ---------- checks 11 & 12: active-row-stale / active-row-reclaimable -------
 // CS44-5b. Threshold-based freshness check for individual Active Work rows.
 // Conditional: only fires when the Active Work table has a `Last Updated`
-// column (added by CS44-3 schema upgrade). Today's schema uses `Started`, so
-// these rules are silent until the upgrade lands — by design.
+// column (added by CS44-3 schema upgrade, now the canonical schema).
+// CS62: column-1 header is `CS-Task ID` (renamed from `Task ID`); rows
+// whose `CS-Task ID` cell is blank are description-continuation rows and
+// are skipped.
 
 function parseTableRow(line) {
   // A markdown table row: leading `|`, cells separated by `|`, trailing `|`.
   // Returns trimmed cells (without the leading/trailing empty strings) or
-  // null if the line is not a table row.
+  // null if the line is not a table row. Splits on `|` not preceded by `\`
+  // and unescapes `\|` so authors can include literal pipes inside cells
+  // (e.g. inline regex / shell snippets in description-continuation rows).
   if (!line.includes('|')) return null;
   const trimmed = line.trim();
   if (!trimmed.startsWith('|')) return null;
-  const parts = trimmed.split('|').map(s => s.trim());
-  if (parts.length >= 2 && parts[0] === '') parts.shift();
-  if (parts.length >= 1 && parts[parts.length - 1] === '') parts.pop();
-  return parts;
+  const stripped = trimmed.replace(/^\|/, '').replace(/\|$/, '');
+  return stripped.split(/(?<!\\)\|/).map(s => s.trim().replace(/\\\|/g, '|'));
 }
 
 function isSeparatorRow(cells) {
@@ -710,7 +839,7 @@ function checkActiveRowFreshness(repoRoot, now) {
         skipThisTable = true;
         continue;
       }
-      const idxTaskId = cells.findIndex(c => /^task\s*id$/i.test(c));
+      const idxTaskId = cells.findIndex(c => CS_TASK_ID_HEADER_RE.test(c));
       let idxOwner = cells.findIndex(c => /^owner$/i.test(c));
       if (idxOwner === -1) idxOwner = cells.findIndex(c => /^agent\s*id$/i.test(c));
       header = { idxLastUpdated, idxTaskId, idxOwner };
@@ -720,6 +849,12 @@ function checkActiveRowFreshness(repoRoot, now) {
     if (!sawSeparator) {
       if (isSeparatorRow(cells)) { sawSeparator = true; continue; }
       sawSeparator = true; // tolerate missing separator
+    }
+
+    // CS62: skip description-continuation rows (blank CS-Task ID cell).
+    if (header.idxTaskId !== -1) {
+      const tid = (cells[header.idxTaskId] || '').trim();
+      if (tid === '') continue;
     }
 
     const cell = cells[header.idxLastUpdated];
@@ -751,6 +886,134 @@ function checkActiveRowFreshness(repoRoot, now) {
   }
 
   return findings.filter(f => !isIgnored(wbIgnores, f.rule, f.line));
+}
+
+// ---------- CS62: clickstop-h1-matches-filename (warn-only) -----------------
+
+function checkClickstopH1MatchesFilename(repoRoot) {
+  const findings = [];
+  for (const sub of ['planned', 'active', 'done']) {
+    const dir = path.join(repoRoot, 'project', 'clickstops', sub);
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir)) {
+      if (!name.toLowerCase().endsWith('.md')) continue;
+      const file = path.join(dir, name);
+      const parsed = parseClickstopFilename(name);
+      if (!parsed) continue;
+      let text;
+      try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
+      const h1 = parseClickstopH1WithLine(text);
+      if (!h1) {
+        findings.push({ rule: 'clickstop-h1-matches-filename', file, line: 1,
+          severity: 'warning',
+          message: `file is empty; expected H1 of the form '# CSnn — Human Title'` });
+        continue;
+      }
+      const lineNo = h1.line;
+      if (!h1.cs || !h1.title) {
+        findings.push({ rule: 'clickstop-h1-matches-filename', file, line: lineNo,
+          severity: 'warning',
+          message: `malformed H1 — expected '# CSnn — Human Title' with a real em-dash (\u2014)` });
+        continue;
+      }
+      if (h1.cs.toUpperCase() !== parsed.cs.toUpperCase()) {
+        findings.push({ rule: 'clickstop-h1-matches-filename', file, line: lineNo,
+          severity: 'warning',
+          message: `H1 CSID '${h1.cs}' does not match filename CSID '${parsed.cs}'` });
+      }
+      const expectedSlug = kebabSlug(h1.title);
+      if (expectedSlug !== parsed.slug) {
+        findings.push({ rule: 'clickstop-h1-matches-filename', file, line: lineNo,
+          severity: 'warning',
+          message: `filename slug '${parsed.slug}' does not match kebab-cased H1 title '${expectedSlug}'` });
+      }
+    }
+  }
+  // Per-file ignore: read each file's directives and filter.
+  return findings.filter(f => {
+    try {
+      const ig = parseIgnores(readLines(f.file));
+      return !isIgnored(ig, f.rule, f.line);
+    } catch { return true; }
+  });
+}
+
+// ---------- CS62: workboard-title-matches-h1 (warn-only) --------------------
+
+function findClickstopFilesByCs(repoRoot, cs) {
+  // Returns ALL matching files for cs across {planned,active,done}.
+  // Caller decides how to handle 0/1/>1 matches.
+  const out = [];
+  const csLower = String(cs).toLowerCase();
+  for (const sub of ['planned', 'active', 'done']) {
+    const dir = path.join(repoRoot, 'project', 'clickstops', sub);
+    if (!fs.existsSync(dir)) continue;
+    let names;
+    try { names = fs.readdirSync(dir); } catch { continue; }
+    const re = new RegExp(`^(planned|active|done)_${csLower}_.+\\.md$`, 'i');
+    for (const n of names) {
+      if (re.test(n)) out.push(path.join(dir, n));
+    }
+  }
+  return out;
+}
+
+function extractTitleCellLine1(cellRaw) {
+  // Title cell is multi-line `**Title**<br>WT: ...<br>B:&nbsp; ...`.
+  // Take the substring before the first `<br>`, strip surrounding `**`,
+  // and trim leading/trailing whitespace.
+  const firstSegment = String(cellRaw).split(/<br\s*\/?>/i)[0];
+  let s = firstSegment.trim();
+  // Strip a single wrapping pair of `**...**` if present.
+  const m = /^\*\*(.*)\*\*$/s.exec(s);
+  if (m) s = m[1];
+  // Strip any leftover stray `**` (shouldn't happen for well-formed cells).
+  s = s.replace(/\*\*/g, '');
+  return s.trim();
+}
+
+function checkWorkboardTitleMatchesH1(repoRoot, lines, wbPath, ignores) {
+  const findings = [];
+  const tbl = getActiveWorkTable(lines);
+  if (!tbl) return findings;
+  const csTaskIdx = colIndex(tbl.headers, h => CS_TASK_ID_HEADER_RE.test(h));
+  const titleIdx = colIndex(tbl.headers, h => /^title$/i.test(h));
+  if (csTaskIdx === -1 || titleIdx === -1) return findings;
+  for (const row of tbl.rows) {
+    const taskIdCell = (row.cells[csTaskIdx] || '').trim();
+    if (!taskIdCell) continue; // description-continuation row
+    const csMatch = /^(CS\d+)/i.exec(taskIdCell);
+    if (!csMatch) continue;
+    const cs = csMatch[1].toUpperCase();
+    const matches = findClickstopFilesByCs(repoRoot, cs);
+    if (matches.length > 1) {
+      const rels = matches.map(m => path.relative(repoRoot, m).replace(/\\/g, '/')).join(', ');
+      findings.push({ rule: 'workboard-title-matches-h1', file: wbPath, line: row.lineNo,
+        severity: 'warning',
+        message: `${taskIdCell}: ambiguous — ${matches.length} clickstop files match ${cs}: ${rels}. Resolve by deleting/renaming duplicates; H1 comparison is skipped until the ambiguity is resolved.` });
+      continue; // short-circuit: don't compare against an arbitrary first match
+    }
+    const file = matches[0] || null;
+    if (!file) {
+      findings.push({ rule: 'workboard-title-matches-h1', file: wbPath, line: row.lineNo,
+        severity: 'warning',
+        message: `${taskIdCell}: no clickstop file found for ${cs} under project/clickstops/{active,planned,done}/` });
+      continue;
+    }
+    let text;
+    try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    const h1 = parseClickstopH1(text);
+    if (!h1 || !h1.title) continue; // H1 issues are reported by the sibling rule
+    const titleCell = (row.cells[titleIdx] || '').trim();
+    const line1 = extractTitleCellLine1(titleCell);
+    if (line1 !== h1.title.trim()) {
+      const rel = path.relative(repoRoot, file).replace(/\\/g, '/');
+      findings.push({ rule: 'workboard-title-matches-h1', file: wbPath, line: row.lineNo,
+        severity: 'warning',
+        message: `${taskIdCell}: Title cell '${line1}' does not match H1 of ${rel} ('${h1.title}')` });
+    }
+  }
+  return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
 }
 
 // ---------- main runner ------------------------------------------------------
@@ -788,7 +1051,8 @@ function run(opts) {
   findings.push(...checkActiveRowFreshness(repoRoot, now));
 
   // CS44-5a: WORKBOARD state-vocabulary / ISO 8601 / owner-in-orchestrators.
-  // All three are no-ops until CS44-3 upgrades the schema.
+  // CS62: also runs the new warn-only `workboard-title-matches-h1` rule
+  // against the same Active Work table.
   const wbPath = path.join(repoRoot, 'WORKBOARD.md');
   if (fs.existsSync(wbPath)) {
     const wbLines = readLines(wbPath);
@@ -796,7 +1060,11 @@ function run(opts) {
     findings.push(...checkStateInVocabulary(wbPath, wbLines, wbIgnores));
     findings.push(...checkLastUpdatedIso8601(wbPath, wbLines, wbIgnores));
     findings.push(...checkOwnerInOrchestratorsTable(wbPath, wbLines, wbIgnores));
+    findings.push(...checkWorkboardTitleMatchesH1(repoRoot, wbLines, wbPath, wbIgnores));
   }
+
+  // CS62: clickstop H1 ↔ filename consistency (warn-only).
+  findings.push(...checkClickstopH1MatchesFilename(repoRoot));
 
   // Normalise file paths to repo-relative for output stability.
   for (const f of findings) {
@@ -855,4 +1123,4 @@ if (require.main === module) {
   process.exit(opts.strict && hasErrors ? 1 : 0);
 }
 
-module.exports = { run, formatText, slugify, parseIgnores, parseClickstopSummary };
+module.exports = { run, formatText, slugify, kebabSlug, parseIgnores, parseClickstopSummary, parseClickstopFilename, parseClickstopH1 };

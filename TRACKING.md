@@ -97,7 +97,7 @@ WORKBOARD.md is the real-time coordination file for multi-agent work. It tracks 
 **Direct commit on main (no PR required):**
 Unlike most project files, WORKBOARD.md is updated by orchestrating agents directly on main via commit + push. **The push is critical** — a local-only commit provides zero coordination value to other agents. Always commit and push together (see the multi-line commit format with `Agent:` trailer in § Commit Convention for workboard updates below). This enables fast task assignment without PR review overhead. Clickstop plan files are the other direct-on-main exception (see § Clickstop File Lifecycle). The workboard must be updated immediately when:
 - An orchestrator claims a task (add to Active Work)
-- An orchestrator starts any work — including non-clickstop tasks (ad-hoc requests, deployments, investigations). Use empty Task ID and Clickstop columns ("—") for non-CS work.
+- An orchestrator starts any work — including non-clickstop tasks (ad-hoc requests, deployments, investigations). Use a non-empty `CS-Task ID` placeholder (e.g. `OPS-DEPLOY-2026-04-27`) for non-CS work — the docs-consistency parser treats a blank `CS-Task ID` cell as a description-continuation row, so non-CS status rows must carry some non-empty token. See § WORKBOARD entry template below for the canonical shape.
 - A task completes (remove from Active Work)
 - A task becomes blocked (keep in Active Work with a note indicating blocked status)
 - An orchestrator starts or stops a session (update Orchestrators table)
@@ -144,9 +144,31 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 **Public repository note:** When branch protection is enabled with required reviews, the repository owner (henrik-me) uses a repository ruleset bypass to allow direct WORKBOARD.md and clickstop plan file pushes. This bypass is configured in Settings → Rules → Rulesets and applies only to the owner role. Non-owner orchestrating agents (if any) would need to use PR-based updates instead.
 
+#### WORKBOARD entry template
+
+Every Active Work entry is **two markdown rows**: a status row, then a description-continuation row whose `CS-Task ID` cell is blank. The blank `CS-Task ID` is the docs-consistency parser's skip-marker — per-row checks (state vocabulary, ISO 8601 `Last Updated`, owner-in-orchestrators, freshness) are only applied to status rows.
+
+```markdown
+| CS-Task ID | Title | State | Owner | Last Updated | Blocked Reason |
+|------------|-------|-------|-------|--------------|----------------|
+| CSnn-mm | **Bold human title (matches parent CS file H1)**<br>WT: `C:\path\to\worktree`<br>B:&nbsp; `branch-name` | implementing | yoga-gwn-cN | 2026-04-27T02:10Z | — |
+|  | _Italic free-form prose. Use markdown links for PRs: [#NNN](https://github.com/henrik-me/guesswhatisnext/pull/NNN). Escape any literal pipe in prose as `\|`. Inline `code` is fine. The leading `CS-Task ID` cell MUST be blank — that is what tells the docs-consistency checker this is a description-continuation row._ |  |  |  |  |
+```
+
+Conventions:
+
+- **Title cell, line 1:** bolded human title with **no** `CSnn —` prefix. It must equal the parent CS file's H1 human title exactly. The CS file's H1 lives at `project/clickstops/{planned,active,done}/{state}_cs<n>_<slug>.md` and follows the form `# CSnn — Human Title` (em-dash U+2014, not `-` or `--`). The warn-only rule `workboard-title-matches-h1` enforces this; the warn-only rule `clickstop-h1-matches-filename` enforces the `kebab-case(human title) === <slug>` invariant on the file itself.
+- **Title cell, lines 2-3:** ``WT: `worktree-path` `` (line 2) and ``B:&nbsp; `branch-name` `` (line 3), separated by `<br>`. The `&nbsp;` keeps the `B:` and `WT:` labels visually aligned in rendered markdown.
+- **Renaming a CS file → must update the H1**, and vice versa. The two warn-only rules will flag drift on the next `npm run check:docs` run.
+- **Description row prose:** wrap in `_…_` italics. Preserve PR refs as inline markdown links rather than the legacy `PR: #NNN` column. Keep prose terse — the description row is a narrative, not a status field.
+- **Non-CS work** (ad-hoc requests, deployments, investigations not tied to a clickstop): use a placeholder `CS-Task ID` such as `OPS-DEPLOY-2026-04-27` so the cell is non-empty (otherwise the parser will treat the status row as a description-continuation row and skip it). Placeholders that do not start with `CS\d+` short-circuit the `workboard-title-matches-h1` rule cleanly. If you do start a placeholder with `CS\d+` for a CS that has no clickstop file yet, that rule will warn until the file lands — author the clickstop plan file first.
+- **State column:** must be one of the canonical states defined in § WORKBOARD State Machine below.
+- **Last Updated:** ISO 8601 UTC with `Z` suffix (e.g. `2026-04-27T02:10Z`); seconds are optional. Bump on every edit, including reclamation.
+- **Blocked Reason:** populate **only** when `State == blocked`; use `—` otherwise.
+
 ### WORKBOARD State Machine
 
-This section defines the canonical vocabulary for the lifecycle of an Active Work row. The `State` column lives in `WORKBOARD.md` (added by CS44-3). The sub-agent → orchestrator reporting protocol that drives this column is described in § Agent Progress Reporting and the dispatch checklist in § Agent Work Model ("Sub-agent dispatch checklist").
+This section defines the canonical vocabulary for the lifecycle of an Active Work row. The `State` column lives in `WORKBOARD.md`. The sub-agent → orchestrator reporting protocol that drives this column is described in § Agent Progress Reporting and the dispatch checklist in § Agent Work Model ("Sub-agent dispatch checklist").
 
 **A. Canonical states (8).** Every Active Work row is in exactly one of:
 
@@ -211,7 +233,7 @@ The single exception is the reclamation procedure in § C below.
 
 Sub-agents do not edit `WORKBOARD.md` at all — they report state-change events to their orchestrator per the protocol in § WORKBOARD State Machine (point D, "Reporting protocol").
 
-**B. Stale-lock thresholds.** Both thresholds are measured as time since the row's `Last Updated` timestamp (added to the schema by CS44-3):
+**B. Stale-lock thresholds.** Both thresholds are measured as time since the row's `Last Updated` timestamp:
 
 | Threshold | Age | Meaning |
 |---|---|---|
@@ -239,7 +261,6 @@ Any reclamation that does not follow this procedure — silently editing another
 
 **D. Forward references.**
 
-- CS44-3 (schema upgrade) renames the current `Agent ID` column to `Owner` and adds the `Last Updated`, `Blocked Reason`, and `Next Action` columns. Until CS44-3 lands, treat references to `Owner` in this section as the existing `Agent ID` column, and treat the thresholds in § B and the reclamation procedure in § C as not yet mechanically enforceable.
 - The CS43-2 consistency checker is extended in CS44-5b to emit a warning at 24h and an error at 7d against the `Last Updated` column.
 
 ### CONTEXT.md — Project State Updates
