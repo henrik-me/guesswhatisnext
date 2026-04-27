@@ -87,6 +87,27 @@ describe('lazy request-driven init (CS53-9 / Policy 1)', () => {
     expect(initSpy).not.toHaveBeenCalled();
   });
 
+  it('CS53-8b: /api/db-status during cold start returns 200 with dbInitialized=false and does NOT trigger init', async () => {
+    // The whole point of /api/db-status is to be probeable during cold
+    // start — operators + uptime monitors must be able to ask "is the DB
+    // ready yet?" WITHOUT being gated by the request gate (which would
+    // 503 them) AND without triggering lazy init themselves (which would
+    // defeat the in-memory-only contract). This must hold true BEFORE
+    // any DB-touching request has fired runInit().
+    const callsBefore = initSpy.mock.calls.length;
+    const res = await agent
+      .get('/api/db-status')
+      .set('X-Forwarded-Proto', 'https');
+    expect(res.status).toBe(200);
+    expect(res.body.dbInitialized).toBe(false);
+    expect(res.body.isInFlight).toBe(false);
+    expect(res.body.unavailability).toBeNull();
+    expect(res.headers['retry-after']).toBeUndefined();
+    // Allow microtasks to drain so any spurious runInit() would surface.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(initSpy.mock.calls.length).toBe(callsBefore);
+  });
+
   it('header-less request during cold start gets 503 but does NOT trigger init (CS53-19.D)', async () => {
     // CS53-19.D contract: a header-less /api/* request during cold start
     // must return 503+Retry-After WITHOUT calling runInit(). This test runs
