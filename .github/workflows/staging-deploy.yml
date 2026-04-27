@@ -372,6 +372,30 @@ jobs:
     env:
       IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
     steps:
+      # CS61-3 (D4): early secret preflight. Aborts the staging deploy
+      # within seconds (before any Azure CLI mutation, before any container
+      # update) if either secret required by the downstream CS61 seed step
+      # or the CS41 smoke chain is unset. The CS41-1/CS41-12/CS41-5
+      # skip-on-secret-missing branches still exist as a safety net (they
+      # are removed in CS61-4 once CS61-6 verifies the live deploy works);
+      # for now preflight + skip coexist — preflight catches early, skip
+      # is the safety net.
+      - name: Preflight — required secrets present (CS61-3)
+        if: always()
+        run: |
+          missing=()
+          if [ -z "${{ secrets.SMOKE_USER_PASSWORD_STAGING }}" ]; then
+            missing+=("SMOKE_USER_PASSWORD_STAGING")
+          fi
+          if [ -z "${{ secrets.SYSTEM_API_KEY }}" ]; then
+            missing+=("SYSTEM_API_KEY")
+          fi
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Required secrets unset: ${missing[*]}. Set them before staging deploys can proceed. See OPERATIONS.md § Deploy gates (CS41) and CS61 plan."
+            exit 1
+          fi
+          echo "✅ All required secrets present."
+
       - name: Log in to Azure
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
         with:
@@ -524,6 +548,111 @@ jobs:
 
       - name: Install dependencies (production only)
         run: npm ci --omit=dev
+
+      # CS61-3 (b) prep: resolve the NEW revision's direct FQDN so the seed
+      # step + migration assertion can target it before traffic shifts.
+      # The existing "Get new revision FQDN (CS41-1)" step further down
+      # captures the same FQDN as a step output (`steps.rev.outputs.fqdn`)
+      # for the CS41-1 smoke; we resolve it early as an env var here so the
+      # CS61-3 steps don't need to thread step outputs through them.
+      - name: Resolve NEW revision FQDN (CS61-3 prep)
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            NEW_REV="${{ steps.deploy.outputs.new-revision }}"
+            FQDN=$(az containerapp revision show \
+              --name gwn-staging --resource-group gwn-rg \
+              --revision "$NEW_REV" \
+              --query "properties.fqdn" -o tsv)
+            if [ -z "$FQDN" ] || [ "$FQDN" = "None" ]; then
+              echo "::error::CS61-3: could not resolve FQDN for NEW revision $NEW_REV"
+              exit 1
+            fi
+            echo "NEW_REVISION_FQDN=$FQDN" >> "$GITHUB_ENV"
+            echo "Resolved NEW revision FQDN: $FQDN"
+
+      # CS61-3 (b): seed `gwn-smoke-bot` against the NEW revision via the
+      # CS61-1 admin endpoint BEFORE any CS41 smoke step runs. Staging uses
+      # container-local SQLite at /tmp/game.db (see deploy step env), so
+      # every new revision starts with an empty user table — the smoke-bot
+      # must be created post-deploy, pre-smoke, on the NEW revision's
+      # direct FQDN (apex still routes to OLD at this point). The endpoint
+      # is idempotent (200/exists or 201/created); both are success.
+      #
+      # Healthz wait: 60 × 3s = 180s. The CS41 smoke uses
+      # WARMUP_CAP_MS=30000 + COLD_START_MS=30000 = 60s allowance — 180s
+      # here is comfortably above that to absorb container-app cold-start
+      # variance plus DB self-init (the seed endpoint also touches the DB).
+      - name: Seed gwn-smoke-bot via API (CS61-1)
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+        run: |
+          if [ -z "$NEW_REVISION_FQDN" ]; then
+            echo "::error::CS61-3: NEW_REVISION_FQDN unset (resolve step did not run?)"
+            exit 1
+          fi
+          echo "Waiting for /healthz on $NEW_REVISION_FQDN before seeding..."
+          HEALTHZ_OK=0
+          for i in $(seq 1 60); do
+            STATUS=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "https://$NEW_REVISION_FQDN/healthz" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "/healthz ready after $((i * 3))s (HTTP $STATUS)"
+              HEALTHZ_OK=1
+              break
+            fi
+            sleep 3
+          done
+          if [ "$HEALTHZ_OK" -ne 1 ]; then
+            echo "::error::CS61-1: /healthz on $NEW_REVISION_FQDN did not become ready within 180s; aborting staging deploy before seed"
+            exit 1
+          fi
+          # /healthz returning 200 means the HTTP listener is up, but DB
+          # self-init is lazy (CS53-9): the seed endpoint touches the DB
+          # and may return 503 + Retry-After during the first ~30s of
+          # cold-start until self-init completes. Retry the seed up to 10
+          # times (≈50s) to ride out that window.
+          SEED_OK=0
+          for attempt in $(seq 1 10); do
+            if node scripts/seed-smoke-user-via-api.js "$NEW_REVISION_FQDN"; then
+              SEED_OK=1
+              break
+            fi
+            echo "Seed attempt $attempt/10 failed; sleeping 5s before retry (likely DB self-init in progress)..."
+            sleep 5
+          done
+          if [ "$SEED_OK" -ne 1 ]; then
+            echo "::error::CS61-1: seeding gwn-smoke-bot failed on $NEW_REVISION_FQDN after 10 attempts; aborting staging deploy"
+            exit 1
+          fi
+
+      # CS61-3 (c): assert the NEW revision finished applying all DB
+      # migrations cleanly. The `_tracker.runMigrations()` call happens at
+      # server boot (server/app.js); this gate confirms it succeeded
+      # against the NEW revision's container-local SQLite. status taxonomy
+      # per CS61 plan v3 D2: only `ok` (applied === expected) is success;
+      # `pending`/`ahead`/`error` all abort the deploy. (Note: `ahead` is
+      # legitimate during rollback windows, but a fresh-deploy NEW revision
+      # has the latest code and should never legitimately be `ahead`.)
+      - name: Assert all migrations applied (CS61-2)
+        env:
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+        run: |
+          if [ -z "$NEW_REVISION_FQDN" ]; then
+            echo "::error::CS61-3: NEW_REVISION_FQDN unset (resolve step did not run?)"
+            exit 1
+          fi
+          response=$(curl -sk -H "x-api-key: $SYSTEM_API_KEY" --max-time 10 "https://$NEW_REVISION_FQDN/api/admin/migrations")
+          echo "Migration tracker state: $response"
+          status=$(echo "$response" | jq -r '.status // "missing"')
+          if [ "$status" != "ok" ]; then
+            applied=$(echo "$response" | jq -r '.applied // 0')
+            expected=$(echo "$response" | jq -r '.expected // 0')
+            lastError=$(echo "$response" | jq -r '.lastError // "null"')
+            echo "::error::CS61-2: migration status is '$status' (applied=$applied/expected=$expected, lastError=$lastError); aborting staging deploy"
+            exit 1
+          fi
+          echo "✅ All migrations applied (status=ok)."
 
       - name: Run DB migrations
         env:
