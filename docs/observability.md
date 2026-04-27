@@ -29,23 +29,34 @@ Both AI resources are **workspace-bound** to the same Log Analytics workspace (`
 
 For scripted use or when you don't want to leave the terminal. The CLI accepts either an App Insights `appId` (for AI tables: `requests`, `dependencies`, etc. — and for cross-table queries that bridge to `ContainerAppConsoleLogs_CL` via the `workspace(...)` function, see § B.5) or a Log Analytics `customer-id` (a GUID, for queries whose primary table is a workspace table such as `ContainerAppConsoleLogs_CL`).
 
+> **⚠️ Known asymmetry (discovered CS60-1a, 2026-04-26):** classic AI-scope tables (`requests` / `dependencies` / `exceptions` / etc.) work as expected for `gwn-ai-production` but consistently return **0 rows** for `gwn-ai-staging`, even when the underlying workspace tables (`AppRequests`/`AppDependencies`/`AppExceptions`) clearly contain rows for the same window. Both AI components are workspace-mode and bound to the same workspace, so the cause is not "workspace-mode breaks classic queries" — it's specific to the staging component. Root cause is unknown and tracked under [CS60-4](../project/clickstops/active/active_cs60_post-cs54-observability-followup.md). **Operational workaround until resolved:** when running the same query against both envs (e.g. CS60 cost-watch), use `az monitor log-analytics query --workspace <customerId>` against the workspace tables (`AppRequests`/`AppDependencies`/etc.) — that path works reliably for both envs.
+
 ```powershell
 # Sanity check: 'requests' table in the staging AI resource
 az monitor app-insights query `
   --app gwn-ai-staging --resource-group gwn-rg `
   --analytics-query 'requests | where timestamp > ago(15m) | take 5' `
   -o table
+# ⚠️ Currently returns 0 rows for gwn-ai-staging — see asymmetry note above.
+# Workspace-direct equivalent (works for both envs):
+az monitor log-analytics query `
+  --workspace <workspace-customer-id> `
+  --analytics-query 'AppRequests | where _ResourceId contains "gwn-ai-staging" | where TimeGenerated > ago(15m) | take 5' `
+  -o table
 
-# Same query against prod
+# Same query against prod (works as expected via either path)
 az monitor app-insights query `
   --app gwn-ai-production --resource-group gwn-rg `
   --analytics-query 'requests | where timestamp > ago(15m) | take 5' `
   -o table
 
 # Cross-table query that bridges 'requests' (AI) with 'ContainerAppConsoleLogs_CL'
-# (workspace) — runs in AI scope; the workspace(...) function reaches the bound workspace
+# (workspace) — runs in AI scope; the workspace(...) function reaches the bound workspace.
+# Use gwn-ai-production here (the AI-scope variant works for prod). For staging, use
+# the workspace-direct AppRequests variant in § B.5 instead — the staging asymmetry
+# above also affects the AI side of this bridge query.
 az monitor app-insights query `
-  --app gwn-ai-staging --resource-group gwn-rg `
+  --app gwn-ai-production --resource-group gwn-rg `
   --analytics-query '<kql from § B.5>' `
   -o table
 ```
@@ -129,7 +140,7 @@ Grab an `operation_Id` from this query and feed it into § B.5 to see what the s
 
 Until [CS54-9](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#cs54-9--deferred-work-evaluation-appendix) lands a Pino → AI log forwarder, the `traces` table is empty. To correlate a request span with the Pino log lines it produced, bridge the AI `requests` table to the workspace's `ContainerAppConsoleLogs_CL` via `operation_Id` ↔ `trace_id` (Pino logger injects `trace_id` from the active OTel span — see [`server/logger.js`](../server/logger.js)).
 
-The query below runs **in AI scope** (against `gwn-ai-staging` or `gwn-ai-production`), so `requests` resolves natively. It uses the `workspace(...)` KQL function on the Pino branch to reach across to the bound Log Analytics workspace for `ContainerAppConsoleLogs_CL` — the same workspace both AI resources are bound to (see the resource table above). Equivalent CLI invocation: `az monitor app-insights query --app gwn-ai-{staging,production} --analytics-query '<below>'`.
+The query below historically ran **in AI scope** (against `gwn-ai-staging` or `gwn-ai-production`), so `requests` resolved natively. ⚠️ **Staging caveat (CS60-1a finding):** classic AI-scope queries against `gwn-ai-staging` currently return 0 rows (root cause unknown, tracked under CS60-4 Gap-1) — see § A.2 above. For staging, use the workspace-direct variant in the second code block below. For prod the AI-scope version still works. The query below uses the `workspace(...)` KQL function on the Pino branch to reach across to the bound Log Analytics workspace for `ContainerAppConsoleLogs_CL` — the same workspace both AI resources are bound to (see the resource table above). Equivalent CLI invocation: `az monitor app-insights query --app gwn-ai-{staging,production} --analytics-query '<below>'`.
 
 ```kusto
 let opId = "<paste operation_Id from a requests row>";
@@ -150,7 +161,17 @@ az monitor log-analytics workspace list -g gwn-rg -o table
 az monitor log-analytics workspace show --workspace-name workspace-gwnrg6bXt -g gwn-rg --query id -o tsv
 ```
 
-Because both AI resources are bound to `workspace-gwnrg6bXt`, the same bridge query works for both staging and prod — only the AI side of the union changes implicitly based on which resource you're querying from.
+Because both AI resources are bound to `workspace-gwnrg6bXt`, the same bridge query works for prod via AI scope; for staging (where AI-scope `requests` returns 0 rows pending CS60-4 Gap-1) replace the AI side with the workspace `AppRequests` table:
+
+```kusto
+let opId = "<paste operation_Id>";
+union
+  (AppRequests | where _ResourceId contains "gwn-ai-staging" and OperationId == opId | extend src="AppRequests", timestamp=TimeGenerated),
+  (ContainerAppConsoleLogs_CL | where parse_json(Log_s).trace_id == opId | extend src="pino", timestamp=TimeGenerated)
+| order by timestamp asc
+```
+
+Run via `az monitor log-analytics query --workspace <workspace-customer-id>` (resolve with `az monitor log-analytics workspace show --workspace-name workspace-gwnrg6bXt -g gwn-rg --query customerId -o tsv`).
 
 ### B.6 Cold-start mssql connect latency (until `dependencies` is wired)
 

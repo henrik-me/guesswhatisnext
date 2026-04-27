@@ -31,7 +31,7 @@ Resolve every piece of observability follow-up from CS54 to either ✅ done, ✅
 
 ## KQL — cost measurement (CS60-1, CS60-2, CS60-3)
 
-> **CS60-1a finding (2026-04-26):** Both `gwn-ai-staging` and `gwn-ai-production` are **workspace-mode** App Insights components (`ingestionMode: LogAnalytics`, both pointing at `workspace-gwnrg6bXt`). The original CS60 KQL using `union *` and the classic `requests` / `dependencies` / `_BilledSize` table names returns **0 rows** in this mode — workspace-based AI re-homes data into `AppRequests` / `AppDependencies` / `AppTraces` / `AppExceptions` / `AppMetrics` / `AppPageViews` / `AppBrowserTimings` / `AppAvailabilityResults` / `AppSystemEvents` in the linked Log Analytics workspace, and `union *` over the AI scope does not reach them. Query the workspace directly via `az monitor log-analytics query`. KQL below is the corrected form.
+> **CS60-1a finding (2026-04-26, refined):** the original CS60 plan KQL queries `requests` / `dependencies` against the AI scope and computes `_BilledSize`. **Empirically observed:** against `gwn-ai-staging` those AI-scope queries return **0 rows** even when the underlying workspace tables (`AppRequests`/`AppDependencies`) clearly contain rows for the same window. Against `gwn-ai-production` the same AI-scope queries return data normally. Both AI components are workspace-mode (`ingestionMode: LogAnalytics`, both → `workspace-gwnrg6bXt`); root cause for the staging-only asymmetry is unknown and tracked under CS60-4 as part of the Gap-1 investigation. **Operational fix:** query the workspace directly via `az monitor log-analytics query` against the workspace `customerId` — that pattern works reliably for both envs. KQL below uses the workspace-direct form.
 
 ### Per-day daily measurement (CS60-1a..CS60-3{Day30})
 
@@ -63,16 +63,72 @@ az monitor log-analytics query --workspace $cust --analytics-query 'union withso
 az monitor log-analytics query --workspace $cust --analytics-query 'union withsource=Tbl * | where TimeGenerated > ago(30d) | summarize bytes = sum(_BilledSize) by Tbl, day = bin(TimeGenerated, 1d) | order by day asc, bytes desc' -o json
 ```
 
+## $ cost + Container Apps compute / memory (CS60-1, CS60-2, CS60-3)
+
+> **Per-day report contract (added 2026-04-26).** Each daily measurement (CS60-1a..CS60-3{Day30}) records — for both `gwn-staging` and `gwn-production` — not just the AI ingest bytes but ALSO:
+> 1. **Resource cost in DKK**, broken down by meter (Standard vCPU Active / Idle Usage, Standard Memory Active / Idle Usage, Analytics Logs Data Ingestion, etc.) per resource (`gwn-staging`, `gwn-production`, `workspace-gwnrg6bXt`, `gwn-sqldb/*`, `gwn-ai-*`).
+> 2. **Container Apps compute** — `UsageNanoCores` daily average + `Replicas` daily max.
+> 3. **Container Apps memory** — `WorkingSetBytes` daily average (also max if it deviates materially).
+> 4. **Container Apps requests** — `Requests` daily total (cross-check against AI `AppRequests` row count).
+> 5. **Container Apps restarts** — `RestartCount` daily max (alerts to silent crash-loops).
+>
+> Per-day storage cost (Azure SQL `gwn-sqldb`) is captured in the cost-by-meter step automatically; no separate query needed for the per-day cadence. If `gwn-sqldb` shows non-zero cost on a day where the app did NO writes, that's a finding worth investigating in CS60-4.
+
+### Cost query (Cost Management API)
+
+The `az consumption` CLI is in preview and returns inconsistent results for empty days. Use the Cost Management `query` REST endpoint instead:
+
+```powershell
+$body = @{
+  type = 'Usage'
+  timeframe = 'Custom'
+  timePeriod = @{ from = '<YYYY-MM-DD>T00:00:00Z'; to = '<YYYY-MM-DD>T23:59:59Z' }
+  dataset = @{
+    granularity = 'Daily'
+    aggregation = @{ totalCost = @{ name = 'Cost'; function = 'Sum' } }
+    grouping = @( @{ type = 'Dimension'; name = 'ResourceId' }, @{ type = 'Dimension'; name = 'Meter' } )
+  }
+} | ConvertTo-Json -Depth 10 -Compress
+$body | Out-File -Encoding ascii .\cost_q.json
+az rest --method post `
+  --uri 'https://management.azure.com/subscriptions/<sub>/resourceGroups/gwn-rg/providers/Microsoft.CostManagement/query?api-version=2023-11-01' `
+  --body '@cost_q.json' -o json
+Remove-Item .\cost_q.json
+```
+
+The response is `properties.rows` shaped `[Cost, UsageDate(YYYYMMDD), ResourceId, Meter, Currency]`. Filter rows where `Cost > 0` and group by ResourceId+Meter for the appendix table.
+
+### Container Apps metrics query (per env per day)
+
+```powershell
+$staging = '/subscriptions/<sub>/resourceGroups/gwn-rg/providers/Microsoft.App/containerapps/gwn-staging'
+$prod    = '/subscriptions/<sub>/resourceGroups/gwn-rg/providers/Microsoft.App/containerapps/gwn-production'
+
+foreach ($r in @($staging, $prod)) {
+  foreach ($spec in @(
+    @{m='UsageNanoCores'; agg='Average'},   # divide by 1e9 for cores
+    @{m='WorkingSetBytes'; agg='Average'},  # divide by 1024*1024 for MiB
+    @{m='Replicas'; agg='Maximum'},
+    @{m='Requests'; agg='Total'},
+    @{m='RestartCount'; agg='Maximum'}
+  )) {
+    az monitor metrics list --resource $r --metrics $spec.m --aggregation $spec.agg `
+      --interval P1D --start-time '<YYYY-MM-DD>T00:00:00Z' --end-time '<YYYY-MM-DD>T23:59:59Z' -o json
+  }
+}
+```
+
+Available metric definitions discoverable via `az monitor metrics list-definitions --resource <containerapp-id>`.
+
 ## KQL — Gap 1 investigation (CS60-4)
 
-After hitting `gwn-ai-staging` with ≥ 20 `/api/scores/leaderboard` probes:
+> **Note:** consistent with the CS60-1a finding above, classic AI-scope `dependencies` queries return 0 rows against `gwn-ai-staging` (root cause unknown, tracked under CS60-4 Gap-1) but work normally against `gwn-ai-production`. To keep Gap 1 investigation reliable across both envs, query the workspace `AppDependencies` table directly via `az monitor log-analytics query`. The classic AI-scope `dependencies` query against staging would produce a false-empty result and drive an incorrect CS60-4 disposition.
 
-```kusto
-// Did dependencies finally populate?
-dependencies
-| where timestamp > ago(15m)
-| summarize count() by type, name
-| order by count_ desc
+After hitting `gwn-ai-staging` with ≥ 20 `/api/scores/leaderboard` probes, run against the workspace:
+
+```powershell
+$cust = '<workspace-customer-id>'   # see § KQL — cost measurement for how to resolve
+az monitor log-analytics query --workspace $cust --analytics-query 'AppDependencies | where TimeGenerated > ago(15m) and _ResourceId contains "gwn-ai-staging" | summarize n = count() by Type, Name | order by n desc' -o json
 ```
 
 If empty, pull the local span shape for comparison (run from a `dev:mssql` container):
