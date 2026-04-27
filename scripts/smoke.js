@@ -369,11 +369,15 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
   }
 
   // --- Step (e): GET /api/scores/me + assertion ----------------------------
+  // Sends X-User-Activity: 1 because CS53-19's boot-quiet contract returns an
+  // empty payload to header-less non-system traffic on enrolled endpoints
+  // (server/routes/scores.js:316-326). The smoke is simulated user activity
+  // so the header is correct.
   {
     const url = `${base}/api/scores/me`;
     const started = nowMs();
     const res = await fetcher('GET', url, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, 'X-User-Activity': '1' },
       timeoutMs: cfg.requestTimeoutMs, insecure: cfg.insecure,
     });
     const elapsed = nowMs() - started;
