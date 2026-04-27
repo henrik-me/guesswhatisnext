@@ -324,6 +324,19 @@ describe('check-docs-consistency', () => {
     expect(hits[0].message).toContain('CS999');
   });
 
+  test('cs62-title-ambiguous: multiple clickstop files match one CSID → ambiguity warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-title-ambiguous'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'workboard-title-matches-h1');
+    // Exactly one ambiguity warning (Title cell line 1 matches H1 of the
+    // first match, so no separate title-mismatch warning fires).
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+    expect(hits[0].message).toContain('CS200');
+    expect(hits[0].message).toContain('ambiguous');
+    expect(hits[0].message).toContain('active_cs200_some-title.md');
+    expect(hits[0].message).toContain('active_cs200_duplicate.md');
+  });
+
   test('cs62-title-rule honors `<!-- check:ignore workboard-title-matches-h1 -->`', () => {
     const fs = require('fs');
     const root = path.join(FIX, 'cs62-title-mismatch');

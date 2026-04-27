@@ -909,24 +909,33 @@ function checkClickstopH1MatchesFilename(repoRoot) {
 
 // ---------- CS62: workboard-title-matches-h1 (warn-only) --------------------
 
-function findClickstopFileByCs(repoRoot, cs) {
-  const csLower = cs.toLowerCase();
-  for (const sub of ['active', 'planned', 'done']) {
+function findClickstopFilesByCs(repoRoot, cs) {
+  // Returns ALL matching files for cs across {planned,active,done}.
+  // Caller decides how to handle 0/1/>1 matches.
+  const out = [];
+  const csLower = String(cs).toLowerCase();
+  for (const sub of ['planned', 'active', 'done']) {
     const dir = path.join(repoRoot, 'project', 'clickstops', sub);
     if (!fs.existsSync(dir)) continue;
     let names;
     try { names = fs.readdirSync(dir); } catch { continue; }
     const re = new RegExp(`^(planned|active|done)_${csLower}_.+\\.md$`, 'i');
-    const found = names.find(n => re.test(n));
-    if (found) return path.join(dir, found);
+    for (const n of names) {
+      if (re.test(n)) out.push(path.join(dir, n));
+    }
   }
-  return null;
+  return out;
+}
+
+function findClickstopFileByCs(repoRoot, cs) {
+  const all = findClickstopFilesByCs(repoRoot, cs);
+  return all.length > 0 ? all[0] : null;
 }
 
 function extractTitleCellLine1(cellRaw) {
   // Title cell is multi-line `**Title**<br>WT: ...<br>B:&nbsp; ...`.
   // Take the substring before the first `<br>`, strip surrounding `**`,
-  // collapse internal whitespace, and trim.
+  // and trim leading/trailing whitespace.
   const firstSegment = String(cellRaw).split(/<br\s*\/?>/i)[0];
   let s = firstSegment.trim();
   // Strip a single wrapping pair of `**...**` if present.
@@ -950,7 +959,14 @@ function checkWorkboardTitleMatchesH1(repoRoot, lines, wbPath, ignores) {
     const csMatch = /^(CS\d+)/i.exec(taskIdCell);
     if (!csMatch) continue;
     const cs = csMatch[1].toUpperCase();
-    const file = findClickstopFileByCs(repoRoot, cs);
+    const matches = findClickstopFilesByCs(repoRoot, cs);
+    const file = matches.length > 0 ? matches[0] : null;
+    if (matches.length > 1) {
+      const rels = matches.map(m => path.relative(repoRoot, m).replace(/\\/g, '/')).join(', ');
+      findings.push({ rule: 'workboard-title-matches-h1', file: wbPath, line: row.lineNo,
+        severity: 'warning',
+        message: `${taskIdCell}: ambiguous — ${matches.length} clickstop files match ${cs}: ${rels}. The H1 comparison uses the first match (\`planned\` > \`active\` > \`done\` order); resolve by deleting/renaming duplicates.` });
+    }
     if (!file) {
       findings.push({ rule: 'workboard-title-matches-h1', file: wbPath, line: row.lineNo,
         severity: 'warning',
