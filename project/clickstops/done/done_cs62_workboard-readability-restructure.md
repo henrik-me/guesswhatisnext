@@ -1,6 +1,6 @@
 # CS62 — WORKBOARD readability restructure
 
-**Status:** 🟢 Active (yoga-gwn-c4, claimed 2026-04-26T17:38Z)
+**Status:** ✅ Done (yoga-gwn-c4, merged 2026-04-27T03:16Z via PR [#294](https://github.com/henrik-me/guesswhatisnext/pull/294), squash commit `2a01d58`)
 **Origin:** UX/process iteration with the orchestrator (yoga-gwn-c4 session, 2026-04-26). The current `## Active Work` table on `WORKBOARD.md` packs ~10 columns into a single markdown row; the rightmost `Next Action` cell wraps to a thin column and is unreadable in practice. Restructure for readability without giving up the docs-consistency parser guarantees.
 
 ## Goal
