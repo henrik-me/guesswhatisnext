@@ -232,7 +232,7 @@ describe('CS61-3 deploy YAML structure (staging-deploy.yml seed + preflight + mi
       if (lines[i].startsWith('  deploy-azure-staging:')) inDeployJob = true;
       if (!inDeployJob) continue;
       // Stop at the next top-level job, if any.
-      if (lines[i].match(/^  [a-z][\w-]*:/) && !lines[i].startsWith('  deploy-azure-staging:')) {
+      if (lines[i].match(/^ {2}[a-z][\w-]*:/) && !lines[i].startsWith('  deploy-azure-staging:')) {
         return -1;
       }
       if (lines[i].match(/\baz containerapp\b/)) return i + 1;
@@ -326,7 +326,7 @@ describe('CS61-3 deploy YAML structure (staging-deploy.yml seed + preflight + mi
     expect(jobStart).toBeGreaterThan(-1);
     let jobEnd = lines.length;
     for (let i = jobStart + 1; i < lines.length; i++) {
-      if (lines[i].match(/^  [a-z][\w-]*:/)) {
+      if (lines[i].match(/^ {2}[a-z][\w-]*:/)) {
         jobEnd = i;
         break;
       }
