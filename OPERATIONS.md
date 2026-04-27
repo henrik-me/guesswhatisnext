@@ -453,10 +453,48 @@ Every staging and production deploy runs through a defense-in-depth chain of aut
 
 **Operator one-time setup (per env):**
 - GitHub secret `SMOKE_USER_PASSWORD_PROD` (env-scoped to production environment).
-- GitHub secret `SMOKE_USER_PASSWORD_STAGING` (env-scoped to staging environment).
-- `node scripts/setup-smoke-user.js` against each env's DB to create the `gwn-smoke-bot` user (idempotent). Until done, smoke steps gracefully skip with a notice — the deploy still succeeds.
+- GitHub secret `SMOKE_USER_PASSWORD_STAGING` (env-scoped to staging environment): `gh secret set SMOKE_USER_PASSWORD_STAGING --env staging --body <pw>`.
+- **Production:** `node scripts/setup-smoke-user.js` against the prod DB to create the persistent `gwn-smoke-bot` user (idempotent; one-time only because prod uses persistent Azure SQL).
+- **Staging:** no manual DB action needed — staging uses ephemeral SQLite and the `gwn-smoke-bot` user is recreated automatically by the in-workflow seed step on every deploy (CS61-1 endpoint + CS61-3 workflow wiring).
+
+After CS61, staging skip-on-secret-missing branches are gone (CS61-4); a missing secret hard-fails the deploy at the early preflight step.
 
 For the post-deploy KQL queries that CS41-3 / CS41-7 emit and how to interpret the deploy summary annotation, see [`docs/observability.md` § E](docs/observability.md#e-post-deploy-verification-cs41).
+
+### Staging-specific extensions (CS61)
+
+CS61 added staging-only deploy-time machinery to make the CS41 smoke + AI verify chain actually run in staging (where the SQLite DB is ephemeral per-revision, so prod's persistent-user pattern doesn't apply). Full plan + close-out in [`done_cs61_activate-cs41-smoke-in-staging.md`](project/clickstops/done/done_cs61_activate-cs41-smoke-in-staging.md).
+
+**Inline-seed pattern (vs prod's persistent-user pattern):**
+- Prod: `gwn-smoke-bot` is seeded once into Azure SQL via `scripts/setup-smoke-user.js`; persists across deploys.
+- Staging: `gwn-smoke-bot` is recreated every deploy via `POST /api/admin/seed-smoke-user` (idempotent: 200 on exists, 201 on created; `requireSystem` auth; hard-coded username; audit-logged). Driver: `scripts/seed-smoke-user-via-api.js`.
+
+**Cold-start init warmup (CS61-3a):**
+- Before the seed step, the workflow calls `POST $NEW_REVISION_FQDN/api/admin/init-db` (with retry on 5xx for up to 60s) to force `unInit()` on the adapter. Without this the seed call races the cold-start init and gets HTTP 500 because `/api/admin/*` bypasses the cold-start gate (`server/app.js:296`).
+
+**Migration introspection endpoint (CS61-2):**
+- `GET /api/admin/migrations` (`requireSystem`) returns `{ applied, expected, status, names, lastError }` where `status` ∈ `ok|pending|ahead|error`.
+  - `ok`: applied === expected.
+  - `pending`: applied < expected (likely transient during cold-start, real failure if persistent).
+  - `ahead`: applied > expected — LEGITIMATE during rollback windows (code older than DB).
+  - `error`: tracker query itself failed.
+- Smoke-side staging-only assertion against the new revision: `status === 'ok'`. NEVER asserted against OLD revision or rollback target.
+- Backed by adapter-level `db.getMigrationState()` (CS61-0); routes never import `_tracker.js` directly.
+
+**Cross-revision transition markers (CS61-5 + CS61-5a):**
+- CS41-12 (old-rev smoke) and CS41-5 (rollback smoke) probe `GET $TARGET_REVISION_FQDN/api/admin/migrations` before running. HTTP 404 → that revision pre-dates CS61 → graceful-skip with notice. HTTP 200/401/403 → route exists → proceed with full smoke. Anything else → fail loudly. The probe is a **positive marker** (route presence) — cannot be fooled by a broken auth path.
+
+**Rollback coupling (from CS61 plan v3 § D5):**
+
+| If you revert... | You also MUST revert... | Why |
+|---|---|---|
+| CS61-1 (admin endpoint + script) | CS61-3 (workflow seed step) | Without endpoint, seed step always fails → ALL staging deploys broken. |
+| CS61-2 (migration check + adapter API) | CS61-3 (smoke assertion of `migrations.status`) + CS61-5/5a (transition probes) | Smoke and probes would call non-existent endpoint. |
+| CS61-3 (workflow integration) | CS61-4 (skip removal) + CS61-5/5a (transition markers) | Without seed in workflow, hard-fail = always-broken staging. |
+| CS61-3a (init-db warmup) | none required, but expect intermittent seed-step 500s | Cold-start race returns. |
+| CS61-3b (smoke header) | none required, but CS41-1 will fail in staging again | CS53-19 boot-quiet contract returns empty payload to score-readback. |
+
+A single revert PR for any of CS61-1/2/3 must include the corresponding workflow revert atomically.
 
 ## Observability — App Insights query examples
 

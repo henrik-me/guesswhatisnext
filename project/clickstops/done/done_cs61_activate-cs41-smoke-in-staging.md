@@ -1,0 +1,242 @@
+# CS61 — Activate CS41 smoke + DB migration validation in staging
+
+**Status:** ✅ Done — closed 2026-04-27
+**Closed by:** yoga-gwn-c2 via CS61-7 PR (see closing summary below)
+**Owner:** yoga-gwn-c2 (claimed 2026-04-26T23:35Z)
+**Origin:** CS41 close-out (2026-04-26) surfaced two related staging gaps:
+1. Staging silently skips the entire CS41 validation chain (CS41-1 smoke, CS41-3 AI verify, CS41-12 old-rev smoke, CS41-5 rollback smoke) because staging uses container-local SQLite at `/tmp/game.db` ([staging-deploy.yml:476-477](../../../.github/workflows/staging-deploy.yml)) — every revision gets a fresh ephemeral DB, so `gwn-smoke-bot` (the user CS41-1''s smoke logs in as) cannot be pre-seeded once via `scripts/setup-smoke-user.js` the way it''s done for prod.
+2. The DB migration framework (`server/db/migrations/`, 8 migrations, called by [`server/app.js:46-49`](../../../server/app.js)) **runs against staging''s SQLite on every server startup, but no deploy gate validates that the migrations actually applied successfully.**
+
+**User direction (2026-04-26):** smoke testing AND DB migration step validation in staging.
+
+**Plan revision history:**
+- v1: inline-seed-via-API only (Option α: bypass on `/api/auth/register`).
+- v2: added DB migration validation by extending `/api/health` with a `migrations` check.
+- **v3 (this — post-GPT-5.4 rubber-duck):** addresses 3 blockers + 6 serious findings. Pivots from Option α → **Option β** (dedicated admin endpoint — narrower auth surface). Migration check moves OFF `/api/health.status` rollup to a NEW dedicated endpoint that does NOT affect existing health-check consumers. Adds `getMigrationState()` adapter API as a precondition. Strengthens CS41-12 transition signal to a positive marker rather than 401-detection. Adds early secret preflight + explicit rollback coupling.
+
+## Goal
+
+Staging deploys actually exercise (a) the full CS41 smoke + AI verify + ingest summary chain AND (b) explicit validation that all DB migrations applied cleanly. Failures abort the deploy before traffic shift. Cheapest viable approach so it lands fast.
+
+**Out of scope:** moving staging to managed MSSQL (separate, larger CS — relates to CS59).
+
+## Investigated repository state (verified during plan v3, 2026-04-26)
+
+| What | Where | Implication |
+|---|---|---|
+| Migration framework call | [`server/app.js:46-49`](../../../server/app.js) | Migrations run on every server boot in staging. |
+| Migration tracker API | [`_tracker.js`](../../../server/db/migrations/_tracker.js) — exposes `ensureMigrationsTable`, `getAppliedVersions`, `runMigrations` only. **Header explicitly says "should not be imported directly by routes."** | CS61 must add a public adapter-level wrapper (`db.getMigrationState()`) before any route can read tracker state. |
+| `/api/health` route | [`server/app.js:399-462`](../../../server/app.js) — `requireSystem` | Top-level `status` is rolled from all checks. Existing consumers ([`tests/health.test.js`](../../../tests/health.test.js), [`scripts/health-check.sh`](../../../scripts/health-check.sh), [`tests/e2e/health-api.spec.mjs`](../../../tests/e2e/health-api.spec.mjs)) assume `status: 'ok'` on healthy systems. **Adding migrations to the rollup risks breaking these — DO NOT do that.** |
+| `/api/auth/register` duplicate response | [`server/routes/auth.js:76-79`](../../../server/routes/auth.js): returns **HTTP 409 + `{error: "Username already taken"}`** | Idempotency contract for the seed script: 409 is success-on-rerun, NOT 400. |
+| `gwn-smoke-` reservation | CS41-0 in [`auth.js`](../../../server/routes/auth.js) — public registration rejects `gwn-smoke-*` | Bypass needed for staging seed; see Design D1. |
+| Existing admin route pattern | [`server/routes/admin.js`](../../../server/routes/admin.js) + [`server/middleware/auth.js`](../../../server/middleware/auth.js) (`requireSystem`) | Established pattern for narrow admin endpoints; CS61 reuses it. |
+| `setup-smoke-user.js` (prod-tested) | [`scripts/setup-smoke-user.js`](../../../scripts/setup-smoke-user.js) — direct DB insert | Sibling pattern for `seed-smoke-user-via-api.js` but works against MSSQL via direct connection. CS61''s API-based approach is needed for staging where the DB is inside the container. |
+| Workflow SP RBAC | [`infra/deploy.sh:265-278`](../../../infra/deploy.sh): SP gets **Contributor** on resource scope | Likely covers `Microsoft.App/containerApps/exec/action` — Option γ is technically viable, but Option β still wins on testability + auditability. |
+| Staging AI wiring | Live — [`staging-deploy.yml:478-479`](../../../.github/workflows/staging-deploy.yml) + CS54-3 done | CS41-3 AI verify in staging will work once smoke is producing requests. |
+| Existing CS41-12 staging skip | [`staging-deploy.yml:596-598`](../../../.github/workflows/staging-deploy.yml) — graceful-skip on `SMOKE_USER_PASSWORD_STAGING` unset | CS61 replaces this with hard-fail (post-secret-set) + a positive transition marker (see Design D3). |
+
+## Design decisions (v3)
+
+### D1. Smoke-bot user creation in staging — Option β (NEW admin endpoint)
+
+**Pivot from v2''s Option α to Option β** per rubber-duck Serious finding #4.
+
+**Why β over α:** the `/api/auth/register` route does multiple things (validation, role assignment, JWT issuance, registration logging). Bypassing the reserved-prefix check there widens the attack surface of a public, rate-limited endpoint to allow privileged-user creation. A dedicated narrow endpoint (`POST /api/admin/seed-smoke-user`) with `requireSystem` auth and a HARD-CODED username (no arbitrary input from the caller) is a smaller, more auditable surface.
+
+**Why β over γ (`az containerapp exec`):** even though SP RBAC likely covers exec, Option β is unit-testable (Option γ is integration-only); Option β has a clear log trail in the application (Option γ leaves only Azure platform logs); and Option β''s endpoint is reusable for other one-time-seed workflows.
+
+**Endpoint contract (locked):**
+- `POST /api/admin/seed-smoke-user`
+- Auth: `requireSystem` (existing `x-api-key` middleware).
+- Body: `{ password: string }`.
+- Behavior: idempotent. If user `gwn-smoke-bot` already exists, return **200 + `{status: "exists", username: "gwn-smoke-bot"}`**. If not, create and return **201 + `{status: "created", username: "gwn-smoke-bot"}`**. Hard-coded username; no other inputs accepted.
+- Audit: emits `audit.seed-smoke-user` log line with `actor: 'system-api-key'`, `result: 'created'|'exists'`.
+
+### D2. Migration validation — NEW dedicated endpoint (not /api/health)
+
+**Pivot from v2''s "extend /api/health"** per rubber-duck Blocker #2.
+
+**Why NOT /api/health:** rolling migration check into the existing `status` field would break existing consumers (`tests/health.test.js`, `scripts/health-check.sh`, `tests/e2e/health-api.spec.mjs`) that assert `status: 'ok'`. Adding it as a non-rolled-up check still requires consumers to opt in.
+
+**New endpoint contract (locked):**
+- `GET /api/admin/migrations`
+- Auth: `requireSystem`.
+- Response: `{ applied: number, expected: number, status: 'ok' | 'pending' | 'ahead' | 'error', names: string[], lastError: string|null }`.
+- `status` taxonomy:
+  - `ok`: `applied === expected`.
+  - `pending`: `applied < expected` — server boot did not finish migrations (likely transient during cold-start; legit failure if persistent).
+  - `ahead`: `applied > expected` — code is older than the DB (rolled-back deploy after newer code applied newer migrations); LEGITIMATE during rollback windows. NOT a failure.
+  - `error`: tracker query itself failed.
+- Smoke-side assertion (staging-only, NEW revision only): `status === 'ok'` (after seed step ensures cold-start is past).
+- Old-rev smoke (CS41-12) and rollback smoke (CS41-5) explicitly do NOT assert this — they would legitimately see `ahead` or `pending` and that''s fine.
+
+### D2a. New adapter-level API (precondition for D2)
+
+Per rubber-duck Blocker #3, add `getMigrationState()` to the adapter interface (both SQLite and MSSQL implementations). Internally calls `_tracker.getAppliedVersions()`. Routes call `db.getMigrationState()` — never import `_tracker.js` directly.
+
+### D3. CS41-12 old-rev transition — positive marker, not 401-detection
+
+Per rubber-duck Serious finding #5: "skip on 401" masks both "old revision pre-dates CS61" AND "old revision auth is broken."
+
+**v3 transition signal:** probe `GET /api/admin/migrations` against the OLD revision (it''s `requireSystem`, accepts the same `x-api-key` the workflow already uses for /api/health):
+- HTTP **404** (route not registered) → OLD revision pre-dates CS61-2 → **graceful-skip** CS41-12 with notice "OLD revision pre-dates CS61; CS41-12 skipped — re-run after one transition deploy".
+- HTTP **200/401/403** (route exists, regardless of auth result) → OLD revision is post-CS61 → **proceed with full CS41-12 smoke**.
+- HTTP anything else → unexpected; fail loudly.
+
+This is a positive marker (route presence) rather than a behavior detection (login result). Cannot be fooled by a broken auth path.
+
+### D4. Staging skip-on-secret-missing → hard-fail (parity with prod) + early preflight
+
+Per rubber-duck Serious finding #6: add a workflow step that fires EARLY (before `az containerapp update`) and fails the deploy if `SMOKE_USER_PASSWORD_STAGING` is unset. Operator gets the failure in seconds, not after wasted work.
+
+```yaml
+- name: Preflight — required secrets present
+  run: |
+    if [ -z "${{ secrets.SMOKE_USER_PASSWORD_STAGING }}" ]; then
+      echo "::error::SMOKE_USER_PASSWORD_STAGING is unset. Set it before staging deploys can proceed. See OPERATIONS.md § Deploy gates (CS41)."
+      exit 1
+    fi
+```
+
+This step lands in the SAME PR as CS61-4 to keep the contract atomic.
+
+### D5. Rollback coupling (new section per rubber-duck Serious #7)
+
+| If you revert... | You also MUST revert... | Why |
+|---|---|---|
+| CS61-1 (admin endpoint + script) | CS61-3 (workflow seed step) | Without endpoint, seed step always fails → ALL staging deploys broken |
+| CS61-2 (migration check + adapter API) | CS61-3 (smoke assertion of migrations.status) | Smoke would call non-existent endpoint |
+| CS61-3 (workflow integration) | CS61-4 (skip removal) + CS61-5 (transition marker) | Without seed in workflow, hard-fail = always-broken staging |
+
+**Operationally:** a single revert PR for CS61-1 must include the corresponding workflow revert. The CS61-7 closing summary documents this explicitly.
+
+## Tasks
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| CS61-0 | **Adapter-level `getMigrationState()` API** (precondition per D2a). Add public method on the DB adapter interface; implement for SQLite + MSSQL. Wraps `_tracker.getAppliedVersions()`. Plus unit tests for both backends. | ✅ Done | PR [#284](https://github.com/henrik-me/guesswhatisnext/pull/284) (commit `32dae18`). |
+| CS61-1 | **`POST /api/admin/seed-smoke-user` endpoint + seed script** (per D1 Option β). New endpoint in `server/routes/admin.js`; idempotent (200 on exists, 201 on created); audit-logged. New `scripts/seed-smoke-user-via-api.js` POSTs to it with system key + smoke-bot password from env. Plus unit tests covering: wrong API key rejected; correct key creates; correct key on existing returns 200; missing password rejected; reserved-prefix bypass scoped to ONLY this endpoint. | ✅ Done | PR [#287](https://github.com/henrik-me/guesswhatisnext/pull/287) (commit `c2b7aa8`). |
+| CS61-2 | **`GET /api/admin/migrations` endpoint** (per D2). Add to `server/routes/admin.js`; uses adapter `getMigrationState()` from CS61-0. Plus unit tests covering ok/pending/ahead/error/not-initialized paths. | ✅ Done | PR [#285](https://github.com/henrik-me/guesswhatisnext/pull/285) (commit `83c7884`). |
+| CS61-3 | **Wire seed step + migration assertion into staging-deploy.yml.** Adds (a) early secret preflight per D4; (b) seed step after new-revision deploy, before CS41-12; (c) NEW staging smoke-side assertion of `/api/admin/migrations.status === ok` against the new revision (NOT shared `scripts/smoke.js` — a separate inline step). All steps fail-fast. | ✅ Done | PR [#289](https://github.com/henrik-me/guesswhatisnext/pull/289) (commit `b5bf6ae`). |
+| CS61-3a | **Force DB init before seed step** (recovery from first verification-deploy failure 2026-04-26). In staging-deploy.yml between the /healthz wait and the seed loop, calls `POST $NEW_REVISION_FQDN/api/admin/init-db` with `x-api-key`. Retry on 5xx for up to 60s (cold-start tolerance). Only proceed to seed once init-db returns 200. **Why:** the seed endpoint sits behind the `/api/admin/*` cold-start gate bypass (`server/app.js:296`), so it executes during cold-start and 500s when `getDbAdapter()` returns un-initialized. `/api/admin/init-db` (`server/app.js:515`) explicitly calls `unInit()`. | ✅ Done | PR [#298](https://github.com/henrik-me/guesswhatisnext/pull/298) (commit `63f190b`). Workflow-only fix; identified during failed CS61-6 run 24971160848. |
+| CS61-3b | **Smoke sends `X-User-Activity:1` to `/api/scores/me`** (boot-quiet contract fix; recovery from second verification-deploy failure 2026-04-27). One-line addition in `scripts/smoke.js` so the GET that asserts the just-submitted score includes the header CS53-19 boot-quiet contract requires. Without it the server returns an empty payload during the boot-quiet window and CS41-1 assertion always fails on staging. | ✅ Done | PR [#302](https://github.com/henrik-me/guesswhatisnext/pull/302) (commit `ad233eb`). Recovery task added after CS53-19 ↔ CS41-1 collision discovered during the second CS61-6 verification deploy. |
+| CS61-4 | **Drop staging skip-on-secret-missing branches.** Remove `if [ -z "$SMOKE_USER_PASSWORD" ]` from CS41-1/CS41-12/CS41-5 staging paths. Replace with hard-fail. Preflight step (CS61-3 (a)) is now the single point of failure when secret is missing. | ✅ Done | PR [#306](https://github.com/henrik-me/guesswhatisnext/pull/306) (commit `6633916`). |
+| CS61-5 | **CS41-12 staging transition marker** (per D3). Probe `GET /api/admin/migrations` against OLD revision FQDN; HTTP 404 → graceful-skip with notice (OLD pre-dates CS61); HTTP 200/401/403 → proceed with full CS41-12 smoke; other → fail. | ✅ Done | PR [#290](https://github.com/henrik-me/guesswhatisnext/pull/290) (commit `41ba4f5`). |
+| CS61-5a | **CS41-5 transition marker** — mirrors CS61-5 for the rollback path. Probe `$ROLLBACK_REVISION_FQDN/api/admin/migrations` before CS41-5 smoke; same decision table as CS61-5; CS41-5 smoke gated on `skip-rollback-smoke != true`. **Why:** CS41-5 unconditionally smokes the rollback target; on the first post-CS61 deploy, the rollback target is a pre-CS61 revision with no `gwn-smoke-bot` user → 401 → ROLLBACK TARGET ALSO UNHEALTHY annotation → workflow fails. | ✅ Done | PR [#297](https://github.com/henrik-me/guesswhatisnext/pull/297) (commit `efdd31d`). Workflow-only fix; same pattern as CS61-5 applied to rollback smoke. |
+| CS61-6 | **Verification deploy.** After CS61-1..-5 merged + operator sets `SMOKE_USER_PASSWORD_STAGING`: trigger staging deploy, confirm preflight + seed + migration check + CS41-1 smoke + CS41-3 AI verify all pass. CS41-12 graceful-skips on first deploy (OLD pre-dates CS61). | ✅ Done | Verification deploy run [24976962804](https://github.com/henrik-me/guesswhatisnext/actions/runs/24976962804) succeeded 2026-04-27T04:55Z — completed all 4 jobs; full chain exercised end-to-end. |
+| CS61-7 | **Documentation + close.** Update OPERATIONS.md 'Deploy gates (CS41)' section: staging inline-seed pattern, migration validation endpoint, transition marker, rollback coupling table from D5. Move CS61 to `done/`. | ✅ Done | This PR (`yoga-gwn-c2/cs61-7-closeout`). |
+
+## Validation gates per PR (mandatory per INSTRUCTIONS § 4a + LIVE PR-CI gate)
+
+Every CS61 PR includes:
+- ✅ `npm test` (with new tests).
+- ✅ `npm run check:docs`.
+- ✅ `npm run check:migration-policy`.
+- ✅ `npm run container:validate`.
+- ✅ `## Container Validation` + `## Telemetry Validation` sections.
+
+## Risks & mitigations
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| New admin endpoint expands attack surface | LOW | `requireSystem` auth (same as existing `/api/admin/*`); HARD-CODED username (no input); rate limit not needed since system-key callers are trusted; audit log on every call. |
+| `getMigrationState()` query latency | LOW | Single-row tracker count; sub-millisecond. |
+| `/api/admin/migrations` reports `ahead` during rollback windows — operator misreads as failure | MEDIUM | Documented in D2 status taxonomy. Smoke does NOT assert ahead/pending/error from rollback or old-rev smoke. Only NEW-revision-only assertion is `=== 'ok'`. |
+| First-deploy-after-CS61 transition is invisible to operator | LOW | CS61-5''s graceful-skip emits explicit notice; CS61-7 docs flag this. |
+| Operator forgets to set secret before CS61-4 lands → staging breaks | MEDIUM | Early preflight (D4) fails in seconds with a clear message pointing at OPERATIONS.md. CS61-4 lands AFTER CS61-6 verification confirms the secret is set. |
+| Rollback of CS61-1 alone leaves staging broken | MEDIUM | D5 rollback coupling table documents the required atomic-revert. CS61-7 docs reinforce. |
+| Staging AI wiring (CS54-3) was reverted/never applied | LOW (not currently — verified live) | If CS61-6 finds AI verify failing, root-cause to CS54 wiring before assuming CS61 issue. |
+| `requireSystem` auth in CS61-1/CS61-2 differs from `/api/auth/register`''s public path — could expose a header-injection vector | LOW | Use the existing `requireSystem` middleware unchanged; do not handcraft auth. |
+
+## Acceptance criteria
+
+- [ ] Adapter-level `getMigrationState()` API exists; SQLite + MSSQL implementations have unit tests.
+- [ ] `POST /api/admin/seed-smoke-user` exists; idempotent; system-key auth; reserved-prefix bypass scoped to this endpoint only.
+- [ ] `GET /api/admin/migrations` exists; reports `applied/expected/status/names/lastError`; status taxonomy matches D2.
+- [ ] `scripts/seed-smoke-user-via-api.js` is idempotent (200/201 = success).
+- [ ] Staging deploy seeds smoke-bot before any CS41 smoke step.
+- [ ] Staging deploy asserts `/api/admin/migrations.status === 'ok'` on new revision (NEW staging-only step, NOT in shared `scripts/smoke.js`).
+- [ ] Existing prod `/api/health` contract is unchanged (no migration field, no rollup change). Verified by existing tests still passing.
+- [ ] Staging CS41-12 graceful-skips when OLD revision returns 404 from `/api/admin/migrations`; runs smoke when route exists.
+- [ ] Staging CS41-1 + CS41-3 + CS41-7 all run end-to-end (verified via CS61-6).
+- [ ] Staging skip-on-secret-missing branches removed; replaced with early preflight.
+- [ ] OPERATIONS.md documents staging inline-seed pattern + migration validation + rollback coupling table.
+- [ ] No regression in `npm test` or `npm run container:validate`.
+
+## Will not be done as part of this clickstop
+
+- Moving staging to managed MSSQL.
+- Changing prod''s persistent-user pattern.
+- Smoke-bot data cleanup in staging.
+- Per-migration timing telemetry.
+- Auto-rollback on migration mismatch.
+- Adding migration check to `/api/health` rollup (explicitly REJECTED per D2).
+
+## Rollback story (per D5)
+
+| Task | Rollback | Coupling |
+|---|---|---|
+| CS61-0 | Revert PR. Adapter API removed. | Must precede revert of CS61-2. |
+| CS61-1 | Revert PR. Admin endpoint + script removed. | Must couple with CS61-3 revert. |
+| CS61-2 | Revert PR. Migration endpoint removed. | Must couple with CS61-3 + CS61-5 reverts. |
+| CS61-3 | Revert PR. Staging deploy returns to skipping smoke. | Standalone. |
+| CS61-3a | **Force DB init before seed step (recovery from first verification-deploy failure 2026-04-26).** In staging-deploy.yml between the /healthz wait and the seed loop, add a step that calls POST https://$NEW_REVISION_FQDN/api/admin/init-db with x-api-key: $SYSTEM_API_KEY. Retry on 5xx for up to 60s (cold-start tolerance). Only proceed to seed once init-db returns 200. **Why:** the seed endpoint sits behind the /api/admin/* cold-start gate bypass (server/app.js:296), so it executes during cold-start and 500s when getDbAdapter() returns un-initialized. /api/admin/init-db (server/app.js:515) explicitly calls 
+unInit(). | ⬜ Pending | Workflow-only fix; no server code change. Identified during the failed CS61-6 verification deploy (run 24971160848) where every seed attempt got HTTP 500. |
+| CS61-4 | Revert PR. Staging skip-on-secret-missing returns. | Standalone. |
+| CS61-5 | Revert PR. CS41-12 staging path returns to prior. | Standalone. |
+| CS61-5a | **CS41-5 transition marker** — mirrors CS61-5 for the rollback path. In staging-deploy.yml rollback flow: before CS41-5 smoke, add a probe step that does curl -sk -o /dev/null -w '%{http_code}' -H 'x-api-key: $SYSTEM_API_KEY' --max-time 10 https://$ROLLBACK_REVISION_FQDN/api/admin/migrations. Decision table identical to CS61-5: 200/401/403 → proceed with rollback smoke; 404 → graceful-skip with notice (rollback target pre-dates CS61); other → fail loudly. CS41-5 smoke step gated on if: steps.cs41-5-marker.outputs.skip-rollback-smoke != 'true'. **Why:** CS41-5 unconditionally smokes the rollback target; on the first post-CS61 deploy, the rollback target is a pre-CS61 revision with no gwn-smoke-bot user → 401 → ROLLBACK TARGET ALSO UNHEALTHY annotation → workflow fails. Identified during the same failed verification deploy. | ⬜ Pending | Workflow-only fix; no server code change. Same pattern as CS61-5 applied to a different smoke step. |
+| CS61-6 / CS61-7 | Pure verification + docs. | Standalone. |
+
+## Relationship to other clickstops
+
+- **CS41** — predecessor; established the smoke + verify chain CS61 makes runnable in staging.
+- **CS41-0** — reservation that CS61-1''s narrow admin endpoint bypasses (with audit + system-key auth).
+- **CS54** — App Insights wiring; CS41-3 AI verify in staging produces real `gwn-ai-staging.requests` rows once CS61 lands.
+- **CS59** — staging cost-soak; inline-seed traffic counted by CS59-8.
+- **Future managed-MSSQL-staging CS** (unfiled) — would supersede CS61''s inline-seed approach.
+
+## Parallelism
+
+- CS61-0 lands FIRST (precondition).
+- CS61-1 and CS61-2 are independent after CS61-0; two sub-agents in parallel.
+- CS61-3 depends on CS61-1 + CS61-2 merged.
+- CS61-4 depends on CS61-3 merged + CS61-6 verified.
+- CS61-5 depends on CS61-3 merged.
+- CS61-6 depends on CS61-3 + CS61-5 merged + operator-set secret.
+- CS61-7 depends on CS61-6.
+
+Total: 8 PRs across max 2 sub-agents at a time.
+
+## Pre-dispatch checklist
+
+- [x] CS61 number verified free.
+- [x] Plan v3 reflects user direction + GPT-5.4 rubber-duck (3 blockers + 6 serious + 3 minor adopted).
+- [ ] User reviews v3 plan → approves before dispatch.
+
+## Closing summary
+
+**Outcome:** 9 PRs delivered + 1 verification deploy. Staging deploy chain now exercises the full CS41 smoke + AI verify + DB migration validation chain end-to-end. Parity with prod's hard-fail-on-missing-secret behavior achieved (per CS61-4).
+
+**Verification evidence:** staging deploy run [24976962804](https://github.com/henrik-me/guesswhatisnext/actions/runs/24976962804) succeeded 2026-04-27T04:55Z (all 4 jobs ✅, ~11 min total): preflight, init-db (CS61-3a), seed gwn-smoke-bot via API (CS61-1) → created, migration assert (CS61-2) → `status=ok`, CS41-12 transition marker correctly skipped first transition (OLD revision pre-CS61), CS41-1 smoke PASSED (CS61-3b X-User-Activity:1 fix in effect), CS41-3 AI verify PASSED, traffic shifted, post-cutover summary emitted.
+
+**Surprises along the way:**
+- The first CS61-6 verification deploy (run [24971160848](https://github.com/henrik-me/guesswhatisnext/actions/runs/24971160848)) failed: the seed step got HTTP 500 because `/api/admin/*` bypasses the cold-start gate (`server/app.js:296`), so the seed endpoint executed during cold-start and `getDbAdapter()` returned un-initialized. Fixed via **CS61-3a** — explicit `POST /api/admin/init-db` (with retry on 5xx for up to 60s) before the seed loop.
+- CS41-5 had no transition marker like CS41-12 did → on the first post-CS61 deploy, the rollback target was a pre-CS61 revision with no `gwn-smoke-bot` user → 401 → `ROLLBACK TARGET ALSO UNHEALTHY` annotation → workflow fail. Fixed via **CS61-5a**, mirroring the CS61-5 `/api/admin/migrations` 404-probe pattern for the rollback path.
+- The second verification deploy revealed a CS53-19 ↔ CS41-1 collision: `scripts/smoke.js` `GET /api/scores/me` did not send `X-User-Activity:1` → CS53-19's boot-quiet contract returned an empty payload during the boot-quiet window → CS41-1's "score I just submitted is visible" assertion always failed on staging. Fixed via **CS61-3b** (one-line header addition).
+- The GitHub `staging` environment now requires manual approval for the Deploy job (a new env protection rule landed during this CS). Orchestrator can auto-approve with `gh api --method POST /repos/{owner}/{repo}/actions/runs/{run_id}/pending_deployments`.
+
+**What lives forward:**
+- Every staging deploy now exercises: preflight → init-db → seed → migration assert → CS41-12 (gated by transition marker) → CS41-1 smoke → CS41-3 AI verify → traffic shift → CS41-5 (on rollback, gated by transition marker) → CS41-7 ingest summary → CS41-8 deploy summary.
+- Adapter-level `db.getMigrationState()` (CS61-0) is available for any future route needing tracker introspection.
+- `POST /api/admin/seed-smoke-user` (CS61-1) is available for any future deploy-time bot-user seeding.
+- `GET /api/admin/migrations` (CS61-2) is available for ad-hoc operator probes and as a positive transition marker for future cross-revision logic.
+- Migration policy (CS41-11 linter) still enforces backward-compatible migrations; no regression.
+
+**Operator-action prerequisite (already done during this CS):** GitHub secret `SMOKE_USER_PASSWORD_STAGING` set via `gh secret set --env staging` (one-time per env). The `gwn-smoke-bot` user is now created automatically by the seed step on every staging deploy — staging uses ephemeral SQLite, so no manual DB action is required.
+
+**Cross-CS impact:**
+- C5's CS52-10 staging deploys are unblocked (the staging chain now fails fast on real regressions instead of silently skipping smoke).
+- CS59 staging cost-soak measurements should still account for the deterministic per-deploy smoke traffic (CS59-8 task remains valid).
+- CS53-19's boot-quiet contract is now exercised by deploy-time smoke on every staging deploy — free regression coverage going forward (any future change that breaks the boot-quiet → `X-User-Activity` contract will fail CS41-1 in staging).
+
+**Deferred from CS61:** none — every sub-task delivered or explicitly out-of-scope per "Will not be done as part of this clickstop".
