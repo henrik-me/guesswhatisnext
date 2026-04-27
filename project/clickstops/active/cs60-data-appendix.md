@@ -12,9 +12,10 @@
 | Window / event | Date (UTC) | Captured by | Section |
 |---|---|---|---|
 | _baseline_ | 2026-04-25T22:39Z (CS54-6 verification) | yoga-gwn-c2 | [§ Baseline (CS54-6)](#baseline-cs54-6) |
-| +24h cost measurement | 2026-04-26T22:39Z | _pending — CS60-1_ | _to be appended_ |
-| +7d cost measurement | 2026-05-02T22:39Z | _pending — CS60-2_ | _to be appended_ |
-| +30d cost measurement | 2026-05-25T22:39Z | _pending — CS60-3_ | _to be appended_ |
+| Day 0 — 2026-04-25 (CS60-1a, backfill) | captured 2026-04-26T23:50Z | yoga-gwn-c3 | [§ Day 0 — 2026-04-25 (CS60-1a)](#day-0--2026-04-25-cs60-1a) |
+| Day 1 — 2026-04-26 (CS60-1b, +24h) | captured 2026-04-26T23:50Z | yoga-gwn-c3 | [§ Day 1 — 2026-04-26 (CS60-1b)](#day-1--2026-04-26-cs60-1b) |
+| +7d cost measurement | 2026-05-02T22:39Z | _pending — CS60-2_ | _to be appended (daily ticks via CS60-2c..2h)_ |
+| +30d cost measurement | 2026-05-25T22:39Z | _pending — CS60-3_ | _to be appended (daily ticks via CS60-3i..)_ |
 | Per-deploy ingest summary (rolling) | continuous from CS41 land | _pending — CS41 deploy summary_ | [§ Per-deploy ingest summary](#per-deploy-ingest-summary) |
 
 ---
@@ -77,7 +78,87 @@ CS60-1, CS60-2, CS60-3 each append a section here with:
 **Decision (CS60-3 only):** _to be filled at +30d window_
 ```
 
-CS60-1/2/3 task descriptions in [`planned_cs60_post-cs54-observability-followup.md`](planned_cs60_post-cs54-observability-followup.md#tasks) point here for the actual recording of values.
+CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.md`](active_cs60_post-cs54-observability-followup.md#tasks) point here for the actual recording of values.
+
+---
+
+### Day 0 — 2026-04-25 (CS60-1a)
+
+**Captured:** 2026-04-26T23:50Z by yoga-gwn-c3 (backfill).
+**Window:** UTC day 2026-04-25 (partial — AI activation occurred mid-day, baseline marker 2026-04-25T22:39Z per CS54-6).
+**KQL bug (significant):** the original CS60 plan KQL (`union * | … _BilledSize` against the AI scope) returns 0 rows because both AI components are workspace-mode. Corrected query in CS60 plan now points at workspace tables (`AppRequests` / `AppDependencies` / etc.) via `az monitor log-analytics query` against workspace `workspace-gwnrg6bXt` (customerId `ca1b90db-504b-4771-bfeb-5e4a6bb62422`).
+
+#### App Insights tables — Day 0
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| staging | AppDependencies | 892 | 0.66 |
+| staging | AppRequests | 73 | 0.06 |
+| staging | AppMetrics | 56 | 0.05 |
+| prod | AppDependencies | 110 | 0.08 |
+| prod | AppRequests | 8 | 0.01 |
+| prod | AppMetrics | 3 | 0.00 |
+
+| env | Day 0 AI total (MB) |
+|---|---:|
+| staging | **0.77** |
+| prod | **0.09** |
+
+**Notes**
+- Day-0 staging dominates because CS54-6 verification + CS58 scale-to-zero work both happened on staging that day. Prod was barely touched until late 22:28Z.
+- No `AppExceptions`, `AppTraces`, `AppPageViews`, `AppBrowserTimings`, `AppAvailabilityResults`, or `AppSystemEvents` rows on Day 0.
+
+---
+
+### Day 1 — 2026-04-26 (CS60-1b)
+
+**Captured:** 2026-04-26T23:50Z by yoga-gwn-c3 (canonical "+24h" window per original CS60-1 trigger).
+**Window:** UTC day 2026-04-26 (partial — captured at ~T23:50Z, ~10 min before day end).
+
+#### App Insights tables — Day 1
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| prod | AppDependencies | 943 | 0.70 |
+| prod | AppRequests | 81 | 0.07 |
+| prod | AppMetrics | 15 | 0.01 |
+| staging | AppDependencies | 137 | 0.10 |
+| staging | AppRequests | 9 | 0.01 |
+| staging | AppMetrics | 2 | 0.00 |
+
+| env | Day 1 AI total (MB) |
+|---|---:|
+| prod | **0.78** |
+| staging | **0.11** |
+
+**Cumulative since baseline (Day 0 + Day 1)**
+
+| env | rows | MB | Run-rate (MB/day) | Projected monthly (MB) |
+|---|---:|---:|---:|---:|
+| staging | 1003 | 0.88 | ≈0.44 | ≈13 |
+| prod    | 1160 | 0.87 | ≈0.44 | ≈13 |
+
+**Free-tier headroom (5 GB / month workspace cap, AI tables only):** ≫ 4 GB headroom in both envs at current run-rate.
+
+#### ⚠️ Operational finding — staging exception storm
+
+40 `SQLITE_ERROR: no such table: users` exceptions in `AppExceptions` against `gwn-ai-staging`, all between **2026-04-27T00:51:00Z** and **2026-04-27T00:51:47Z** (47-second burst). Exact root cause not investigated yet, but this is precisely the failure-mode that planned **CS61** (activate CS41 smoke + DB migration validation in staging) is designed to catch — staging spun up a fresh container with an empty SQLite at `/tmp/game.db` and migrations apparently did not run before the first request hit. Logged here as evidence; full investigation belongs in the active CS61 work or a follow-up CS, not in CS60 (CS60 is observability follow-up, not staging-deploy fix).
+
+#### Whole-workspace cost context (cumulative since baseline)
+
+The 5 GB free tier is **per workspace**, not per AI component. AI tables are dwarfed by container logs:
+
+| Tbl | rows | MB billed |
+|---|---:|---:|
+| ContainerAppSystemLogs_CL | 131,058 | **36.12** |
+| ContainerAppConsoleLogs_CL | 10,441 | **13.77** |
+| AppDependencies | 2,360 | 1.75 |
+| AppRequests | 187 | 0.16 |
+| Usage | 363 | 0.14 |
+| AppMetrics | 89 | 0.08 |
+| AppExceptions | 40 | 0.04 |
+
+So total workspace ingest (~52 MB cumulative for the ~36h since baseline) projects to ≈1.25 GB/month at current rate — still well inside the 5 GB free tier, but ~71× the AI-tables-only projection. CS60-3 free-tier-headroom decision must use this whole-workspace number, not just the AI-component slice.
 
 ---
 
