@@ -607,11 +607,41 @@ jobs:
             echo "::error::CS61-1: /healthz on $NEW_REVISION_FQDN did not become ready within 180s; aborting staging deploy before seed"
             exit 1
           fi
-          # /healthz returning 200 means the HTTP listener is up, but DB
-          # self-init is lazy (CS53-9): the seed endpoint touches the DB
-          # and may return 503 + Retry-After during the first ~30s of
-          # cold-start until self-init completes. Retry the seed up to 10
-          # times (≈50s) to ride out that window.
+          # CS61-3a — Force DB init before seed.
+          # /api/admin/* paths bypass the cold-start gate (server/app.js:296),
+          # so the seed endpoint can land while the DB is un-initialized and
+          # 500 (e.g. SQLITE_ERROR: no such table: users). Calling
+          # /api/admin/init-db first explicitly triggers runInit()
+          # (server/app.js:531) and waits for it to complete (HTTP 200), so
+          # the subsequent seed call lands against a ready DB. Identified
+          # during the failed CS61-6 verification deploy (run 24971160848)
+          # where every seed attempt returned HTTP 500 because of this.
+          # Concurrency: runInit() shares an in-flight promise via
+          # `initGuard` (server/app.js:145), so this call piggybacks on any
+          # init already kicked off by the /healthz handler.
+          echo "Forcing DB init via /api/admin/init-db (CS61-3a)..."
+          INIT_OK=0
+          for init_attempt in $(seq 1 12); do
+            INIT_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" \
+              --max-time 30 \
+              -X POST \
+              -H "x-api-key: $SYSTEM_API_KEY" \
+              "https://$NEW_REVISION_FQDN/api/admin/init-db")
+            if [ "$INIT_STATUS" = "200" ]; then
+              echo "✅ CS61-3a: DB init succeeded after ~$((init_attempt * 5))s (HTTP 200)"
+              INIT_OK=1
+              break
+            fi
+            echo "CS61-3a: init-db attempt $init_attempt/12 returned HTTP $INIT_STATUS; sleeping 5s before retry..."
+            sleep 5
+          done
+          if [ "$INIT_OK" -ne 1 ]; then
+            echo "::error::CS61-3a: /api/admin/init-db on $NEW_REVISION_FQDN did not return 200 within ~60s; aborting before seed"
+            exit 1
+          fi
+          # CS61-1 seed loop — now lands against an initialized DB. The
+          # 10×5s retry budget below is retained as defense-in-depth in
+          # case of transient post-init flakiness.
           SEED_OK=0
           for attempt in $(seq 1 10); do
             if node scripts/seed-smoke-user-via-api.js "$NEW_REVISION_FQDN"; then
