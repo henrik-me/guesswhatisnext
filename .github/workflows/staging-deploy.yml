@@ -1105,17 +1105,13 @@ jobs:
       # ("ROLLBACK TARGET ALSO UNHEALTHY") to differentiate this incident
       # mode from CS41-12's "MIGRATION BREAKS OLD STAGING SERVER" — operator
       # playbook is different.
-      - name: Rollback verification (CS41-5)
+      # CS41-5 prep: resolve the rollback target's revision name + FQDN
+      # ONCE and export to $GITHUB_ENV so both the CS61-5a transition marker
+      # and the CS41-5 smoke step can reference them. Mirrors the
+      # "Capture old revision" → CS61-5 marker → CS41-12 smoke shape used
+      # for the forward path.
+      - name: Resolve rollback target revision (CS41-5 prep)
         if: failure() && steps.deploy.outputs.current-revision != ''
-        env:
-          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
-          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
-          WARMUP_CAP_MS: '30000'
-          COLD_START_MS: '30000'
-          PERF_WARN_MS: '2000'
-          AI_RESOURCE: gwn-ai-staging
-          RESOURCE_GROUP: gwn-rg
-          EXPECTED_ROW_COUNT: '6'
         run: |
           # Allow Azure ingress to settle on the rolled-back revision after
           # the rollback step's `traffic set` + `sleep 10`. Small additional
@@ -1126,9 +1122,12 @@ jobs:
             --name gwn-staging --resource-group gwn-rg \
             --query "properties.configuration.ingress.traffic[?weight==\`100\`].revisionName | [0]" -o tsv 2>/dev/null || echo "")
           ROLLBACK_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "ROLLBACK_TIMESTAMP=$ROLLBACK_TIMESTAMP" >> "$GITHUB_ENV"
 
           if [ -z "$ROLLBACK_REVISION_NAME" ] || [ "$ROLLBACK_REVISION_NAME" = "None" ]; then
             echo "::warning::CS41-5: could not resolve rollback revision name (no traffic at weight=100). Skipping rollback verification — operator must verify manually."
+            echo "ROLLBACK_REVISION_NAME=" >> "$GITHUB_ENV"
+            echo "ROLLBACK_REVISION_FQDN=" >> "$GITHUB_ENV"
             exit 0
           fi
 
@@ -1138,11 +1137,70 @@ jobs:
             --query "properties.fqdn" -o tsv 2>/dev/null || echo "")
           if [ -z "$ROLLBACK_FQDN" ] || [ "$ROLLBACK_FQDN" = "None" ]; then
             echo "::warning::CS41-5: could not resolve FQDN for rollback revision $ROLLBACK_REVISION_NAME. Skipping rollback verification — operator must verify manually."
+            echo "ROLLBACK_REVISION_NAME=$ROLLBACK_REVISION_NAME" >> "$GITHUB_ENV"
+            echo "ROLLBACK_REVISION_FQDN=" >> "$GITHUB_ENV"
             exit 0
           fi
 
+          echo "ROLLBACK_REVISION_NAME=$ROLLBACK_REVISION_NAME" >> "$GITHUB_ENV"
+          echo "ROLLBACK_REVISION_FQDN=$ROLLBACK_FQDN" >> "$GITHUB_ENV"
           echo "::notice::CS41-5: rollback target revision=$ROLLBACK_REVISION_NAME fqdn=$ROLLBACK_FQDN at $ROLLBACK_TIMESTAMP"
 
+      # CS61-5a: positive transition marker for the ROLLBACK path. Mirrors
+      # CS61-5 (CS41-12 transition marker) exactly, just probing the
+      # rollback target's FQDN instead of the OLD revision's. Without this
+      # marker, on the first post-CS61 deploy the rollback target is a
+      # pre-CS61 revision (no smoke-bot seeded) → CS41-5's smoke would
+      # 401-login-fail → false-positive "ROLLBACK TARGET ALSO UNHEALTHY"
+      # annotation. Probe route presence to decide whether the rollback
+      # target supports CS41-5 smoke. See plan v3 § D3 (extension).
+      - name: Detect CS61-aware ROLLBACK target (CS41-5 transition marker)
+        id: cs41-5-marker
+        if: failure() && env.ROLLBACK_REVISION_FQDN != ''
+        env:
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+        run: |
+          if [ -z "$ROLLBACK_REVISION_FQDN" ]; then
+            echo "::notice::CS61-5a: no ROLLBACK_REVISION_FQDN (no rollback target?); CS41-5 will skip naturally"
+            echo "skip-rollback-smoke=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Probe /api/admin/migrations on the rollback target; route
+          # absence (404) means pre-CS61. --max-time 10 keeps a hung
+          # rollback target from stalling the workflow; curl returns "000"
+          # on timeout/DNS failure, which falls through to the
+          # unexpected-status arm.
+          http_status=$(curl -sk -o /dev/null -w "%{http_code}" \
+            -H "x-api-key: $SYSTEM_API_KEY" \
+            --max-time 10 \
+            "https://$ROLLBACK_REVISION_FQDN/api/admin/migrations")
+          case "$http_status" in
+            200|401|403)
+              echo "✅ CS61-5a: ROLLBACK target is CS61-aware (HTTP $http_status from /api/admin/migrations); proceeding with CS41-5 smoke"
+              echo "skip-rollback-smoke=false" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "::notice::CS61-5a: ROLLBACK target pre-dates CS61 (HTTP 404 from /api/admin/migrations); skipping CS41-5 smoke for this transition. After one full post-CS61 deploy cycle, all rollback targets will support CS41-5 smoke."
+              echo "skip-rollback-smoke=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::CS61-5a: unexpected HTTP $http_status from /api/admin/migrations on ROLLBACK target $ROLLBACK_REVISION_NAME ($ROLLBACK_REVISION_FQDN); cannot determine CS61-awareness. If rollback target is broken/restarting, re-run the deploy; if persistent, investigate the rollback target's health."
+              exit 1
+              ;;
+          esac
+
+      - name: Rollback verification (CS41-5)
+        if: failure() && env.ROLLBACK_REVISION_FQDN != '' && steps.cs41-5-marker.outputs.skip-rollback-smoke != 'true'
+        env:
+          SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          WARMUP_CAP_MS: '30000'
+          COLD_START_MS: '30000'
+          PERF_WARN_MS: '2000'
+          AI_RESOURCE: gwn-ai-staging
+          RESOURCE_GROUP: gwn-rg
+          EXPECTED_ROW_COUNT: '6'
+        run: |
           if [ -z "$SMOKE_USER_PASSWORD" ]; then
             echo "::notice::CS41-5: SMOKE_USER_PASSWORD_STAGING unset — skipping rollback smoke (mirrors CS41-1 skip behavior)."
             exit 0
@@ -1151,7 +1209,7 @@ jobs:
           # 1. Smoke against the rollback target. If THIS fails, both the
           # new revision (deploy-time smoke) AND the rollback target are
           # broken — indeterminate state; operator must intervene.
-          if ! SMOKE_RESULTS_PATH=rollback-smoke-results.json node scripts/smoke.js "$ROLLBACK_FQDN"; then
+          if ! SMOKE_RESULTS_PATH=rollback-smoke-results.json node scripts/smoke.js "$ROLLBACK_REVISION_FQDN"; then
             echo "::error::CS41-5: ROLLBACK TARGET ALSO UNHEALTHY — operator intervention required"
             echo "::error::Rolled-back revision $ROLLBACK_REVISION_NAME failed CS41-1 smoke at $ROLLBACK_TIMESTAMP."
             echo "::error::Service is in an indeterminate state: both the new revision (failed deploy) and the rollback target are broken."
