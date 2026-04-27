@@ -146,7 +146,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 ### WORKBOARD State Machine
 
-This section defines the canonical vocabulary for the lifecycle of an Active Work row. The `State` column lives in `WORKBOARD.md` (added by CS44-3). The sub-agent → orchestrator reporting protocol that drives this column is described in § Agent Progress Reporting and the dispatch checklist in § Agent Work Model ("Sub-agent dispatch checklist").
+This section defines the canonical vocabulary for the lifecycle of an Active Work row. The `State` column lives in `WORKBOARD.md`. The sub-agent → orchestrator reporting protocol that drives this column is described in § Agent Progress Reporting and the dispatch checklist in § Agent Work Model ("Sub-agent dispatch checklist").
 
 **A. Canonical states (8).** Every Active Work row is in exactly one of:
 
@@ -211,7 +211,7 @@ The single exception is the reclamation procedure in § C below.
 
 Sub-agents do not edit `WORKBOARD.md` at all — they report state-change events to their orchestrator per the protocol in § WORKBOARD State Machine (point D, "Reporting protocol").
 
-**B. Stale-lock thresholds.** Both thresholds are measured as time since the row's `Last Updated` timestamp (added to the schema by CS44-3):
+**B. Stale-lock thresholds.** Both thresholds are measured as time since the row's `Last Updated` timestamp:
 
 | Threshold | Age | Meaning |
 |---|---|---|
@@ -239,7 +239,6 @@ Any reclamation that does not follow this procedure — silently editing another
 
 **D. Forward references.**
 
-- CS44-3 (schema upgrade) renames the current `Agent ID` column to `Owner` and adds the `Last Updated`, `Blocked Reason`, and `Next Action` columns. Until CS44-3 lands, treat references to `Owner` in this section as the existing `Agent ID` column, and treat the thresholds in § B and the reclamation procedure in § C as not yet mechanically enforceable.
 - The CS43-2 consistency checker is extended in CS44-5b to emit a warning at 24h and an error at 7d against the `Last Updated` column.
 
 ### CONTEXT.md — Project State Updates
