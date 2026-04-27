@@ -256,4 +256,67 @@ describe('GET /api/scores/me', () => {
       }
     }
   });
+
+  // CS52-followup-2: stats are grouped by (mode, source) so Practice
+  // averages don't contaminate Ranked averages and vice versa.
+  test('stats are split by (mode, source)', async () => {
+    const db = await require('../server/db').getDbAdapter();
+    const me = await db.get('SELECT id FROM users WHERE username = ?', ['scoreuser']);
+
+    // Wipe any prior scores for this user so the assertions are deterministic.
+    await db.run('DELETE FROM scores WHERE user_id = ?', [me.id]);
+
+    // Insert one Ranked freeplay, two Practice freeplay, one Ranked daily,
+    // one Practice daily, one Legacy freeplay. Five distinct (mode, source)
+    // combos plus a duplicate for the Practice freeplay aggregation check.
+    const insert = (mode, source, score, streak) => db.run(
+      `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [me.id, mode, score, 5, 10, streak, source]
+    );
+    await insert('freeplay', 'ranked',  1000, 5);
+    await insert('freeplay', 'offline', 500,  3);
+    await insert('freeplay', 'offline', 700,  4);  // → avg should be 600, count 2
+    await insert('daily',    'ranked',  800,  5);
+    await insert('daily',    'offline', 400,  2);
+    await insert('freeplay', 'legacy',  9999, 10);
+
+    const meRes = await getAgent()
+      .get('/api/scores/me')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(meRes.status).toBe(200);
+
+    const stats = meRes.body.stats;
+    // Find each (mode, source) combo we expect.
+    const findStat = (mode, source) => stats.find(s => s.mode === mode && s.source === source);
+
+    const rfp = findStat('freeplay', 'ranked');
+    expect(rfp).toBeDefined();
+    expect(Number(rfp.high_score)).toBe(1000);
+    expect(Number(rfp.games_played)).toBe(1);
+
+    const pfp = findStat('freeplay', 'offline');
+    expect(pfp).toBeDefined();
+    expect(Number(pfp.high_score)).toBe(700);
+    expect(Number(pfp.games_played)).toBe(2);
+    // Critical: avg is computed within (mode, source) — so Practice avg
+    // doesn't get contaminated by the Ranked 1000 score.
+    expect(Number(pfp.avg_score)).toBe(600);
+
+    const rd = findStat('daily', 'ranked');
+    expect(rd).toBeDefined();
+    expect(Number(rd.high_score)).toBe(800);
+
+    const pd = findStat('daily', 'offline');
+    expect(pd).toBeDefined();
+    expect(Number(pd.high_score)).toBe(400);
+
+    const lfp = findStat('freeplay', 'legacy');
+    expect(lfp).toBeDefined();
+    expect(Number(lfp.high_score)).toBe(9999);
+
+    // Multiplayer stats only appear if the user has finished an MP match;
+    // this user hasn't, so no MP row should be present.
+    expect(findStat('multiplayer', 'ranked')).toBeUndefined();
+  });
 });

@@ -11,6 +11,13 @@ import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError } from 
 import { validateStoredAuthToken } from './auth-boot.js';
 import { showClaimPromptModal } from './claim-modal.js';
 import {
+  LEADERBOARD_MODE_KEY, LEADERBOARD_SOURCE_KEY, LEADERBOARD_PERIOD_KEY,
+  VALID_LB_MODES, VALID_LB_SOURCES, VALID_LB_PERIODS,
+  DEFAULT_LB_MODE, DEFAULT_LB_SOURCE, DEFAULT_LB_PERIOD,
+  loadStoredLb, persistLb,
+} from './leaderboard-persist.js';
+import { renderPersonalBestsHTML } from './personal-bests.js';
+import {
   CONNECTIVITY_BANNER_COPY,
   renderConnectivityBanner as renderBanner,
   applyRankedEntryGate as applyGate,
@@ -1087,15 +1094,13 @@ function init() {
         break;
       case 'show-leaderboard':
         showScreen('leaderboard');
-        leaderboardMode = 'freeplay';
-        // CS52-followup-1: respect the user's last LB source selection
-        // (loaded from localStorage at module init) instead of forcing
-        // back to `ranked` every time the leaderboard screen opens.
-        setActiveLeaderboardMode('freeplay');
+        // CS52-followup-1+2: restore last LB view (mode, source, period)
+        // from localStorage. Don't hard-reset to defaults here.
+        setActiveLeaderboardMode(leaderboardMode);
         setActiveLeaderboardSource(leaderboardSource);
-        setActiveLeaderboardTab('alltime');
+        setActiveLeaderboardTab(leaderboardPeriod);
         fetchPersonalBests();
-        fetchLeaderboard('alltime');
+        fetchLeaderboard(leaderboardPeriod);
         break;
       case 'show-achievements':
         if (isLoggedIn()) {
@@ -1238,13 +1243,16 @@ function init() {
           // hidden state can't strand them with an empty list.
           if (mode === 'multiplayer' && leaderboardSource !== 'ranked') {
             leaderboardSource = 'ranked';
+            persistLb(LEADERBOARD_SOURCE_KEY, 'ranked');
             setActiveLeaderboardSource('ranked');
           }
           leaderboardMode = mode;
+          // CS52-followup-1+2: persist mode tab selection.
+          persistLb(LEADERBOARD_MODE_KEY, mode);
           setActiveLeaderboardMode(mode);
-          // Show/hide period tabs for multiplayer (they apply to both)
-          setActiveLeaderboardTab('alltime');
-          fetchLeaderboard('alltime');
+          // Re-render from the active (persisted) period.
+          setActiveLeaderboardTab(leaderboardPeriod);
+          fetchLeaderboard(leaderboardPeriod);
         }
         break;
       }
@@ -1264,19 +1272,19 @@ function init() {
           leaderboardSource = source;
           // CS52-followup-1: persist last selection so it sticks across
           // sessions (per user feedback on initial CS52-6 default).
-          try { localStorage.setItem(LEADERBOARD_SOURCE_KEY, source); }
-          catch { /* storage full or unavailable — selection is in-memory only this session */ }
+          persistLb(LEADERBOARD_SOURCE_KEY, source);
           setActiveLeaderboardSource(source);
-          // Re-render from the active period.
-          const activeTab = document.querySelector('.leaderboard-tab.active');
-          const period = activeTab?.dataset.period || 'alltime';
-          fetchLeaderboard(period);
+          // Re-render from the active (persisted) period.
+          fetchLeaderboard(leaderboardPeriod);
         }
         break;
       }
       case 'leaderboard-tab': {
         const period = e.target.dataset.period;
-        if (period) {
+        if (period && VALID_LB_PERIODS.has(period)) {
+          // CS52-followup-1+2: persist period tab selection.
+          leaderboardPeriod = period;
+          persistLb(LEADERBOARD_PERIOD_KEY, period);
           setActiveLeaderboardTab(period);
           fetchLeaderboard(period);
         }
@@ -1457,23 +1465,12 @@ function loadSettingsUI() {
   if (timerEl) timerEl.value = String(settings.timer);
 }
 
-let leaderboardMode = 'freeplay';
-// CS52-followup-1: public LBs default to `All` (was `Ranked` per CS52-6
-// § Decision #6) — user feedback: defaulting to Ranked hides the user's
-// own Practice scores from the LB on first load, which is confusing
-// because Practice play is the most common entry point for new users.
-// `All` ensures their own numbers are visible by default, and the last
-// selection persists across sessions in localStorage so a user who
-// prefers competitive-only view can pick `Ranked` once and keep it.
-const LEADERBOARD_SOURCE_KEY = 'gwn_lb_source';
-const VALID_LB_SOURCES = new Set(['ranked', 'offline', 'all']);
-function loadStoredLbSource() {
-  try {
-    const stored = localStorage.getItem(LEADERBOARD_SOURCE_KEY);
-    return VALID_LB_SOURCES.has(stored) ? stored : 'all';
-  } catch { return 'all'; }
-}
-let leaderboardSource = loadStoredLbSource();
+// CS52-followup-1+2: persist all three leaderboard tab selections
+// (mode, source, period) to localStorage. See ./leaderboard-persist.js
+// for the keys, allow-lists, and helpers.
+let leaderboardMode   = loadStoredLb(LEADERBOARD_MODE_KEY,   VALID_LB_MODES,   DEFAULT_LB_MODE);
+let leaderboardSource = loadStoredLb(LEADERBOARD_SOURCE_KEY, VALID_LB_SOURCES, DEFAULT_LB_SOURCE);
+let leaderboardPeriod = loadStoredLb(LEADERBOARD_PERIOD_KEY, VALID_LB_PERIODS, DEFAULT_LB_PERIOD);
 
 /** Fetch and render personal bests section on the leaderboard screen. */
 async function fetchPersonalBests() {
@@ -1501,39 +1498,18 @@ async function fetchPersonalBests() {
   }
 }
 
-/** Render personal bests card from stats data. */
+/**
+ * Render personal bests card from stats data.
+ *
+ * CS52-followup-2: extracted into ./personal-bests.js so the HTML
+ * builder can be unit-tested without standing up a DOM. Stats arrive
+ * grouped by (mode, source) so each (game-type × provenance) combo
+ * renders as its own block.
+ */
 function renderPersonalBests(stats) {
   const container = document.querySelector('[data-bind="personal-bests"]');
   if (!container) return;
-
-  const freeplay = stats.find(s => s.mode === 'freeplay');
-  const multiplayer = stats.find(s => s.mode === 'multiplayer');
-
-  if (!freeplay && !multiplayer) {
-    container.innerHTML = '<div class="personal-bests-card"><p class="personal-bests-empty">Play some Free Play or Multiplayer games to see your stats here! 🎮</p></div>';
-    return;
-  }
-
-  let html = '<div class="personal-bests-card"><h3 class="personal-bests-title">📊 My Personal Bests</h3><div class="personal-bests-grid">';
-
-  if (freeplay) {
-    html += `<div class="personal-bests-stat">
-      <span class="personal-bests-label">🎮 Free Play</span>
-      <span class="personal-bests-value">${Number(freeplay.high_score).toLocaleString()}</span>
-      <span class="personal-bests-detail">${Number(freeplay.games_played)} games · ${Number(freeplay.avg_score).toLocaleString()} avg</span>
-    </div>`;
-  }
-
-  if (multiplayer) {
-    html += `<div class="personal-bests-stat">
-      <span class="personal-bests-label">⚔️ Multiplayer</span>
-      <span class="personal-bests-value">${Number(multiplayer.high_score).toLocaleString()}</span>
-      <span class="personal-bests-detail">${Number(multiplayer.games_played)} games · 🔥 ${Number(multiplayer.best_streak)} streak</span>
-    </div>`;
-  }
-
-  html += '</div></div>';
-  container.innerHTML = html;
+  container.innerHTML = renderPersonalBestsHTML(stats);
 }
 
 /** Set the active leaderboard mode tab visually. */
