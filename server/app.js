@@ -34,6 +34,7 @@ const telemetryRoutes = require('./routes/telemetry');
 const sessionRoutes = require('./routes/sessions');
 const adminGameConfigsRoutes = require('./routes/admin');
 const adminMigrationsRoutes = require('./routes/admin-migrations');
+const adminSeedSmokeUserRoutes = require('./routes/admin-seed-smoke-user');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
@@ -399,6 +400,11 @@ function createServer() {
   // Surfaces adapter-level getMigrationState() (CS61-0) so the staging deploy
   // smoke can assert all migrations applied cleanly. See routes/admin-migrations.js.
   app.use('/api/admin/migrations', adminMigrationsRoutes);
+
+  // CS61-1 — POST /api/admin/seed-smoke-user (idempotent; system-key auth).
+  // Used by scripts/seed-smoke-user-via-api.js from staging-deploy.yml to
+  // seed the deploy-time smoke probe user inside staging's ephemeral SQLite.
+  app.use('/api/admin/seed-smoke-user', adminSeedSmokeUserRoutes);
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, async (req, res, next) => {
