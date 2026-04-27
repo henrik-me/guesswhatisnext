@@ -10,9 +10,13 @@
  *   New in CS62 (warn-only on landing — flipped to error in a follow-up CS
  *   once the baseline is clean, mirroring the CS43-2 / CS43-7 pattern):
  *     - clickstop-h1-matches-filename  — every file under
- *         project/clickstops/{planned,active,done}/ has an H1 of the form
+ *         project/clickstops/{planned,active,done}/ whose name matches
+ *         `(planned|active|done)_cs<n>_<slug>.md` has an H1 of the form
  *         `# CSnn — Human Title` whose CSID matches the filename CSID and
- *         whose kebab-cased title matches the filename slug.
+ *         whose kebab-cased title matches the filename slug. Files in
+ *         those directories that do NOT match the clickstop naming
+ *         convention (e.g. `cs60-data-appendix.md`) are NOT covered by
+ *         this rule — they are companion docs, not clickstop files.
  *     - workboard-title-matches-h1     — each Active Work row's Title cell
  *         (line 1, before the first <br>, ** stripped) equals the human
  *         title of its parent CS file's H1.
@@ -743,14 +747,14 @@ function checkOwnerInOrchestratorsTable(wbPath, lines, ignores) {
 function parseTableRow(line) {
   // A markdown table row: leading `|`, cells separated by `|`, trailing `|`.
   // Returns trimmed cells (without the leading/trailing empty strings) or
-  // null if the line is not a table row.
+  // null if the line is not a table row. Splits on `|` not preceded by `\`
+  // and unescapes `\|` so authors can include literal pipes inside cells
+  // (e.g. inline regex / shell snippets in description-continuation rows).
   if (!line.includes('|')) return null;
   const trimmed = line.trim();
   if (!trimmed.startsWith('|')) return null;
-  const parts = trimmed.split('|').map(s => s.trim());
-  if (parts.length >= 2 && parts[0] === '') parts.shift();
-  if (parts.length >= 1 && parts[parts.length - 1] === '') parts.pop();
-  return parts;
+  const stripped = trimmed.replace(/^\|/, '').replace(/\|$/, '');
+  return stripped.split(/(?<!\\)\|/).map(s => s.trim().replace(/\\\|/g, '|'));
 }
 
 function isSeparatorRow(cells) {
