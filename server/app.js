@@ -36,6 +36,7 @@ const adminGameConfigsRoutes = require('./routes/admin');
 const adminMigrationsRoutes = require('./routes/admin-migrations');
 const adminSeedSmokeUserRoutes = require('./routes/admin-seed-smoke-user');
 const adminSeedRankedPuzzlesRoutes = require('./routes/admin-seed-ranked-puzzles');
+const { createDbStatusRouter } = require('./routes/db-status');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
@@ -249,7 +250,7 @@ function createServer() {
     },
     autoLogging: config.NODE_ENV === 'test' ? false : {
       ignore: (req) => {
-        if (req.path === '/api/health' || req.path === '/healthz') return true;
+        if (req.path === '/api/health' || req.path === '/healthz' || req.path === '/api/db-status') return true;
         if (req.path.startsWith('/api/telemetry/')) return true;
         const dotIdx = req.path.lastIndexOf('.');
         return dotIdx !== -1 && staticExtensions.has(req.path.substring(dotIdx));
@@ -294,7 +295,7 @@ function createServer() {
     return req.path === '/api/sync' || FINISH_PATH_RE.test(req.path);
   }
   app.use((req, res, next) => {
-    if (req.path === '/healthz' || req.path === '/api/health' || req.path.startsWith('/api/admin/') || req.path.startsWith('/api/telemetry/')) return next();
+    if (req.path === '/healthz' || req.path === '/api/health' || req.path === '/api/db-status' || req.path.startsWith('/api/admin/') || req.path.startsWith('/api/telemetry/')) return next();
 
     if (draining) {
       return res.set('Retry-After', '5').status(503).json({ error: 'Server is draining', retryAfter: 5 });
@@ -383,7 +384,8 @@ function createServer() {
     // (one readdir against a small dir). Per [INSTRUCTIONS.md § Database
     // & Data] this is request-bound and not a timer.
     if (req.path.startsWith('/api/') && !req.path.startsWith('/api/health')
-        && !req.path.startsWith('/api/telemetry/')) {
+        && !req.path.startsWith('/api/telemetry/')
+        && req.path !== '/api/db-status') {
       res.on('finish', () => {
         if (res.statusCode >= 400) return;
         if (getDbUnavailabilityState()) return;
@@ -428,6 +430,14 @@ function createServer() {
   // pool without `docker cp`-ing scripts/seed-ranked-puzzles.js (the
   // script is intentionally NOT copied into the production image).
   app.use('/api/admin/seed-ranked-puzzles', adminSeedRankedPuzzlesRoutes);
+
+  // CS53-8b: public ops endpoint that reads in-memory DB-init state
+  // WITHOUT issuing any DB query. SPA must not poll this — it's for
+  // operators + external uptime monitors only. See server/routes/db-status.js.
+  app.use('/api/db-status', createDbStatusRouter({
+    getDbInitialized: () => dbInitialized,
+    getInitInFlight: () => initGuard.isInFlight(),
+  }));
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, async (req, res, next) => {

@@ -533,6 +533,27 @@ ContainerAppConsoleLogs_CL
 - **Any `armed=true` row in staging/prod** → a real deployment activated the simulator. Roll back immediately and audit the deployment env.
 - **Any `armed=false` row in staging/prod** → the SIMULATE_* var leaked but the arming gate spared us; still investigate (something in the deploy pipeline copied the wrong env block).
 
+### B.17 /api/db-status probe rate (CS53-8b polling watchdog)
+
+The public ops endpoint at [`server/routes/db-status.js`](../server/routes/db-status.js) emits a structured Pino info `event=db-status-probe` per request. Per CS53-8b's policy the SPA must NOT poll this endpoint — it is for operators + external uptime monitors only. This query trips when the rate is too high to be uptime-check traffic (e.g. 1 monitor at 30s cadence ≈ 2/min ≈ 2880/day); a sustained spike usually means a SPA bug introduced an inadvertent poller.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "db-status-probe"
+| summarize probes_per_min = count() / 60
+            by bin(TimeGenerated, 1h)
+| order by TimeGenerated desc
+```
+
+**Healthy interpretation:** sustained <5 probes/min (≈ 1 monitor every 12s; well under the 30/min/IP rate limit). Bursts ≤ 30/min are tolerable as long as they fall back to baseline.
+
+**Unhealthy interpretation:**
+- **Sustained ≥10 probes/min** → likely a SPA poller regression. Search the recent commits for new `setInterval` / `setTimeout` near `/api/db-status`; the rule is the SPA learns DB state from real user-request response shapes, not from polling.
+- **Sustained ≥30 probes/min from one IP** → also likely a misbehaving external monitor; the rate limiter (`30/min/IP`) will start returning 429s. Check the `429` count via § B.2.
+- **Sudden zero rows after a deploy** → the route is not being hit at all. Verify the route is mounted (search for `/api/db-status` in `server/app.js`) and the bypass list in the request gate still includes it (otherwise a cold container would 503 the probe).
+
 ### Ranked puzzle pool seed (CS52-2 / CS52-followup)
 
 Both the operator-invoked CLI (`scripts/seed-ranked-puzzles.js`) and the in-container admin endpoint (`POST /api/admin/seed-ranked-puzzles`) emit the same structured log line `Ranked puzzles seeded` with `inserted/skipped/total/version` fields, so a single KQL covers both surfaces. The HTTP path additionally emits `audit.seed-ranked-puzzles` with `actor='admin-route'` for invocation tracing.
