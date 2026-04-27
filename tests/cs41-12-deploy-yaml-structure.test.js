@@ -197,3 +197,143 @@ describe('CS41-9 deploy YAML structure (staging-deploy.yml pre-cutover gates)', 
     expect(lineSummary).toBeGreaterThan(lineTraffic);
   });
 });
+
+describe('CS61-3 deploy YAML structure (staging-deploy.yml seed + preflight + migration assertion)', () => {
+  // CS61-3 wires three new steps into the staging deploy job:
+  //   (a) Preflight  — fails the deploy in seconds if required secrets are
+  //       unset, BEFORE any Azure CLI mutation runs.
+  //   (b) Seed       — creates `gwn-smoke-bot` against the NEW revision via
+  //       the CS61-1 admin endpoint AFTER the new-revision deploy and
+  //       BEFORE CS41-12 OLD smoke (which depends on smoke-bot existing
+  //       on the apex-served OLD revision once the apex is shifted).
+  //   (c) Migration  — asserts `/api/admin/migrations.status === 'ok'` on
+  //       the NEW revision AFTER seed but BEFORE traffic shift.
+  //
+  // Step ordering is the entire correctness contract for CS61-3; lock it
+  // here so future edits cannot silently regress.
+  const yaml = readFileSync(join(WF_DIR, 'staging-deploy.yml'), 'utf8');
+
+  const linePreflight = lineOf(yaml, '- name: Preflight — required secrets present (CS61-3)');
+  const lineDeploy = lineOf(yaml, '- name: Deploy new revision (0% traffic)');
+  const lineResolveNewFqdn = lineOf(yaml, '- name: Resolve NEW revision FQDN (CS61-3 prep)');
+  const lineSeed = lineOf(yaml, '- name: Seed gwn-smoke-bot via API (CS61-1)');
+  const lineMigrationAssert = lineOf(yaml, '- name: Assert all migrations applied (CS61-2)');
+  const lineCs4112Smoke = lineOf(yaml, '- name: Smoke OLD revision against NEW schema (CS41-12)');
+  const lineTraffic = lineOf(yaml, '- name: Switch traffic to new revision');
+
+  // First Azure CLI mutation in the deploy-azure-staging job. We grep for
+  // the literal `az containerapp` call pattern; the preflight step's body
+  // does not contain that string, so a positive match implies the first
+  // *mutation* step.
+  function firstAzMutationLine(content) {
+    const lines = content.split('\n');
+    let inDeployJob = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith('  deploy-azure-staging:')) inDeployJob = true;
+      if (!inDeployJob) continue;
+      // Stop at the next top-level job, if any.
+      if (lines[i].match(/^  [a-z][\w-]*:/) && !lines[i].startsWith('  deploy-azure-staging:')) {
+        return -1;
+      }
+      if (lines[i].match(/\baz containerapp\b/)) return i + 1;
+    }
+    return -1;
+  }
+  const lineFirstAzMutation = firstAzMutationLine(yaml);
+
+  it('contains the CS61-3 preflight step', () => {
+    expect(linePreflight).toBeGreaterThan(0);
+  });
+
+  it('contains the CS61-3 NEW-FQDN resolve step', () => {
+    expect(lineResolveNewFqdn).toBeGreaterThan(0);
+  });
+
+  it('contains the CS61-1 seed step', () => {
+    expect(lineSeed).toBeGreaterThan(0);
+  });
+
+  it('contains the CS61-2 migration-assertion step', () => {
+    expect(lineMigrationAssert).toBeGreaterThan(0);
+  });
+
+  it('preflight runs BEFORE any Azure CLI mutation (`az containerapp`) so deploy aborts cheaply', () => {
+    expect(lineFirstAzMutation).toBeGreaterThan(0);
+    expect(linePreflight).toBeLessThan(lineFirstAzMutation);
+  });
+
+  it('preflight checks for SMOKE_USER_PASSWORD_STAGING (CS61-3 D4)', () => {
+    const window = yaml
+      .split('\n')
+      .slice(linePreflight - 1, linePreflight + 25)
+      .join('\n');
+    expect(window).toMatch(/SMOKE_USER_PASSWORD_STAGING/);
+  });
+
+  it('preflight checks for SYSTEM_API_KEY (CS61-3 D4)', () => {
+    const window = yaml
+      .split('\n')
+      .slice(linePreflight - 1, linePreflight + 25)
+      .join('\n');
+    expect(window).toMatch(/SYSTEM_API_KEY/);
+  });
+
+  it('seed step runs AFTER the new-revision deploy (depends on new-revision being deployed)', () => {
+    expect(lineSeed).toBeGreaterThan(lineDeploy);
+  });
+
+  it('seed step runs AFTER NEW-FQDN resolve (depends on $NEW_REVISION_FQDN env var)', () => {
+    expect(lineSeed).toBeGreaterThan(lineResolveNewFqdn);
+  });
+
+  it('seed step runs BEFORE CS41-12 OLD smoke (smoke-bot must exist before any CS41 smoke)', () => {
+    expect(lineSeed).toBeLessThan(lineCs4112Smoke);
+  });
+
+  it('migration assertion runs AFTER seed step', () => {
+    expect(lineMigrationAssert).toBeGreaterThan(lineSeed);
+  });
+
+  it('migration assertion runs BEFORE traffic-set step (must abort pre-cutover)', () => {
+    expect(lineMigrationAssert).toBeLessThan(lineTraffic);
+  });
+
+  it('migration assertion calls /api/admin/migrations on the NEW revision', () => {
+    const window = yaml
+      .split('\n')
+      .slice(lineMigrationAssert - 1, lineMigrationAssert + 30)
+      .join('\n');
+    expect(window).toMatch(/\/api\/admin\/migrations/);
+    expect(window).toMatch(/NEW_REVISION_FQDN/);
+  });
+
+  it('migration assertion fails on any status !== "ok"', () => {
+    const window = yaml
+      .split('\n')
+      .slice(lineMigrationAssert - 1, lineMigrationAssert + 30)
+      .join('\n');
+    expect(window).toMatch(/!= "ok"/);
+  });
+
+  it('seed + migration assertion + preflight all live in the same job (deploy-azure-staging)', () => {
+    // The simplest invariant: the only job that contains "Deploy new
+    // revision (0% traffic)" is `deploy-azure-staging`. If preflight,
+    // seed, and migration assertion all appear and are bracketed by the
+    // job header `deploy-azure-staging:` and the next top-level job, they
+    // belong to that job. Verify by reading the job slice.
+    const lines = yaml.split('\n');
+    const jobStart = lines.findIndex((l) => l.startsWith('  deploy-azure-staging:'));
+    expect(jobStart).toBeGreaterThan(-1);
+    let jobEnd = lines.length;
+    for (let i = jobStart + 1; i < lines.length; i++) {
+      if (lines[i].match(/^  [a-z][\w-]*:/)) {
+        jobEnd = i;
+        break;
+      }
+    }
+    const jobSlice = lines.slice(jobStart, jobEnd).join('\n');
+    expect(jobSlice).toMatch(/- name: Preflight — required secrets present \(CS61-3\)/);
+    expect(jobSlice).toMatch(/- name: Seed gwn-smoke-bot via API \(CS61-1\)/);
+    expect(jobSlice).toMatch(/- name: Assert all migrations applied \(CS61-2\)/);
+  });
+});
