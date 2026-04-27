@@ -226,7 +226,7 @@ The 5 GB free tier is **per workspace**, not per AI component. AI tables are dwa
 | AppMetrics | 89 | 0.08 |
 | AppExceptions | 40 | 0.04 |
 
-So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) projects to ≈1.49 GB/month at current rate (`52 / 25.18 × 24 × 30`) — still well inside the 5 GB free tier (~30% of cap), but ~60× the AI-tables-only projection. CS60-3 free-tier-headroom decision must use this whole-workspace number, not just the AI-component slice.
+So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) projects to ≈1.49 GB/month at current rate (`52 / 25.18 × 24 × 30`) — still well inside the 5 GB free tier (~30% of cap), but ~30× the **combined** AI-tables-only projection (~50 MB/month for staging + prod) and ~60× the single-env AI slice (~25 MB/month). CS60-3 free-tier-headroom decision must use this whole-workspace number, not just the AI-component slice.
 
 **Caveat on these projections.** Both AI- and workspace-level run-rates are extrapolated from a 25h sample that includes one-off CS54-6 verification traffic on Day 0 staging and the CS61-1 deploy-failure exception storm on Day 1 staging. Treat these numbers as upper-bound estimates until CS60-2h (+7d) provides a steadier baseline.
 
