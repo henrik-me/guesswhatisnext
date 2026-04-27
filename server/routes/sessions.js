@@ -348,7 +348,16 @@ router.post('/', requireAuth, async (req, res, next) => {
         [nowIso(), sessionId]
       );
       logger.error({ sessionId, userId }, 'ranked-session no-active-puzzles');
-      return res.status(503).json({ error: 'no ranked puzzles available' });
+      // CS52-followup-1: not a transient warmup — the ranked_puzzles table
+      // has no active rows, which is a permanent state until the operator
+      // runs `npm run seed:ranked-puzzles`. Return 500 with a distinct
+      // error code so the client doesn't show the generic "warming up"
+      // toast and trick the user into infinite retries.
+      return res.status(500).json({
+        error: 'ranked pool empty',
+        code: 'ranked_pool_empty',
+        hint: 'Operator must run scripts/seed-ranked-puzzles.js to populate ranked_puzzles before Ranked sessions can start.',
+      });
     }
     const dispatchedAtMs = Date.now();
     dispatchedRounds.set(sessionId, {

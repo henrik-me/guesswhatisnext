@@ -792,6 +792,11 @@ async function handleStartRanked(mode) {
       showToast('You already played today\u2019s Ranked Daily');
     } else if (result.status === 401) {
       showToast('Signed out — please sign in again');
+    } else if (result.status === 500 && result.body?.code === 'ranked_pool_empty') {
+      // CS52-followup-1: distinct from the warming-up case — ranked
+      // puzzle pool isn't seeded; retrying won't help. Tell the user
+      // the truth so they don't infinite-retry.
+      showToast('Ranked unavailable — puzzle pool not yet seeded');
     } else if (result.status === 503) {
       showToast('Ranked is warming up — try again in a moment');
     } else {
@@ -1083,9 +1088,11 @@ function init() {
       case 'show-leaderboard':
         showScreen('leaderboard');
         leaderboardMode = 'freeplay';
-        leaderboardSource = 'ranked';
+        // CS52-followup-1: respect the user's last LB source selection
+        // (loaded from localStorage at module init) instead of forcing
+        // back to `ranked` every time the leaderboard screen opens.
         setActiveLeaderboardMode('freeplay');
-        setActiveLeaderboardSource('ranked');
+        setActiveLeaderboardSource(leaderboardSource);
         setActiveLeaderboardTab('alltime');
         fetchPersonalBests();
         fetchLeaderboard('alltime');
@@ -1255,6 +1262,10 @@ function init() {
             ts: new Date().toISOString(),
           }));
           leaderboardSource = source;
+          // CS52-followup-1: persist last selection so it sticks across
+          // sessions (per user feedback on initial CS52-6 default).
+          try { localStorage.setItem(LEADERBOARD_SOURCE_KEY, source); }
+          catch { /* storage full or unavailable — selection is in-memory only this session */ }
           setActiveLeaderboardSource(source);
           // Re-render from the active period.
           const activeTab = document.querySelector('.leaderboard-tab.active');
@@ -1447,10 +1458,22 @@ function loadSettingsUI() {
 }
 
 let leaderboardMode = 'freeplay';
-// CS52-6 § Decision #6: public LBs default to `Ranked` (the competitive
-// view). User flips between Ranked / Offline / All via the segmented
-// control. Multiplayer hides the source tabs (no offline path).
-let leaderboardSource = 'ranked';
+// CS52-followup-1: public LBs default to `All` (was `Ranked` per CS52-6
+// § Decision #6) — user feedback: defaulting to Ranked hides the user's
+// own Practice scores from the LB on first load, which is confusing
+// because Practice play is the most common entry point for new users.
+// `All` ensures their own numbers are visible by default, and the last
+// selection persists across sessions in localStorage so a user who
+// prefers competitive-only view can pick `Ranked` once and keep it.
+const LEADERBOARD_SOURCE_KEY = 'gwn_lb_source';
+const VALID_LB_SOURCES = new Set(['ranked', 'offline', 'all']);
+function loadStoredLbSource() {
+  try {
+    const stored = localStorage.getItem(LEADERBOARD_SOURCE_KEY);
+    return VALID_LB_SOURCES.has(stored) ? stored : 'all';
+  } catch { return 'all'; }
+}
+let leaderboardSource = loadStoredLbSource();
 
 /** Fetch and render personal bests section on the leaderboard screen. */
 async function fetchPersonalBests() {
@@ -1609,12 +1632,16 @@ function showSyncIndicator(message) {
 /**
  * Render a CS52-6 provenance badge for a score row.
  * - 'ranked'  → green/primary (server-validated)
- * - 'offline' → amber (self-reported)
+ * - 'offline' → amber (Practice mode — self-reported)
  * - 'legacy'  → muted (pre-CS52; profile-only)
+ *
+ * UX terminology: internally we keep the DB-level `source='offline'` (no
+ * schema change), but user-facing labels say "Practice" to match the gameplay
+ * mode label that produced the score (Practice Free Play / Practice Daily).
  */
 function provenanceBadgeHTML(source) {
   if (!source) return '';
-  const labels = { ranked: 'Ranked', offline: 'Offline', legacy: 'Legacy' };
+  const labels = { ranked: 'Ranked', offline: 'Practice', legacy: 'Legacy' };
   const label = labels[source];
   if (!label) return '';
   return `<span class="provenance-badge provenance-${source}" data-source="${source}" aria-label="Score source: ${label}">${label}</span>`;
