@@ -475,6 +475,33 @@ A route with `total == 0` means the SPA isn't reaching it (or telemetry is stall
 
 The container-side regression test (`scripts/container-validate.js --mode=boot-quiet`) builds the same matrix from local logs and asserts header-less rows have `dbTouched=false`; the e2e regression spec (`tests/e2e/boot-quiet.spec.mjs`) does the same against the dev server.
 
+### B.15 Auth warmup deadline exhausted (CS53-13.A)
+
+Counts how often the client-side auth retry loop in [`public/js/app.js`](../public/js/app.js) (search for `AUTH_WARMUP_DEADLINE_MS`) ran out of its 120 s warmup budget without ever receiving a 200 from `POST /api/auth/login` or `POST /api/auth/register`. The signal is a one-shot client beacon to [`POST /api/telemetry/auth-deadline-exhausted`](../server/routes/telemetry.js) which logs a structured Pino warn line `event=auth-warmup-deadline-exhausted` server-side. This is the prerequisite signal for [CS53-13](../project/clickstops/active/active_cs53_prod-cold-start-retry-investigation.md) — that clickstop's design decision (a/b/c retry-budget UX) is deferred until ≥1 week of post-deploy data is available here.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "auth-warmup-deadline-exhausted"
+| summarize incidents = count(),
+            avg_attempts = round(avg(toint(pino.attempts)), 1),
+            avg_elapsed_ms = round(avg(toint(pino.elapsedMs)), 0),
+            distinct_ips = dcount(tostring(pino.ip))
+            by bin(TimeGenerated, 1d), action = tostring(pino.action)
+| order by TimeGenerated desc, action asc
+```
+
+**Healthy interpretation:** <1 incident per 100 successful logins (use § B.2 to derive the login-success denominator). Sub-10 incidents/day at our current traffic level is noise — most likely a user closing the tab mid-warmup or a genuinely paused-then-resumed Free-tier DB hitting the 120 s ceiling exactly once.
+
+**Unhealthy interpretation (investigate):**
+- **Spike >5/day within 24h of a deploy** → cold-start regression; check whether `dependencies` mssql connect latency (§ B.6) crossed the 90 s mark, or whether the cold-start gate (`server/middleware/coldStartGate.js`) started returning 503 for longer than `AUTH_WARMUP_DEADLINE_MS`.
+- **Sustained >10/day with no recent deploy** → Free-tier DB pause cadence may have shifted, or upstream gateway (Caddy/Azure FD) is dropping `Retry-After` headers and forcing the client into the 5 s default (see § B.4 for slow-request hunting).
+- **`avg_attempts` < 3** → the loop is bailing very early — the per-attempt timeout (`AUTH_TIMEOUT_MS`) may be misconfigured, since 120 s should normally allow ≥4 attempts.
+- **`action == "register"` skewed high** → register has a stricter retry policy (502/504 + AbortError don't auto-retry for idempotency) so a register-heavy distribution may indicate a different failure class than login.
+
+**Cross-link:** the beacon is best-effort observability — IP can be spoofed and `navigator.sendBeacon` is fire-and-forget, so use this as a trend signal, not for alerting on individual incidents.
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:
