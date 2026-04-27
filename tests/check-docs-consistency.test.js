@@ -371,6 +371,25 @@ describe('check-docs-consistency', () => {
     expect(findings.filter(f => f.rule === 'workboard-title-matches-h1')).toEqual([]);
   });
 
+  test('cs62-leading-legend-table: leading non-data table does not silence no-orphan-active-work or workboard-title-matches-h1', () => {
+    // The fixture's `## Active Work` section has a small Legend table BEFORE
+    // the real Active Work data table. Pre-fix, getActiveWorkTable() would
+    // return the legend table and both rules would silently skip. Post-fix,
+    // it walks all tables in the section and picks the first one whose
+    // headers contain `CS-Task ID`. CS300-1 is an orphan (done_cs300 exists)
+    // and CS301-1's Title cell line 1 ("Wrong Workboard Title") differs
+    // from active_cs301_*.md's H1 ("Real Title").
+    const findings = run({ root: path.join(FIX, 'cs62-leading-legend-table'), now: FIXED_NOW });
+    const orphans = findings.filter(f => f.rule === 'no-orphan-active-work');
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0].message).toContain('CS300');
+    const titles = findings.filter(f => f.rule === 'workboard-title-matches-h1');
+    expect(titles).toHaveLength(1);
+    expect(titles[0].message).toContain('CS301-1');
+    expect(titles[0].message).toContain('Wrong Workboard Title');
+    expect(titles[0].message).toContain('Real Title');
+  });
+
   test('cs62: no-orphan-active-work uses CS-Task ID header lookup and extracts parent CSID', () => {
     // The orphan-active-work fixture's CS-Task ID cell is `CS9-1`; the rule
     // must extract the `CS9` parent CSID and compare to done_cs9_*.md.

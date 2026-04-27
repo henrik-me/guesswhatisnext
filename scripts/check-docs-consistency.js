@@ -598,32 +598,45 @@ function findSection(lines, headingRe) {
   return { start, end };
 }
 
+function splitMarkdownRow(line) {
+  // Split on `|` that is not preceded by a backslash, then unescape `\|`.
+  const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  return trimmed.split(/(?<!\\)\|/).map(s => s.trim().replace(/\\\|/g, '|'));
+}
+
 function parseMarkdownTable(lines, start, end) {
   // Find the first markdown table inside lines[start..end). Returns
   // { headers: [...], rows: [{cells, lineNo (1-based), raw}] } or null.
-  let headerIdx = -1;
-  for (let i = start; i < end - 1; i++) {
+  return parseMarkdownTableMatching(lines, start, end, () => true);
+}
+
+function parseMarkdownTableMatching(lines, start, end, headerPredicate) {
+  // Walk all markdown tables inside lines[start..end). Returns the first
+  // table whose parsed headers satisfy `headerPredicate(headers)`, or null.
+  // CS62 leading-table case: a notes/legend table may precede the real
+  // Active Work data table; using the first-table-only `parseMarkdownTable`
+  // would silently skip the data table. Callers that need the data table
+  // specifically should use this with a header predicate.
+  let i = start;
+  while (i < end - 1) {
     const cur = lines[i];
     const next = lines[i + 1];
     if (/^\s*\|.*\|\s*$/.test(cur) && /^\s*\|[\s:|-]+\|\s*$/.test(next)) {
-      headerIdx = i;
-      break;
+      const headers = splitMarkdownRow(cur);
+      const rows = [];
+      let j = i + 2;
+      for (; j < end; j++) {
+        const line = lines[j];
+        if (!/^\s*\|/.test(line)) break;
+        rows.push({ cells: splitMarkdownRow(line), lineNo: j + 1, raw: line });
+      }
+      if (headerPredicate(headers)) return { headers, rows };
+      i = j; // continue scanning past this table
+      continue;
     }
+    i++;
   }
-  if (headerIdx === -1) return null;
-  const splitRow = (line) => {
-    // Split on `|` that is not preceded by a backslash, then unescape `\|`.
-    const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
-    return trimmed.split(/(?<!\\)\|/).map(s => s.trim().replace(/\\\|/g, '|'));
-  };
-  const headers = splitRow(lines[headerIdx]);
-  const rows = [];
-  for (let i = headerIdx + 2; i < end; i++) {
-    const line = lines[i];
-    if (!/^\s*\|/.test(line)) break;
-    rows.push({ cells: splitRow(line), lineNo: i + 1, raw: line });
-  }
-  return { headers, rows };
+  return null;
 }
 
 function colIndex(headers, predicate) {
@@ -634,8 +647,23 @@ function colIndex(headers, predicate) {
 }
 
 function getActiveWorkTable(lines) {
+  // CS62: the `## Active Work` section may contain a leading legend/notes
+  // table before the real data table. Walk all tables in the section and
+  // return the first one whose headers contain `CS-Task ID` (or the
+  // pre-CS62 `Task ID` shape, accepted via CS_TASK_ID_HEADER_RE), with a
+  // sensible fallback to header sets that include both `State` and `Owner`
+  // (or `Agent ID`) for forward-compat with future schema tweaks. Falls
+  // back to the first-table-found as a last resort so existing fixtures
+  // keep their behavior when no candidate matches.
   const sec = findSection(lines, /^##\s+Active Work/);
   if (!sec) return null;
+  const byCsTaskId = parseMarkdownTableMatching(lines, sec.start, sec.end,
+    (hs) => hs.some(h => CS_TASK_ID_HEADER_RE.test(h)));
+  if (byCsTaskId) return byCsTaskId;
+  const byStateOwner = parseMarkdownTableMatching(lines, sec.start, sec.end,
+    (hs) => hs.some(h => /^state$/i.test(h)) &&
+            hs.some(h => /^(owner|agent\s*id)$/i.test(h)));
+  if (byStateOwner) return byStateOwner;
   return parseMarkdownTable(lines, sec.start, sec.end);
 }
 
