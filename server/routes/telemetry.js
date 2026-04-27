@@ -22,7 +22,7 @@ const errorReportLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // req.ip respects trust proxy setting, giving the real client IP behind a reverse proxy
-  message: { error: 'Too many error reports, try again later' },
+  message: { error: 'Too many telemetry requests, try again later' },
 });
 
 router.post('/errors', errorReportLimiter, optionalAuth, parseTelemetryJson, (req, res) => {

@@ -75,7 +75,7 @@ describe('POST /api/telemetry/errors', () => {
     expect(responses.slice(0, 10).map((res) => res.status)).toEqual(new Array(10).fill(400));
     expect(responses.slice(0, 10).every((res) => res.body.error === 'Malformed JSON body')).toBe(true);
     expect(responses[10].status).toBe(429);
-    expect(responses[10].body.error).toBe('Too many error reports, try again later');
+    expect(responses[10].body.error).toBe('Too many telemetry requests, try again later');
   });
 
   test('accepts error with stack trace', async () => {
@@ -151,6 +151,6 @@ describe('POST /api/telemetry/errors', () => {
 
     expect(responses.slice(0, 10).map((res) => res.status)).toEqual(new Array(10).fill(204));
     expect(responses[10].status).toBe(429);
-    expect(responses[10].body.error).toBe('Too many error reports, try again later');
+    expect(responses[10].body.error).toBe('Too many telemetry requests, try again later');
   });
 });

@@ -2164,14 +2164,22 @@ async function authAction(action) {
       // requires a Blob with the right Content-Type to land on the
       // application/json body parser; without Blob it would be sent as
       // text/plain and the server would reject it with 400, so we fall
-      // through to fetch in that case.
+      // through to fetch in that case. ALSO falls back to fetch when
+      // sendBeacon returns false (queue full, payload too large, browser
+      // refusal — Copilot R1 finding).
       const canBeacon = typeof navigator !== 'undefined'
         && typeof navigator.sendBeacon === 'function'
         && typeof Blob === 'function';
+      let beaconQueued = false;
       if (canBeacon) {
         const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(url, blob);
-      } else if (typeof fetch === 'function') {
+        try {
+          beaconQueued = navigator.sendBeacon(url, blob) === true;
+        } catch {
+          beaconQueued = false;
+        }
+      }
+      if (!beaconQueued && typeof fetch === 'function') {
         fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
