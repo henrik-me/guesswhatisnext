@@ -88,7 +88,7 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 
 **Captured:** 2026-04-26T23:50Z by yoga-gwn-c3 (backfill).
 **Window:** UTC day 2026-04-25 (partial — AI activation occurred mid-day, baseline marker 2026-04-25T22:39Z per CS54-6).
-**KQL bug (significant):** the original CS60 plan KQL (`union * | … _BilledSize` against the AI scope) returns 0 rows because both AI components are workspace-mode. Corrected query in CS60 plan now points at workspace tables (`AppRequests` / `AppDependencies` / etc.) via `az monitor log-analytics query` against workspace `workspace-gwnrg6bXt` (customerId `ca1b90db-504b-4771-bfeb-5e4a6bb62422`).
+**KQL bug (refined finding):** the original CS60 plan KQL (`union * | … _BilledSize` against the AI scope) returned 0 rows when run against `gwn-ai-staging`. Initial hypothesis was "workspace-mode breaks classic AI-scope queries", but follow-up testing showed the same classic `requests | take 5` query **works fine against `gwn-ai-production`** even though both AI components are workspace-mode (`ingestionMode: LogAnalytics`) and both point at the same workspace `workspace-gwnrg6bXt` (customerId `ca1b90db-504b-4771-bfeb-5e4a6bb62422`). So the real situation is: **staging-only AI-scope query asymmetry, root cause unknown** (tracked under CS60-4 Gap-1 investigation). The operational workaround is to query the workspace directly via `az monitor log-analytics query` against the workspace customerId — that pattern works reliably for both envs and is what CS60's corrected KQL uses.
 
 #### App Insights tables — Day 0
 

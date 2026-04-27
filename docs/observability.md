@@ -29,14 +29,22 @@ Both AI resources are **workspace-bound** to the same Log Analytics workspace (`
 
 For scripted use or when you don't want to leave the terminal. The CLI accepts either an App Insights `appId` (for AI tables: `requests`, `dependencies`, etc. — and for cross-table queries that bridge to `ContainerAppConsoleLogs_CL` via the `workspace(...)` function, see § B.5) or a Log Analytics `customer-id` (a GUID, for queries whose primary table is a workspace table such as `ContainerAppConsoleLogs_CL`).
 
+> **⚠️ Known asymmetry (discovered CS60-1a, 2026-04-26):** classic AI-scope tables (`requests` / `dependencies` / `exceptions` / etc.) work as expected for `gwn-ai-production` but consistently return **0 rows** for `gwn-ai-staging`, even when the underlying workspace tables (`AppRequests`/`AppDependencies`/`AppExceptions`) clearly contain rows for the same window. Both AI components are workspace-mode and bound to the same workspace, so the cause is not "workspace-mode breaks classic queries" — it's specific to the staging component. Root cause is unknown and tracked under [CS60-4](../project/clickstops/active/active_cs60_post-cs54-observability-followup.md). **Operational workaround until resolved:** when running the same query against both envs (e.g. CS60 cost-watch), use `az monitor log-analytics query --workspace <customerId>` against the workspace tables (`AppRequests`/`AppDependencies`/etc.) — that path works reliably for both envs.
+
 ```powershell
 # Sanity check: 'requests' table in the staging AI resource
 az monitor app-insights query `
   --app gwn-ai-staging --resource-group gwn-rg `
   --analytics-query 'requests | where timestamp > ago(15m) | take 5' `
   -o table
+# ⚠️ Currently returns 0 rows for gwn-ai-staging — see asymmetry note above.
+# Workspace-direct equivalent (works for both envs):
+az monitor log-analytics query `
+  --workspace <workspace-customer-id> `
+  --analytics-query 'AppRequests | where _ResourceId contains "gwn-ai-staging" | where TimeGenerated > ago(15m) | take 5' `
+  -o table
 
-# Same query against prod
+# Same query against prod (works as expected via either path)
 az monitor app-insights query `
   --app gwn-ai-production --resource-group gwn-rg `
   --analytics-query 'requests | where timestamp > ago(15m) | take 5' `
