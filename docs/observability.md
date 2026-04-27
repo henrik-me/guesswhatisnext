@@ -533,6 +533,36 @@ ContainerAppConsoleLogs_CL
 - **Any `armed=true` row in staging/prod** → a real deployment activated the simulator. Roll back immediately and audit the deployment env.
 - **Any `armed=false` row in staging/prod** → the SIMULATE_* var leaked but the arming gate spared us; still investigate (something in the deploy pipeline copied the wrong env block).
 
+### Ranked puzzle pool seed (CS52-2 / CS52-followup)
+
+Both the operator-invoked CLI (`scripts/seed-ranked-puzzles.js`) and the in-container admin endpoint (`POST /api/admin/seed-ranked-puzzles`) emit the same structured log line `Ranked puzzles seeded` with `inserted/skipped/total/version` fields, so a single KQL covers both surfaces. The HTTP path additionally emits `audit.seed-ranked-puzzles` with `actor='admin-route'` for invocation tracing.
+
+```kusto
+// Every ranked-puzzle seed event in the last 14 days (CLI + admin route).
+traces
+| where timestamp > ago(14d)
+| where message == "Ranked puzzles seeded"
+| project timestamp,
+          inserted   = toint(customDimensions.inserted),
+          skipped    = toint(customDimensions.skipped),
+          total      = toint(customDimensions.total),
+          version    = toint(customDimensions.version)
+| order by timestamp desc
+
+// Admin-route invocations only (audit trail; HTTP path).
+traces
+| where timestamp > ago(14d)
+| where message == "audit.seed-ranked-puzzles"
+| project timestamp,
+          actor    = tostring(customDimensions.actor),
+          inserted = toint(customDimensions.inserted),
+          skipped  = toint(customDimensions.skipped),
+          total    = toint(customDimensions.total)
+| order by timestamp desc
+```
+
+**Healthy interpretation:** in steady state, repeat invocations show `inserted=0, skipped=N, total=N` (idempotent — the second-call assertion in `tests/cs52-followup-seed-admin.test.js`). A non-zero `inserted` is expected only on a fresh DB or after a new `ranked-puzzles-vN.json` ships.
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:

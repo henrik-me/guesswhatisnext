@@ -35,6 +35,7 @@ const sessionRoutes = require('./routes/sessions');
 const adminGameConfigsRoutes = require('./routes/admin');
 const adminMigrationsRoutes = require('./routes/admin-migrations');
 const adminSeedSmokeUserRoutes = require('./routes/admin-seed-smoke-user');
+const adminSeedRankedPuzzlesRoutes = require('./routes/admin-seed-ranked-puzzles');
 const { initWebSocket, rooms } = require('./ws/matchHandler');
 
 const { httpsRedirect, securityHeaders } = require('./middleware/security');
@@ -421,6 +422,12 @@ function createServer() {
   // Used by scripts/seed-smoke-user-via-api.js from staging-deploy.yml to
   // seed the deploy-time smoke probe user inside staging's ephemeral SQLite.
   app.use('/api/admin/seed-smoke-user', adminSeedSmokeUserRoutes);
+
+  // CS52-followup — POST /api/admin/seed-ranked-puzzles (idempotent;
+  // system-key auth). Lets staging/prod be seeded with the ranked puzzle
+  // pool without `docker cp`-ing scripts/seed-ranked-puzzles.js (the
+  // script is intentionally NOT copied into the production image).
+  app.use('/api/admin/seed-ranked-puzzles', adminSeedRankedPuzzlesRoutes);
 
   // Health check (system access only)
   app.get('/api/health', requireSystem, async (req, res, next) => {
