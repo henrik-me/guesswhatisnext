@@ -16,7 +16,7 @@ function parseTelemetryJson(req, res, next) {
   });
 }
 
-const errorReportLimiter = rateLimit({
+const telemetryLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -25,7 +25,7 @@ const errorReportLimiter = rateLimit({
   message: { error: 'Too many telemetry requests, try again later' },
 });
 
-router.post('/errors', errorReportLimiter, optionalAuth, parseTelemetryJson, (req, res) => {
+router.post('/errors', telemetryLimiter, optionalAuth, parseTelemetryJson, (req, res) => {
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
     ? req.body
     : {};
@@ -71,12 +71,12 @@ router.post('/errors', errorReportLimiter, optionalAuth, parseTelemetryJson, (re
 // CS53-13.A: one-shot beacon fired by the auth retry loop in public/js/app.js
 // when AUTH_WARMUP_DEADLINE_MS (120s) is exhausted without a 200. The user is
 // by definition NOT logged in here (the loop guards login/register POSTs), so
-// no auth middleware is applied. Shares `errorReportLimiter` with /errors so a
+// no auth middleware is applied. Shares `telemetryLimiter` with /errors so a
 // pathological client can't bypass per-IP throttling by mixing routes. The
 // signal is best-effort observability (input is client-supplied + IP can be
 // spoofed) — never use it for security decisions. KQL: docs/observability.md
 // § B.15 (auth-warmup-deadline-exhausted incidents per day per action).
-router.post('/auth-deadline-exhausted', errorReportLimiter, parseTelemetryJson, (req, res) => {
+router.post('/auth-deadline-exhausted', telemetryLimiter, parseTelemetryJson, (req, res) => {
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
     ? req.body
     : {};
