@@ -19,7 +19,7 @@ router.get('/', optionalAuth, (req, res) => {
   const featureCount = Object.keys(features).length;
   logger.debug({ userId, featureCount }, 'feature flags requested');
   const ctx = bootQuietContext(req);
-  logBootQuiet('/api/features', ctx, false);
+  logBootQuiet('/api/features', ctx, false, undefined, res);
   res.json({ features });
 });
 

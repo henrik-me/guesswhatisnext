@@ -150,7 +150,7 @@ router.get('/history', requireAuth, async (req, res, next) => {
   try {
     const ctx = bootQuietContext(req);
     if (!ctx.allowDb) {
-      logBootQuiet('/api/matches/history', ctx, false);
+      logBootQuiet('/api/matches/history', ctx, false, undefined, res);
       return res.json({ history: [] });
     }
     const db = await getDbAdapter();
@@ -187,8 +187,9 @@ router.get('/history', requireAuth, async (req, res, next) => {
       };
     });
 
+    // logBootQuiet sets X-Boot-Quiet-* response headers — call BEFORE res.json().
+    logBootQuiet('/api/matches/history', ctx, true, undefined, res);
     res.json({ history });
-    logBootQuiet('/api/matches/history', ctx, true);
   } catch (err) {
     next(err);
   }

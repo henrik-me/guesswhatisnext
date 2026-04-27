@@ -321,7 +321,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
       // an empty payload immediately — the SPA refetches on first user
       // gesture (typically opening the profile screen) with the activity
       // header set.
-      logBootQuiet('/api/scores/me', ctx, false);
+      logBootQuiet('/api/scores/me', ctx, false, undefined, res);
       return res.json({ scores: [], stats: [] });
     }
     const db = await getDbAdapter();
@@ -378,8 +378,9 @@ router.get('/me', requireAuth, async (req, res, next) => {
       });
     }
 
+    // logBootQuiet sets X-Boot-Quiet-* response headers — call BEFORE res.json().
+    logBootQuiet('/api/scores/me', ctx, true, undefined, res);
     res.json({ scores, stats });
-    logBootQuiet('/api/scores/me', ctx, true);
   } catch (err) {
     next(err);
   }

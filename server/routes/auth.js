@@ -137,7 +137,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const ctx = bootQuietContext(req);
     if (!ctx.allowDb) {
-      logBootQuiet('/api/auth/me', ctx, false);
+      logBootQuiet('/api/auth/me', ctx, false, undefined, res);
       return res.json({
         user: {
           ...req.user,
@@ -147,7 +147,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
     }
     const db = await getDbAdapter();
     const row = await db.get('SELECT created_at FROM users WHERE id = ?', [req.user.id]);
-    logBootQuiet('/api/auth/me', ctx, true);
+    logBootQuiet('/api/auth/me', ctx, true, undefined, res);
     res.json({
       user: {
         ...req.user,
