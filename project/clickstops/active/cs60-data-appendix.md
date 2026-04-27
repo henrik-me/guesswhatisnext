@@ -86,7 +86,7 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 
 ### Day 0 — 2026-04-25 (CS60-1a)
 
-**Captured:** 2026-04-26T23:50Z by yoga-gwn-c3 (backfill).
+**Captured:** 2026-04-26T23:50Z by yoga-gwn-c3 (backfill); cost + Container Apps metrics added 2026-04-27T03:15Z.
 **Window:** UTC day 2026-04-25 (partial — AI activation occurred mid-day, baseline marker 2026-04-25T22:39Z per CS54-6).
 **KQL bug (refined finding):** the original CS60 plan KQL (`union * | … _BilledSize` against the AI scope) returned 0 rows when run against `gwn-ai-staging`. Initial hypothesis was "workspace-mode breaks classic AI-scope queries", but follow-up testing showed the same classic `requests | take 5` query **works fine against `gwn-ai-production`** even though both AI components are workspace-mode (`ingestionMode: LogAnalytics`) and both point at the same workspace `workspace-gwnrg6bXt` (customerId `ca1b90db-504b-4771-bfeb-5e4a6bb62422`). So the real situation is: **staging-only AI-scope query asymmetry, root cause unknown** (tracked under CS60-4 Gap-1 investigation). The operational workaround is to query the workspace directly via `az monitor log-analytics query` against the workspace customerId — that pattern works reliably for both envs and is what CS60's corrected KQL uses.
 
@@ -106,15 +106,47 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 | staging | **0.77** |
 | prod | **0.09** |
 
+#### Cost — Day 0 (DKK)
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| gwn-staging        | Standard Memory Idle Usage    | 1.29 |
+| gwn-staging        | Standard vCPU Idle Usage      | 0.64 |
+| gwn-staging        | Standard vCPU Active Usage    | 0.16 |
+| gwn-staging        | Standard Memory Active Usage  | 0.04 |
+| gwn-production     | Standard Memory Idle Usage    | 1.38 |
+| gwn-production     | Standard vCPU Idle Usage      | 0.69 |
+| gwn-production     | Standard vCPU Active Usage    | 0.02 |
+| gwn-production     | Standard Memory Active Usage  | 0.00 |
+| workspace-gwnrg6bxt | Analytics Logs Data Ingestion | 0.02 |
+
+| Resource | Day 0 cost (DKK) | Notes |
+|---|---:|---|
+| gwn-staging | **2.13** | Idle dominates (~91%). CS58 scale-to-zero applied 2026-04-25T18:30Z, so day was billed for ~18.5h normal + ~5.5h scaled-to-zero. |
+| gwn-production | **2.09** | Idle ~99% — typical for a Container App with low real traffic. |
+| workspace-gwnrg6bxt | **0.02** | Whole workspace logs — well below 5GB/month free tier. |
+| gwn-sqldb (production) | 0.00 | Free tier. |
+| gwn-ai-staging / gwn-ai-production | 0.00 | Workspace-mode AI components have no separate cost line; ingest cost rolls into the workspace meter. |
+| **Day 0 total** | **2.24 DKK** | ≈$0.32 USD at ~7 DKK/USD. |
+
+#### Container Apps compute / memory / requests — Day 0
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | 0.0001 cores (~100k nanocores) | 69.1 MiB | 1 | 233 | 0 |
+| gwn-production | 0.0001 cores | 65.8 MiB | 1 | 199 | 0 |
+
 **Notes**
-- Day-0 staging dominates because CS54-6 verification + CS58 scale-to-zero work both happened on staging that day. Prod was barely touched until late 22:28Z.
+- Both apps essentially idle — vCPU usage at 1/10000th of a core average, memory pinned around 65-69 MiB (well below the configured limit).
+- Day-0 staging AI ingest dominates because CS54-6 verification + CS58 scale-to-zero work both happened on staging that day. Prod was barely touched until late 22:28Z.
 - No `AppExceptions`, `AppTraces`, `AppPageViews`, `AppBrowserTimings`, `AppAvailabilityResults`, or `AppSystemEvents` rows on Day 0.
+- `gwn-staging` Requests (233) ≫ AI `AppRequests` rows (73) for the same day — request-instrumentation sampling or the staging classic-query asymmetry both plausible explanations; investigate under CS60-4.
 
 ---
 
 ### Day 1 — 2026-04-26 (CS60-1b)
 
-**Captured:** 2026-04-26T23:50Z by yoga-gwn-c3 (canonical "+24h" window per original CS60-1 trigger).
+**Captured:** 2026-04-26T23:50Z by yoga-gwn-c3 (canonical "+24h" window per original CS60-1 trigger); cost + Container Apps metrics added 2026-04-27T03:15Z.
 **Window:** UTC day 2026-04-26 (partial — captured at ~T23:50Z, ~10 min before day end).
 
 #### App Insights tables — Day 1
@@ -133,6 +165,36 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 | prod | **0.78** |
 | staging | **0.11** |
 
+#### Cost — Day 1 (DKK)
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| gwn-production     | Standard Memory Idle Usage    | 0.91 |
+| gwn-production     | Standard vCPU Idle Usage      | 0.45 |
+| gwn-production     | Standard vCPU Active Usage    | 0.00 |
+| gwn-production     | Standard Memory Active Usage  | 0.00 |
+| workspace-gwnrg6bxt | Analytics Logs Data Ingestion | 0.01 |
+
+| Resource | Day 1 cost (DKK) | Notes |
+|---|---:|---|
+| gwn-production | **1.36** | ~33% drop vs Day 0 — fewer Active Usage minutes despite more requests; Active Usage doesn't bill linearly with request count, only with sustained CPU above the idle threshold. |
+| **gwn-staging** | **0.00** | ✅ CS58 scale-to-zero is fully working — first full day at zero billing. Confirms ~50.8 DKK/month projection from CS58 close-out (CS59 will measure the +7d window). |
+| workspace-gwnrg6bxt | 0.01 | |
+| gwn-sqldb / AI components | 0.00 | |
+| **Day 1 total** | **1.37 DKK** | ≈$0.20 USD. |
+
+#### Container Apps compute / memory / requests — Day 1
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | 0.0005 cores | 129.1 MiB | 1 | 4 | 0 |
+| gwn-production | 0.0003 cores | 134.2 MiB | 1 | 81 | 0 |
+
+**Notes**
+- Replicas max = 1 for staging means staging WAS up at some point on Day 1 (just briefly — 4 requests). The CS61-1 deploy attempts (which triggered the SQLITE storm) and the CS52-10 staging probes are likely the source. CS58 still wins overall — `Standard vCPU Idle Usage` cost = 0 on Day 1.
+- WorkingSet doubled from Day 0 (~65-69 MiB → ~129-134 MiB) likely reflecting Node heap warming up after CS41 deploy + recent CS53/CS52 work landing.
+- Prod requests dropped 199 → 81 vs Day 0 — Day 0 included CS54-6 verification probes; Day 1 is closer to organic traffic.
+
 **Cumulative since baseline (Day 0 + Day 1)**
 
 Window basis: baseline marker `2026-04-25T22:39Z` → capture `2026-04-26T23:50Z` = **25.18 hours elapsed**. Run-rate uses `MB / 25.18 × 24`; monthly uses `run-rate × 30`. Both are best-effort point estimates from a partial-window sample — refine at CS60-1c (full Day 2) and revisit at CS60-2h (+7d).
@@ -146,7 +208,7 @@ Window basis: baseline marker `2026-04-25T22:39Z` → capture `2026-04-26T23:50Z
 
 #### ⚠️ Operational finding — staging exception storm
 
-40 `SQLITE_ERROR: no such table: users` exceptions in `AppExceptions` against `gwn-ai-staging`, all between **2026-04-27T00:51:00Z** and **2026-04-27T00:51:47Z** (47-second burst). Exact root cause not investigated yet, but this is precisely the failure-mode that planned **CS61** (activate CS41 smoke + DB migration validation in staging) is designed to catch — staging spun up a fresh container with an empty SQLite at `/tmp/game.db` and migrations apparently did not run before the first request hit. Logged here as evidence; full investigation belongs in the active CS61 work or a follow-up CS, not in CS60 (CS60 is observability follow-up, not staging-deploy fix).
+40 `SQLITE_ERROR: no such table: users` exceptions in `AppExceptions` against `gwn-ai-staging`, all between **2026-04-27T00:51:00Z** and **2026-04-27T00:51:47Z** (47-second burst). Exact root cause not investigated yet, but this is precisely the failure-mode that **CS61** (activate CS41 smoke + DB migration validation in staging) is designed to catch — staging spun up a fresh container with an empty SQLite at `/tmp/game.db` and migrations apparently did not run before the first request hit. Logged here as evidence; full investigation belongs in active CS61 work or a follow-up CS, not in CS60 (CS60 is observability follow-up, not staging-deploy fix).
 
 #### Whole-workspace cost context (cumulative since baseline)
 
@@ -165,6 +227,50 @@ The 5 GB free tier is **per workspace**, not per AI component. AI tables are dwa
 So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) projects to ≈1.49 GB/month at current rate (`52 / 25.18 × 24 × 30`) — still well inside the 5 GB free tier (~30% of cap), but ~60× the AI-tables-only projection. CS60-3 free-tier-headroom decision must use this whole-workspace number, not just the AI-component slice.
 
 **Caveat on these projections.** Both AI- and workspace-level run-rates are extrapolated from a 25h sample that includes one-off CS54-6 verification traffic on Day 0 staging and the CS61-1 deploy-failure exception storm on Day 1 staging. Treat these numbers as upper-bound estimates until CS60-2h (+7d) provides a steadier baseline.
+
+---
+
+### +7d cost-watch summary (CS60-2h preview — partial)
+
+> **Status:** PARTIAL — only Day 0 + Day 1 data in this rollup. CS60-1c (Day 2 = 2026-04-27), CS60-2c..2h (Days 3-7 = 2026-04-28..2026-05-02) will append daily rows below as their windows close. The total/projection lines auto-recompute from the rows present.
+
+#### Days observed so far (2 of 7)
+
+| Day | gwn-staging $ (DKK) | gwn-production $ (DKK) | workspace $ (DKK) | Day total $ (DKK) | Notes |
+|---|---:|---:|---:|---:|---|
+| Day 0 — 2026-04-25 | 2.13 | 2.09 | 0.02 | **2.24** | CS58 partial (scale-to-zero applied 18:30Z) + CS54-6 verification traffic. |
+| Day 1 — 2026-04-26 | 0.00 | 1.36 | 0.01 | **1.37** | First full day at CS58 scale-to-zero. |
+| Day 2 — 2026-04-27 | _pending CS60-1c_ | _pending_ | _pending_ | _pending_ | _Append at next daily tick._ |
+| Day 3 — 2026-04-28 | _pending CS60-2c_ | _pending_ | _pending_ | _pending_ | |
+| Day 4 — 2026-04-29 | _pending CS60-2d_ | _pending_ | _pending_ | _pending_ | |
+| Day 5 — 2026-04-30 | _pending CS60-2e_ | _pending_ | _pending_ | _pending_ | |
+| Day 6 — 2026-05-01 | _pending CS60-2f_ | _pending_ | _pending_ | _pending_ | |
+| Day 7 — 2026-05-02 | _pending CS60-2h_ | _pending_ | _pending_ | _pending_ | **Canonical +7d window — interpretive close-out for CS60-2.** |
+
+#### 2-day preview — running totals & extrapolations
+
+| Metric | gwn-staging | gwn-production | workspace | Total |
+|---|---:|---:|---:|---:|
+| Cost so far (2 days) | 2.13 DKK | 3.45 DKK | 0.03 DKK | **5.61 DKK** |
+| Daily avg (2 days) | 1.07 DKK/day | 1.73 DKK/day | 0.015 DKK/day | **2.81 DKK/day** |
+| Naive 7-day projection | 7.45 DKK | 12.10 DKK | 0.10 DKK | **19.65 DKK** (~$2.81 USD) |
+| Naive 30-day projection | 32.0 DKK | 51.8 DKK | 0.45 DKK | **84.2 DKK/month** (~$12 USD) |
+
+> **Caveat (must read before quoting these numbers):** Day 0 included pre-CS58 staging idle billing (~1.93 DKK was idle vCPU+memory on staging before CS58 scaled it to zero at 18:30Z). Day 1 staging billed $0 because CS58 was in effect for the full day. The realistic steady-state staging cost is closer to the Day-1 number (0.00 DKK) than the 2-day average (1.07 DKK), modulo brief spin-ups for CI deploys + smoke probes. The realistic full-7-day total is therefore likely much lower than 19.65 DKK — probably closer to **~10-12 DKK** (prod ~1.4 DKK/day × 7 + small staging spikes + workspace ~0.1).
+>
+> The +7d data added through CS60-2c..2h will replace this preview with the actual measurement.
+
+#### Container Apps compute / memory — running min/max
+
+| Metric | gwn-staging (Day 0..1 range) | gwn-production (Day 0..1 range) |
+|---|---|---|
+| UsageNanoCores avg | 0.0001..0.0005 cores | 0.0001..0.0003 cores |
+| WorkingSetBytes avg | 69..129 MiB | 66..134 MiB |
+| Replicas max | 1 | 1 |
+| Requests/day | 4..233 | 81..199 |
+| RestartCount | 0 | 0 |
+
+> Will be tracked across all 7 days at CS60-2h close.
 
 ---
 

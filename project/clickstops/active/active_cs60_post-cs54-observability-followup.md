@@ -63,6 +63,63 @@ az monitor log-analytics query --workspace $cust --analytics-query 'union withso
 az monitor log-analytics query --workspace $cust --analytics-query 'union withsource=Tbl * | where TimeGenerated > ago(30d) | summarize bytes = sum(_BilledSize) by Tbl, day = bin(TimeGenerated, 1d) | order by day asc, bytes desc' -o json
 ```
 
+## $ cost + Container Apps compute / memory (CS60-1, CS60-2, CS60-3)
+
+> **Per-day report contract (added 2026-04-26).** Each daily measurement (CS60-1a..CS60-3{Day30}) records — for both `gwn-staging` and `gwn-production` — not just the AI ingest bytes but ALSO:
+> 1. **Resource cost in DKK**, broken down by meter (Standard vCPU Active / Idle Usage, Standard Memory Active / Idle Usage, Analytics Logs Data Ingestion, etc.) per resource (`gwn-staging`, `gwn-production`, `workspace-gwnrg6bXt`, `gwn-sqldb/*`, `gwn-ai-*`).
+> 2. **Container Apps compute** — `UsageNanoCores` daily average + `Replicas` daily max.
+> 3. **Container Apps memory** — `WorkingSetBytes` daily average (also max if it deviates materially).
+> 4. **Container Apps requests** — `Requests` daily total (cross-check against AI `AppRequests` row count).
+> 5. **Container Apps restarts** — `RestartCount` daily max (alerts to silent crash-loops).
+>
+> Per-day storage cost (Azure SQL `gwn-sqldb`) is captured in the cost-by-meter step automatically; no separate query needed for the per-day cadence. If `gwn-sqldb` shows non-zero cost on a day where the app did NO writes, that's a finding worth investigating in CS60-4.
+
+### Cost query (Cost Management API)
+
+The `az consumption` CLI is in preview and returns inconsistent results for empty days. Use the Cost Management `query` REST endpoint instead:
+
+```powershell
+$body = @{
+  type = 'Usage'
+  timeframe = 'Custom'
+  timePeriod = @{ from = '<YYYY-MM-DD>T00:00:00Z'; to = '<YYYY-MM-DD>T23:59:59Z' }
+  dataset = @{
+    granularity = 'Daily'
+    aggregation = @{ totalCost = @{ name = 'Cost'; function = 'Sum' } }
+    grouping = @( @{ type = 'Dimension'; name = 'ResourceId' }, @{ type = 'Dimension'; name = 'Meter' } )
+  }
+} | ConvertTo-Json -Depth 10 -Compress
+$body | Out-File -Encoding ascii .\cost_q.json
+az rest --method post `
+  --uri 'https://management.azure.com/subscriptions/<sub>/resourceGroups/gwn-rg/providers/Microsoft.CostManagement/query?api-version=2023-11-01' `
+  --body '@cost_q.json' -o json
+Remove-Item .\cost_q.json
+```
+
+The response is `properties.rows` shaped `[Cost, UsageDate(YYYYMMDD), ResourceId, Meter, Currency]`. Filter rows where `Cost > 0` and group by ResourceId+Meter for the appendix table.
+
+### Container Apps metrics query (per env per day)
+
+```powershell
+$staging = '/subscriptions/<sub>/resourceGroups/gwn-rg/providers/Microsoft.App/containerapps/gwn-staging'
+$prod    = '/subscriptions/<sub>/resourceGroups/gwn-rg/providers/Microsoft.App/containerapps/gwn-production'
+
+foreach ($r in @($staging, $prod)) {
+  foreach ($spec in @(
+    @{m='UsageNanoCores'; agg='Average'},   # divide by 1e9 for cores
+    @{m='WorkingSetBytes'; agg='Average'},  # divide by 1MB for MiB
+    @{m='Replicas'; agg='Maximum'},
+    @{m='Requests'; agg='Total'},
+    @{m='RestartCount'; agg='Maximum'}
+  )) {
+    az monitor metrics list --resource $r --metrics $spec.m --aggregation $spec.agg `
+      --interval P1D --start-time '<YYYY-MM-DD>T00:00:00Z' --end-time '<YYYY-MM-DD>T23:59:59Z' -o json
+  }
+}
+```
+
+Available metric definitions discoverable via `az monitor metrics list-definitions --resource <containerapp-id>`.
+
 ## KQL — Gap 1 investigation (CS60-4)
 
 > **Note:** because both AI components are workspace-mode (see § KQL — cost measurement), Gap 1 must be queried via the workspace `AppDependencies` table — the classic `dependencies` table on the AI scope returns 0 rows in workspace mode and would produce a false-empty result that drives an incorrect CS60-4 disposition.
