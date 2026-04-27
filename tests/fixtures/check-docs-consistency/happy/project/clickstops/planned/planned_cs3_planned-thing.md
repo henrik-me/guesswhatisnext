@@ -1,2 +1,2 @@
-# CS3
+# CS3 — Planned Thing
 planned.

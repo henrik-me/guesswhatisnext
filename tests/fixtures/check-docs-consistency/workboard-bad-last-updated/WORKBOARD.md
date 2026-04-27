@@ -10,6 +10,6 @@
 
 ## Active Work
 
-| Task ID | Clickstop | State | Owner | Last Updated |
-|---------|-----------|-------|-------|--------------|
+| CS-Task ID | Clickstop | State | Owner | Last Updated |
+|------------|-----------|-------|-------|--------------|
 | CS44-5a | CS44 | implementing | omni-gwn | yesterday |

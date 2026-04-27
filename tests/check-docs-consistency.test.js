@@ -9,7 +9,7 @@
 
 const path = require('path');
 const checker = require('../scripts/check-docs-consistency.js');
-const { run, slugify, parseIgnores } = checker;
+const { run, slugify, kebabSlug, parseIgnores, parseClickstopFilename, parseClickstopH1 } = checker;
 
 const FIX = path.join(__dirname, 'fixtures', 'check-docs-consistency');
 const FIXED_NOW = new Date('2099-01-05T00:00:00Z'); // close to fixture stamps
@@ -244,6 +244,129 @@ describe('check-docs-consistency', () => {
     }
   });
 
+  // ---- CS62: clickstop-h1-matches-filename + workboard-title-matches-h1 ----
+
+  test('cs62-h1-happy: H1 + filename slug align → no findings', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-h1-happy'), now: FIXED_NOW });
+    expect(findings).toEqual([]);
+  });
+
+  test('cs62-h1-slug-drift: H1 title kebabs to a slug other than the filename slug → warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-h1-slug-drift'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'clickstop-h1-matches-filename');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+    expect(hits[0].message).toContain('some-slug');
+    expect(hits[0].message).toContain('different-title-entirely');
+  });
+
+  test('cs62-h1-csid-drift: H1 CSID does not match filename CSID → warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-h1-csid-drift'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'clickstop-h1-matches-filename');
+    // Both CSID-mismatch and slug-mismatch (CS999 vs cs102) findings expected.
+    expect(hits.length).toBeGreaterThanOrEqual(1);
+    expect(hits.every(f => f.severity === 'warning')).toBe(true);
+    expect(hits.some(f => /CSID/i.test(f.message))).toBe(true);
+  });
+
+  test('cs62-h1-malformed-dash: ASCII `--` in place of em-dash → malformed-H1 warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-h1-malformed-dash'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'clickstop-h1-matches-filename');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+    expect(hits[0].message).toContain('malformed');
+  });
+
+  test('cs62-h1-missing: no H1 at all → malformed-H1 warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-h1-missing'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'clickstop-h1-matches-filename');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+  });
+
+  test('cs62-h1-rule honors `<!-- check:ignore clickstop-h1-matches-filename -->`', () => {
+    const fs = require('fs');
+    const root = path.join(FIX, 'cs62-h1-slug-drift');
+    const targetFile = path.join(root, 'project', 'clickstops', 'active', 'active_cs101_some-slug.md');
+    const original = fs.readFileSync(targetFile, 'utf8');
+    try {
+      fs.writeFileSync(targetFile,
+        '<!-- check:ignore clickstop-h1-matches-filename -->\n' + original);
+      const findings = run({ root, now: FIXED_NOW });
+      expect(findings.filter(f => f.rule === 'clickstop-h1-matches-filename')).toEqual([]);
+    } finally {
+      fs.writeFileSync(targetFile, original);
+    }
+  });
+
+  test('cs62-title-happy: WORKBOARD Title cell line 1 equals H1 title → no warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-title-happy'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'workboard-title-matches-h1')).toEqual([]);
+    // And the description-continuation row must not trigger the per-row checks.
+    expect(findings.filter(f => f.rule === 'state-in-vocabulary')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'last-updated-iso8601')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'owner-in-orchestrators-table')).toEqual([]);
+  });
+
+  test('cs62-title-mismatch: WORKBOARD Title differs from H1 → warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-title-mismatch'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'workboard-title-matches-h1');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+    expect(hits[0].message).toContain('Drifted Title');
+    expect(hits[0].message).toContain('My Thing');
+  });
+
+  test('cs62-title-no-file: WORKBOARD references a CS with no clickstop file → warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs62-title-no-file'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'workboard-title-matches-h1');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].message).toContain('CS999');
+  });
+
+  test('cs62-title-rule honors `<!-- check:ignore workboard-title-matches-h1 -->`', () => {
+    const fs = require('fs');
+    const root = path.join(FIX, 'cs62-title-mismatch');
+    const wb = path.join(root, 'WORKBOARD.md');
+    const original = fs.readFileSync(wb, 'utf8');
+    try {
+      const patched = original.replace(
+        '| CS106-1 |',
+        '<!-- check:ignore workboard-title-matches-h1 -->\n| CS106-1 |');
+      fs.writeFileSync(wb, patched);
+      const findings = run({ root, now: FIXED_NOW });
+      expect(findings.filter(f => f.rule === 'workboard-title-matches-h1')).toEqual([]);
+    } finally {
+      fs.writeFileSync(wb, original);
+    }
+  });
+
+  test('cs62-description-row: per-row checks skip rows with blank CS-Task ID cell', () => {
+    // The description-continuation row has blank values everywhere except
+    // a description-prose cell. Without the description-row guard, the
+    // empty State / Last Updated / Owner cells would be skipped via their
+    // own value-empty short-circuits, but the rules must explicitly skip
+    // such rows so a stray non-empty value in a continuation row does not
+    // produce a misleading finding either.
+    const findings = run({ root: path.join(FIX, 'cs62-description-row'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'state-in-vocabulary')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'last-updated-iso8601')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'owner-in-orchestrators-table')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'active-row-stale')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'active-row-reclaimable')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'no-orphan-active-work')).toEqual([]);
+    expect(findings.filter(f => f.rule === 'workboard-title-matches-h1')).toEqual([]);
+  });
+
+  test('cs62: no-orphan-active-work uses CS-Task ID header lookup and extracts parent CSID', () => {
+    // The orphan-active-work fixture's CS-Task ID cell is `CS9-1`; the rule
+    // must extract the `CS9` parent CSID and compare to done_cs9_*.md.
+    const findings = run({ root: path.join(FIX, 'orphan-active-work'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'no-orphan-active-work');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].message).toContain('CS9');
+  });
+
   test('unique-cs-state can be suppressed by own-line ignore above the heading', () => {
     // Dynamic: add an ignore comment to the top of one of the cs-in-two-states
     // files, rerun, and assert the findings for that file are gone.
@@ -295,5 +418,36 @@ describe('helpers', () => {
     ];
     const ig = parseIgnores(lines);
     expect([...ig[0].lines].sort((a, b) => a - b)).toEqual([3, 4]);
+  });
+
+  test('kebabSlug: lowercase + non-alnum runs collapse to single hyphen', () => {
+    expect(kebabSlug('Workboard Readability Restructure'))
+      .toBe('workboard-readability-restructure');
+    expect(kebabSlug('  Leading/trailing  '))
+      .toBe('leading-trailing');
+  });
+
+  test('kebabSlug: `&` becomes `and`', () => {
+    expect(kebabSlug('H1 ↔ filename consistency rules & guard'))
+      .toBe('h1-filename-consistency-rules-and-guard');
+  });
+
+  test('parseClickstopFilename: matches active/planned/done with CS prefix and slug', () => {
+    expect(parseClickstopFilename('active_cs62_workboard-readability-restructure.md'))
+      .toEqual({ state: 'active', cs: 'CS62', slug: 'workboard-readability-restructure' });
+    expect(parseClickstopFilename('done_cs7_thing.md'))
+      .toEqual({ state: 'done', cs: 'CS7', slug: 'thing' });
+    expect(parseClickstopFilename('not-a-clickstop.md')).toBeNull();
+  });
+
+  test('parseClickstopH1: em-dash variants — only U+2014 accepted', () => {
+    expect(parseClickstopH1('# CS62 — Title')).toEqual({ cs: 'CS62', title: 'Title' });
+    expect(parseClickstopH1('# CS62 - Title')).toEqual({ cs: null, title: null });
+    expect(parseClickstopH1('# CS62 -- Title')).toEqual({ cs: null, title: null });
+  });
+
+  test('parseClickstopH1: skips leading blank/comment lines', () => {
+    const text = '\n<!-- check:ignore foo -->\n\n# CS62 — Title\nbody\n';
+    expect(parseClickstopH1(text)).toEqual({ cs: 'CS62', title: 'Title' });
   });
 });

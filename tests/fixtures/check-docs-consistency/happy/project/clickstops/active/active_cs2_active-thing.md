@@ -1,2 +1,2 @@
-# CS2
+# CS2 — Active Thing
 active.

@@ -1,2 +1,2 @@
-# CS1
+# CS1 — Done Thing
 done.

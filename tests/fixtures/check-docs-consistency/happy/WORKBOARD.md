@@ -4,6 +4,6 @@
 
 ## Active Work
 
-| Task | CS | Title | Owner |
-|------|-----|-------|-------|
-| CS2-1 | CS2 | Working on it | someone |
+| CS-Task ID | Title | Owner |
+|------------|-------|-------|
+| CS2-1 | Active Thing | someone |
