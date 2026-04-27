@@ -562,4 +562,4 @@ CS54 lands the smallest verifiable App Insights wiring on top of an already-OTel
 - Initial prod deploy attempt 24938579240 (19:16:13Z) failed at image-validate because the workflow was given a 7-char short SHA. The validation step rejected it as expected; the second attempt with the full 40-char SHA succeeded. No code change needed — the guard worked.
 - Production DB returned `capacity-exhausted` 503s during CS54-6 prod probes. This is unrelated to CS54 wiring (Azure SQL free-tier monthly cap reached). The 503s still landed in AI as `requests` rows, which is the only thing CS54-6 was asserting.
 
-**For the next orchestrator who picks up the deferred work:** claim [CS60](../active/active_cs60_post-cs54-observability-followup.md) from `project/clickstops/planned/`. CS60-1 (the first measurement window) runs at 2026-04-26T22:39Z.
+**For the next orchestrator who picks up the deferred work:** claim [CS60](../active/active_cs60_post-cs54-observability-followup.md) from `project/clickstops/active/`. CS60-1 (the first measurement window) runs at 2026-04-26T22:39Z.
