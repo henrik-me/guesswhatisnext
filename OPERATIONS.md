@@ -262,6 +262,19 @@ A docs-only or CI-config-only PR may instead state `## Container Validation: not
 All worktree work runs as background tasks. The orchestrating agent launches each task agent in the background and is notified when each completes. Use **fixed-name worktree slots** (`wt-1` through `wt-4`) with task-specific branch names.
 The branch name carries the task meaning — the folder name is just a stable slot.
 
+### `staging-deploy.yml` dispatch coordination (concurrency-cancellation hazard)
+
+`staging-deploy.yml` is configured with `concurrency.group: staging-deploy` and `cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}`. Read carefully: the `cancel-in-progress` predicate is evaluated for the **incoming** run, not the in-progress one, so:
+
+- An incoming `workflow_dispatch` will NOT cancel an in-progress run (it queues).
+- An incoming `push` WILL cancel an in-progress `workflow_dispatch` (because for the push, `cancel-in-progress=true`).
+
+Net effect: any orchestrator that dispatches `staging-deploy.yml` for ad-hoc validation can have its run killed mid-execution by another agent landing a merge to `main`. CS53-20's end-to-end validation hit this — two of three dispatches were cancelled by other agents' merges; the third only succeeded because the merge wave happened to lull. Mitigations, in increasing order of robustness:
+
+1. **Coordinate via WORKBOARD before dispatch** — post a "dispatching staging-deploy for X validation, hold merges for ~10min" note in the relevant active-work row. Cheap; no workflow change.
+2. **Always retry on cancellation** — if `gh run view <id> --json conclusion` reports `cancelled` (not `failure`), re-dispatch immediately. Each dispatch costs ~5–10 min of CI runner time but is otherwise harmless.
+3. **Fix the workflow concurrency** to give each `workflow_dispatch` its own group (`group: ${{ github.event_name == 'workflow_dispatch' && format('staging-deploy-dispatch-{0}', github.run_id) || 'staging-deploy' }}`). Cleanest, but requires owner approval since it changes the staging deploy contract for everyone.
+
 **Worktree root naming:** `gwn<suffix>-worktrees` where `<suffix>` is the text after the
 repo name in the clone folder (e.g., clone `guesswhatisnext_copilot2` → suffix `_copilot2`
 → root `gwn_copilot2-worktrees`). If clone matches repo name exactly, suffix is empty.
