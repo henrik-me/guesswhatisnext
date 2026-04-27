@@ -9,6 +9,7 @@ const { requireAuth } = require('../middleware/auth');
 const { getConfig } = require('../services/gameConfigLoader');
 const logger = require('../logger');
 const { RESERVED_USERNAME_LIKE_PATTERNS } = require('../reserved-usernames');
+const { bootQuietContext, logBootQuiet } = require('../services/boot-quiet');
 
 /** SQL fragment: `<alias>.username NOT LIKE ?` joined with AND for every reserved prefix. */
 function reservedUsernameFilter(alias) {
@@ -140,9 +141,18 @@ router.post('/join', requireAuth, async (req, res, next) => {
   }
 });
 
-/** GET /api/matches/history — get match history for the current user */
+/** GET /api/matches/history — get match history for the current user.
+ *
+ * Boot-quiet contract (CS53-19): header-less non-system requests get an
+ * empty history array — no DB query.
+ */
 router.get('/history', requireAuth, async (req, res, next) => {
   try {
+    const ctx = bootQuietContext(req);
+    if (!ctx.allowDb) {
+      logBootQuiet('/api/matches/history', ctx, false);
+      return res.json({ history: [] });
+    }
     const db = await getDbAdapter();
     const limit = Math.min(Number(req.query.limit) || 20, 50);
 
@@ -178,6 +188,7 @@ router.get('/history', requireAuth, async (req, res, next) => {
     });
 
     res.json({ history });
+    logBootQuiet('/api/matches/history', ctx, true);
   } catch (err) {
     next(err);
   }

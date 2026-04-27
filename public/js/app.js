@@ -1465,7 +1465,7 @@ async function fetchPersonalBests() {
   }
 
   try {
-    const res = await apiFetch('/api/scores/me');
+    const res = await apiFetch('/api/scores/me', { userActivity: true });
     if (res.status === 401) {
       container.innerHTML = signinHTML;
       return;
@@ -1709,7 +1709,7 @@ async function fetchAchievements() {
 
   const data = await progressiveLoad(
     async (signal) => {
-      const res = await apiFetch('/api/achievements', { signal });
+      const res = await apiFetch('/api/achievements', { signal, userActivity: true });
       if (res.status === 401) return null;
       await throwIfRetryable(res);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -3448,25 +3448,25 @@ async function fetchProfile() {
     async (signal) => {
       // Fetch all four endpoints independently — partial success is OK
       const [meResult, scoresResult, achievementsResult, historyResult] = await Promise.allSettled([
-        apiFetch('/api/auth/me', { signal }).then(async (res) => {
+        apiFetch('/api/auth/me', { signal, userActivity: true }).then(async (res) => {
           if (res.status === 401) return null;
           await throwIfRetryable(res);
           if (!res.ok) throw new Error(`me: ${res.status}`);
           return res.json();
         }),
-        apiFetch('/api/scores/me', { signal }).then(async (res) => {
+        apiFetch('/api/scores/me', { signal, userActivity: true }).then(async (res) => {
           if (res.status === 401) return null;
           await throwIfRetryable(res);
           if (!res.ok) throw new Error(`scores: ${res.status}`);
           return res.json();
         }),
-        apiFetch('/api/achievements', { signal }).then(async (res) => {
+        apiFetch('/api/achievements', { signal, userActivity: true }).then(async (res) => {
           if (res.status === 401) return null;
           await throwIfRetryable(res);
           if (!res.ok) throw new Error(`achievements: ${res.status}`);
           return res.json();
         }),
-        apiFetch('/api/matches/history', { signal }).then(async (res) => {
+        apiFetch('/api/matches/history', { signal, userActivity: true }).then(async (res) => {
           if (res.status === 401) return null;
           await throwIfRetryable(res);
           if (!res.ok) throw new Error(`history: ${res.status}`);
@@ -3677,7 +3677,7 @@ async function fetchMatchHistory() {
   container.innerHTML = '<div class="leaderboard-loading">Loading</div>';
 
   try {
-    const res = await apiFetch('/api/matches/history');
+    const res = await apiFetch('/api/matches/history', { userActivity: true });
     if (res.status === 401) return;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();

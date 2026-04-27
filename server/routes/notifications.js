@@ -9,17 +9,30 @@ const express = require('express');
 const { getDbAdapter } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { unreadCountCache, coerceUnreadCount } = require('../services/unread-count-cache');
+const { bootQuietContext, logBootQuiet } = require('../services/boot-quiet');
 const logger = require('../logger');
 
 const router = express.Router();
 
-/** GET /api/notifications — list user's notifications. */
+/** GET /api/notifications — list user's notifications.
+ *
+ * Boot-quiet contract (CS53-19): header-less non-system requests get an
+ * empty list immediately — no DB query. The SPA refetches with
+ * `X-User-Activity: 1` on first user gesture (e.g. opening the
+ * notifications drawer).
+ */
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const db = await getDbAdapter();
     const userId = req.user.id;
     const unreadOnly = req.query.unread === 'true' || req.query.unread === '1';
     const userActivity = req.get('X-User-Activity') === '1';
+    const isSystemList = req.user.role === 'system';
+    const ctx = bootQuietContext(req);
+    if (!ctx.allowDb) {
+      logBootQuiet('/api/notifications', ctx, false);
+      return res.json({ notifications: [], unread_count: 0 });
+    }
+    const db = await getDbAdapter();
 
     let query = 'SELECT id, user_id, type, message, data, is_read, created_at FROM notifications WHERE user_id = ?';
     const params = [userId];
@@ -35,7 +48,6 @@ router.get('/', requireAuth, async (req, res, next) => {
       query += ' LIMIT 50';
     }
 
-    const isSystemList = req.user.role === 'system';
     const willSeedCache = userActivity || isSystemList;
     // Only capture a generation token when we're actually going to call
     // setIfFresh — beginRead has the side-effect of lazily seeding the
@@ -77,6 +89,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       }),
       unread_count: unreadCount,
     });
+    logBootQuiet('/api/notifications', ctx, true);
   } catch (err) {
     next(err);
   }
@@ -115,13 +128,17 @@ router.get('/count', requireAuth, async (req, res, next) => {
     const cached = unreadCountCache.get(userId);
     if (cached !== null) {
       res.set('X-Cache', 'HIT');
-      // Telemetry (CS53-23): emit one structured Pino line per outcome so
-      // boot-quiet contract behavior is observable in App Insights via the
-      // ContainerAppConsoleLogs_CL bridge (see docs/observability.md § B.7).
+      // Telemetry (CS53-23 + CS53-19): emit one structured Pino line per
+      // outcome so boot-quiet contract behavior is observable in App
+      // Insights via the ContainerAppConsoleLogs_CL bridge (see
+      // docs/observability.md § B.12). CS53-19 added `dbTouched` for
+      // cross-endpoint matrix consistency — HIT and MISS-NO-ACTIVITY are
+      // false (no DB query); MISS and STALE-DROP are true (DB queried).
       logger.info({
         gate: 'boot-quiet',
         route: '/api/notifications/count',
         cacheOutcome: 'HIT',
+        dbTouched: false,
         userActivity,
         isSystem,
         userId,
@@ -141,6 +158,7 @@ router.get('/count', requireAuth, async (req, res, next) => {
         gate: 'boot-quiet',
         route: '/api/notifications/count',
         cacheOutcome: 'MISS-NO-ACTIVITY',
+        dbTouched: false,
         userActivity,
         isSystem,
         userId,
@@ -177,6 +195,7 @@ router.get('/count', requireAuth, async (req, res, next) => {
         gate: 'boot-quiet',
         route: '/api/notifications/count',
         cacheOutcome: outcome,
+        dbTouched: true,
         dropReason,
         userActivity,
         isSystem,
@@ -187,6 +206,7 @@ router.get('/count', requireAuth, async (req, res, next) => {
         gate: 'boot-quiet',
         route: '/api/notifications/count',
         cacheOutcome: outcome,
+        dbTouched: true,
         userActivity,
         isSystem,
         userId,

@@ -2,7 +2,7 @@
  * Notification API tests.
  */
 
-const { getAgent, setup, teardown, registerUser } = require('./helper');
+const { getAgent, getAgentNoActivity, setup, teardown, registerUser } = require('./helper');
 
 const SYSTEM_KEY = process.env.SYSTEM_API_KEY || 'gwn-dev-system-key';
 const ENABLED_SUBMISSIONS_PATH = '/api/submissions?ff_submit_puzzle=1';
@@ -248,7 +248,7 @@ describe('GET /api/notifications/count', () => {
     unreadCountCache.invalidate(userId);
 
     // 1. MISS-NO-ACTIVITY (cold cache, no header, non-system caller).
-    await getAgent()
+    await getAgentNoActivity()
       .get('/api/notifications/count')
       .set('Authorization', `Bearer ${userToken}`);
 
@@ -259,7 +259,7 @@ describe('GET /api/notifications/count', () => {
       .set('X-User-Activity', '1');
 
     // 3. HIT (re-read after seeding, no header).
-    await getAgent()
+    await getAgentNoActivity()
       .get('/api/notifications/count')
       .set('Authorization', `Bearer ${userToken}`);
 
@@ -317,6 +317,12 @@ describe('GET /api/notifications/count', () => {
         isSystem: expect.any(Boolean),
       });
       expect(typeof c[0].cacheOutcome).toBe('string');
+      expect(typeof c[0].dbTouched).toBe('boolean');
+      // CS53-19: dbTouched mirrors cache outcome — HIT and MISS-NO-ACTIVITY
+      // are header-less (or otherwise skip DB), MISS and STALE-DROP do hit DB.
+      const expectDbTouched =
+        c[0].cacheOutcome === 'MISS' || c[0].cacheOutcome === 'STALE-DROP';
+      expect(c[0].dbTouched).toBe(expectDbTouched);
     }
   });
 
@@ -338,7 +344,7 @@ describe('GET /api/notifications/count', () => {
     const allSpy = vi.spyOn(db, 'all');
     const runSpy = vi.spyOn(db, 'run');
 
-    const res = await getAgent()
+    const res = await getAgentNoActivity()
       .get('/api/notifications/count')
       .set('Authorization', `Bearer ${userToken}`);
     expect(res.status).toBe(200);
@@ -360,7 +366,7 @@ describe('GET /api/notifications/count', () => {
     const allSpy = vi.spyOn(db, 'all');
     const runSpy = vi.spyOn(db, 'run');
 
-    const res = await getAgent()
+    const res = await getAgentNoActivity()
       .get('/api/notifications/count')
       .set('Authorization', `Bearer ${userToken}`);
     expect(res.status).toBe(200);
@@ -382,7 +388,7 @@ describe('GET /api/notifications/count', () => {
     const db = await getDbAdapter();
     const getSpy = vi.spyOn(db, 'get');
 
-    const res = await getAgent()
+    const res = await getAgentNoActivity()
       .get('/api/notifications/count')
       .set('X-API-Key', SYSTEM_KEY); // no X-User-Activity header
     expect(res.status).toBe(200);

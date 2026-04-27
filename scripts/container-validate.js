@@ -121,10 +121,10 @@ function safeTeardown(signal) {
 process.on('SIGINT', () => safeTeardown('SIGINT'));
 process.on('SIGTERM', () => safeTeardown('SIGTERM'));
 
-function httpsGet(url, { timeoutMs = 5000 } = {}) {
+function httpsGet(url, { timeoutMs = 5000, headers = {} } = {}) {
   return new Promise((resolve) => {
     const start = Date.now();
-    const req = https.get(url, { rejectUnauthorized: false, timeout: timeoutMs }, (res) => {
+    const req = https.get(url, { rejectUnauthorized: false, timeout: timeoutMs, headers }, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
@@ -173,7 +173,11 @@ async function probeColdStart() {
 
   while (Date.now() - start < RECOVERY_BUDGET_MS) {
     attempts++;
-    const res = await httpsGet(url, { timeoutMs: 10000 });
+    // CS53-19.D: send `X-User-Activity: 1` so the global cold-start init
+    // gate (now boot-quiet-aware) actually fires `runInit()` on this probe.
+    // Without the header, the gate would return 503+Retry-After forever
+    // because nothing user-activity-tagged is hitting the server.
+    const res = await httpsGet(url, { timeoutMs: 10000, headers: { 'X-User-Activity': '1' } });
     const elapsed = Date.now() - start;
     if (res.error) {
       log(`  attempt ${attempts} (+${elapsed}ms): network error — ${res.error}`);
@@ -194,7 +198,264 @@ async function probeColdStart() {
   return { saw503, firstRetryAfter, first200ElapsedMs, attempts };
 }
 
+// CS53-19.A.2 — boot-quiet mode helpers ------------------------------------
+//
+// The boot-quiet harness exercises every endpoint enrolled in the boot-quiet
+// contract and reports a per-request matrix `{ scenario, route, dbTouched,
+// userActivity }`. Source-of-truth for `dbTouched` is the structured Pino
+// log line emitted by each handler (see server/services/boot-quiet.js).
+//
+// Why this is HTTP-driven, not full-Playwright. The boot-quiet contract is
+// fundamentally an HTTP contract: "no header → no DB". The six SPA-side
+// scenarios in the CS53-19 plan (cold-anonymous-boot, warm-boot-with-jwt,
+// refresh, refocus, bfcache, sw-update) all reduce to "the SPA fires these
+// API requests under these header conditions". Driving the matrix at the
+// HTTP layer reproduces the exact request shape with deterministic timing,
+// no flakey browser teardown, and zero browser dependency in
+// `npm run container:validate`. The full SPA-driven scenarios live in
+// `tests/e2e/boot-quiet.spec.mjs` (Playwright) where the real browser
+// behavior under document.visibilitychange / page.goBack() / SW updates
+// is exercised end-to-end against the running container.
+
+const fs = require('fs');
+
+function readSystemKey() {
+  // Mirror docker-compose.mssql.yml — defaults to 'test-system-api-key' for
+  // the local validation stack; override via env if a different stack value
+  // is configured.
+  return process.env.SYSTEM_API_KEY || 'test-system-api-key';
+}
+
+const BOOT_QUIET_ENDPOINTS = [
+  // path, requiresAuth (i.e. omits 401 with no token)
+  { route: '/api/auth/me', requiresAuth: true },
+  { route: '/api/features', requiresAuth: false },
+  { route: '/api/notifications', requiresAuth: true },
+  { route: '/api/notifications/count', requiresAuth: true },
+  { route: '/api/scores/me', requiresAuth: true },
+  { route: '/api/achievements', requiresAuth: true },
+  { route: '/api/matches/history', requiresAuth: true },
+];
+
+// The header-presence/auth-shape matrix the harness sweeps. Each row maps
+// onto one or more of the six SPA boot scenarios — boot/refresh/refocus
+// without a user gesture all look like "JWT present, no X-User-Activity"
+// from the server's perspective. The system-key row exercises the
+// operator/system bypass (CS53-23 R4) that the contract explicitly preserves.
+const BOOT_QUIET_SCENARIOS = [
+  { scenario: 'cold-anonymous-boot', auth: 'none', userActivity: false },
+  { scenario: 'warm-boot-with-jwt', auth: 'jwt', userActivity: false },
+  { scenario: 'user-gesture', auth: 'jwt', userActivity: true },
+  { scenario: 'system-key-bypass', auth: 'system', userActivity: false },
+];
+
+async function bootQuietRegisterAndLogin() {
+  // Hit /api/auth/register with X-User-Activity: 1 to ensure runInit fires.
+  const username = `bq_${Math.random().toString(36).slice(2, 10)}`;
+  const password = 'BootQuietPw1!';
+  const body = JSON.stringify({ username, password });
+  const opts = {
+    method: 'POST',
+    rejectUnauthorized: false,
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+      'X-User-Activity': '1',
+    },
+    timeout: 30000,
+  };
+  return new Promise((resolve) => {
+    const req = https.request(new URL('/api/auth/register', BASE_URL).href, opts, (res) => {
+      let buf = '';
+      res.on('data', (c) => { buf += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(buf);
+          resolve({ status: res.statusCode, token: parsed.token });
+        } catch {
+          resolve({ status: res.statusCode, token: null });
+        }
+      });
+    });
+    req.on('error', () => resolve({ status: 0, token: null }));
+    req.on('timeout', () => { req.destroy(); resolve({ status: 0, token: null }); });
+    req.write(body);
+    req.end();
+  });
+}
+
+async function bootQuietProbe(scenario, route, jwt) {
+  const headers = {};
+  if (scenario.auth === 'jwt' && jwt) headers['Authorization'] = `Bearer ${jwt}`;
+  if (scenario.auth === 'system') headers['X-API-Key'] = readSystemKey();
+  if (scenario.userActivity) headers['X-User-Activity'] = '1';
+  const url = new URL(route, BASE_URL).href;
+  const res = await httpsGet(url, { timeoutMs: 10000, headers });
+  return res;
+}
+
+function captureContainerLogsSince(sinceISO) {
+  const r = spawnSync(
+    `docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} logs --since ${sinceISO} --no-color app`,
+    { cwd: ROOT, shell: true, env: process.env, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+  );
+  return (r.stdout || '') + (r.stderr || '');
+}
+
+function parseBootQuietLogs(text) {
+  const out = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    // Pino emits one JSON object per line; pull out the JSON substring.
+    const start = line.indexOf('{');
+    if (start === -1) continue;
+    let parsed;
+    try { parsed = JSON.parse(line.slice(start)); } catch { continue; }
+    if (parsed && parsed.gate === 'boot-quiet') out.push(parsed);
+  }
+  return out;
+}
+
+async function runBootQuietMode() {
+  log('Boot-quiet harness starting (--mode=boot-quiet).');
+  log('Tearing down any existing stack…');
+  compose('down -v', { silent: true });
+  // Boot-quiet harness wants fast iteration — no 30s simulated cold start.
+  const env = {
+    GWN_SIMULATE_COLD_START_MS: '0',
+    HTTPS_PORT,
+    HTTP_PORT,
+    SYSTEM_API_KEY: readSystemKey(),
+  };
+  const up = compose('up -d --build', { env });
+  if (up.status !== 0) {
+    logErr('docker compose up failed.');
+    teardown();
+    process.exit(1);
+  }
+
+  const healthy = await waitForHealthz();
+  if (!healthy) {
+    logErr('/healthz did not become reachable within timeout.');
+    compose('logs --tail=200 app');
+    teardown();
+    process.exit(1);
+  }
+
+  // Need an auth token for the JWT-shaped scenarios. Register a fresh user;
+  // this also drives `runInit()` so the rest of the harness gets 200s
+  // instead of 503s.
+  log('Registering a fresh user for JWT-shaped scenarios…');
+  const reg = await bootQuietRegisterAndLogin();
+  if (!reg.token) {
+    logErr(`Failed to register harness user (status=${reg.status}). Cannot continue.`);
+    compose('logs --tail=200 app');
+    teardown();
+    process.exit(1);
+  }
+  log('  ok — token acquired.');
+
+  const sinceISO = new Date().toISOString();
+  const matrix = [];
+
+  for (const scenario of BOOT_QUIET_SCENARIOS) {
+    for (const ep of BOOT_QUIET_ENDPOINTS) {
+      // Skip auth=none rows for endpoints that gate on requireAuth — those
+      // 401 before reaching the boot-quiet log line, so the matrix row is
+      // not a contract violation regardless of dbTouched.
+      if (ep.requiresAuth && scenario.auth === 'none') {
+        matrix.push({ scenario: scenario.scenario, route: ep.route, status: 401, dbTouched: null, userActivity: scenario.userActivity, skipped: 'requires-auth' });
+        continue;
+      }
+      const probe = await bootQuietProbe(scenario, ep.route, reg.token);
+      matrix.push({
+        scenario: scenario.scenario,
+        route: ep.route,
+        status: probe.status,
+        userActivity: scenario.userActivity,
+        // dbTouched comes from the log line — fill in below after capture.
+        dbTouched: null,
+      });
+    }
+  }
+
+  // Allow the server a beat to flush the last log lines.
+  await new Promise((r) => setTimeout(r, 1500));
+  const logs = captureContainerLogsSince(sinceISO);
+  const records = parseBootQuietLogs(logs);
+  // Match each matrix row to a record by route + scenario context. We use
+  // a per-route FIFO so ordering of duplicates is preserved.
+  const queues = new Map();
+  for (const rec of records) {
+    if (!queues.has(rec.route)) queues.set(rec.route, []);
+    queues.get(rec.route).push(rec);
+  }
+  for (const row of matrix) {
+    if (row.skipped) continue;
+    const q = queues.get(row.route);
+    if (!q || q.length === 0) {
+      row.dbTouched = 'MISSING';
+      continue;
+    }
+    const rec = q.shift();
+    row.dbTouched = !!rec.dbTouched;
+  }
+
+  // Emit the matrix to stdout as a markdown table + a JSON sidecar file.
+  const tablePath = path.join(ROOT, 'boot-quiet-matrix.json');
+  fs.writeFileSync(tablePath, JSON.stringify(matrix, null, 2), 'utf8');
+  log(`Matrix written to ${tablePath}`);
+
+  console.log('\n## Boot-quiet matrix\n');
+  console.log('| scenario | route | userActivity | status | dbTouched |');
+  console.log('|---|---|---|---|---|');
+  for (const r of matrix) {
+    const dt = r.skipped ? `_skipped: ${r.skipped}_` : String(r.dbTouched);
+    console.log(`| ${r.scenario} | ${r.route} | ${r.userActivity} | ${r.status} | ${dt} |`);
+  }
+  console.log('');
+
+  // Acceptance: every header-less request (userActivity=false) on a non-system
+  // scenario must show dbTouched=false. system-key scenarios (operator
+  // bypass) are EXEMPT — they should set dbTouched=true on cache miss.
+  const violations = matrix.filter((r) => {
+    if (r.skipped) return false;
+    if (r.dbTouched === 'MISSING') return true;
+    if (r.scenario === 'system-key-bypass') return false;
+    if (r.userActivity) return false;
+    return r.dbTouched === true;
+  });
+
+  teardown();
+  if (violations.length === 0) {
+    log('✅ Boot-quiet harness PASSED — all header-less requests show dbTouched=false.');
+    process.exit(0);
+  } else {
+    logErr(`Boot-quiet harness FAILED — ${violations.length} violation(s):`);
+    for (const v of violations) {
+      logErr(`  ${v.scenario} ${v.route}: dbTouched=${v.dbTouched}`);
+    }
+    process.exit(1);
+  }
+}
+
 async function main() {
+  // CS53-19.A.2 — `--mode=boot-quiet` runs the per-endpoint contract matrix
+  // instead of the cold-start probe. The two modes are independent: the
+  // existing `--mode=default` cold-start cycle stays the gate for CS53
+  // policy 2; the new mode is the gate for CS53-19 boot-quiet enrollment.
+  const modeArg = process.argv.find((a) => a.startsWith('--mode='));
+  const mode = modeArg ? modeArg.slice('--mode='.length) : 'default';
+  if (mode === 'boot-quiet') {
+    await runBootQuietMode();
+    return;
+  }
+  if (mode !== 'default') {
+    logErr(`Unknown --mode=${mode} (supported: default, boot-quiet).`);
+    process.exit(2);
+  }
+
   log(`CS53 cold-start container validation — project=${PROJECT_NAME}`);
   log(`COLD_START_MS=${COLD_START_MS} HTTPS_PORT=${HTTPS_PORT} HTTP_PORT=${HTTP_PORT}`);
 
