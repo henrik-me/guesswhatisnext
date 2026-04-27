@@ -42,6 +42,26 @@ services:
       # every container restart. Only for local container validation; never
       # set in real dev/staging/prod environments.
       GWN_SIMULATE_COLD_START_MS: "${GWN_SIMULATE_COLD_START_MS:-}"
+      # CS53-10 — DB-unavailable + cold-start-fails simulators.
+      # GWN_ENABLE_DB_CONNECT_SIMULATORS=1: arming gate (REQUIRED — without
+      #   this, the SIMULATE_* vars below are inert and only audit-logged).
+      #   Lives in compose so a real Container Apps deployment that copies
+      #   the SIMULATE_* vars but not the gate cannot turn the live DB into
+      #   a fake-failure surface.
+      # GWN_SIMULATE_COLD_START_FAILS=N: first N _connect() attempts throw a
+      #   synthetic ConnectionError/ETIMEOUT (transient → 503+Retry-After);
+      #   N+1th proceeds. Validates the slow-retry init loop + isTransientDbError.
+      # GWN_SIMULATE_DB_UNAVAILABLE=capacity_exhausted: every _connect() throws
+      #   the verbatim Azure SQL Free Tier "paused for the remainder of the
+      #   month" error (ELOGIN). getDbUnavailability classifies it →
+      #   503 + {unavailable:true,reason:'capacity-exhausted'} no Retry-After.
+      # GWN_SIMULATE_DB_UNAVAILABLE=transient: every _connect() throws ETIMEOUT
+      #   (forever transient, never recovers — for retry-cap testing).
+      # All off by default; only enabled by `npm run container:validate --mode=*`
+      # or by individual unit tests.
+      GWN_ENABLE_DB_CONNECT_SIMULATORS: "${GWN_ENABLE_DB_CONNECT_SIMULATORS:-}"
+      GWN_SIMULATE_COLD_START_FAILS: "${GWN_SIMULATE_COLD_START_FAILS:-}"
+      GWN_SIMULATE_DB_UNAVAILABLE: "${GWN_SIMULATE_DB_UNAVAILABLE:-}"
       # OTLP exporter — sends traces to the local collector (no Azure conn string
       # so telemetry.js uses the OTLP HTTP fallback path)
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"

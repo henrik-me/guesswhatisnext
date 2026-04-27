@@ -330,6 +330,15 @@ class MssqlAdapter extends BaseAdapter {
       MssqlAdapter._coldStartConsumed = true;
       await new Promise((resolve) => setTimeout(resolve, simulateMs));
     }
+
+    // CS53-10 simulators (off-by-default; production-safe). Order matters:
+    // (1) cold-start delay above; (2) cold-start-fails (first N attempts);
+    // (3) unavailable (every attempt). Each helper throws synchronously so
+    // the real `this._sql.connect()` below is never reached when active.
+    MssqlAdapter._connectAttemptCount += 1;
+    MssqlAdapter._maybeSimulateColdStartFails(MssqlAdapter._connectAttemptCount);
+    MssqlAdapter._maybeSimulateUnavailable();
+
     // Parse the connection string into a config object so we can override
     // timeout defaults without losing user-supplied options (encrypt,
     // trustServerCertificate, etc.). CS53-3 / CS53-6:
@@ -428,6 +437,129 @@ MssqlAdapter._rewriteSql = rewriteSql;
 // Process-lifetime flag — see _connect() above.
 MssqlAdapter._coldStartConsumed = false;
 MssqlAdapter._resetColdStart = () => { MssqlAdapter._coldStartConsumed = false; };
+
+// CS53-10 — DB-unavailable + cold-start-fails simulators. All off-by-default;
+// activated by env vars (`GWN_SIMULATE_DB_UNAVAILABLE`,
+// `GWN_SIMULATE_COLD_START_FAILS`) AND a separate arming gate
+// `GWN_ENABLE_DB_CONNECT_SIMULATORS=1` so an accidentally-leaked simulator
+// var in a real deploy cannot convert a healthy DB into a fake-failure
+// surface (GPT-5.4 PR #301 review). NODE_ENV is NOT a safe gate because
+// docker-compose.mssql.yml intentionally runs with NODE_ENV=production.
+// Audit-trail logger is loaded lazily so this module stays cheap to require
+// in tests that don't exercise the sims.
+MssqlAdapter._connectAttemptCount = 0;
+MssqlAdapter._resetConnectAttemptCount = () => { MssqlAdapter._connectAttemptCount = 0; };
+MssqlAdapter._resetSimulators = () => {
+  MssqlAdapter._coldStartConsumed = false;
+  MssqlAdapter._connectAttemptCount = 0;
+};
+
+function _simulatorsArmed() {
+  return process.env.GWN_ENABLE_DB_CONNECT_SIMULATORS === '1';
+}
+
+// CS53-10 — synthetic Azure SQL Free Tier "capacity exhausted" error.
+// Message text intentionally matches the prod regex in
+// server/lib/transient-db-error.js (AZURE_FREE_TIER_EXHAUSTED_RE) so the
+// classifier path we want to test fires identically. Per the design,
+// the env-var existence is the audit trail; no "(simulated)" suffix is
+// added so prod-mirroring tests classifier robustness against the real
+// message.
+function _buildSimulatedCapacityExhaustedError() {
+  const err = new Error(
+    "Login failed for user 'gwn_app'. The database is paused for the remainder of the month due to free capacity allowance."
+  );
+  err.name = 'ConnectionError';
+  err.code = 'ELOGIN';
+  return err;
+}
+
+function _buildSimulatedTransientError(label) {
+  const err = new Error(`Connection Timeout: server is not responding (${label})`);
+  err.name = 'ConnectionError';
+  err.code = 'ETIMEOUT';
+  return err;
+}
+
+// Lazy logger — avoid pulling pino + telemetry into the adapter at require
+// time (lots of unit tests stub the adapter via _sql injection and never
+// touch _connect). When sims fire, log a structured warn with the mode +
+// attempt count so the env-var activation is auditable. Per the CS53-10
+// design's CS41-6 telemetry obligation: KQL § B.13 confirms env vars are
+// unset in staging/prod by counting these warns (must be 0 outside local).
+function _logSimulatorActivation(payload) {
+  try {
+    // Defer require to avoid circulars with server/app.js bootstrap.
+    const logger = require('../logger');
+    logger.warn(payload, 'CS53-10 simulator fired (env-driven)');
+  } catch {
+    /* logger unavailable in some test contexts — env-var existence
+       remains the canonical audit trail. */
+  }
+}
+
+MssqlAdapter._maybeSimulateUnavailable = function _maybeSimulateUnavailable() {
+  const mode = process.env.GWN_SIMULATE_DB_UNAVAILABLE;
+  if (!mode) return;
+  if (!_simulatorsArmed()) {
+    // Arming gate not set — refuse to fire. Log so a misconfigured deploy
+    // (sim var leaked without the gate) is still surfaced via KQL § B.16.
+    _logSimulatorActivation({
+      gate: 'simulated-unavailable',
+      mode: `unarmed:${mode}`,
+      attempt: MssqlAdapter._connectAttemptCount,
+    });
+    return;
+  }
+  if (mode === 'capacity_exhausted') {
+    _logSimulatorActivation({
+      gate: 'simulated-unavailable',
+      mode: 'capacity_exhausted',
+      attempt: MssqlAdapter._connectAttemptCount,
+    });
+    throw _buildSimulatedCapacityExhaustedError();
+  }
+  if (mode === 'transient') {
+    _logSimulatorActivation({
+      gate: 'simulated-unavailable',
+      mode: 'transient',
+      attempt: MssqlAdapter._connectAttemptCount,
+    });
+    throw _buildSimulatedTransientError('simulated transient');
+  }
+  // Unknown value: log a warn and fail-closed (treat as no-op so a typo
+  // doesn't accidentally throw on every connect in dev).
+  _logSimulatorActivation({
+    gate: 'simulated-unavailable',
+    mode: `unknown:${mode}`,
+    attempt: MssqlAdapter._connectAttemptCount,
+  });
+};
+
+MssqlAdapter._maybeSimulateColdStartFails = function _maybeSimulateColdStartFails(attemptCount) {
+  const raw = process.env.GWN_SIMULATE_COLD_START_FAILS;
+  // Strict numeric parsing — same convention as GWN_SIMULATE_COLD_START_MS.
+  const limit = typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : 0;
+  if (limit <= 0 || attemptCount > limit) return;
+  if (!_simulatorsArmed()) {
+    // Arming gate not set — refuse to fire. Same audit-trail rationale.
+    _logSimulatorActivation({
+      gate: 'simulated-unavailable',
+      mode: `unarmed:cold-start-fails`,
+      attempt: attemptCount,
+      limit,
+    });
+    return;
+  }
+  _logSimulatorActivation({
+    gate: 'simulated-unavailable',
+    mode: 'cold-start-fails',
+    attempt: attemptCount,
+    limit,
+  });
+  throw _buildSimulatedTransientError('simulated cold-start fail');
+};
+
 // Connection / request timeouts (CS53-3 / CS53-6). Exposed as static fields
 // so tests can assert against them and so future tuning lives in one place.
 MssqlAdapter.CONNECT_TIMEOUT_MS = 5000;

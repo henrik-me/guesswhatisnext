@@ -502,6 +502,37 @@ ContainerAppConsoleLogs_CL
 
 **Cross-link:** the beacon is best-effort observability — IP can be spoofed and `navigator.sendBeacon` is fire-and-forget, so use this as a trend signal, not for alerting on individual incidents.
 
+### B.16 CS53-10 simulator activation audit (must be 0 outside local validation)
+
+The CS53-10 connect-time simulators in [`server/db/mssql-adapter.js`](../server/db/mssql-adapter.js) emit a structured Pino warn `gate=simulated-unavailable` whenever `GWN_SIMULATE_DB_UNAVAILABLE=*` or `GWN_SIMULATE_COLD_START_FAILS=N` is set in the environment.
+
+**Two layers of safety:**
+
+1. **Arming gate (prevention).** The simulators are inert unless `GWN_ENABLE_DB_CONNECT_SIMULATORS=1` is ALSO set. A leaked `SIMULATE_*` var without the arming gate cannot turn the live DB into a fake-failure surface — `_connect()` proceeds normally.
+2. **Audit log (detection).** Whenever any `SIMULATE_*` var is set — armed or not — a Pino warn fires with `gate=simulated-unavailable` and a `mode` field of either the active mode (e.g. `capacity_exhausted`) or `unarmed:<mode>` if the gate is missing. This query is the tripwire.
+
+Real staging/prod must never set any of these env vars (the gate or the SIMULATE values), so a non-zero count for a staging or prod resource means an operator misconfigured a deployment and the corresponding revision should be rolled back immediately.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.gate) == "simulated-unavailable"
+| extend armed = not(tostring(pino.mode) startswith "unarmed:")
+| summarize fires = count(),
+            modes = make_set(tostring(pino.mode)),
+            first_seen = min(TimeGenerated),
+            last_seen = max(TimeGenerated)
+            by bin(TimeGenerated, 1d), armed
+| order by TimeGenerated desc, armed desc
+```
+
+**Healthy interpretation (staging + prod):** zero rows. The simulators are only meant to fire under `npm run container:validate --mode={cold-start-fails,capacity-exhausted,transient}` on a developer machine, which sets both the arming gate and the SIMULATE var.
+
+**Unhealthy interpretation:**
+- **Any `armed=true` row in staging/prod** → a real deployment activated the simulator. Roll back immediately and audit the deployment env.
+- **Any `armed=false` row in staging/prod** → the SIMULATE_* var leaked but the arming gate spared us; still investigate (something in the deploy pipeline copied the wrong env block).
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:
