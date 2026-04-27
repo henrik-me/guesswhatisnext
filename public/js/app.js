@@ -2140,7 +2140,57 @@ async function authAction(action) {
   lockAuthForm(action);
 
   const endpoint = action === 'login' ? '/api/auth/login' : '/api/auth/register';
-  const warmupDeadline = Date.now() + AUTH_WARMUP_DEADLINE_MS;
+  const warmupStart = Date.now();
+  const warmupDeadline = warmupStart + AUTH_WARMUP_DEADLINE_MS;
+  // CS53-13.A: telemetry counters for the deadline-exhausted beacon. Mutated
+  // each iteration; only read when one of the two bail-out paths fires.
+  let attempts = 0;
+  let lastStatus = null;
+  let beaconSent = false;
+  const sendDeadlineExhaustedBeacon = () => {
+    if (beaconSent) return;
+    beaconSent = true;
+    try {
+      const payload = JSON.stringify({
+        attempts,
+        elapsedMs: Date.now() - warmupStart,
+        lastStatus,
+        action,
+      });
+      const url = '/api/telemetry/auth-deadline-exhausted';
+      // Prefer sendBeacon: survives page-unload and is non-blocking. Both
+      // sendBeacon and the keepalive-fetch fallback are best-effort —
+      // failures are swallowed (telemetry, not control flow). sendBeacon
+      // requires a Blob with the right Content-Type to land on the
+      // application/json body parser; without Blob it would be sent as
+      // text/plain and the server would reject it with 400, so we fall
+      // through to fetch in that case. ALSO falls back to fetch when
+      // sendBeacon returns false (queue full, payload too large, browser
+      // refusal — Copilot R1 finding).
+      const canBeacon = typeof navigator !== 'undefined'
+        && typeof navigator.sendBeacon === 'function'
+        && typeof Blob === 'function';
+      let beaconQueued = false;
+      if (canBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        try {
+          beaconQueued = navigator.sendBeacon(url, blob) === true;
+        } catch {
+          beaconQueued = false;
+        }
+      }
+      if (!beaconQueued && typeof fetch === 'function') {
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    } catch {
+      // Telemetry must never break the auth UX.
+    }
+  };
 
   // CS53-17: cold-start aware retry. On 503 + Retry-After (server warming up),
   // sleep and retry inside AUTH_WARMUP_DEADLINE_MS instead of leaking the raw
@@ -2191,6 +2241,7 @@ async function authAction(action) {
       // never overshoots AUTH_WARMUP_DEADLINE_MS by up to 45s (rubber-duck #1).
       const remainingBudget = warmupDeadline - Date.now();
       if (remainingBudget <= 0) {
+        sendDeadlineExhaustedBeacon();
         unlockAuthForm(action);
         bindText('auth-error', authWarmupExhaustedMessage(action));
         return;
@@ -2198,6 +2249,7 @@ async function authAction(action) {
       const attemptTimeout = Math.min(AUTH_TIMEOUT_MS, remainingBudget);
       activeController = new AbortController();
       activeTimeoutId = setTimeout(() => activeController.abort(), attemptTimeout);
+      attempts += 1;
       try {
         res = await fetch(endpoint, {
           method: 'POST',
@@ -2207,6 +2259,7 @@ async function authAction(action) {
         });
         data = await res.json().catch(() => ({}));
         lastError = null;
+        lastStatus = res.status;
       } catch (err) {
         lastError = err;
         res = null;
@@ -2273,6 +2326,7 @@ async function authAction(action) {
       // MIN_ATTEMPT_MS to actually run. Otherwise the final attempt aborts
       // immediately and surfaces a misleading "Request timed out" error.
       if (remaining <= wait + AUTH_MIN_ATTEMPT_MS) {
+        sendDeadlineExhaustedBeacon();
         unlockAuthForm(action);
         bindText('auth-error', authWarmupExhaustedMessage(action));
         return;
