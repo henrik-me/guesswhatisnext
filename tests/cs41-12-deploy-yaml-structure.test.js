@@ -315,6 +315,55 @@ describe('CS61-3 deploy YAML structure (staging-deploy.yml seed + preflight + mi
     expect(window).toMatch(/!= "ok"/);
   });
 
+  it('CS61-5 marker step exists in staging-deploy.yml', () => {
+    const lineMarker = lineOf(yaml, '- name: Detect CS61-aware OLD revision (CS41-12 transition marker)');
+    expect(lineMarker).toBeGreaterThan(0);
+  });
+
+  it('CS61-5 marker step appears BEFORE the CS41-12 OLD smoke step', () => {
+    const lineMarker = lineOf(yaml, '- name: Detect CS61-aware OLD revision (CS41-12 transition marker)');
+    expect(lineMarker).toBeLessThan(lineCs4112Smoke);
+  });
+
+  it('CS61-5 marker step has id: cs41-12-marker (CS41-12 OLD smoke `if:` references it)', () => {
+    const lineMarker = lineOf(yaml, '- name: Detect CS61-aware OLD revision (CS41-12 transition marker)');
+    const window = yaml
+      .split('\n')
+      .slice(lineMarker - 1, lineMarker + 5)
+      .join('\n');
+    expect(window).toMatch(/id:\s*cs41-12-marker/);
+  });
+
+  it('CS61-5 marker probes /api/admin/migrations on the OLD revision', () => {
+    const lineMarker = lineOf(yaml, '- name: Detect CS61-aware OLD revision (CS41-12 transition marker)');
+    const window = yaml
+      .split('\n')
+      .slice(lineMarker - 1, lineMarker + 50)
+      .join('\n');
+    expect(window).toMatch(/\/api\/admin\/migrations/);
+    expect(window).toMatch(/OLD_REVISION_FQDN/);
+  });
+
+  it('CS61-5 marker decision table covers 200/401/403 (proceed) and 404 (skip)', () => {
+    const lineMarker = lineOf(yaml, '- name: Detect CS61-aware OLD revision (CS41-12 transition marker)');
+    const window = yaml
+      .split('\n')
+      .slice(lineMarker - 1, lineMarker + 50)
+      .join('\n');
+    expect(window).toMatch(/200\|401\|403/);
+    expect(window).toMatch(/404\)/);
+    expect(window).toMatch(/skip-old-smoke=true/);
+    expect(window).toMatch(/skip-old-smoke=false/);
+  });
+
+  it('CS41-12 OLD smoke step is gated on the CS61-5 marker output', () => {
+    const window = yaml
+      .split('\n')
+      .slice(lineCs4112Smoke - 1, lineCs4112Smoke + 5)
+      .join('\n');
+    expect(window).toMatch(/steps\.cs41-12-marker\.outputs\.skip-old-smoke != 'true'/);
+  });
+
   it('seed + migration assertion + preflight all live in the same job (deploy-azure-staging)', () => {
     // The simplest invariant: the only job that contains "Deploy new
     // revision (0% traffic)" is `deploy-azure-staging`. If preflight,
