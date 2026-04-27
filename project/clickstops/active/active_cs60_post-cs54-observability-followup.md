@@ -65,14 +65,13 @@ az monitor log-analytics query --workspace $cust --analytics-query 'union withso
 
 ## KQL — Gap 1 investigation (CS60-4)
 
-After hitting `gwn-ai-staging` with ≥ 20 `/api/scores/leaderboard` probes:
+> **Note:** because both AI components are workspace-mode (see § KQL — cost measurement), Gap 1 must be queried via the workspace `AppDependencies` table — the classic `dependencies` table on the AI scope returns 0 rows in workspace mode and would produce a false-empty result that drives an incorrect CS60-4 disposition.
 
-```kusto
-// Did dependencies finally populate?
-dependencies
-| where timestamp > ago(15m)
-| summarize count() by type, name
-| order by count_ desc
+After hitting `gwn-ai-staging` with ≥ 20 `/api/scores/leaderboard` probes, run against the workspace:
+
+```powershell
+$cust = '<workspace-customer-id>'   # see § KQL — cost measurement for how to resolve
+az monitor log-analytics query --workspace $cust --analytics-query 'AppDependencies | where TimeGenerated > ago(15m) and _ResourceId has "gwn-ai-staging" | summarize n = count() by Type, Name | order by n desc' -o json
 ```
 
 If empty, pull the local span shape for comparison (run from a `dev:mssql` container):

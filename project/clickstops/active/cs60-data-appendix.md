@@ -37,7 +37,9 @@ The local `execSql` count (4 per leaderboard request) is the unverified-in-prod 
 
 ## Per-deploy ingest summary
 
-CS41-7 (planned) appends one row per successful production or staging deploy with the deploy timestamp, revision name, image SHA, and the AI ingest delta from the prior deploy's marker. The format is:
+> **Correction (CS60-1a, 2026-04-26):** the original wording in this section claimed CS41-7 (now landed in `done_cs41_*`) "appends a section here" automatically from the deploy workflow. That is incorrect. Per [`done_cs41_production-deploy-validation.md`](../done/done_cs41_production-deploy-validation.md) and [`scripts/compute-ingest-delta.js`](../../../scripts/compute-ingest-delta.js), CS41-7 emits the per-deploy ingest delta as a **GitHub Actions workflow summary + 90-day workflow artifact** — branch protection prevents workflows from writing to `main`, so nothing auto-commits to this file. Operators may manually transcribe selected artifact summaries here if a particular deploy's data is useful for cross-window cost analysis (e.g. the CS60-3 +30d decision).
+
+Recommended format if transcribing manually:
 
 ```markdown
 ### Deploy <ISO-timestamp> — <revision-name>
@@ -49,10 +51,10 @@ CS41-7 (planned) appends one row per successful production or staging deploy wit
 | Workflow run | <link to actions run> |
 | AI ingest since previous deploy | `<X.Y MB requests + W.Z MB other>` |
 | `requests` rows since previous deploy | `<N>` |
-| KQL run | (link to docs/observability.md anchor or one-liner) |
+| Source artifact | <link to workflow run artifact> |
 ```
 
-When a deploy executes, the deploy script appends a section here (NOT a row in the Manifest — the Manifest just points at this section). The first such section will be the first deploy after CS41 lands; everything before it is captured in the Baseline section above.
+The first such transcription, if anyone makes one, will be a deploy after CS41 landed; everything before it is captured in the Baseline section above.
 
 ---
 
@@ -133,12 +135,14 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 
 **Cumulative since baseline (Day 0 + Day 1)**
 
+Window basis: baseline marker `2026-04-25T22:39Z` → capture `2026-04-26T23:50Z` = **25.18 hours elapsed**. Run-rate uses `MB / 25.18 × 24`; monthly uses `run-rate × 30`. Both are best-effort point estimates from a partial-window sample — refine at CS60-1c (full Day 2) and revisit at CS60-2h (+7d).
+
 | env | rows | MB | Run-rate (MB/day) | Projected monthly (MB) |
 |---|---:|---:|---:|---:|
-| staging | 1003 | 0.88 | ≈0.44 | ≈13 |
-| prod    | 1160 | 0.87 | ≈0.44 | ≈13 |
+| staging | 1003 | 0.88 | ≈0.84 | ≈25 |
+| prod    | 1160 | 0.87 | ≈0.83 | ≈25 |
 
-**Free-tier headroom (5 GB / month workspace cap, AI tables only):** ≫ 4 GB headroom in both envs at current run-rate.
+**Free-tier headroom (5 GB / month workspace cap, AI tables only):** ≫ 4 GB headroom in both envs at current run-rate (~0.5% of cap).
 
 #### ⚠️ Operational finding — staging exception storm
 
@@ -158,7 +162,9 @@ The 5 GB free tier is **per workspace**, not per AI component. AI tables are dwa
 | AppMetrics | 89 | 0.08 |
 | AppExceptions | 40 | 0.04 |
 
-So total workspace ingest (~52 MB cumulative for the ~36h since baseline) projects to ≈1.25 GB/month at current rate — still well inside the 5 GB free tier, but ~71× the AI-tables-only projection. CS60-3 free-tier-headroom decision must use this whole-workspace number, not just the AI-component slice.
+So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) projects to ≈1.49 GB/month at current rate (`52 / 25.18 × 24 × 30`) — still well inside the 5 GB free tier (~30% of cap), but ~60× the AI-tables-only projection. CS60-3 free-tier-headroom decision must use this whole-workspace number, not just the AI-component slice.
+
+**Caveat on these projections.** Both AI- and workspace-level run-rates are extrapolated from a 25h sample that includes one-off CS54-6 verification traffic on Day 0 staging and the CS61-1 deploy-failure exception storm on Day 1 staging. Treat these numbers as upper-bound estimates until CS60-2h (+7d) provides a steadier baseline.
 
 ---
 
