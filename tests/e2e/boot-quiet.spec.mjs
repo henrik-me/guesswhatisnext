@@ -2,25 +2,28 @@
 /**
  * CS53-19 boot-quiet contract regression test.
  *
- * Verifies that every enrolled endpoint emits a Pino `gate: 'boot-quiet'` log
- * line on each request, and that `dbTouched` is `false` for header-less
- * non-system traffic (i.e. cold-anonymous / warm-no-gesture / refocus) and
- * `true` only when `X-User-Activity: 1` is present or the caller is the
- * system service.
+ * Verifies that every enrolled endpoint honors the contract: header-less
+ * non-system requests (cold-anonymous / warm-no-gesture / refocus) MUST NOT
+ * touch the DB, while `X-User-Activity: 1` or system-key callers MAY.
  *
- * Implementation notes:
- *   - Driven by the Playwright `request` fixture (pure HTTP). Boot-quiet is
- *     fundamentally an HTTP contract so we don't need a browser harness here.
- *   - Server stdout is captured to `.playwright/server.log` by
- *     `scripts/dev-server.js --output …` (configured in playwright.config.mjs).
+ * Implementation:
+ *   - Driven by Playwright's `request` fixture (pure HTTP). Boot-quiet is
+ *     fundamentally an HTTP contract — no browser harness needed.
+ *   - Assertions read the `X-Boot-Quiet-DB-Touched: true|false` response
+ *     header, which the server sets via `logBootQuiet()` in
+ *     `server/services/boot-quiet.js` AND inline in the
+ *     `/api/notifications/count` handler. This works in any environment:
+ *     local Playwright webServer, Docker container in CI, or a deployed
+ *     Azure Container App. (Earlier revision scraped server stdout from
+ *     `.playwright/server.log` — that file only exists when Playwright's
+ *     local `webServer` runs `scripts/dev-server.js --output …`, not in
+ *     CI's Ephemeral Smoke Test which runs the app as a Docker service.)
  *   - The 7 enrolled endpoints (per CS53-19): /api/auth/me, /api/features,
  *     /api/notifications, /api/notifications/count, /api/scores/me,
  *     /api/achievements, /api/matches/history.
  */
 
 import { test, expect } from '@playwright/test';
-import fs from 'fs';
-import path from 'path';
 
 const ENDPOINTS = [
   { route: '/api/auth/me', requiresAuth: true },
@@ -32,39 +35,7 @@ const ENDPOINTS = [
   { route: '/api/matches/history', requiresAuth: true },
 ];
 
-const SERVER_LOG = path.resolve('.playwright', 'server.log');
 const SYSTEM_KEY = process.env.SYSTEM_API_KEY || 'test-system-api-key';
-
-function readServerLog() {
-  if (!fs.existsSync(SERVER_LOG)) return [];
-  const raw = fs.readFileSync(SERVER_LOG, 'utf8');
-  const lines = [];
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || !trimmed.startsWith('{')) continue;
-    try {
-      const obj = JSON.parse(trimmed);
-      if (obj.gate === 'boot-quiet') lines.push(obj);
-    } catch { /* not JSON, skip */ }
-  }
-  return lines;
-}
-
-/**
- * Find the most recent boot-quiet log entry for `route` after the marker
- * timestamp. Returns null if none match. Currently unused (kept for future
- * scenario-specific lookups) — see the inline matcher in the main test.
- */
-// eslint-disable-next-line no-unused-vars
-function findMatching(logs, route, sinceMs) {
-  for (let i = logs.length - 1; i >= 0; i--) {
-    const e = logs[i];
-    if (e.route !== route) continue;
-    if (typeof e.time === 'number' && e.time < sinceMs) continue;
-    return e;
-  }
-  return null;
-}
 
 test.describe('CS53-19 boot-quiet contract — enrolled endpoints', () => {
   test('matrix: dbTouched honors X-User-Activity / system-key across all 7 endpoints', async ({ request }) => {
@@ -77,120 +48,77 @@ test.describe('CS53-19 boot-quiet contract — enrolled endpoints', () => {
     const { token } = await reg.json();
     expect(typeof token).toBe('string');
 
-    // Decode the user id from the JWT to discriminate logs (Copilot R1):
-    // anon and jwt scenarios with no activity header otherwise share the
-    // same (userActivity=false, isSystem=false) shape and could match each
-    // other's log lines on shared endpoints. JWT payload is the middle
-    // base64url segment.
-    const jwtPayload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-    const jwtUserId = jwtPayload.id;
-    expect(typeof jwtUserId).toBe('number');
-
-    // Marker timestamp — only consider log lines emitted after this point.
-    const sinceMs = Date.now();
-
-    /** @type {{ name: string, headers: Record<string,string>, expectDbTouched: boolean, expectUserId: number|null, isAuthenticated: boolean }[]} */
+    /** @type {{ name: string, headers: Record<string,string>, expectDbTouched: boolean, isAuthenticated: boolean, isSystem: boolean }[]} */
     const scenarios = [
       // 1. cold/warm boot, anonymous, no gesture → must NOT touch DB.
-      //    For requireAuth endpoints, anon → 401 (no boot-quiet log emitted; matcher must skip).
-      //    Anon shape: req.user is undefined → bootQuietContext returns userId=null.
-      { name: 'anon-no-activity', headers: {}, expectDbTouched: false, expectUserId: null, isAuthenticated: false },
+      //    For requireAuth endpoints, anon → 401 (no boot-quiet header set; matcher must skip).
+      { name: 'anon-no-activity', headers: {}, expectDbTouched: false, isAuthenticated: false, isSystem: false },
       // 2. anon with explicit gesture → may touch DB (auth/me etc still 401, but feature flags can read).
-      { name: 'anon-with-activity', headers: { 'X-User-Activity': '1' }, expectDbTouched: true, expectUserId: null, isAuthenticated: false },
+      { name: 'anon-with-activity', headers: { 'X-User-Activity': '1' }, expectDbTouched: true, isAuthenticated: false, isSystem: false },
       // 3. JWT present, no gesture → must NOT touch DB (boot/refocus pattern).
-      { name: 'jwt-no-activity', headers: { Authorization: `Bearer ${token}` }, expectDbTouched: false, expectUserId: jwtUserId, isAuthenticated: true },
+      { name: 'jwt-no-activity', headers: { Authorization: `Bearer ${token}` }, expectDbTouched: false, isAuthenticated: true, isSystem: false },
       // 4. JWT + gesture → must touch DB.
-      { name: 'jwt-with-activity', headers: { Authorization: `Bearer ${token}`, 'X-User-Activity': '1' }, expectDbTouched: true, expectUserId: jwtUserId, isAuthenticated: true },
+      { name: 'jwt-with-activity', headers: { Authorization: `Bearer ${token}`, 'X-User-Activity': '1' }, expectDbTouched: true, isAuthenticated: true, isSystem: false },
       // 5. system-key bypass → must touch DB without needing the activity header.
-      //    System pseudo-user has id=0 (set by requireAuth on the API-key path) — distinct from anon's null.
-      { name: 'system-key', headers: { 'X-API-Key': SYSTEM_KEY }, expectDbTouched: true, expectUserId: 0, isAuthenticated: true },
+      { name: 'system-key', headers: { 'X-API-Key': SYSTEM_KEY }, expectDbTouched: true, isAuthenticated: true, isSystem: true },
     ];
 
-    /** @type {{ scenario: string, route: string, status: number, dbTouched: any }[]} */
-    const matrix = [];
-
-    for (const scenario of scenarios) {
-      for (const ep of ENDPOINTS) {
-        // /api/features has no DB query in any scenario — expect dbTouched=false always.
-        const expectDbTouched = ep.route === '/api/features' ? false : scenario.expectDbTouched;
-        const res = await request.get(ep.route, { headers: scenario.headers });
-        matrix.push({
-          scenario: scenario.name,
-          route: ep.route,
-          status: res.status(),
-          dbTouched: expectDbTouched,
-        });
-      }
-    }
-
-    // Give Pino a moment to flush to stdout → server.log.
-    await new Promise(r => setTimeout(r, 750));
-
-    const logs = readServerLog();
-    expect(logs.length, 'expected at least one boot-quiet log line in .playwright/server.log').toBeGreaterThan(0);
-
-    // For each (scenario, endpoint) pair, locate the most recent matching log
-    // line and assert the dbTouched + userActivity + isSystem fields.
-    // Discriminates by userId so anon and jwt scenarios with the same
-    // (userActivity=false, isSystem=false) shape don't match each other's
-    // logs (Copilot R1).
+    /** @type {string[]} */
     const failures = [];
+
     for (const scenario of scenarios) {
       for (const ep of ENDPOINTS) {
-        // requireAuth endpoints with no auth → 401 → no boot-quiet log
-        // (the request never reaches the handler). Skip those (scenario,
-        // endpoint) pairs in the matcher.
-        if (ep.requiresAuth && !scenario.isAuthenticated) continue;
+        const res = await request.get(ep.route, { headers: scenario.headers });
 
+        // requireAuth endpoints with no auth → 401 → no boot-quiet header set
+        // (the request never reaches the handler). Skip those (scenario,
+        // endpoint) pairs.
+        if (ep.requiresAuth && !scenario.isAuthenticated) {
+          if (res.status() !== 401) {
+            failures.push(`${scenario.name} ${ep.route}: expected 401 (anon on requireAuth) but got ${res.status()}`);
+          }
+          continue;
+        }
+
+        const headers = res.headers();
+        const dbTouchedHeader = headers['x-boot-quiet-db-touched'];
+        if (dbTouchedHeader !== 'true' && dbTouchedHeader !== 'false') {
+          failures.push(`${scenario.name} ${ep.route}: missing/invalid X-Boot-Quiet-DB-Touched header (got ${JSON.stringify(dbTouchedHeader)}, status=${res.status()})`);
+          continue;
+        }
+        const dbTouched = dbTouchedHeader === 'true';
+
+        // /api/features has no DB query in any scenario — always false.
         const expectDbTouched = ep.route === '/api/features' ? false : scenario.expectDbTouched;
-        const expectUserActivity = scenario.headers['X-User-Activity'] === '1';
-        const expectIsSystem = scenario.headers['X-API-Key'] === SYSTEM_KEY;
-        const expectUserId = scenario.expectUserId;
-        // Look from the end and find the entry whose route, userActivity,
-        // isSystem AND userId all match the scenario.
-        let entry = null;
-        for (let i = logs.length - 1; i >= 0; i--) {
-          const e = logs[i];
-          if (e.route !== ep.route) continue;
-          if (typeof e.time === 'number' && e.time < sinceMs) continue;
-          if (Boolean(e.userActivity) !== expectUserActivity) continue;
-          if (Boolean(e.isSystem) !== expectIsSystem) continue;
-          // Compare userId WITHOUT type-coercing null↔0 — they are distinct
-          // identities (null = anon / no req.user; 0 = system pseudo-user).
-          // Copilot R2: prior `Number(e.userId) !== Number(expectUserId)`
-          // collapsed null and 0, masking the anon-vs-system distinction.
-          const entryUserId = e.userId == null ? null : e.userId;
-          const wantUserId = expectUserId == null ? null : expectUserId;
-          if (entryUserId !== wantUserId) continue;
-          entry = e;
-          break;
-        }
-        if (!entry) {
-          failures.push(`no boot-quiet log for ${scenario.name} ${ep.route} (userActivity=${expectUserActivity}, isSystem=${expectIsSystem}, userId=${expectUserId})`);
-          continue;
-        }
-        if (typeof entry.dbTouched !== 'boolean') {
-          failures.push(`${scenario.name} ${ep.route}: dbTouched is not boolean (${typeof entry.dbTouched})`);
-          continue;
-        }
-        if (entry.dbTouched !== expectDbTouched) {
+
+        if (dbTouched !== expectDbTouched) {
           // /api/notifications/count has a per-user cache: even with
           // X-User-Activity:1 a HIT returns dbTouched=false. Accept either
           // value for that route when we expected true; the boot-quiet
           // contract (false when header-less + non-system) is still
           // enforced by the no-activity scenarios.
-          if (ep.route === '/api/notifications/count' && expectDbTouched && entry.dbTouched === false) {
+          if (ep.route === '/api/notifications/count' && expectDbTouched && dbTouched === false) {
             // Cache hit — acceptable.
             continue;
           }
-          failures.push(`${scenario.name} ${ep.route}: dbTouched=${entry.dbTouched} expected ${expectDbTouched}`);
+          failures.push(`${scenario.name} ${ep.route}: X-Boot-Quiet-DB-Touched=${dbTouched} expected ${expectDbTouched} (status=${res.status()})`);
+        }
+
+        // Cross-check the discriminator headers match the scenario shape.
+        const userActivityHeader = headers['x-boot-quiet-user-activity'];
+        const isSystemHeader = headers['x-boot-quiet-is-system'];
+        const expectUserActivity = scenario.headers['X-User-Activity'] === '1';
+        if (userActivityHeader !== (expectUserActivity ? 'true' : 'false')) {
+          failures.push(`${scenario.name} ${ep.route}: X-Boot-Quiet-User-Activity=${userActivityHeader} expected ${expectUserActivity}`);
+        }
+        if (isSystemHeader !== (scenario.isSystem ? 'true' : 'false')) {
+          failures.push(`${scenario.name} ${ep.route}: X-Boot-Quiet-Is-System=${isSystemHeader} expected ${scenario.isSystem}`);
         }
       }
     }
 
     if (failures.length) {
-      // Surface all failures at once for easy debugging.
-      throw new Error(`Boot-quiet matrix failures:\n  - ${failures.join('\n  - ')}`);
+      throw new Error(`Boot-quiet matrix failures (${failures.length}):\n  - ${failures.join('\n  - ')}`);
     }
   });
 });

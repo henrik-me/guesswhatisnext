@@ -29,7 +29,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const isSystemList = req.user.role === 'system';
     const ctx = bootQuietContext(req);
     if (!ctx.allowDb) {
-      logBootQuiet('/api/notifications', ctx, false);
+      logBootQuiet('/api/notifications', ctx, false, undefined, res);
       return res.json({ notifications: [], unread_count: 0 });
     }
     const db = await getDbAdapter();
@@ -72,7 +72,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       unreadCountCache.setIfFresh(userId, unreadCount, token);
     }
 
-    res.json({
+    const responseBody = {
       notifications: notifications.map(n => {
         let data = null;
         if (n.data) {
@@ -88,8 +88,11 @@ router.get('/', requireAuth, async (req, res, next) => {
         };
       }),
       unread_count: unreadCount,
-    });
-    logBootQuiet('/api/notifications', ctx, true);
+    };
+    // logBootQuiet sets X-Boot-Quiet-* response headers, so it MUST be
+    // called BEFORE res.json() (which marks headers as sent).
+    logBootQuiet('/api/notifications', ctx, true, undefined, res);
+    res.json(responseBody);
   } catch (err) {
     next(err);
   }
@@ -128,6 +131,9 @@ router.get('/count', requireAuth, async (req, res, next) => {
     const cached = unreadCountCache.get(userId);
     if (cached !== null) {
       res.set('X-Cache', 'HIT');
+      res.set('X-Boot-Quiet-DB-Touched', 'false');
+      res.set('X-Boot-Quiet-User-Activity', userActivity ? 'true' : 'false');
+      res.set('X-Boot-Quiet-Is-System', isSystem ? 'true' : 'false');
       // Telemetry (CS53-23 + CS53-19): emit one structured Pino line per
       // outcome so boot-quiet contract behavior is observable in App
       // Insights via the ContainerAppConsoleLogs_CL bridge (see
@@ -154,6 +160,9 @@ router.get('/count', requireAuth, async (req, res, next) => {
       // from the DB. A brief undercount is acceptable per the documented
       // option (a) cold-cache miss policy.
       res.set('X-Cache', 'MISS-NO-ACTIVITY');
+      res.set('X-Boot-Quiet-DB-Touched', 'false');
+      res.set('X-Boot-Quiet-User-Activity', 'false');
+      res.set('X-Boot-Quiet-Is-System', 'false');
       logger.info({
         gate: 'boot-quiet',
         route: '/api/notifications/count',
@@ -181,6 +190,9 @@ router.get('/count', requireAuth, async (req, res, next) => {
     const stored = unreadCountCache.setIfFresh(userId, count, token);
     const outcome = stored ? 'MISS' : 'STALE-DROP';
     res.set('X-Cache', outcome);
+    res.set('X-Boot-Quiet-DB-Touched', 'true');
+    res.set('X-Boot-Quiet-User-Activity', userActivity ? 'true' : 'false');
+    res.set('X-Boot-Quiet-Is-System', isSystem ? 'true' : 'false');
     // STALE-DROP signals that the cache rejected this read's value during
     // setIfFresh — either because a concurrent writer bumped the generation
     // OR because the user's gen entry was evicted between beginRead and

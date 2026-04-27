@@ -20,7 +20,7 @@ router.get('/', requireAuth, async (req, res, next) => {
   try {
     const ctx = bootQuietContext(req);
     if (!ctx.allowDb) {
-      logBootQuiet('/api/achievements', ctx, false);
+      logBootQuiet('/api/achievements', ctx, false, undefined, res);
       return res.json({ achievements: [] });
     }
     const db = await getDbAdapter();
@@ -32,7 +32,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       ORDER BY a.category, a.id
     `, [req.user.id]);
 
-    logBootQuiet('/api/achievements', ctx, true);
+    logBootQuiet('/api/achievements', ctx, true, undefined, res);
     res.json({
       achievements: achievements.map(a => ({
         id: a.id,
