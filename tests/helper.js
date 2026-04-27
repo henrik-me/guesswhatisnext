@@ -21,10 +21,44 @@ let server = null;
 let agent = null;
 let tmpDir = null;
 
-/** Returns the supertest agent bound to the test server. */
+/**
+ * Returns the supertest agent bound to the test server.
+ *
+ * CS53-19: every Test returned by this agent has `X-User-Activity: 1` set
+ * by default, mirroring the production reality that almost every test
+ * scenario represents a user-initiated request. Boot-quiet specific tests
+ * that need to assert header-less behavior should use `getAgentNoActivity()`
+ * (returns the unwrapped agent — the caller controls headers explicitly).
+ */
 function getAgent() {
   if (!agent) throw new Error('Call setup() in beforeAll first');
+  return wrappedAgent;
+}
+
+/**
+ * Returns the unwrapped supertest agent — caller is responsible for setting
+ * `X-User-Activity: 1` on requests that are meant to represent user activity.
+ * Use this in boot-quiet contract tests that assert header-less behavior.
+ */
+function getAgentNoActivity() {
+  if (!agent) throw new Error('Call setup() in beforeAll first');
   return agent;
+}
+
+/**
+ * Wrap a supertest agent so every request method (.get, .post, .put, .delete,
+ * .patch) returns a Test that pre-sets `X-User-Activity: 1`. Tests can still
+ * override per-call (e.g. `.set('X-User-Activity', '0')` is a no-op in the
+ * server's check, which only treats the literal string '1' as truthy).
+ */
+let wrappedAgent = null;
+function buildWrappedAgent(rawAgent) {
+  const verbs = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
+  const wrap = {};
+  for (const v of verbs) {
+    wrap[v] = (...args) => rawAgent[v](...args).set('X-User-Activity', '1');
+  }
+  return wrap;
 }
 
 /** Returns the raw http.Server instance (for WS connections etc). */
@@ -61,6 +95,7 @@ async function setup() {
   });
 
   agent = supertest(server);
+  wrappedAgent = buildWrappedAgent(agent);
 }
 
 /** Shut down server and clean up temp DB. */
@@ -130,4 +165,4 @@ async function setGameConfig(mode, { rounds, round_timer_ms, inter_round_delay_m
   bustCache(mode);
 }
 
-module.exports = { getAgent, getServer, setup, teardown, registerUser, setGameConfig };
+module.exports = { getAgent, getAgentNoActivity, getServer, setup, teardown, registerUser, setGameConfig };

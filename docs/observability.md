@@ -427,6 +427,54 @@ ContainerAppConsoleLogs_CL
 
 A healthy environment shows almost all rows with `evt = "multiplayer_match_persisted"` / `path = "live"`. A `pending_writes_variant_c` spike that is not followed within minutes by a matching `multiplayer_match_replayed` count is the operational signal that the drain isn't keeping up — cross-reference § B.10 (DB unavailability state transitions) and the `pending-writes-*` log family.
 
+### B.14 Boot-quiet matrix across enrolled endpoints (CS53-19)
+
+CS53-19 extends the boot-quiet contract from a single endpoint (`/api/notifications/count`, see § B.12) to seven endpoints that the SPA touches during boot, refresh, refocus, and bfcache restore: `/api/auth/me`, `/api/features`, `/api/notifications`, `/api/notifications/count`, `/api/scores/me`, `/api/achievements`, `/api/matches/history`. Each emits a structured Pino line on every authorized request:
+
+```json
+{ "gate": "boot-quiet", "route": "/api/scores/me", "dbTouched": false,
+  "userActivity": false, "isSystem": false, "userId": 42 }
+```
+
+`dbTouched` is the single field used to verify the contract: it must be `false` for any row where `userActivity == false` AND `isSystem == false`. The exception is `/api/notifications/count` cache HIT — that route also returns `dbTouched=false` *with* the activity header, but never `true` without it.
+
+**Verify the contract holds in the last hour:**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(1h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.gate) == "boot-quiet"
+| extend route = tostring(pino.route),
+         dbTouched = tobool(pino.dbTouched),
+         userActivity = tobool(pino.userActivity),
+         isSystem = tobool(pino.isSystem)
+| where dbTouched == true and userActivity == false and isSystem == false
+| project TimeGenerated, route, userId = tostring(pino.userId), Log_s
+| order by TimeGenerated desc
+```
+
+**Zero rows is the SLO.** Any row is a contract violation — the route is touching the DB on a header-less, non-system request and must be patched in the corresponding `server/routes/*.js` handler (re-check the `bootQuietContext(req).allowDb` branch).
+
+**Per-endpoint coverage check (are we even seeing traffic?):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(1h)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.gate) == "boot-quiet"
+| summarize total = count(),
+            db_touched = countif(tobool(pino.dbTouched) == true),
+            with_activity = countif(tobool(pino.userActivity) == true)
+            by route = tostring(pino.route)
+| extend pct_db_touched = round(100.0 * db_touched / total, 1)
+| order by route asc
+```
+
+A route with `total == 0` means the SPA isn't reaching it (or telemetry is stalled). A route with `pct_db_touched` close to `100` means almost every caller is sending `X-User-Activity: 1` (expected on click-through endpoints). A route with `pct_db_touched` close to `0` is the boot-quiet "happy path" — most traffic is silent header-less polling.
+
+The container-side regression test (`scripts/container-validate.js --mode=boot-quiet`) builds the same matrix from local logs and asserts header-less rows have `dbTouched=false`; the e2e regression spec (`tests/e2e/boot-quiet.spec.mjs`) does the same against the dev server.
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:

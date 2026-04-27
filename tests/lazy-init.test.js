@@ -87,9 +87,17 @@ describe('lazy request-driven init (CS53-9 / Policy 1)', () => {
     expect(initSpy).not.toHaveBeenCalled();
   });
 
-  it('first /api/* request returns 503+Retry-After AND triggers init', async () => {
+  it('first /api/* request with user-activity header returns 503+Retry-After AND triggers init', async () => {
+    // CS53-19.D — the global cold-start init gate is now boot-quiet aware:
+    // header-less requests still get 503+Retry-After but DO NOT drive
+    // `runInit()`. Only `X-User-Activity: 1` (or system-key) requests do.
+    // This protects the boot-quiet contract for header-less boot/focus
+    // traffic that lands during a cold start.
     const callsBefore = initSpy.mock.calls.length;
-    const res = await agent.get('/api/features').set('X-Forwarded-Proto', 'https');
+    const res = await agent
+      .get('/api/features')
+      .set('X-Forwarded-Proto', 'https')
+      .set('X-User-Activity', '1');
     expect(res.status).toBe(503);
     expect(res.headers['retry-after']).toBe('5');
     expect(res.body.error).toBe('Database not yet initialized');
@@ -99,12 +107,24 @@ describe('lazy request-driven init (CS53-9 / Policy 1)', () => {
     expect(initSpy.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
+  it.skip('header-less request during cold start gets 503 but does NOT trigger init (CS53-19.D)', async () => {
+    // Boot-quiet contract: a header-less request during cold start should
+    // return 503+Retry-After WITHOUT calling runInit(). Asserting this in
+    // isolation requires a fresh server with a never-initialized DB module
+    // state (the prior test in this file already drove init). The behavior
+    // is exercised end-to-end by `npm run container:validate -- --mode=boot-quiet`
+    // and by tests/e2e/boot-quiet.spec.mjs (cold-anonymous-boot scenario).
+  });
+
   it('subsequent /api/* request after init succeeds returns 200', async () => {
     // Wait for any in-flight init from the previous test to settle, then
     // probe again. With SQLite the init is fast so by now dbInitialized
     // is true and /api/features should be 200.
     await new Promise((r) => setTimeout(r, 500));
-    const ok = await agent.get('/api/features').set('X-Forwarded-Proto', 'https');
+    const ok = await agent
+      .get('/api/features')
+      .set('X-Forwarded-Proto', 'https')
+      .set('X-User-Activity', '1');
     expect(ok.status).toBe(200);
   });
 });

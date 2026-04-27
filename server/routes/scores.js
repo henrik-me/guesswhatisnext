@@ -7,6 +7,7 @@ const { getDbAdapter } = require('../db');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const logger = require('../logger');
 const { RESERVED_USERNAME_LIKE_PATTERNS } = require('../reserved-usernames');
+const { bootQuietContext, logBootQuiet } = require('../services/boot-quiet');
 
 /** SQL fragment that excludes reserved-prefix usernames. Joins with `AND` into an existing WHERE. */
 const RESERVED_USERNAME_FILTER_SQL = RESERVED_USERNAME_LIKE_PATTERNS
@@ -314,6 +315,15 @@ router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
 /** GET /api/scores/me — get current user's scores */
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
+    const ctx = bootQuietContext(req);
+    if (!ctx.allowDb) {
+      // Boot-quiet contract (CS53-19): header-less non-system requests get
+      // an empty payload immediately — the SPA refetches on first user
+      // gesture (typically opening the profile screen) with the activity
+      // header set.
+      logBootQuiet('/api/scores/me', ctx, false);
+      return res.json({ scores: [], stats: [] });
+    }
     const db = await getDbAdapter();
     // CS52-6 § Decision #6: profile shows ALL rows including legacy; the
     // `source` column drives the per-row provenance badge in the UI
@@ -356,6 +366,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
     }
 
     res.json({ scores, stats });
+    logBootQuiet('/api/scores/me', ctx, true);
   } catch (err) {
     next(err);
   }

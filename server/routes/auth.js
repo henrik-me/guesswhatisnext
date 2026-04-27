@@ -9,6 +9,7 @@ const { getDbAdapter } = require('../db');
 const { generateToken, requireAuth } = require('../middleware/auth');
 const { isReservedUsername } = require('../reserved-usernames');
 const logger = require('../logger');
+const { bootQuietContext, logBootQuiet } = require('../services/boot-quiet');
 
 const router = express.Router();
 
@@ -121,11 +122,32 @@ router.post('/login', loginLimiter, async (req, res, next) => {
   }
 });
 
-/** GET /api/auth/me — get current user from token */
+/** GET /api/auth/me — get current user from token.
+ *
+ * Boot-quiet contract (CS53-19): the JWT is validated in-memory by
+ * `requireAuth` middleware (no DB). The DB lookup of the user record is
+ * SKIPPED for header-less non-system requests — the JWT-derived `req.user`
+ * shape (id, username, role) is sufficient for boot-time UI ("logged in
+ * as X"). When `X-User-Activity: 1` IS present (or system-key caller),
+ * we look up `created_at` and any other DB-only fields. The SPA tolerates
+ * `created_at: null` on the boot-time response and re-fetches with the
+ * activity header on the first user gesture.
+ */
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
+    const ctx = bootQuietContext(req);
+    if (!ctx.allowDb) {
+      logBootQuiet('/api/auth/me', ctx, false);
+      return res.json({
+        user: {
+          ...req.user,
+          created_at: null,
+        },
+      });
+    }
     const db = await getDbAdapter();
     const row = await db.get('SELECT created_at FROM users WHERE id = ?', [req.user.id]);
+    logBootQuiet('/api/auth/me', ctx, true);
     res.json({
       user: {
         ...req.user,

@@ -10,7 +10,7 @@
  *   - source filter on legacy /api/scores/leaderboard
  */
 
-const { getAgent, setup, teardown, registerUser } = require('./helper');
+const { getAgent, getAgentNoActivity, setup, teardown, registerUser } = require('./helper');
 
 let userToken;
 
@@ -34,7 +34,7 @@ function authedSync(body, headers = {}) {
 
 describe('POST /api/sync — boot-quiet enforcement', () => {
   test('returns 400 when X-User-Activity header is missing', async () => {
-    const res = await getAgent()
+    const res = await getAgentNoActivity()
       .post('/api/sync')
       .set('Authorization', `Bearer ${userToken}`)
       .send({ queuedRecords: [], revalidate: {} });
