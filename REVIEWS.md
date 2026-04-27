@@ -67,7 +67,7 @@ Requesting review (requires gh CLI ≥ 2.88.0): `gh pr edit <PR#> --add-reviewer
 3. Reply to each comment with disposition and rationale, then fix valid issues
 4. Resolve all threads (fixed or acknowledged) — always reply BEFORE resolving
 5. Re-request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-6. Repeat from step 1 until Copilot approves with no new comments
+6. Repeat from step 1 until Copilot review is clean — the latest Copilot review is `COMMENTED` with all inline threads resolved, OR `APPROVED`. The Copilot bot does not always issue `APPROVED`; in this repo it almost always converges as `COMMENTED` with no new comments, and that state — combined with all inline threads resolved — is acceptable per the merge gate. See [§ Long-running PRs in fast-churning main → Review state on the `--admin` exception path in OPERATIONS.md](OPERATIONS.md#review-state-on-the---admin-exception-path) for the full criteria that the merge gate uses.
 
 ### Waiting for Copilot Review
 
