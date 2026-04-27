@@ -713,8 +713,56 @@ jobs:
             echo "OLD_REVISION_NAME=$OLD_REV" >> "$GITHUB_ENV"
             echo "Captured OLD revision: $OLD_REV ($OLD_FQDN)"
 
-      - name: Smoke OLD revision against NEW schema (CS41-12)
+      # CS61-5: positive transition marker. Probe /api/admin/migrations
+      # (CS61-2 endpoint, requireSystem auth) on the OLD revision before
+      # CS41-12 OLD smoke runs. The route's PRESENCE — regardless of auth
+      # outcome — proves the OLD revision is post-CS61-2; ABSENCE (HTTP
+      # 404) proves the OLD revision pre-dates CS61 and the CS41-12 smoke
+      # would necessarily fail (smoke-bot was never seeded into the OLD
+      # revision's ephemeral SQLite). On 404, gracefully skip CS41-12 so
+      # the first-deploy-after-CS61-3 transition succeeds; on the second
+      # deploy CS41-12 runs naturally. See plan v3 § D3.
+      #
+      # NOTE: this marker only runs when CS41-12 itself would have run
+      # (MIGRATION_STATUS == 'applied' && OLD_REVISION_FQDN != ''). When
+      # those preconditions are absent, CS41-12's existing `if:` already
+      # skips, so the marker has nothing to mark.
+      - name: Detect CS61-aware OLD revision (CS41-12 transition marker)
+        id: cs41-12-marker
         if: env.MIGRATION_STATUS == 'applied' && env.OLD_REVISION_FQDN != ''
+        env:
+          SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+        run: |
+          if [ -z "$OLD_REVISION_FQDN" ]; then
+            echo "::notice::CS61-5: OLD_REVISION_FQDN unset (first deploy ever); CS41-12 OLD smoke will skip naturally"
+            echo "skip-old-smoke=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Probe /api/admin/migrations on OLD revision; route absence
+          # (404) means pre-CS61. --max-time 10 keeps a hung OLD revision
+          # from stalling the deploy; curl returns "000" on timeout/DNS
+          # failure, which falls through to the unexpected-status arm.
+          http_status=$(curl -sk -o /dev/null -w "%{http_code}" \
+            -H "x-api-key: $SYSTEM_API_KEY" \
+            --max-time 10 \
+            "https://$OLD_REVISION_FQDN/api/admin/migrations")
+          case "$http_status" in
+            200|401|403)
+              echo "✅ CS61-5: OLD revision is CS61-aware (HTTP $http_status from /api/admin/migrations); proceeding with CS41-12 smoke"
+              echo "skip-old-smoke=false" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "::notice::CS61-5: OLD revision pre-dates CS61 (HTTP 404 from /api/admin/migrations); skipping CS41-12 OLD smoke for this transition deploy. Re-run after one transition deploy and CS41-12 will work."
+              echo "skip-old-smoke=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::CS61-5: unexpected HTTP $http_status from /api/admin/migrations on OLD revision $OLD_REVISION_NAME ($OLD_REVISION_FQDN); cannot determine CS61-awareness. If OLD revision is broken/restarting, re-run the deploy; if persistent, investigate the OLD revision's health."
+              exit 1
+              ;;
+          esac
+
+      - name: Smoke OLD revision against NEW schema (CS41-12)
+        if: env.MIGRATION_STATUS == 'applied' && env.OLD_REVISION_FQDN != '' && steps.cs41-12-marker.outputs.skip-old-smoke != 'true'
         env:
           SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_STAGING }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
