@@ -1,6 +1,6 @@
 # CS60 — Data Appendix (cost & telemetry actuals)
 
-**Status:** companion to [`planned_cs60_post-cs54-observability-followup.md`](planned_cs60_post-cs54-observability-followup.md). Travels with CS60 through its lifecycle (planned → active → done).
+**Status:** companion to [`active_cs60_post-cs54-observability-followup.md`](active_cs60_post-cs54-observability-followup.md). Travels with CS60 through its lifecycle (planned → active → done).
 **Purpose:** durable, append-only record of empirical observability data captured by CS41 deploys and CS60 measurement windows. Keeping it as a separate file (rather than inline in CS60) keeps CS60's plan readable while allowing this file to grow large over time without bloating the planning doc.
 
 **Read order:** check the [Manifest](#manifest) below to find the most recent measurement, then jump to the relevant section. The Manifest is the single source of truth for what's recorded; sections may be appended out of strict chronological order.

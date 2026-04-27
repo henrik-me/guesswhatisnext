@@ -451,7 +451,7 @@ Spot-checked the post-deploy step output of run 24938590966 — no occurrence of
 
 ## CS54-8 — Cost watch schedule
 
-**Follow-up tracking:** the three cost-measurement windows have been folded into [CS60 — Post-CS54 observability follow-up](../planned/planned_cs60_post-cs54-observability-followup.md) as tasks CS60-1 (+24h), CS60-2 (+7d), CS60-3 (+30d). Actuals get recorded in CS60's "Measurements" table, not here.
+**Follow-up tracking:** the three cost-measurement windows have been folded into [CS60 — Post-CS54 observability follow-up](../active/active_cs60_post-cs54-observability-followup.md) as tasks CS60-1 (+24h), CS60-2 (+7d), CS60-3 (+30d). Actuals get recorded in CS60's "Measurements" table, not here.
 
 CS54 closes with verification green; CS54-8 measurements are intentionally deferred to the dates below because they cannot be obtained today.
 
@@ -475,7 +475,7 @@ Whichever orchestrator runs the +24h / +7d / +30d query appends a row under each
 
 ## CS54-9 — Deferred Work Evaluation appendix
 
-**Follow-up tracking:** the actionable follow-ups for this appendix have been folded into [CS60 — Post-CS54 observability follow-up](../planned/planned_cs60_post-cs54-observability-followup.md) as proper tasks (CS60-4 / CS60-5 / CS60-6). The qualitative analysis below remains the durable design record that those CS60 tasks read from before deciding implement-vs-defer-vs-cancel; the live status of each gap is tracked in CS60, not here.
+**Follow-up tracking:** the actionable follow-ups for this appendix have been folded into [CS60 — Post-CS54 observability follow-up](../active/active_cs60_post-cs54-observability-followup.md) as proper tasks (CS60-4 / CS60-5 / CS60-6). The qualitative analysis below remains the durable design record that those CS60 tasks read from before deciding implement-vs-defer-vs-cancel; the live status of each gap is tracked in CS60, not here.
 
 Following the evaluate-first deferral pattern: each gap below is documented with options + recommendation. **No follow-up CS file is created today.** A future orchestrator with CS54-8 measurement data in hand will decide whether to file one CS, multiple CSs, or fold these into adjacent clickstops (CS47, CS56). The decision is recorded here so it cannot be silently dropped.
 
@@ -554,7 +554,7 @@ CS54 lands the smallest verifiable App Insights wiring on top of an already-OTel
 - 2 ACA secrets registered: `appinsights-connection-string` on `gwn-staging` + `gwn-production`.
 - 2 deploys validated end-to-end (CS54-6).
 
-**Deferred (now tracked in [CS60 — Post-CS54 observability follow-up](../planned/planned_cs60_post-cs54-observability-followup.md), not silently dropped):**
+**Deferred (now tracked in [CS60 — Post-CS54 observability follow-up](../active/active_cs60_post-cs54-observability-followup.md), not silently dropped):**
 - 3 observability gaps evaluated (mssql instrumentation, Pino→AI log forwarding, exceptions). See [Deferred Work Evaluation appendix](#cs54-9--deferred-work-evaluation-appendix) for the qualitative analysis. Implementation-vs-defer-vs-cancel decision lives in CS60-4 / CS60-5 / CS60-6, gated on CS60-3 ingest data.
 - 3 cost-watch measurement windows scheduled (+24h / +7d / +30d). Now CS60-1 / CS60-2 / CS60-3 with actuals recorded in CS60's "Measurements" table.
 
@@ -562,4 +562,4 @@ CS54 lands the smallest verifiable App Insights wiring on top of an already-OTel
 - Initial prod deploy attempt 24938579240 (19:16:13Z) failed at image-validate because the workflow was given a 7-char short SHA. The validation step rejected it as expected; the second attempt with the full 40-char SHA succeeded. No code change needed — the guard worked.
 - Production DB returned `capacity-exhausted` 503s during CS54-6 prod probes. This is unrelated to CS54 wiring (Azure SQL free-tier monthly cap reached). The 503s still landed in AI as `requests` rows, which is the only thing CS54-6 was asserting.
 
-**For the next orchestrator who picks up the deferred work:** claim [CS60](../planned/planned_cs60_post-cs54-observability-followup.md) from `project/clickstops/planned/`. CS60-1 (the first measurement window) runs at 2026-04-26T22:39Z.
+**For the next orchestrator who picks up the deferred work:** claim [CS60](../active/active_cs60_post-cs54-observability-followup.md) from `project/clickstops/planned/`. CS60-1 (the first measurement window) runs at 2026-04-26T22:39Z.

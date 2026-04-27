@@ -87,7 +87,7 @@ Filled-in checklists are recorded in the clickstop's archive file upon completio
 
 **Examples in this repo:**
 
-- [CS54](project/clickstops/done/done_cs54_enable-app-insights-in-prod.md) closed with deferred observability gaps. The qualitative analysis lived in a `## CS54-9 Deferred Work Evaluation` appendix; the live tracking went into [CS60](project/clickstops/planned/planned_cs60_post-cs54-observability-followup.md) (Disposition 2, single CS folding multiple items). CS54's appendix cross-links forward to CS60; CS60's tasks cross-link backward to the appendix. This is the pattern.
+- [CS54](project/clickstops/done/done_cs54_enable-app-insights-in-prod.md) closed with deferred observability gaps. The qualitative analysis lived in a `## CS54-9 Deferred Work Evaluation` appendix; the live tracking went into [CS60](project/clickstops/active/active_cs60_post-cs54-observability-followup.md) (Disposition 2, single CS folding multiple items). CS54's appendix cross-links forward to CS60; CS60's tasks cross-link backward to the appendix. This is the pattern.
 - A simpler case where Disposition 1 (just do it in this CS) or Disposition 4 (cancel with reason) would have been preferred is when the deferred item is a one-line documentation fix or a clearly-out-of-scope concern that won't ever justify its own CS.
 
 ### WORKBOARD.md — Live Coordination
