@@ -1,6 +1,6 @@
 # CS62 — WORKBOARD readability restructure (and H1 ↔ filename consistency)
 
-**Status:** ⬜ Planned
+**Status:** 🟢 Active (yoga-gwn-c4, claimed 2026-04-26T17:38Z)
 **Origin:** UX/process iteration with the orchestrator (yoga-gwn-c4 session, 2026-04-26). The current `## Active Work` table on `WORKBOARD.md` packs ~10 columns into a single markdown row; the rightmost `Next Action` cell wraps to a thin column and is unreadable in practice. Restructure for readability without giving up the docs-consistency parser guarantees.
 
 ## Goal
