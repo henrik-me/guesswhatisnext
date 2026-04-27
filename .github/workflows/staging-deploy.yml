@@ -521,11 +521,13 @@ jobs:
       # CS61-3 (D4): early secret preflight. Aborts the staging deploy
       # within seconds (before any Azure CLI mutation, before any container
       # update) if either secret required by the downstream CS61 seed step
-      # or the CS41 smoke chain is unset. The CS41-1/CS41-12/CS41-5
-      # skip-on-secret-missing branches still exist as a safety net (they
-      # are removed in CS61-4 once CS61-6 verifies the live deploy works);
-      # for now preflight + skip coexist — preflight catches early, skip
-      # is the safety net.
+      # or the CS41 smoke chain is unset. Per CS61-4 this is now the
+      # SINGLE point of failure for missing secrets — the prior
+      # skip-on-secret-missing branches in CS41-1/CS41-12/CS41-5 step
+      # bodies have been removed (CS61-6 verification deploy run
+      # 24976962804 confirmed the early preflight catches the only
+      # failure mode they masked, and parity with prod-deploy.yml is
+      # now restored).
       - name: Preflight — required secrets present (CS61-3)
         if: always()
         run: |
@@ -855,8 +857,11 @@ jobs:
       # Skip conditions (each emits a notice, NOT a failure):
       #   - MIGRATION_STATUS != 'applied'  → no schema change occurred
       #     (staging still on SQLite, or migration step skipped).
-      #   - SMOKE_USER_PASSWORD_STAGING unset → mirror CS41-1 smoke skip behavior.
       #   - steps.deploy.outputs.current-revision empty → first deploy ever.
+      #
+      # Note: SMOKE_USER_PASSWORD_STAGING absence is now caught by the
+      # CS61-3 early preflight step at job start (CS61-4); the prior
+      # mirror-CS41-1 skip branch in this step body was removed.
       #
       # Failure mode (smoke fails): the migration HAS been applied to staging
       # DB, but the OLD revision cannot serve against it. Aborting BEFORE
@@ -947,8 +952,8 @@ jobs:
           PERF_WARN_MS: '2000'
         run: |
           if [ -z "$SMOKE_USER_PASSWORD" ]; then
-            echo "::notice::secrets.SMOKE_USER_PASSWORD_STAGING is unset — skipping CS41-12 old-revision smoke (mirrors CS41-1 skip behavior)."
-            exit 0
+            echo "::error::secrets.SMOKE_USER_PASSWORD_STAGING is unset; cannot run CS41-12 old-revision smoke. The CS61-3 preflight should have caught this — investigate why it did not."
+            exit 1
           fi
           node scripts/smoke.js "$OLD_REVISION_FQDN" || {
             echo "::error::CS41-12: MIGRATION BREAKS OLD STAGING SERVER — aborting before traffic shift"
@@ -992,9 +997,8 @@ jobs:
           SMOKE_RESULTS_PATH: smoke-results.json
         run: |
           if [ -z "$SMOKE_USER_PASSWORD" ]; then
-            echo "::notice::secrets.SMOKE_USER_PASSWORD_STAGING is unset — skipping CS41-1 smoke. Operator action: set the secret per OPERATIONS.md to enable pre-cutover validation."
-            echo "smoke-exit=skipped" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::secrets.SMOKE_USER_PASSWORD_STAGING is unset; cannot run CS41-1 smoke. The CS61-3 preflight should have caught this — investigate why it did not. Operator action: set the secret per OPERATIONS.md."
+            exit 1
           fi
           set +e
           node scripts/smoke.js "${{ steps.rev.outputs.fqdn }}"
@@ -1348,8 +1352,8 @@ jobs:
           EXPECTED_ROW_COUNT: '6'
         run: |
           if [ -z "$SMOKE_USER_PASSWORD" ]; then
-            echo "::notice::CS41-5: SMOKE_USER_PASSWORD_STAGING unset — skipping rollback smoke (mirrors CS41-1 skip behavior)."
-            exit 0
+            echo "::error::CS41-5: SMOKE_USER_PASSWORD_STAGING is unset; cannot run rollback smoke. The CS61-3 preflight should have caught this — investigate why it did not."
+            exit 1
           fi
 
           # 1. Smoke against the rollback target. If THIS fails, both the
