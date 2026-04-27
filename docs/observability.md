@@ -502,6 +502,27 @@ ContainerAppConsoleLogs_CL
 
 **Cross-link:** the beacon is best-effort observability — IP can be spoofed and `navigator.sendBeacon` is fire-and-forget, so use this as a trend signal, not for alerting on individual incidents.
 
+### B.16 CS53-10 simulator activation audit (must be 0 outside local validation)
+
+The CS53-10 connect-time simulators in [`server/db/mssql-adapter.js`](../server/db/mssql-adapter.js) emit a structured Pino warn `gate=simulated-unavailable` whenever `GWN_SIMULATE_DB_UNAVAILABLE=*` or `GWN_SIMULATE_COLD_START_FAILS=N` is set in the environment. Real staging/prod must never set those env vars (they would convert the live DB into a fake-failure surface), so this query is a tripwire: if it ever returns a non-zero count for a staging or prod resource, an operator misconfigured a deployment and the corresponding revision should be rolled back immediately.
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.gate) == "simulated-unavailable"
+| summarize fires = count(),
+            modes = make_set(tostring(pino.mode)),
+            first_seen = min(TimeGenerated),
+            last_seen = max(TimeGenerated)
+            by bin(TimeGenerated, 1d)
+| order by TimeGenerated desc
+```
+
+**Healthy interpretation (staging + prod):** zero rows. The simulators are only meant to fire under `npm run container:validate --mode={cold-start-fails,capacity-exhausted,transient}` on a developer machine.
+
+**Unhealthy interpretation:** any non-zero count on the prod or staging AI resource → the env var was set in a real deployment. Roll back the latest revision and audit how the env var leaked in (likely a misconfigured `containerapp create/update` or compose file copy).
+
 ## C. Staging vs prod filtering
 
 There is **no cross-environment filter inside a single KQL query** — staging and production are deliberately separate AI resources ([CS54 design decision #2](../project/clickstops/done/done_cs54_enable-app-insights-in-prod.md#design-decisions)). The "filter" is which resource you point the portal/CLI at:

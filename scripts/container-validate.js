@@ -440,20 +440,244 @@ async function runBootQuietMode() {
   }
 }
 
+// CS53-10 — DB-unavailable + cold-start-fails simulator harness ------------
+//
+// Each CS53-10 mode brings up the stack with a different combination of
+// GWN_SIMULATE_* env vars then probes a DB-touching endpoint and asserts
+// the corresponding 503 path:
+//
+//   cold-start-fails   GWN_SIMULATE_COLD_START_FAILS=N  → ≥N×503+Retry-After
+//                                                         then 200 (transient
+//                                                         classifier path).
+//   capacity-exhausted GWN_SIMULATE_DB_UNAVAILABLE=     → 503 + body
+//                      capacity_exhausted                {unavailable:true,
+//                                                        reason:'capacity-
+//                                                        exhausted'} AND no
+//                                                        Retry-After header.
+//                                                        Repeated; never 200.
+//   transient          GWN_SIMULATE_DB_UNAVAILABLE=     → every probe gets
+//                      transient                         503+Retry-After;
+//                                                         never 200.
+//
+// All probes send `X-User-Activity: 1` so the boot-quiet-aware /api/* gate
+// (server/app.js:258-280) actually fires `runInit()`. Without the header
+// the gate returns 503+Retry-After regardless of DB state, masking what
+// we're trying to assert.
+const CS53_10_PROBE_PATH = '/api/scores/leaderboard?variant=freeplay';
+const CS53_10_PROBE_BUDGET_MS = 90000; // enough to see ≥3 retries + recovery
+const CS53_10_NEVER_RECOVER_PROBES = 6; // mode=*-no-recover sample size
+const CS53_10_PROBE_INTERVAL_MS = 2000;
+
+async function probeUntilStatus({ url, statusPredicate, budgetMs, label }) {
+  const start = Date.now();
+  let attempts = 0;
+  let saw503 = false;
+  let firstRetryAfter = null;
+  let firstSuccessElapsedMs = null;
+  let lastBody = null;
+  let lastHeaders = null;
+  while (Date.now() - start < budgetMs) {
+    attempts++;
+    const res = await httpsGet(url, { timeoutMs: 10000, headers: { 'X-User-Activity': '1' } });
+    const elapsed = Date.now() - start;
+    if (res.error) {
+      log(`  ${label} attempt ${attempts} (+${elapsed}ms): network error — ${res.error}`);
+    } else {
+      const ra = res.headers['retry-after'];
+      log(`  ${label} attempt ${attempts} (+${elapsed}ms): HTTP ${res.status}${ra ? ` Retry-After=${ra}` : ''}`);
+      if (res.status === 503) {
+        saw503 = true;
+        if (firstRetryAfter === null && ra) firstRetryAfter = ra;
+      }
+      lastBody = res.body;
+      lastHeaders = res.headers;
+      if (statusPredicate(res)) {
+        firstSuccessElapsedMs = elapsed;
+        break;
+      }
+    }
+    await new Promise((r) => setTimeout(r, CS53_10_PROBE_INTERVAL_MS));
+  }
+  return { attempts, saw503, firstRetryAfter, firstSuccessElapsedMs, lastBody, lastHeaders };
+}
+
+async function probeNeverRecover({ url, label, count }) {
+  const responses = [];
+  for (let i = 0; i < count; i++) {
+    const res = await httpsGet(url, { timeoutMs: 10000, headers: { 'X-User-Activity': '1' } });
+    if (res.error) {
+      log(`  ${label} probe ${i + 1}/${count}: network error — ${res.error}`);
+      responses.push({ status: null, headers: {}, body: '', error: res.error });
+    } else {
+      const ra = res.headers['retry-after'];
+      log(`  ${label} probe ${i + 1}/${count}: HTTP ${res.status}${ra ? ` Retry-After=${ra}` : ''}`);
+      responses.push({ status: res.status, headers: res.headers, body: res.body });
+    }
+    await new Promise((r) => setTimeout(r, CS53_10_PROBE_INTERVAL_MS));
+  }
+  return responses;
+}
+
+async function runCs53_10Mode(mode) {
+  log(`CS53-10 simulator validation — mode=${mode} project=${PROJECT_NAME}`);
+
+  // Step 1: tear down any existing stack.
+  log('Stopping any existing validation stack…');
+  compose('down -v', { silent: true });
+
+  // Step 2: bring up the stack with the right env-var combination.
+  // No cold-start delay (the CS53-10 sims own the connect-time behavior).
+  const env = {
+    GWN_SIMULATE_COLD_START_MS: '',
+    GWN_SIMULATE_COLD_START_FAILS: '',
+    GWN_SIMULATE_DB_UNAVAILABLE: '',
+    HTTPS_PORT,
+    HTTP_PORT,
+  };
+  if (mode === 'cold-start-fails') {
+    env.GWN_SIMULATE_COLD_START_FAILS = '3';
+  } else if (mode === 'capacity-exhausted') {
+    env.GWN_SIMULATE_DB_UNAVAILABLE = 'capacity_exhausted';
+  } else if (mode === 'transient') {
+    env.GWN_SIMULATE_DB_UNAVAILABLE = 'transient';
+  }
+  const up = compose('up -d --build', { env });
+  if (up.status !== 0) {
+    logErr('docker compose up failed.');
+    teardown();
+    process.exit(1);
+  }
+
+  // Step 3: wait for /healthz (no DB touch — should be reachable regardless).
+  const healthy = await waitForHealthz();
+  if (!healthy) {
+    logErr('/healthz did not become reachable within timeout.');
+    compose('logs --tail=200 app');
+    teardown();
+    process.exit(1);
+  }
+
+  const url = new URL(CS53_10_PROBE_PATH, BASE_URL).href;
+  let ok = true;
+
+  if (mode === 'cold-start-fails') {
+    log(`Probing ${url} — expect ≥3× 503+Retry-After then 200 within ${Math.round(CS53_10_PROBE_BUDGET_MS / 1000)}s.`);
+    const result = await probeUntilStatus({
+      url,
+      statusPredicate: (r) => r.status === 200,
+      budgetMs: CS53_10_PROBE_BUDGET_MS,
+      label: 'cold-start-fails',
+    });
+    log(`Result: attempts=${result.attempts} saw503=${result.saw503} firstRetryAfter=${result.firstRetryAfter} first200ElapsedMs=${result.firstSuccessElapsedMs}`);
+    if (!result.saw503) { logErr('FAIL: never observed a 503 — sim did not fire.'); ok = false; }
+    if (result.firstRetryAfter == null && result.saw503) {
+      logErr('FAIL: 503 response did not include Retry-After header (transient classifier broken?).');
+      ok = false;
+    }
+    if (result.firstSuccessElapsedMs == null) {
+      logErr('FAIL: never recovered to 200 — sim did not stop at limit (or warmup loop is broken).');
+      ok = false;
+    }
+  } else if (mode === 'capacity-exhausted') {
+    log(`Probing ${url} — first wait for the capacity-exhausted 503 shape (init must run + classify), then assert ${CS53_10_NEVER_RECOVER_PROBES} consecutive probes all return that shape with no Retry-After.`);
+    // Phase A: wait until the gate flips to the capacity-exhausted body
+    // (runInit must complete its first attempt and set dbUnavailability).
+    const phaseA = await probeUntilStatus({
+      url,
+      statusPredicate: (r) => {
+        if (r.status !== 503) return false;
+        try {
+          const b = JSON.parse(r.body);
+          return b && b.unavailable === true && b.reason === 'capacity-exhausted';
+        } catch { return false; }
+      },
+      budgetMs: CS53_10_PROBE_BUDGET_MS,
+      label: 'capacity-exhausted/phase-A',
+    });
+    if (phaseA.firstSuccessElapsedMs == null) {
+      logErr('FAIL: never observed the capacity-exhausted response shape — sim did not classify correctly.');
+      ok = false;
+    } else if (phaseA.lastHeaders && phaseA.lastHeaders['retry-after']) {
+      logErr(`FAIL: capacity-exhausted 503 must NOT include Retry-After (got '${phaseA.lastHeaders['retry-after']}').`);
+      ok = false;
+    }
+    // Phase B: now that the gate is in capacity-exhausted state, every
+    // probe must match the same shape (until the 30s backoff window
+    // expires and a real request can re-trigger init — we deliberately
+    // run fewer than 6×2s=12s probes so we stay inside that window).
+    if (ok) {
+      const phaseB = await probeNeverRecover({ url, label: 'capacity-exhausted/phase-B', count: CS53_10_NEVER_RECOVER_PROBES });
+      for (const r of phaseB) {
+        if (r.status !== 503) {
+          logErr(`FAIL: phase-B expected 503, got ${r.status}.`);
+          ok = false;
+          continue;
+        }
+        if (r.headers['retry-after']) {
+          logErr(`FAIL: phase-B 503 must NOT include Retry-After (got '${r.headers['retry-after']}').`);
+          ok = false;
+        }
+        let body = null;
+        try { body = JSON.parse(r.body); } catch { /* fall through */ }
+        if (!body || body.unavailable !== true || body.reason !== 'capacity-exhausted') {
+          logErr(`FAIL: phase-B body shape mismatch — got: ${r.body && r.body.slice(0, 200)}`);
+          ok = false;
+        }
+      }
+    }
+  } else if (mode === 'transient') {
+    log(`Probing ${url} ${CS53_10_NEVER_RECOVER_PROBES}× — expect 503+Retry-After on every probe (transient classifier; never recovers because sim throws on every connect).`);
+    const responses = await probeNeverRecover({ url, label: 'transient', count: CS53_10_NEVER_RECOVER_PROBES });
+    for (const r of responses) {
+      if (r.status !== 503) {
+        logErr(`FAIL: expected 503 on every probe, got ${r.status}.`);
+        ok = false;
+      } else if (!r.headers['retry-after']) {
+        logErr('FAIL: transient 503 must include Retry-After header.');
+        ok = false;
+      }
+    }
+  }
+
+  if (!ok) {
+    log('Dumping last 200 lines of app logs for diagnosis:');
+    compose('logs --tail=200 app');
+  }
+
+  teardown();
+  if (ok) {
+    log(`✅ CS53-10 mode=${mode} validation PASSED.`);
+    process.exit(0);
+  } else {
+    logErr(`CS53-10 mode=${mode} validation FAILED.`);
+    process.exit(1);
+  }
+}
+
 async function main() {
   // CS53-19.A.2 — `--mode=boot-quiet` runs the per-endpoint contract matrix
   // instead of the cold-start probe. The two modes are independent: the
   // existing `--mode=default` cold-start cycle stays the gate for CS53
   // policy 2; the new mode is the gate for CS53-19 boot-quiet enrollment.
+  // CS53-10 — `--mode={cold-start-fails,capacity-exhausted,transient}` use
+  // the GWN_SIMULATE_* env vars to exercise the slow-retry init loop and
+  // the central error handler's two 503 paths against a real container.
+  const SUPPORTED_MODES = new Set([
+    'default', 'boot-quiet', 'cold-start-fails', 'capacity-exhausted', 'transient',
+  ]);
   const modeArg = process.argv.find((a) => a.startsWith('--mode='));
   const mode = modeArg ? modeArg.slice('--mode='.length) : 'default';
+  if (!SUPPORTED_MODES.has(mode)) {
+    logErr(`Unknown --mode=${mode} (supported: ${Array.from(SUPPORTED_MODES).join(', ')}).`);
+    process.exit(2);
+  }
   if (mode === 'boot-quiet') {
     await runBootQuietMode();
     return;
   }
-  if (mode !== 'default') {
-    logErr(`Unknown --mode=${mode} (supported: default, boot-quiet).`);
-    process.exit(2);
+  if (mode === 'cold-start-fails' || mode === 'capacity-exhausted' || mode === 'transient') {
+    await runCs53_10Mode(mode);
+    return;
   }
 
   log(`CS53 cold-start container validation — project=${PROJECT_NAME}`);
