@@ -197,7 +197,7 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 
 **Sub-Agent Checklist** (include verbatim in every sub-agent prompt — the orchestrator must provide: task ID, acceptance criteria, worktree slot, branch name, port, and edge cases):
 1. Read INSTRUCTIONS.md in the repository root before starting any work
-2. Read WORKBOARD.md for current project context and active work — **do not edit it**; State updates are the orchestrator's job (see [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D)
+2. Read WORKBOARD.md for current project context and active work — **do not edit it**. Specifically: do NOT add yourself or annotate yourself (e.g. `(sub-agent)` suffix) in the Orchestrators table; do NOT modify the State column or any row in Active Work other than the row your dispatching orchestrator already created for your task. State updates are the orchestrator's job (see [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D). The `owner-in-orchestrators-table` docs:strict rule will fail CI if you violate this.
 3. Run `npm install` in worktree
 4. Set `$env:PORT = "300N"` for the assigned slot
 5. Implement the task (commit after each meaningful step with `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer). **Emit `STATE: implementing` on the first interim update after edits begin.**
@@ -221,7 +221,7 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 - **Validation commands:** the `npm run lint && npm test && npm run test:e2e` line (or `npm run check:docs:strict` for docs-only) the agent must run before opening a PR.
 - **Commit & PR steps:** commit message format (conventional + `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`), `git push -u origin <branch>`, `gh pr create` with title/body conventions, and (for code/config PRs) `gh pr edit <#> --add-reviewer Copilot`.
 - **State-reporting protocol:** the explicit `STATE: <value>` line for each transition listed in § Agent Progress Reporting. The final report must end with greppable `STATE:` (and `PR:` when applicable) lines. Reference [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) for the canonical vocabulary.
-- **Constraints:** do not edit `WORKBOARD.md`; do not touch other agents' clickstop rows; do not work outside the assigned worktree; mark only the agent's own claimed task row `✅ Done` with the PR link.
+- **Constraints:** do not edit `WORKBOARD.md` (this includes: do NOT add yourself to the Orchestrators table, do NOT use `(sub-agent)` annotation in any column, do NOT modify the State column); do not touch other agents' clickstop rows; do not work outside the assigned worktree; mark only the agent's own claimed task row `✅ Done` with the PR link.
 
 This checklist exists so dispatched agents have everything needed to report state mechanically without orchestrator follow-up. Omitting any bullet pushes work back onto the orchestrator and degrades the State column to fiction (see [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D).
 
