@@ -18,6 +18,7 @@ CS44-3 schema upgrade.
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | 🟢 Active | 2026-04-27T01:15Z |
 | yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | 🟢 Active | 2026-04-27T03:20Z |
 | yoga-gwn-c5 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot5 | 🟢 Active | 2026-04-26T03:05Z |
+| yoga-gwn-c5 (sub-agent) | HENRIKM-YOGA | C:\src\gwn-worktrees\wt-cs52-seed-route | 🟢 Active | 2026-04-27T04:30Z |
 | omni-gwn | HENRIKM-OMNI| C:\src\guesswhatisnext | ⚪ Offline | 2026-04-22T00:55Z |
 | omni-gwn-c2 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot2 | ⚪ Offline | 2026-04-21T22:38Z |
 
