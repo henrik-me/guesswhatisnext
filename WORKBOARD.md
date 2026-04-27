@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main -- no PR required.
 
-> **Last updated:** 2026-04-27T02:10Z
+> **Last updated:** 2026-04-27T03:05Z
 
 > **CS62 schema note (2026-04-27):** the `## Active Work` table now uses 6 columns (`CS-Task ID | Title | State | Owner | Last Updated | Blocked Reason`). Each entry is **two markdown rows**: a status row, then a description-continuation row whose `CS-Task ID` cell is **blank** (the parser uses this as the "skip me" signal for per-row checks). The Title cell is multi-line: ``**Bold human title**<br>WT: `worktree`<br>B:&nbsp; `branch` ``. PR refs live inline in the description as `[#NNN](https://github.com/henrik-me/guesswhatisnext/pull/NNN)`. The Title's bolded line 1 must equal the parent CS file's H1 human title (warn-only `workboard-title-matches-h1` rule, CS62-3). Active orchestrators: `git pull` and re-read `OPERATIONS.md` § Sub-agent dispatch checklist + `TRACKING.md` § WORKBOARD entry template before your next claim.
 

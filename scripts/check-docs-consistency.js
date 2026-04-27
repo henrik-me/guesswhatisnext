@@ -649,8 +649,7 @@ function colIndex(headers, predicate) {
 function getActiveWorkTable(lines) {
   // CS62: the `## Active Work` section may contain a leading legend/notes
   // table before the real data table. Walk all tables in the section and
-  // return the first one whose headers contain `CS-Task ID` (or the
-  // pre-CS62 `Task ID` shape, accepted via CS_TASK_ID_HEADER_RE), with a
+  // return the first one whose headers contain `CS-Task ID`, with a
   // sensible fallback to header sets that include both `State` and `Owner`
   // (or `Agent ID`) for forward-compat with future schema tweaks. Falls
   // back to the first-table-found as a last resort so existing fixtures
