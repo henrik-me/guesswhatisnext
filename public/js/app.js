@@ -11,6 +11,13 @@ import { progressiveLoad, MESSAGE_SETS, RetryableError, UnavailableError } from 
 import { validateStoredAuthToken } from './auth-boot.js';
 import { showClaimPromptModal } from './claim-modal.js';
 import {
+  LEADERBOARD_MODE_KEY, LEADERBOARD_SOURCE_KEY, LEADERBOARD_PERIOD_KEY,
+  VALID_LB_MODES, VALID_LB_SOURCES, VALID_LB_PERIODS,
+  DEFAULT_LB_MODE, DEFAULT_LB_SOURCE, DEFAULT_LB_PERIOD,
+  loadStoredLb, persistLb,
+} from './leaderboard-persist.js';
+import { renderPersonalBestsHTML } from './personal-bests.js';
+import {
   CONNECTIVITY_BANNER_COPY,
   renderConnectivityBanner as renderBanner,
   applyRankedEntryGate as applyGate,
@@ -792,6 +799,11 @@ async function handleStartRanked(mode) {
       showToast('You already played today\u2019s Ranked Daily');
     } else if (result.status === 401) {
       showToast('Signed out — please sign in again');
+    } else if (result.status === 500 && result.body?.code === 'ranked_pool_empty') {
+      // CS52-followup-1: distinct from the warming-up case — ranked
+      // puzzle pool isn't seeded; retrying won't help. Tell the user
+      // the truth so they don't infinite-retry.
+      showToast('Ranked unavailable — puzzle pool not yet seeded');
     } else if (result.status === 503) {
       showToast('Ranked is warming up — try again in a moment');
     } else {
@@ -1082,13 +1094,13 @@ function init() {
         break;
       case 'show-leaderboard':
         showScreen('leaderboard');
-        leaderboardMode = 'freeplay';
-        leaderboardSource = 'ranked';
-        setActiveLeaderboardMode('freeplay');
-        setActiveLeaderboardSource('ranked');
-        setActiveLeaderboardTab('alltime');
+        // CS52-followup-1+2: restore last LB view (mode, source, period)
+        // from localStorage. Don't hard-reset to defaults here.
+        setActiveLeaderboardMode(leaderboardMode);
+        setActiveLeaderboardSource(leaderboardSource);
+        setActiveLeaderboardTab(leaderboardPeriod);
         fetchPersonalBests();
-        fetchLeaderboard('alltime');
+        fetchLeaderboard(leaderboardPeriod);
         break;
       case 'show-achievements':
         if (isLoggedIn()) {
@@ -1231,13 +1243,16 @@ function init() {
           // hidden state can't strand them with an empty list.
           if (mode === 'multiplayer' && leaderboardSource !== 'ranked') {
             leaderboardSource = 'ranked';
+            persistLb(LEADERBOARD_SOURCE_KEY, 'ranked');
             setActiveLeaderboardSource('ranked');
           }
           leaderboardMode = mode;
+          // CS52-followup-1+2: persist mode tab selection.
+          persistLb(LEADERBOARD_MODE_KEY, mode);
           setActiveLeaderboardMode(mode);
-          // Show/hide period tabs for multiplayer (they apply to both)
-          setActiveLeaderboardTab('alltime');
-          fetchLeaderboard('alltime');
+          // Re-render from the active (persisted) period.
+          setActiveLeaderboardTab(leaderboardPeriod);
+          fetchLeaderboard(leaderboardPeriod);
         }
         break;
       }
@@ -1255,17 +1270,21 @@ function init() {
             ts: new Date().toISOString(),
           }));
           leaderboardSource = source;
+          // CS52-followup-1: persist last selection so it sticks across
+          // sessions (per user feedback on initial CS52-6 default).
+          persistLb(LEADERBOARD_SOURCE_KEY, source);
           setActiveLeaderboardSource(source);
-          // Re-render from the active period.
-          const activeTab = document.querySelector('.leaderboard-tab.active');
-          const period = activeTab?.dataset.period || 'alltime';
-          fetchLeaderboard(period);
+          // Re-render from the active (persisted) period.
+          fetchLeaderboard(leaderboardPeriod);
         }
         break;
       }
       case 'leaderboard-tab': {
         const period = e.target.dataset.period;
-        if (period) {
+        if (period && VALID_LB_PERIODS.has(period)) {
+          // CS52-followup-1+2: persist period tab selection.
+          leaderboardPeriod = period;
+          persistLb(LEADERBOARD_PERIOD_KEY, period);
           setActiveLeaderboardTab(period);
           fetchLeaderboard(period);
         }
@@ -1446,11 +1465,12 @@ function loadSettingsUI() {
   if (timerEl) timerEl.value = String(settings.timer);
 }
 
-let leaderboardMode = 'freeplay';
-// CS52-6 § Decision #6: public LBs default to `Ranked` (the competitive
-// view). User flips between Ranked / Offline / All via the segmented
-// control. Multiplayer hides the source tabs (no offline path).
-let leaderboardSource = 'ranked';
+// CS52-followup-1+2: persist all three leaderboard tab selections
+// (mode, source, period) to localStorage. See ./leaderboard-persist.js
+// for the keys, allow-lists, and helpers.
+let leaderboardMode   = loadStoredLb(LEADERBOARD_MODE_KEY,   VALID_LB_MODES,   DEFAULT_LB_MODE);
+let leaderboardSource = loadStoredLb(LEADERBOARD_SOURCE_KEY, VALID_LB_SOURCES, DEFAULT_LB_SOURCE);
+let leaderboardPeriod = loadStoredLb(LEADERBOARD_PERIOD_KEY, VALID_LB_PERIODS, DEFAULT_LB_PERIOD);
 
 /** Fetch and render personal bests section on the leaderboard screen. */
 async function fetchPersonalBests() {
@@ -1478,39 +1498,18 @@ async function fetchPersonalBests() {
   }
 }
 
-/** Render personal bests card from stats data. */
+/**
+ * Render personal bests card from stats data.
+ *
+ * CS52-followup-2: extracted into ./personal-bests.js so the HTML
+ * builder can be unit-tested without standing up a DOM. Stats arrive
+ * grouped by (mode, source) so each (game-type × provenance) combo
+ * renders as its own block.
+ */
 function renderPersonalBests(stats) {
   const container = document.querySelector('[data-bind="personal-bests"]');
   if (!container) return;
-
-  const freeplay = stats.find(s => s.mode === 'freeplay');
-  const multiplayer = stats.find(s => s.mode === 'multiplayer');
-
-  if (!freeplay && !multiplayer) {
-    container.innerHTML = '<div class="personal-bests-card"><p class="personal-bests-empty">Play some Free Play or Multiplayer games to see your stats here! 🎮</p></div>';
-    return;
-  }
-
-  let html = '<div class="personal-bests-card"><h3 class="personal-bests-title">📊 My Personal Bests</h3><div class="personal-bests-grid">';
-
-  if (freeplay) {
-    html += `<div class="personal-bests-stat">
-      <span class="personal-bests-label">🎮 Free Play</span>
-      <span class="personal-bests-value">${Number(freeplay.high_score).toLocaleString()}</span>
-      <span class="personal-bests-detail">${Number(freeplay.games_played)} games · ${Number(freeplay.avg_score).toLocaleString()} avg</span>
-    </div>`;
-  }
-
-  if (multiplayer) {
-    html += `<div class="personal-bests-stat">
-      <span class="personal-bests-label">⚔️ Multiplayer</span>
-      <span class="personal-bests-value">${Number(multiplayer.high_score).toLocaleString()}</span>
-      <span class="personal-bests-detail">${Number(multiplayer.games_played)} games · 🔥 ${Number(multiplayer.best_streak)} streak</span>
-    </div>`;
-  }
-
-  html += '</div></div>';
-  container.innerHTML = html;
+  container.innerHTML = renderPersonalBestsHTML(stats);
 }
 
 /** Set the active leaderboard mode tab visually. */
@@ -1609,12 +1608,16 @@ function showSyncIndicator(message) {
 /**
  * Render a CS52-6 provenance badge for a score row.
  * - 'ranked'  → green/primary (server-validated)
- * - 'offline' → amber (self-reported)
+ * - 'offline' → amber (Practice mode — self-reported)
  * - 'legacy'  → muted (pre-CS52; profile-only)
+ *
+ * UX terminology: internally we keep the DB-level `source='offline'` (no
+ * schema change), but user-facing labels say "Practice" to match the gameplay
+ * mode label that produced the score (Practice Free Play / Practice Daily).
  */
 function provenanceBadgeHTML(source) {
   if (!source) return '';
-  const labels = { ranked: 'Ranked', offline: 'Offline', legacy: 'Legacy' };
+  const labels = { ranked: 'Ranked', offline: 'Practice', legacy: 'Legacy' };
   const label = labels[source];
   if (!label) return '';
   return `<span class="provenance-badge provenance-${source}" data-source="${source}" aria-label="Score source: ${label}">${label}</span>`;

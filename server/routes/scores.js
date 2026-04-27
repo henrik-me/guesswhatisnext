@@ -334,17 +334,29 @@ router.get('/me', requireAuth, async (req, res, next) => {
       [req.user.id]
     );
 
+    // CS52-followup-2: group personal-bests stats by (mode, source) so
+    // Practice/Ranked/Legacy are reported separately for each game type.
+    // Combining them (the prior `GROUP BY mode` shape) collapsed:
+    //   - Practice freeplay scores into the same row as Ranked freeplay
+    //     scores → averages mixed self-reported numbers with server-validated
+    //     numbers, making them not comparable across game types.
+    //   - Same for Practice daily vs Ranked daily.
+    // The `source` discriminator lets the client render one block per
+    // (source, mode) combo, so users can compare like-with-like.
     const stats = await db.all(`
       SELECT mode,
+             source,
              COUNT(*) as games_played,
              MAX(score) as high_score,
              ROUND(AVG(score), 0) as avg_score,
              MAX(best_streak) as best_streak
       FROM scores WHERE user_id = ?
-      GROUP BY mode
+      GROUP BY mode, source
     `, [req.user.id]);
 
-    // Multiplayer stats from match_players (scores table only has freeplay)
+    // Multiplayer stats from match_players (not in `scores` for unified
+    // CS52-7d rows yet, kept in match_players for back-compat). Multiplayer
+    // is server-validated only — no source split needed.
     const mpStats = await db.get(`
       SELECT COUNT(*) as games_played,
              MAX(mp.score) as high_score,
@@ -358,6 +370,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
     if (mpStats && mpStats.games_played > 0) {
       stats.push({
         mode: 'multiplayer',
+        source: 'ranked',  // MP is always server-validated
         games_played: mpStats.games_played,
         high_score: mpStats.high_score,
         avg_score: mpStats.avg_score,

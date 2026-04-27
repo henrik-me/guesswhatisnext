@@ -126,8 +126,10 @@ test.describe('Leaderboard', () => {
 
     const sourceTabs = page.locator('[data-bind="leaderboard-source-tabs"]');
     await expect(sourceTabs).toBeVisible();
-    // Default selection is Ranked.
-    await expect(page.locator('.leaderboard-source-tab.active')).toHaveAttribute('data-source', 'ranked');
+    // CS52-followup-1: default selection is `all` (was `ranked` per CS52-6
+    // § Decision #6) — flipped per user feedback so users see their own
+    // Practice scores by default. Persisted in localStorage `gwn_lb_source`.
+    await expect(page.locator('.leaderboard-source-tab.active')).toHaveAttribute('data-source', 'all');
 
     // Daily mode tab is present and source filter still applies.
     await page.click('[data-action="leaderboard-mode"][data-mode="daily"]');
