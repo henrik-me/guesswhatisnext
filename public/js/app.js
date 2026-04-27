@@ -2158,13 +2158,18 @@ async function authAction(action) {
         action,
       });
       const url = '/api/telemetry/auth-deadline-exhausted';
-      // Prefer sendBeacon: survives page-unload and is non-blocking. Falls
-      // back to keepalive fetch where unavailable. Both are best-effort —
-      // failures are swallowed (telemetry, not control flow).
-      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-        const blob = typeof Blob === 'function'
-          ? new Blob([payload], { type: 'application/json' })
-          : payload;
+      // Prefer sendBeacon: survives page-unload and is non-blocking. Both
+      // sendBeacon and the keepalive-fetch fallback are best-effort —
+      // failures are swallowed (telemetry, not control flow). sendBeacon
+      // requires a Blob with the right Content-Type to land on the
+      // application/json body parser; without Blob it would be sent as
+      // text/plain and the server would reject it with 400, so we fall
+      // through to fetch in that case.
+      const canBeacon = typeof navigator !== 'undefined'
+        && typeof navigator.sendBeacon === 'function'
+        && typeof Blob === 'function';
+      if (canBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
         navigator.sendBeacon(url, blob);
       } else if (typeof fetch === 'function') {
         fetch(url, {
