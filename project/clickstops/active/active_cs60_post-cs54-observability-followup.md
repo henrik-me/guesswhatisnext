@@ -107,7 +107,7 @@ $prod    = '/subscriptions/<sub>/resourceGroups/gwn-rg/providers/Microsoft.App/c
 foreach ($r in @($staging, $prod)) {
   foreach ($spec in @(
     @{m='UsageNanoCores'; agg='Average'},   # divide by 1e9 for cores
-    @{m='WorkingSetBytes'; agg='Average'},  # divide by 1MB for MiB
+    @{m='WorkingSetBytes'; agg='Average'},  # divide by 1024*1024 for MiB
     @{m='Replicas'; agg='Maximum'},
     @{m='Requests'; agg='Total'},
     @{m='RestartCount'; agg='Maximum'}
@@ -122,7 +122,7 @@ Available metric definitions discoverable via `az monitor metrics list-definitio
 
 ## KQL — Gap 1 investigation (CS60-4)
 
-> **Note:** because both AI components are workspace-mode (see § KQL — cost measurement), Gap 1 must be queried via the workspace `AppDependencies` table — the classic `dependencies` table on the AI scope returns 0 rows in workspace mode and would produce a false-empty result that drives an incorrect CS60-4 disposition.
+> **Note:** consistent with the CS60-1a finding above, classic AI-scope `dependencies` queries return 0 rows against `gwn-ai-staging` (root cause unknown, tracked under CS60-4 Gap-1) but work normally against `gwn-ai-production`. To keep Gap 1 investigation reliable across both envs, query the workspace `AppDependencies` table directly via `az monitor log-analytics query`. The classic AI-scope `dependencies` query against staging would produce a false-empty result and drive an incorrect CS60-4 disposition.
 
 After hitting `gwn-ai-staging` with ≥ 20 `/api/scores/leaderboard` probes, run against the workspace:
 

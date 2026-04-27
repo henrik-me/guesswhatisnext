@@ -118,13 +118,13 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 | gwn-production     | Standard vCPU Idle Usage      | 0.69 |
 | gwn-production     | Standard vCPU Active Usage    | 0.02 |
 | gwn-production     | Standard Memory Active Usage  | 0.00 |
-| workspace-gwnrg6bxt | Analytics Logs Data Ingestion | 0.02 |
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion | 0.02 |
 
 | Resource | Day 0 cost (DKK) | Notes |
 |---|---:|---|
 | gwn-staging | **2.13** | Idle dominates (~91%). CS58 scale-to-zero applied 2026-04-25T18:30Z, so day was billed for ~18.5h normal + ~5.5h scaled-to-zero. |
 | gwn-production | **2.09** | Idle ~99% — typical for a Container App with low real traffic. |
-| workspace-gwnrg6bxt | **0.02** | Whole workspace logs — well below 5GB/month free tier. |
+| workspace-gwnrg6bXt | **0.02** | Whole workspace logs — well below 5GB/month free tier. |
 | gwn-sqldb (production) | 0.00 | Free tier. |
 | gwn-ai-staging / gwn-ai-production | 0.00 | Workspace-mode AI components have no separate cost line; ingest cost rolls into the workspace meter. |
 | **Day 0 total** | **2.24 DKK** | ≈$0.32 USD at ~7 DKK/USD. |
@@ -173,13 +173,13 @@ CS60-1/2/3 task descriptions in [`active_cs60_post-cs54-observability-followup.m
 | gwn-production     | Standard vCPU Idle Usage      | 0.45 |
 | gwn-production     | Standard vCPU Active Usage    | 0.00 |
 | gwn-production     | Standard Memory Active Usage  | 0.00 |
-| workspace-gwnrg6bxt | Analytics Logs Data Ingestion | 0.01 |
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion | 0.01 |
 
 | Resource | Day 1 cost (DKK) | Notes |
 |---|---:|---|
 | gwn-production | **1.36** | ~33% drop vs Day 0 — fewer Active Usage minutes despite more requests; Active Usage doesn't bill linearly with request count, only with sustained CPU above the idle threshold. |
 | **gwn-staging** | **0.00** | ✅ CS58 scale-to-zero is fully working — first full day at zero billing. Confirms ~50.8 DKK/month projection from CS58 close-out (CS59 will measure the +7d window). |
-| workspace-gwnrg6bxt | 0.01 | |
+| workspace-gwnrg6bXt | 0.01 | |
 | gwn-sqldb / AI components | 0.00 | |
 | **Day 1 total** | **1.37 DKK** | ≈$0.20 USD. |
 
