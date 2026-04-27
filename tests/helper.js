@@ -48,8 +48,12 @@ function getAgentNoActivity() {
 /**
  * Wrap a supertest agent so every request method (.get, .post, .put, .delete,
  * .patch) returns a Test that pre-sets `X-User-Activity: 1`. Tests can still
- * override per-call (e.g. `.set('X-User-Activity', '0')` is a no-op in the
- * server's check, which only treats the literal string '1' as truthy).
+ * override per-call — note that `.set('X-User-Activity', '0')` is NOT a no-op:
+ * the server treats the literal string `'1'` as user-activity and any other
+ * value (including `'0'`) as no-activity, so overriding to `'0'` flips the
+ * scenario from "user-activity present" to "no user-activity" (i.e. boot-quiet
+ * gate engages on enrolled endpoints). Use `getAgentNoActivity()` for the
+ * cleaner shape of "no header at all".
  */
 let wrappedAgent = null;
 function buildWrappedAgent(rawAgent) {

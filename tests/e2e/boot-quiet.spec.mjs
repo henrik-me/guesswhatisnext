@@ -77,21 +77,32 @@ test.describe('CS53-19 boot-quiet contract — enrolled endpoints', () => {
     const { token } = await reg.json();
     expect(typeof token).toBe('string');
 
+    // Decode the user id from the JWT to discriminate logs (Copilot R1):
+    // anon and jwt scenarios with no activity header otherwise share the
+    // same (userActivity=false, isSystem=false) shape and could match each
+    // other's log lines on shared endpoints. JWT payload is the middle
+    // base64url segment.
+    const jwtPayload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    const jwtUserId = jwtPayload.id;
+    expect(typeof jwtUserId).toBe('number');
+
     // Marker timestamp — only consider log lines emitted after this point.
     const sinceMs = Date.now();
 
-    /** @type {{ name: string, headers: Record<string,string>, expectDbTouched: boolean }[]} */
+    /** @type {{ name: string, headers: Record<string,string>, expectDbTouched: boolean, expectUserId: number, isAuthenticated: boolean }[]} */
     const scenarios = [
       // 1. cold/warm boot, anonymous, no gesture → must NOT touch DB.
-      { name: 'anon-no-activity', headers: {}, expectDbTouched: false },
+      //    For requireAuth endpoints, anon → 401 (no boot-quiet log emitted; matcher must skip).
+      { name: 'anon-no-activity', headers: {}, expectDbTouched: false, expectUserId: 0, isAuthenticated: false },
       // 2. anon with explicit gesture → may touch DB (auth/me etc still 401, but feature flags can read).
-      { name: 'anon-with-activity', headers: { 'X-User-Activity': '1' }, expectDbTouched: true },
+      { name: 'anon-with-activity', headers: { 'X-User-Activity': '1' }, expectDbTouched: true, expectUserId: 0, isAuthenticated: false },
       // 3. JWT present, no gesture → must NOT touch DB (boot/refocus pattern).
-      { name: 'jwt-no-activity', headers: { Authorization: `Bearer ${token}` }, expectDbTouched: false },
+      { name: 'jwt-no-activity', headers: { Authorization: `Bearer ${token}` }, expectDbTouched: false, expectUserId: jwtUserId, isAuthenticated: true },
       // 4. JWT + gesture → must touch DB.
-      { name: 'jwt-with-activity', headers: { Authorization: `Bearer ${token}`, 'X-User-Activity': '1' }, expectDbTouched: true },
+      { name: 'jwt-with-activity', headers: { Authorization: `Bearer ${token}`, 'X-User-Activity': '1' }, expectDbTouched: true, expectUserId: jwtUserId, isAuthenticated: true },
       // 5. system-key bypass → must touch DB without needing the activity header.
-      { name: 'system-key', headers: { 'X-API-Key': SYSTEM_KEY }, expectDbTouched: true },
+      //    The system pseudo-user has id=0 (set by requireAuth on the API-key path).
+      { name: 'system-key', headers: { 'X-API-Key': SYSTEM_KEY }, expectDbTouched: true, expectUserId: 0, isAuthenticated: true },
     ];
 
     /** @type {{ scenario: string, route: string, status: number, dbTouched: any }[]} */
@@ -119,14 +130,23 @@ test.describe('CS53-19 boot-quiet contract — enrolled endpoints', () => {
 
     // For each (scenario, endpoint) pair, locate the most recent matching log
     // line and assert the dbTouched + userActivity + isSystem fields.
+    // Discriminates by userId so anon and jwt scenarios with the same
+    // (userActivity=false, isSystem=false) shape don't match each other's
+    // logs (Copilot R1).
     const failures = [];
     for (const scenario of scenarios) {
       for (const ep of ENDPOINTS) {
+        // requireAuth endpoints with no auth → 401 → no boot-quiet log
+        // (the request never reaches the handler). Skip those (scenario,
+        // endpoint) pairs in the matcher.
+        if (ep.requiresAuth && !scenario.isAuthenticated) continue;
+
         const expectDbTouched = ep.route === '/api/features' ? false : scenario.expectDbTouched;
         const expectUserActivity = scenario.headers['X-User-Activity'] === '1';
         const expectIsSystem = scenario.headers['X-API-Key'] === SYSTEM_KEY;
-        // Look from the end and find the entry whose userActivity/isSystem
-        // matches this scenario (multiple scenarios share the same route).
+        const expectUserId = scenario.expectUserId;
+        // Look from the end and find the entry whose route, userActivity,
+        // isSystem AND userId all match the scenario.
         let entry = null;
         for (let i = logs.length - 1; i >= 0; i--) {
           const e = logs[i];
@@ -134,11 +154,12 @@ test.describe('CS53-19 boot-quiet contract — enrolled endpoints', () => {
           if (typeof e.time === 'number' && e.time < sinceMs) continue;
           if (Boolean(e.userActivity) !== expectUserActivity) continue;
           if (Boolean(e.isSystem) !== expectIsSystem) continue;
+          if (Number(e.userId) !== Number(expectUserId)) continue;
           entry = e;
           break;
         }
         if (!entry) {
-          failures.push(`no boot-quiet log for ${scenario.name} ${ep.route} (userActivity=${expectUserActivity}, isSystem=${expectIsSystem})`);
+          failures.push(`no boot-quiet log for ${scenario.name} ${ep.route} (userActivity=${expectUserActivity}, isSystem=${expectIsSystem}, userId=${expectUserId})`);
           continue;
         }
         if (typeof entry.dbTouched !== 'boolean') {

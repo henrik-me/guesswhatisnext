@@ -328,14 +328,18 @@ function createServer() {
         // CS53-19.D — boot-quiet cold-start init-gate gap (CS53-23 R6 caveat
         // closure): only kick `runInit()` for requests that carry an
         // explicit user-activity marker (`X-User-Activity: 1`) OR are
-        // system-key callers. Header-less boot/focus/poller traffic that
-        // arrives BEFORE the DB is initialized would otherwise wake the
+        // VALID system-key callers. Header-less boot/focus/poller traffic
+        // that arrives BEFORE the DB is initialized would otherwise wake the
         // pool indirectly via this gate, defeating the route-level
         // boot-quiet contract enforced in CS53-23 + CS53-19. Such requests
         // still receive the standard 503 + Retry-After response — the
         // first user-driven request (or operator probe) drives init.
+        // Copilot R1: validate the X-API-Key value against the configured
+        // secret before treating the caller as system — an invalid/garbage
+        // key must NOT trigger runInit() during cold start.
         const reqUserActivity = req.get('X-User-Activity') === '1';
-        const reqIsSystem = req.get('X-API-Key') ? true : false;
+        const reqApiKey = req.get('X-API-Key');
+        const reqIsSystem = !!reqApiKey && reqApiKey === config.SYSTEM_API_KEY;
         if (isAzure && !initGuard.isInFlight() && (reqUserActivity || reqIsSystem)) {
           // Fire-and-forget; runInit() catches its own errors. The current
           // request still gets 503 + Retry-After — the next retry from the
