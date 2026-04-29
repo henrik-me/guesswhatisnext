@@ -191,7 +191,28 @@ function checkPrBody({ body, files, commitOids }) {
   return findings;
 }
 
+function fetchPrFiles(prNumber) {
+  const result = spawnSync('gh', [
+    'api',
+    `repos/{owner}/{repo}/pulls/${prNumber}/files`,
+    '--paginate',
+    '--jq',
+    '.[].filename',
+  ], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.status !== 0) {
+    throw new Error(`gh api PR files failed for PR #${prNumber}: ${result.stderr || result.stdout}`.trim());
+  }
+  return {
+    files: result.stdout.split(/\r?\n/).map(line => line.trim()).filter(Boolean),
+  };
+}
+
 function fetchPrJson(prNumber, command) {
+  if (command === 'files') return fetchPrFiles(prNumber);
+
   const fields = command === 'commits' ? 'commits' : 'body,files,headRefName,headRefOid';
   const result = spawnSync('gh', ['pr', 'view', String(prNumber), '--json', fields], {
     encoding: 'utf8',
@@ -207,7 +228,8 @@ function run(options) {
   const fetcher = options.fetchPrJson || fetchPrJson;
   const details = fetcher(options.pr, 'details');
   const commits = fetcher(options.pr, 'commits');
-  const files = changedFileNames(details.files);
+  const filesPayload = fetcher(options.pr, 'files') || details;
+  const files = changedFileNames(filesPayload.files || details.files);
   const commitOids = extractCommitOids(commits, details);
   return checkPrBody({ body: details.body || '', files, commitOids });
 }
