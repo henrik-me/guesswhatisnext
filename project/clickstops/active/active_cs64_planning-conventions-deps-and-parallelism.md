@@ -1,6 +1,6 @@
 # CS64 — Planning Conventions Deps And Parallelism
 
-**Status:** 🆕 Planned
+**Status:** 🔄 In Progress
 **Origin:** 2026-04-29 conversation (omni-gwn) about how to make sub-agent review enforcement, doc structure, and process gates more robust. The user observed: planning needs to encode both **dependencies** (so pickup is unambiguous) and **parallelism** (so multiple agents can fan out without colliding), at both intra-CS (task-level) and inter-CS levels.
 **Depends on:** none
 **Parallel-safe with:** any (this CS lands the conventions; consumers reference them but can land in any order if they accept format-churn rebase)
@@ -61,23 +61,42 @@ The plan-file linter rules (added in CS65) will check:
 
 CS64 only documents the conventions; CS65 enforces them.
 
+### Convention E — Scope: CS work vs ad-hoc orchestrator work (preserve existing pattern)
+
+**Conventions A–D apply to clickstop CS work only** (planned/active/done plan files and the WORKBOARD rows that track them). They do NOT apply to ad-hoc orchestrator work that has no clickstop file:
+
+- Workflow ops (deploys, rebases, environment validation, monitoring)
+- Quick docs fixes that don't justify a CS plan
+- Investigations / spikes that may or may not turn into a CS later
+- Sub-agent dispatches for OPS-* tasks (e.g. `OPS-checklist-hardening` earlier today)
+
+Ad-hoc work keeps the existing pattern documented in TRACKING.md:
+- WORKBOARD Active Work row uses a non-empty `CS-Task ID` placeholder starting with `OPS-` (e.g. `OPS-DEPLOY-2026-04-29`, `OPS-checklist-hardening`)
+- No plan file under `project/clickstops/`
+- No `**Depends on:**` / `**Parallel-safe with:**` frontmatter (those live in plan files; ad-hoc work has no plan file)
+- The CS65 linter rules use the file path (`project/clickstops/{planned,active}/`) as their match scope, so they will not fire against ad-hoc rows
+
+**Why this matters:** without this clarification, a reader of the new Convention C bullet might infer "every WORKBOARD row needs `**Depends on:**`" and stop using OPS-* for quick ad-hoc work, undermining a useful pattern. Convention E makes the carve-out explicit and cross-references TRACKING.md as the canonical source for the OPS-* pattern.
+
 ## Tasks
 
 | Task ID | Description | Parallel? |
 |---------|-------------|-----------|
-| CS64-1a | Update INSTRUCTIONS.md Quick Reference with Convention C bullet. | parallel |
-| CS64-1b | Update TRACKING.md § Task IDs / Naming Conventions to describe Conventions A and B with examples. | parallel |
-| CS64-1c | Add a small "Planning conventions" subsection to OPERATIONS.md § Agent Work Model linking to the TRACKING.md section. | parallel |
+| CS64-1a | Update INSTRUCTIONS.md Quick Reference with Convention C bullet AND a follow-up bullet making Convention E's scope carve-out explicit (one sentence: "These conventions apply to clickstop CS work only; ad-hoc work uses the OPS-* placeholder per [TRACKING.md § WORKBOARD — Live Coordination](../../../TRACKING.md#workboardmd--live-coordination)."). | parallel |
+| CS64-1b | Update TRACKING.md § Naming Conventions to describe Conventions A and B with examples. Cross-link to existing TRACKING.md ad-hoc OPS-* guidance (lines ~100 and ~164) so the two conventions are visibly co-located. | parallel |
+| CS64-1c | Add a small "Planning conventions" subsection to OPERATIONS.md § Agent Work Model linking to the TRACKING.md section. Include the Convention E carve-out so an orchestrator reading OPS workflow docs understands ad-hoc OPS-* work is still first-class. | parallel |
 | CS64-2 | Update this file (CS64) and the other three planned files (CS65, CS66, CS67) so their `**Depends on:**` / `**Parallel-safe with:**` frontmatter is in the new canonical position (post-merge sweep — they were authored using the convention pre-landing). | sequential after 1* |
 
 All CS64-1* tasks land together in one PR (they're tightly coupled doc updates). CS64-2 is a no-op if the planned files were already authored with the convention; included for safety.
 
 ## Acceptance
 
-- INSTRUCTIONS.md, TRACKING.md, OPERATIONS.md describe Conventions A, B, C with at least one worked example each.
+- INSTRUCTIONS.md, TRACKING.md, OPERATIONS.md describe Conventions A, B, C, and E with at least one worked example each.
+- The OPS-* ad-hoc pattern carve-out (Convention E) is reachable from any of: INSTRUCTIONS.md Quick Reference, TRACKING.md § Naming Conventions, or OPERATIONS.md § Agent Work Model — a reader landing in any of the three is one click away from the canonical TRACKING.md guidance.
 - `npm run check:docs:strict` clean (0 errors).
 - This CS file (CS64), CS65, CS66, CS67 all carry the canonical `**Depends on:**` and `**Parallel-safe with:**` lines and use the dash-letter notation in their Tasks tables.
 - A future orchestrator can answer "what can I pick up?" by greppng for `**Depends on:** none` across `project/clickstops/planned/`.
+- A future orchestrator starting ad-hoc work (no CS file) still knows to register an `OPS-<short-name>` row in WORKBOARD without authoring frontmatter.
 
 ## Cross-references
 
