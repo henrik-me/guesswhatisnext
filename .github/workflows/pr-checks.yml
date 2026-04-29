@@ -71,3 +71,29 @@ jobs:
             } else {
               core.info("✅ '## Telemetry Validation' section found in PR body");
             }
+
+  check-pr-body:
+    name: PR body process gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run check:pr-body -- --pr ${{ github.event.pull_request.number }}
+
+  check-commit-trailers:
+    name: Commit trailer gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run check:commit-trailers -- --base origin/${{ github.base_ref }} --head ${{ github.event.pull_request.head.sha }}
