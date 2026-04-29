@@ -48,7 +48,7 @@ CS67-1 must complete before CS67-2* because Phase 2's CONVENTIONS.md split chang
 - OPERATIONS.md no longer carries a verbatim duplicate (either deleted in favor of include marker, or kept synced via the `sub-agent-checklist-canonical` linter rule).
 - ✅ `CONVENTIONS.md` exists at repo root with the extracted sections; INSTRUCTIONS.md has been trimmed to orchestrator-facing content only and is < 25KB.
 - ✅ Every `INSTRUCTIONS.md#anchor` link in the repo that targets a moved section now correctly points at `CONVENTIONS.md#anchor`. Verified via `npm run check:docs:strict` (existing `link-resolves` rule).
-- ✅ Sub-agent dispatch prompts (post-CS67) reference `docs/sub-agent-checklist.md` and `CONVENTIONS.md` by path; orchestrators no longer paste the checklist body verbatim.
+- ✅ Sub-agent dispatch prompts (post-CS67) include the canonical `docs/sub-agent-checklist.md` content verbatim and reference `CONVENTIONS.md` as a required read.
 - After ≥ 2 weeks of soak (CS67-3), no sub-agent has reported "I needed convention X but couldn't find it" (or, if they have, the section split is updated).
 
 ## Risks and mitigations
