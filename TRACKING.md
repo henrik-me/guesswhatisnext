@@ -55,6 +55,32 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 **Agent:** yoga-gwn/wt-1
 ```
 
+**Plan-file frontmatter and parallel task IDs (CS64):**
+
+CS plan task IDs encode dependency shape. Plain sequential numbers (`CS<N>-1`, `CS<N>-2`, `CS<N>-3`) are ordered phases; a later phase does not start until all work in the previous phase is done. Dash-letter IDs (`CS<N>-1a`, `CS<N>-1b`, `CS<N>-1c`) are parallel-safe siblings inside the same phase and may run concurrently.
+
+| Task ID | Meaning |
+|---------|---------|
+| `CS65-1a` | Phase 1 sibling A; parallel-safe with the other `CS65-1*` tasks. |
+| `CS65-1b` | Phase 1 sibling B; parallel-safe with the other `CS65-1*` tasks. |
+| `CS65-2` | Sequential synchronization phase; starts only after all `CS65-1*` siblings are done. |
+
+Every `planned_*.md` and `active_*.md` CS plan file must place these frontmatter lines between `**Status:**` and the first `##` heading:
+
+```markdown
+**Status:** ⬜ Planned
+**Depends on:** CS64
+**Parallel-safe with:** CS66, CS67
+
+## Problem
+```
+
+Use `**Depends on:** none` when there is no hard predecessor, and `**Parallel-safe with:** any` when no known file-ownership conflict exists. `Depends on` is a hard pickup gate; `Parallel-safe with` is informational so orchestrators can fan out work without re-reading every prose section.
+
+These CS planning conventions do not replace the existing ad-hoc `OPS-*` pattern for non-CS work; see [§ WORKBOARD.md — Live Coordination](#workboardmd--live-coordination) for the canonical placeholder row guidance.
+
+Mechanical enforcement lands in CS65: the plan-file checks first land warn-only, then flip to errors after baseline cleanup, matching the CS62 / CS43-2 pattern.
+
 ### Clickstop Completion Checklist
 
 Every clickstop must satisfy ALL of these before marking complete:
