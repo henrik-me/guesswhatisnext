@@ -1,6 +1,6 @@
 {
   "details": {
-    "body": "## Summary\n\nDocs only.\n\n## Local Review\n\nnot applicable (docs-only)\n\n## Container Validation\n\nnot applicable (docs-only)\n\n## Telemetry Validation\n\nnot applicable (docs-only)\n",
+    "body": "## Summary\n\nDocs only.\n\n## Local Review: not applicable (docs-only)\n\n## Container Validation: not applicable (docs/CI-only)\n\n## Telemetry Validation: not applicable (docs/CI-only)\n",
     "files": [
       { "path": "README.md" },
       { "path": "project/clickstops/active/active_cs66_pr-body-and-commit-trailer-gates.md" }

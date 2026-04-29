@@ -113,7 +113,12 @@ function fixReferencesCommit(fix, commitOids) {
 }
 
 function validateLocalReview(body, prType, commitOids, findings) {
-  const section = findSection(body, LOCAL_REVIEW, { exact: true });
+  let section = findSection(body, LOCAL_REVIEW, { exact: true });
+  if (!section && prType === 'docs-only') {
+    const flexibleSection = findSection(body, LOCAL_REVIEW);
+    if (flexibleSection && /not applicable \(docs-only\)/i.test(flexibleSection.fullText)) return;
+    section = flexibleSection;
+  }
   if (!section) {
     findings.push(`PR body missing exact '## ${LOCAL_REVIEW}' section`);
     return;
@@ -162,8 +167,8 @@ function validateOperationalSection(body, title, prType, files, findings) {
   }
 
   const text = section.fullText;
-  if (prType === 'docs-only' && /not applicable \(docs-only\)/i.test(text)) return;
-  if (prType === 'CI-config-only' && /not applicable \(CI-config-only\)/i.test(text)) return;
+  if (prType === 'docs-only' && /not applicable \((?:docs-only|docs\/CI-only)\)/i.test(text)) return;
+  if (prType === 'CI-config-only' && /not applicable \((?:CI-config-only|docs\/CI-only)\)/i.test(text)) return;
   if (files.length > 0 && files.every(isToolingOnlyFile) && /not applicable \(tooling-only\)/i.test(text)) return;
 
   if (!hasPassingValidationRow(section)) {
