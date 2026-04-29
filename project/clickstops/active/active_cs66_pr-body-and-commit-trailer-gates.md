@@ -1,6 +1,6 @@
 # CS66 — PR Body And Commit Trailer Gates
 
-**Status:** 🆕 Planned
+**Status:** 🔄 In Progress
 **Origin:** 2026-04-29 conversation (omni-gwn) about enforcing the sub-agent review process. The Sub-Agent Checklist requires a local GPT-5.5 review and a `## Local Review` log in the PR body, but nothing mechanical verifies the orchestrator pasted the checklist or the sub-agent ran the review. Hand-written prompts can drift; this CS catches the drift via CI.
 **Depends on:** CS64 (uses the dep/parallelism conventions in the new gate's PR-body schema docs)
 **Parallel-safe with:** CS65, CS67

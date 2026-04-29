@@ -1,6 +1,6 @@
 # CS65 — Plan File Schema Linter Rules
 
-**Status:** 🆕 Planned
+**Status:** 🔄 In Progress
 **Origin:** 2026-04-29 conversation (omni-gwn). Direct follow-up to CS62 (merged warn-only) and CS64 (planning conventions). The plan-file structural linter is CS62's intended path; this CS finishes that work and adds new rules to enforce CS64's conventions.
 **Depends on:** CS64 (Conventions A and B must exist before they can be enforced)
 **Parallel-safe with:** CS66, CS67

@@ -1,6 +1,6 @@
 # CS67 — Canonical Sub Agent Checklist And Conventions Doc
 
-**Status:** 🆕 Planned
+**Status:** 🔄 In Progress
 **Origin:** 2026-04-29 conversation (omni-gwn). Two related observations: (1) the Sub-Agent Checklist lives buried inside a 50KB OPERATIONS.md, forcing orchestrators to paraphrase or misplace it on each dispatch; (2) ~70% of INSTRUCTIONS.md is code/test/architecture conventions a sub-agent needs every time it touches code, while the rest is orchestrator-only. Splitting both extracts canonical artifacts that are mechanically referenceable.
 **Depends on:** CS64 (uses the dep/parallelism conventions in the new docs)
 **Parallel-safe with:** CS65, CS66
