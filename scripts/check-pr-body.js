@@ -56,7 +56,7 @@ function findSection(body, title, options = {}) {
   if (start === -1) return null;
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
-    if (/^##\s+/.test(lines[i])) {
+    if (/^\s*##\s+/.test(lines[i])) {
       end = i;
       break;
     }
@@ -140,8 +140,10 @@ function validateLocalReview(body, prType, commitOids, findings) {
   }
 
   const hasValidRow = table.rows.some(row => {
-    const round = Number.parseInt(row.cells[roundIdx], 10);
-    if (!Number.isFinite(round) || round < 1) return false;
+    const roundText = String(row.cells[roundIdx] || '').trim();
+    if (!/^\d+$/.test(roundText)) return false;
+    const round = Number.parseInt(roundText, 10);
+    if (round < 1) return false;
     const finding = findingIdx === -1 ? '' : row.cells[findingIdx];
     const fix = row.cells[fixIdx] || '';
     return hasCleanReviewText(fix) || hasCleanReviewText(finding) || fixReferencesCommit(fix, commitOids);

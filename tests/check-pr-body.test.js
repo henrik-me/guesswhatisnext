@@ -76,4 +76,10 @@ describe('check-pr-body', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain('Round and Fix');
   });
+
+  test('flags non-numeric Local Review rounds', () => {
+    const findings = runFixture('malformed-local-review-round');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('Round >= 1');
+  });
 });
