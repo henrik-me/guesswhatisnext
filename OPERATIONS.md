@@ -4,7 +4,7 @@ This file contains day-to-day workflow procedures for orchestrators and sub-agen
 
 ## Agent Progress Reporting
 
-All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → local review loop → Copilot review (code/config PRs only). The orchestrating agent only intervenes to merge approved PRs.
+All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → local review loop → Copilot review (code/config/CI PRs only). The orchestrating agent only intervenes to merge PRs that satisfy the review gate.
 
 Background agents **must** report progress to the orchestrating agent. Each milestone below maps to a canonical state in [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine); the sub-agent's prose update **must** be accompanied by a greppable `STATE: <value>` line so the orchestrator can extract the transition mechanically. **Only the orchestrator updates the `State` column in `WORKBOARD.md`** — sub-agents report events, the orchestrator records them. See [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D ("Reporting protocol") for the authoritative description.
 
@@ -15,8 +15,8 @@ Background agents **must** report progress to the orchestrating agent. Each mile
 - **On abort / cannot proceed:** "CS11-64: BLOCKED — \<reason\>. Needs orchestrator intervention." → `STATE: blocked` plus a `Blocked Reason: <short prose>` line so the orchestrator can populate the Blocked Reason column verbatim
 - **On PR created (`gh pr create` succeeded):** "CS11-64: PR #\<N\> created, running local review" → `STATE: pr_open` and `PR: <number>`
 - **On local review started:** "CS11-64: local review in progress" → `STATE: local_review`
-- **On Copilot review requested (code/config PRs):** "CS11-64: local review clean — requesting Copilot review" → `STATE: copilot_review`. For docs-only PRs: "CS11-64: local review clean — docs-only, skipping Copilot" (no Copilot transition; remain in `local_review` until ready).
-- **On ready (CI green AND all reviews approved):** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)" → `STATE: ready_to_merge`
+- **On Copilot review requested (code/config/CI PRs):** "CS11-64: local review clean — requesting Copilot review" → `STATE: copilot_review`. For docs-only PRs: "CS11-64: local review clean — docs-only, skipping Copilot" (no Copilot transition; remain in `local_review` until ready).
+- **On ready (CI green AND all required reviews satisfy the merge gate):** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)" → `STATE: ready_to_merge`
 - **On deployment approval gate:** When monitoring a staging or production deploy, the monitoring agent must immediately report when an approval gate is reached — do not wait for the full workflow to complete. The orchestrator must immediately notify the user with the approval URL. Approval gates are:
   - **Staging:** After "Fast-Forward release/staging" job completes → "Deploy to Azure Staging" waits for `environment: staging` approval
   - **Production:** After "Validate Deployment Inputs" job completes → "Deploy to Azure Production" waits for `environment: production` approval
@@ -195,7 +195,7 @@ Ad-hoc `OPS-*` work uses the existing simple WORKBOARD pattern and does **not** 
 Sub-agents are responsible for:
 - All implementation file changes (code, docs, config) and all commits/pushes in worktrees
 - PR creation (`gh pr create`)
-- Copilot review loop (code/config PRs: reply to comments, resolve threads, re-request review; docs-only PRs: skip Copilot review)
+- Copilot review loop (code/config/CI PRs: reply to comments with commit SHA/change rationale, resolve threads, re-request review; docs-only PRs: skip Copilot review)
 - Merge conflict resolution (rebase/merge `origin/main` into the feature branch)
 
 This keeps `main` clean and ensures implementation changes flow through PRs. (Clickstop plan files and WORKBOARD.md are the exceptions — those are committed directly on `main` by the orchestrator.)
@@ -209,7 +209,7 @@ The canonical checklist lives in [docs/sub-agent-checklist.md](docs/sub-agent-ch
 - **Worktree path** (e.g. `C:\src\gwn-worktrees\wt-1`) and the **branch name** already checked out there.
 - **Required reads:** `INSTRUCTIONS.md`, `WORKBOARD.md`, the clickstop plan file under `project/clickstops/active/`, plus any task-specific docs.
 - **Validation commands:** the `npm run lint && npm test && npm run test:e2e` line (or `npm run check:docs:strict` for docs-only) the agent must run before opening a PR.
-- **Commit & PR steps:** commit message format (conventional + `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`), `git push -u origin <branch>`, `gh pr create` with title/body conventions, and (for code/config PRs) `gh pr edit <#> --add-reviewer Copilot`.
+- **Commit & PR steps:** commit message format (conventional + `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`), `git push -u origin <branch>`, `gh pr create` with title/body conventions, and (for code/config/CI PRs) `gh pr edit <#> --add-reviewer Copilot`.
 - **State-reporting protocol:** the explicit `STATE: <value>` line for each transition listed in § Agent Progress Reporting. The final report must end with greppable `STATE:` (and `PR:` when applicable) lines. Reference [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) for the canonical vocabulary.
 - **Constraints:** do not edit `WORKBOARD.md` (this includes: do NOT add yourself to the Orchestrators table, do NOT use `(sub-agent)` annotation in any column, do NOT modify the State column); do not touch other agents' clickstop rows; do not work outside the assigned worktree; mark only the agent's own claimed task row `✅ Done` with the PR link.
 
@@ -297,7 +297,7 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 4. Push branch to origin
 5. Create PR: `gh pr create --base main --head {agent-id}/{task-id}-{description}`
 6. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop)) — fix issues, push fixes, repeat until clean
-7. **Code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` | **Docs-only PRs:** Skip Copilot review
+7. **Code/config/CI PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` | **Docs-only PRs:** Skip Copilot review
 8. Address review feedback — commit each round of fixes separately, reply to every Copilot thread with disposition + commit SHA/change rationale, then resolve the thread.
 9. After CI passes and reviews are complete (Copilot clean for code/config/CI PRs; local review clean for docs-only PRs), **squash-merge** via GitHub UI or `gh pr merge --squash` / documented `gh pr merge --squash --admin` gate when Copilot is clean but branch protection still demands `APPROVED`
 10. Main orchestrating agent pulls after each merge: `git pull`
