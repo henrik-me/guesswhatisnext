@@ -25,7 +25,7 @@ Use the next number after the highest found across both sources.If in doubt, use
 
 ### Agent Identification
 Every orchestrating agent has a unique ID: `{machine-short}-{repo-suffix}`
-- **Machine short**: lowercase, first meaningful segment of hostname (e.g., `HENRIKM-YOGA` → `yoga`)
+- **Machine short**: lowercase, first meaningful segment of hostname — skip user/owner prefix segments. Examples: `HENRIKM-YOGA` → `yoga`, `HENRIKM-OMNI` → `omni`.
 - **Repo suffix**: derived from clone folder (e.g., `guesswhatisnext` → `gwn`, `guesswhatisnext_copilot2` → `gwn-c2`)
 - Override via `GWN_AGENT_MACHINE` env var if hostname is unhelpful
 
@@ -130,7 +130,7 @@ Agent: {agent-id}
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```
 
-**Claim effectiveness:** A claim or reclamation is **not effective** until the commit has been pushed to `origin/main`. No task work — exploration, planning, sub-agent dispatch, or any downstream orchestrator state transition — may proceed while the row exists only in the local checkout. If `git push` is rejected, follow the push-rejected recovery procedure in "Conflict handling" below and only resume task work once the row has landed on `origin/main`. This rule applies equally to initial claims (§ Orchestrator Startup Checklist in OPERATIONS.md, step 6) and to reclamation (§ WORKBOARD Row Ownership & Stale-Lock Policy, point C step 3).
+**Claim effectiveness:** A claim or reclamation is **not effective** until the commit has been pushed to `origin/main`. No task work — exploration, planning, sub-agent dispatch, or any downstream orchestrator state transition — may proceed while the row exists only in the local checkout. If `git push` is rejected, follow the push-rejected recovery procedure in "Conflict handling" below and only resume task work once the row has landed on `origin/main`. This rule applies equally to initial claims (§ Orchestrator Startup Checklist in OPERATIONS.md, the WORKBOARD registration item) and to reclamation (§ WORKBOARD Row Ownership & Stale-Lock Policy, point C step 3).
 
 **Conflict handling:** Since multiple orchestrators may update WORKBOARD.md concurrently, conflicts are possible. Orchestrators should `git pull` before updating. If a conflict occurs **only in `WORKBOARD.md`**, this is the one exception to the general "do not resolve merge conflicts in the main checkout" rule: resolve it by keeping both agents' entries (additive merge), then complete the workboard-only update. If the pull produces conflicts in any other file, abort the merge and follow the normal abort + worktree workflow instead.
 
