@@ -1,6 +1,6 @@
 # REVIEWS
 
-This file contains review procedures for sub-agents during PR work (local review loop, Copilot review loop, thread resolution). For durable policy see `INSTRUCTIONS.md`. For day-to-day workflow procedures see `OPERATIONS.md`. For clickstop/workboard lifecycle see `TRACKING.md`.
+This file contains review procedures for sub-agents during PR work (local review loop, Copilot review loop, thread resolution). For orchestrator workflow policy see `INSTRUCTIONS.md`; for code/test conventions see `CONVENTIONS.md`. For day-to-day workflow procedures see `OPERATIONS.md`. For clickstop/workboard lifecycle see `TRACKING.md`.
 
 <!-- OPERATIONS.md and TRACKING.md are created by CS45-2 and CS45-4 (parallel with this PR); once both land the references above can be upgraded from code spans to markdown links. -->
 
@@ -22,7 +22,7 @@ Before requesting Copilot PR review, sub-agents **must** run a local review loop
 4. **Then** proceed to Copilot review or skip, based on PR type:
 
 **Local-review checklist (must verify in addition to whatever the model surfaces):**
-- No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data)).
+- No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
 - PR body has a `## Container Validation` section with at least one passing cycle dated within the last hour, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
 
 **Documenting review findings:**
@@ -58,7 +58,7 @@ This preserves the review audit trail in the PR for future reference.
 - If Copilot re-reviews after fixes, repeat the cycle
 
 **Copilot-review checklist (must verify before merge, in addition to Copilot's own findings):**
-- No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data)).
+- No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
 - PR body's `## Container Validation` section has a fresh passing cycle from after the last fix push, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
 
 **Copilot Review — Detailed Workflow:**

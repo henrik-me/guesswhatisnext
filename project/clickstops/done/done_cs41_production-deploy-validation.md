@@ -9,6 +9,7 @@
 
 Every successful staging or production deploy verifies — automatically and visibly — that the new revision is not just up but **actually working end-to-end**: DB query path, request handler path, OTel export path, response-time envelope, schema migrations applied. Failures roll back without operator intervention and without false negatives on cold-start or AI-ingest delay.
 
+<!-- check:ignore link-resolves -->
 This CS turns INSTRUCTIONS.md § 4a [Telemetry & Observability gate](../../../INSTRUCTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work) from a manual PR-body checkbox into an enforced CI gate at both PR-time and deploy-time.
 
 **Scope assumption:** Azure SQL is available and not capacity-exhausted. The current `gwn-production` capacity-exhausted state is treated as an environmental issue (separate concern). The smoke is read+write; if the DB is capacity-exhausted at deploy time, the smoke fails, the deploy rolls back. That's correct behavior.

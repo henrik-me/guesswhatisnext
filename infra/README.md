@@ -2,7 +2,7 @@
 
 Operational notes for deploying and maintaining the Azure Container Apps deployment of guesswhatisnext. Authoritative configuration lives in the workflow files and deploy scripts; this README points at them and covers a few topics those files don't.
 
-Per [INSTRUCTIONS.md § Documentation Conventions](../INSTRUCTIONS.md#documentation-conventions), this file does not restate values (replica counts, secret names, image tags, environment names, region, CPU/memory limits, health-monitor cadence, branch-protection rules, etc.) that already live authoritatively in workflow files or deploy scripts — it links to them.
+Per [CONVENTIONS.md § Documentation Conventions](../CONVENTIONS.md#documentation-conventions), this file does not restate values (replica counts, secret names, image tags, environment names, region, CPU/memory limits, health-monitor cadence, branch-protection rules, etc.) that already live authoritatively in workflow files or deploy scripts — it links to them.
 
 ## Quickstart
 

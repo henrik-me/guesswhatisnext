@@ -58,7 +58,7 @@ CS55 was originally planned around CS55-2 (server-side unread-count cache + the 
 
 ## CS55-2 follow-ups — Policy 1 compliance gap (post PR #241 v1)
 
-PR #241 ("CS55-2 (early)") landed an in-process unread-count cache in front of `GET /api/notifications/count` with a 5-min TTL. CI is green, GPT-5.4 R2 was clean, and bandwidth/CPU dropped 60→1 per user-hour. **However**, against [INSTRUCTIONS.md § Database & Data](../../../INSTRUCTIONS.md#database--data) the design still violates Policy 1:
+PR #241 ("CS55-2 (early)") landed an in-process unread-count cache in front of `GET /api/notifications/count` with a 5-min TTL. CI is green, GPT-5.4 R2 was clean, and bandwidth/CPU dropped 60→1 per user-hour. **However**, against [CONVENTIONS.md § Database & Data](../../../CONVENTIONS.md#database--data) the design still violates Policy 1:
 
 > "if anything is called from client to server we need to ensure an active otherwise idle tab doesn't hit the db. only regular usage should touch the database."
 
@@ -79,7 +79,7 @@ The current SPA does not poll on a timer (CS53-2 killed it; verified at `public/
 | CS55-2.D | Wire SPA's `refreshNotificationBadge()` (`public/js/app.js:3403`), submission-screen open, mark-read, and mark-all-read paths to send `X-User-Activity: 1`. Every other client (legacy SPA, bookmarks, third-party) gets the header-absent treatment. | Backwards-compatible: legacy clients keep working but cannot wake the DB. |
 | CS55-2.E | Apply the same contract to `/api/auth/me` (boot JWT validation). Either: verify HMAC signature + expiry **without** DB lookup and trust the token's claims until expiry, or: cache the user row with the same write-invalidation discipline. | Closes the second-largest stale-tab DB-wake source. |
 | CS55-2.F | Audit and gate the rest of the "called by clients on tab boot/focus" set: `/api/features`, `/api/notifications` (list), `/api/scores/me`, `/api/achievements`, `/api/matches/history`. Each must be either (a) DB-free, (b) cached + write-invalidated, or (c) explicitly require `X-User-Activity: 1`. | Multi-PR scope likely; track each fix separately. |
-| CS55-2.G | Update [INSTRUCTIONS.md § Database & Data](../../../INSTRUCTIONS.md#database--data) with: (i) the active-vs-idle classification rule, (ii) the `X-User-Activity` header contract semantics, (iii) the rule "reads never seed cache from a non-active call". Cross-link from CS53 and CS55. | Future contributors must not regress this. |
+| CS55-2.G | Update [CONVENTIONS.md § Database & Data](../../../CONVENTIONS.md#database--data) with: (i) the active-vs-idle classification rule, (ii) the `X-User-Activity` header contract semantics, (iii) the rule "reads never seed cache from a non-active call". Cross-link from CS53 and CS55. | Future contributors must not regress this. |
 | CS55-2.H | Tests: assert `X-User-Activity` absence → zero DB queries. Use a mock adapter call counter / spy on `db.get`. Add to both unit + integration suites. | Regression guard. |
 | CS55-2.I | Add `## Container Validation` section to PR #241 body and run `npm run container:validate` before each review request and after each fix push. Required by [Policy 2](../../../INSTRUCTIONS.md#quick-reference-checklist) (touches server runtime + DB code). | Currently absent from PR body. |
 | CS55-2.J | Re-run GPT-5.4 local review (R3+) on the policy-compliant design (R2 was clean against the original 5-min-TTL design only). | Per [REVIEWS.md](../../../REVIEWS.md). |
