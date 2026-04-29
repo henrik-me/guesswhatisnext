@@ -18,10 +18,6 @@ function rules(findings) {
   return findings.map(f => f.rule).sort();
 }
 
-function withoutPlanSchema(findings) {
-  return findings.filter(f => !f.rule.startsWith('plan-'));
-}
-
 describe('check-docs-consistency', () => {
   test('happy fixture: zero findings', () => {
     const findings = run({ root: path.join(FIX, 'happy'), now: FIXED_NOW });
@@ -38,14 +34,14 @@ describe('check-docs-consistency', () => {
   });
 
   test('prefix-mismatch fixture: prefix-matches-status error', () => {
-    const findings = withoutPlanSchema(run({ root: path.join(FIX, 'prefix-mismatch'), now: FIXED_NOW }));
+    const findings = run({ root: path.join(FIX, 'prefix-mismatch'), now: FIXED_NOW });
     expect(rules(findings)).toEqual(['prefix-matches-status']);
     expect(findings[0].message).toContain('CS1');
     expect(findings[0].message).toContain("'done_*'");
   });
 
   test('cs-in-two-states fixture: unique-cs-state error (one per file)', () => {
-    const findings = withoutPlanSchema(run({ root: path.join(FIX, 'cs-in-two-states'), now: FIXED_NOW }));
+    const findings = run({ root: path.join(FIX, 'cs-in-two-states'), now: FIXED_NOW });
     expect(findings.every(f => f.rule === 'unique-cs-state')).toBe(true);
     expect(findings.length).toBe(2);
     expect(findings[0].message).toContain('CS7');
@@ -252,7 +248,7 @@ describe('check-docs-consistency', () => {
 
   test('cs62-h1-happy: H1 + filename slug align → no findings', () => {
     const findings = run({ root: path.join(FIX, 'cs62-h1-happy'), now: FIXED_NOW });
-    expect(withoutPlanSchema(findings)).toEqual([]);
+    expect(findings).toEqual([]);
   });
 
   test('cs62-h1-slug-drift: H1 title kebabs to a slug other than the filename slug → warning', () => {

@@ -171,8 +171,9 @@ CS41 staging deploys add deterministic smoke-test traffic on every deploy via `g
 
 This must be resolved by CS59-8 before reporting cost-soak verification results. Without this, idle-meter drops attributable to scale-to-zero will be mixed with deploy-driven warm windows and the verdict will be unactionable.
 
-## Acceptance criteria
+## Acceptance
 
+- The post-CS58 staging cost-soak result is recorded and any miss is converted into follow-up work.
 - Pre-flight ran and passed (or the CS halted cleanly with the failure documented), **including the cross-agent quiescence step** (WORKBOARD note posted ahead of the cold probe and removed afterward).
 - Both 7-day windows queried and recorded.
 - Verdict (✅ / 🟡 / ❌) classified per the thresholds above.
@@ -198,10 +199,6 @@ This must be resolved by CS59-8 before reporting cost-soak verification results.
 - **CS58** (done) — set up the change being verified here. CS59 is the closing audit. CS59's verdict is appended to `done_cs58_*.md`.
 - **CS54** (App Insights, in flight) — independent. If CS54 lands before CS59, the cost-soak query is unaffected; App Insights ingestion has its own meters but those are on the Log Analytics workspace, not the Container App.
 - **Future CS60 (only if needed)** — staging cost regression investigation. CS59-6 decides whether to open it.
-
-## Acceptance
-
-- The post-CS58 staging cost-soak result is recorded and any miss is converted into follow-up work.
 
 ## Cross-references
 
