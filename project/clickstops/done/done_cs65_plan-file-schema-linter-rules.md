@@ -1,7 +1,7 @@
-<!-- check:ignore clickstop-h1-matches-filename — terminal CS65-2 task title intentionally differs from the original slug while the WORKBOARD row is active -->
+<!-- check:ignore no-orphan-active-work — PR #318 closes CS65 while the orchestrator-owned WORKBOARD row remains until merge -->
 # CS65 — Plan-File Schema Linter Rules — Baseline Cleanup + Flip to Error
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done
 **Origin:** 2026-04-29 conversation (omni-gwn). Direct follow-up to CS62 (merged warn-only) and CS64 (planning conventions). The plan-file structural linter is CS62's intended path; this CS finishes that work and adds new rules to enforce CS64's conventions.
 **Depends on:** CS64 (Conventions A and B must exist before they can be enforced)
 **Parallel-safe with:** CS66, CS67
@@ -33,7 +33,7 @@ Additionally, today's plan files have **no enforced section schema** — a futur
 | CS65-1d | Add `plan-has-required-sections` rule (warn-only). Every clickstop file must contain `## Acceptance` and `## Cross-references` sections. Section name list is documented in the rule's docstring. | ✅ Done in [#314](https://github.com/henrik-me/guesswhatisnext/pull/314) | parallel |
 | CS65-1e | Add `plan-task-id-format` rule (warn-only). Task IDs appearing in Tasks tables whose first column header is `Task ID` match `^CS\d+-\d+([a-z])?$`. | ✅ Done in [#314](https://github.com/henrik-me/guesswhatisnext/pull/314) | parallel |
 | CS65-1f | Audit baseline: run all new rules against existing files in `project/clickstops/{planned,active}/`. Fix or escape-hatch every legitimate hit; historical `done/` files stay out of scope for these plan-schema rules. | ✅ Done in [#314](https://github.com/henrik-me/guesswhatisnext/pull/314) | parallel |
-| CS65-2 | After all CS65-1* land and soak ≥ 1 week with no false positives, flip CS62's two existing warn-only rules (`clickstop-h1-matches-filename`, `workboard-title-matches-h1`) AND CS65-1a/1b/1c/1d/1e to error in `--strict` mode. Update CS62's docstring promise to point at this commit. | ⬜ Pending follow-up after soak | sequential after 1* |
+| CS65-2 | After all CS65-1* land and soak ≥ 1 week with no false positives, flip CS62's two existing warn-only rules (`clickstop-h1-matches-filename`, `workboard-title-matches-h1`) AND CS65-1a/1b/1c/1d/1e to error in `--strict` mode. Update CS62's docstring promise to point at this commit. | ✅ Done in [#318](https://github.com/henrik-me/guesswhatisnext/pull/318) | sequential after 1* |
 
 CS65-1a..CS65-1f are parallel — they each add one rule to the same file (`scripts/check-docs-consistency.js`) plus tests under `tests/check-docs-consistency.test.js` and fixtures under `tests/fixtures/check-docs-consistency/`. Within a single PR they may all land together; if split across PRs they need rebase coordination on the script file.
 

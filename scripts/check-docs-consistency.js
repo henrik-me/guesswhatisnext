@@ -564,12 +564,12 @@ function checkNoOrphanActiveWork(repoRoot, _rows) {
   if (!tbl) return findings;
   const csTaskIdx = colIndex(tbl.headers, h => CS_TASK_ID_HEADER_RE.test(h));
   if (csTaskIdx === -1) return findings;
-  const doneCs = new Set();
+  const doneCs = new Map();
   const doneDir = path.join(repoRoot, 'project', 'clickstops', 'done');
   if (fs.existsSync(doneDir)) {
     for (const name of fs.readdirSync(doneDir)) {
       const m = /^done_(cs\d+)_.+\.md$/i.exec(name);
-      if (m) doneCs.add(m[1].toUpperCase());
+      if (m) doneCs.set(m[1].toUpperCase(), path.join(doneDir, name));
     }
   }
   for (const row of tbl.rows) {
@@ -579,6 +579,22 @@ function checkNoOrphanActiveWork(repoRoot, _rows) {
     if (!m) continue;
     const cs = m[1].toUpperCase();
     if (doneCs.has(cs)) {
+      const doneFile = doneCs.get(cs);
+      let ignoredByDoneFile = false;
+      try {
+        const doneLines = readLines(doneFile);
+        const doneIgnores = parseIgnores(doneLines);
+        let contentLine = 1;
+        for (let i = 0; i < doneLines.length; i++) {
+          const t = doneLines[i].trim();
+          if (t === '') continue;
+          if (/^<!--.*-->\s*$/.test(t)) continue;
+          contentLine = i + 1;
+          break;
+        }
+        ignoredByDoneFile = isIgnored(doneIgnores, 'no-orphan-active-work', contentLine);
+      } catch { /* fall through and report the WORKBOARD finding */ }
+      if (ignoredByDoneFile) continue;
       findings.push({ rule: 'no-orphan-active-work', file: wbPath, line: row.lineNo,
         severity: 'error',
         message: `Active Work row references ${cs} which has a done_${cs.toLowerCase()}_*.md file under project/clickstops/done/` });

@@ -465,6 +465,20 @@ describe('check-docs-consistency', () => {
     expect(hits[0].message).toContain('CS9');
   });
 
+  test('no-orphan-active-work can be suppressed by an ignore above the done file H1', () => {
+    const fs = require('fs');
+    const root = path.join(FIX, 'orphan-active-work');
+    const doneFile = path.join(root, 'project', 'clickstops', 'done', 'done_cs9_done.md');
+    const original = fs.readFileSync(doneFile, 'utf8');
+    try {
+      fs.writeFileSync(doneFile, '<!-- check:ignore no-orphan-active-work -->\n' + original);
+      const findings = run({ root, now: FIXED_NOW });
+      expect(findings.filter(f => f.rule === 'no-orphan-active-work')).toEqual([]);
+    } finally {
+      fs.writeFileSync(doneFile, original);
+    }
+  });
+
   test('unique-cs-state can be suppressed by own-line ignore above the heading', () => {
     // Dynamic: add an ignore comment to the top of one of the cs-in-two-states
     // files, rerun, and assert the findings for that file are gone.
