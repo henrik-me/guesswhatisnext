@@ -201,23 +201,8 @@ Sub-agents are responsible for:
 This keeps `main` clean and ensures implementation changes flow through PRs. (Clickstop plan files and WORKBOARD.md are the exceptions — those are committed directly on `main` by the orchestrator.)
 
 **Sub-Agent Checklist** (include verbatim in every sub-agent prompt — the orchestrator must provide: task ID, acceptance criteria, worktree slot, branch name, port, and edge cases):
-1. Read INSTRUCTIONS.md in the repository root before starting any work
-2. Read WORKBOARD.md for current project context and active work — **do not edit it**. Specifically: do NOT add yourself or annotate yourself (e.g. `(sub-agent)` suffix) in the Orchestrators table; do NOT modify the State column or any row in Active Work other than the row your dispatching orchestrator already created for your task. State updates are the orchestrator's job (see [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D). The `owner-in-orchestrators-table` docs:strict rule will fail CI if you violate this.
-3. Run `npm install` in worktree
-4. Set `$env:PORT = "300N"` for the assigned slot
-5. Implement the task (commit after each meaningful step with `Agent:` trailer and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer). **Emit `STATE: implementing` on the first interim update after edits begin.**
-6. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
-7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs; docs-only PRs must still pass `npm run check:docs:strict`). **On all-green, emit `STATE: validating`.** If validation fails, fix and re-run (up to 3 attempts). If stuck, emit `STATE: blocked` with a `Blocked Reason: <short prose>` line, report failure details, and stop.
-8. Push branch and create PR with task ID in title and agent metadata in description. **On `gh pr create` success, emit `STATE: pr_open` and `PR: <number>` on a separate line.**
-9. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop)): launch `code-review` agent with GPT 5.5 or higher (`model=gpt-5.5` is the floor), fix issues, push fixes, repeat until clean. **Emit `STATE: local_review` when the loop starts.**
-10. **Document local review findings in PR description** (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop) for format)
-11. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per [§ Waiting for Copilot Review in REVIEWS.md](REVIEWS.md#waiting-for-copilot-review). **Emit `STATE: copilot_review` after the reviewer is added.**
-12. **For docs-only PRs:** Skip Copilot review — local review is sufficient (no `copilot_review` transition; stay in `local_review` until ready)
-13. Address all review comments (reply + fix + resolve threads)
-14. Re-request review and repeat until clean (code PRs only)
-15. Report completion with PR number and summary. **When CI is green AND all required reviews approve, emit `STATE: ready_to_merge` as the final state.** The final report must always end with the latest `STATE: <value>` line so the orchestrator can extract it mechanically.
-16. **Include a milestone timing table** in the final report (step name + elapsed time from session start). This helps identify bottlenecks in the agent workflow.
-17. **Update the claimed task row in the clickstop file** (e.g. mark `✅ Done` with the PR link) as part of the implementation commits. **Do not edit `WORKBOARD.md`** — that is the orchestrator's responsibility per [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D and [§ WORKBOARD Row Ownership & Stale-Lock Policy in TRACKING.md](TRACKING.md#workboard-row-ownership--stale-lock-policy) point A.
+
+The canonical checklist lives in [docs/sub-agent-checklist.md](docs/sub-agent-checklist.md). Include that file verbatim in every sub-agent prompt; this section is the policy framing, while the linked file is the canonical verbatim list.
 
 **Sub-agent dispatch checklist (for orchestrators).** Every dispatch prompt the orchestrator writes for a sub-agent must include, at minimum:
 

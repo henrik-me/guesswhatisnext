@@ -22,6 +22,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Commit clickstop plan file to main BEFORE starting implementation work
 - Deferred items → must land in a CS via one of four dispositions (add to current CS / file new `planned_` CS / add to existing planned-or-active CS / cancel with reason). Appendix-in-done-file alone is INSUFFICIENT — see [§ Deferred work policy in TRACKING.md](TRACKING.md#clickstop-completion-checklist). Never silently drop.
 - Sub-agent prompts must include full Sub-Agent Checklist verbatim
+- Sub-agent checklist canonical source: [docs/sub-agent-checklist.md](docs/sub-agent-checklist.md). OPERATIONS.md § Sub-Agent Checklist is the policy framing; the file is the verbatim list.
 - Run local review loop (GPT 5.5 or higher) before Copilot review — skip Copilot for docs-only PRs
 - Report progress to user after dispatching agents — never go silent; relay every sub-agent turn/state transition the same turn it lands, post a heartbeat update at least every ~10 min if nothing has transitioned, and on each heartbeat check the fallback progress signals (branch commits, PR state, file mtimes, `tool_calls_completed`) before claiming the agent is idle (see [§ Agent Progress Reporting in OPERATIONS.md](OPERATIONS.md#agent-progress-reporting) and [§ Fallback progress signals in OPERATIONS.md](OPERATIONS.md#fallback-progress-signals-when-sub-agent-is-silent))
 - Commit after each meaningful step — don't batch unrelated changes
