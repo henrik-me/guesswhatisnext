@@ -1027,8 +1027,12 @@ function checkSubAgentChecklistCanonical(repoRoot) {
   const findings = [];
   const operationsPath = path.join(repoRoot, 'OPERATIONS.md');
   const checklistPath = path.join(repoRoot, 'docs', 'sub-agent-checklist.md');
+  const instructionsPath = path.join(repoRoot, 'INSTRUCTIONS.md');
 
-  if (!fs.existsSync(operationsPath) && !fs.existsSync(checklistPath)) return findings;
+  const hasOperations = fs.existsSync(operationsPath);
+  const hasChecklist = fs.existsSync(checklistPath);
+  const hasRootPolicyMarker = fs.existsSync(instructionsPath) || fs.existsSync(path.join(repoRoot, 'package.json'));
+  if (!hasOperations && !hasChecklist && !hasRootPolicyMarker) return findings;
 
   let operationsLines = [];
   let checklistHeadingLine = 1;
@@ -1082,9 +1086,10 @@ function checkSubAgentChecklistCanonical(repoRoot) {
       }
       return 1;
     };
-    const file = fs.existsSync(operationsPath) ? operationsPath : checklistPath;
+    const fallbackPath = fs.existsSync(instructionsPath) ? instructionsPath : path.join(repoRoot, 'package.json');
+    const file = fs.existsSync(operationsPath) ? operationsPath : (fs.existsSync(checklistPath) ? checklistPath : fallbackPath);
     const line = fs.existsSync(operationsPath) ?
-      (canonicalLinkLine || checklistHeadingLine) : firstEligibleLine(checklistPath);
+      (canonicalLinkLine || checklistHeadingLine) : (fs.existsSync(checklistPath) ? firstEligibleLine(checklistPath) : 1);
     findings.push({
       rule: 'sub-agent-checklist-canonical', file, line,
       severity: 'warning',

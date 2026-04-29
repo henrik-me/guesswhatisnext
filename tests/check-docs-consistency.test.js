@@ -106,6 +106,16 @@ describe('check-docs-consistency', () => {
     expect(hits[0].message).toContain('does not exist');
   });
 
+  test('cs67-checklist-both-missing: project root missing both canonical targets → warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs67-checklist-both-missing'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'sub-agent-checklist-canonical');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+    expect(hits[0].file).toBe('INSTRUCTIONS.md');
+    expect(hits[0].message).toContain('docs/sub-agent-checklist.md does not exist');
+    expect(hits[0].message).toContain('OPERATIONS.md does not exist');
+  });
+
   test('cs67-checklist rule honors an ignore above the OPERATIONS checklist block', () => {
     const fs = require('fs');
     const root = path.join(FIX, 'cs67-checklist-missing-link');
