@@ -96,4 +96,4 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      - run: npm run check:commit-trailers -- --base origin/${{ github.base_ref }} --head ${{ github.event.pull_request.head.sha }}
+      - run: npm run check:commit-trailers -- --base ${{ github.event.pull_request.base.sha }} --head ${{ github.event.pull_request.head.sha }}
