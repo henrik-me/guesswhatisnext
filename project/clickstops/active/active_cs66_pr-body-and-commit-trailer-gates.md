@@ -31,7 +31,7 @@ Symptoms today:
 | CS66-1d | ✅ Done in PR [#315](https://github.com/henrik-me/guesswhatisnext/pull/315): Add `package.json` scripts: `check:pr-body`, `check:commit-trailers`. | parallel |
 | CS66-1e | ✅ Done in PR [#315](https://github.com/henrik-me/guesswhatisnext/pull/315): Add `.github/workflows/pr-checks.yml` jobs that run both gates on `pull_request: [opened, synchronize, edited]`. The PR-body check runs from the action context; the commit-trailer check uses `actions/checkout@v4` with `fetch-depth: 0`. | parallel after 1a + 1b exist |
 | CS66-2 | Soak ≥ 1 week as **non-required** status checks (visible but not gating). Catalog false positives, tighten rules. | sequential after 1* |
-| CS66-3 | Promote both checks to **required** status checks in repository branch protection. Update INSTRUCTIONS.md and OPERATIONS.md to document the gate (with PR-body schema example). | sequential after 2 |
+| CS66-3 | Promote both checks to **required** status checks in repository branch protection. Update CONVENTIONS.md and OPERATIONS.md to document the gate (with PR-body schema example). | sequential after 2 |
 
 ## Acceptance
 
@@ -52,6 +52,6 @@ Symptoms today:
 - CS65 — plan-file schema linter (independent surface; same warn-then-flip philosophy).
 - CS67 — canonical sub-agent checklist file; CS66's gate is the runtime enforcement of what CS67 documents.
 - REVIEWS.md § Local Review Loop — defines the `## Local Review` section format CS66-1a checks for.
-- INSTRUCTIONS.md § 5 Git Workflow — defines the trailer convention CS66-1b checks for.
+- CONVENTIONS.md § 5 Git Workflow — defines the trailer convention CS66-1b checks for.
 - OPERATIONS.md § Cold-start container validation — defines `## Container Validation` section format.
-- INSTRUCTIONS.md § 4a Telemetry & Observability — defines `## Telemetry Validation` section format.
+- CONVENTIONS.md § 4a Telemetry & Observability — defines `## Telemetry Validation` section format.

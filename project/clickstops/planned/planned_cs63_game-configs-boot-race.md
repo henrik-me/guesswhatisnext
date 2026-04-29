@@ -24,7 +24,7 @@ The race exists on **every deploy** — any first request hitting `game_configs`
 
 Two candidates (both worth ruling in/out):
 
-1. **CS52-7c game_configs loader called during a non-DB-touching path that shouldn't reach the DB at all** — the boot-quiet contract says enrolled read endpoints don't touch DB on cache miss when `X-User-Activity: 1` is absent (INSTRUCTIONS.md line 30 + memory). If `getConfig()` is invoked from somewhere that fires before the gesture-driven gate, that's the bug.
+1. **CS52-7c game_configs loader called during a non-DB-touching path that shouldn't reach the DB at all** — the boot-quiet contract says enrolled read endpoints don't touch DB on cache miss when `X-User-Activity: 1` is absent (see [CONVENTIONS.md § Database & Data](../../../CONVENTIONS.md#database--data)). If `getConfig()` is invoked from somewhere that fires before the gesture-driven gate, that's the bug.
 2. **`getConfig()` runs before `_tracker.runMigrations()` returns** — the migration runner's success acknowledgment may not strictly precede the lazy-init "ok" signal that other code paths gate on.
 
 ## Investigation plan

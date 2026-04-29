@@ -50,11 +50,11 @@ CS55 scope decision (to be confirmed during planning):
 | CS55-4 | Add achievement-unlocked notifications: when `user_achievements` insert succeeds, also insert a notification row and push via WS. Update achievement type set in `renderNotificationItem` (icon, message). | ⬜ Pending | Re-uses CS55-1/2/3 pipeline. |
 | CS55-5 | Add admin-announcement notifications: new `POST /api/admin/announcements { message, dismissible }` (requires admin role). Inserts a notification row for every active user (or a single global row clients filter on) and broadcasts via WS. UI: persistent dismissible banner above the top bar. | ⬜ Pending | Bounded scope — text only, no scheduling, no targeting. |
 | CS55-6 | E2E test: create a submission, approve it from a second client, assert the first client's badge updates within ~1s without any HTTP poll observed in the network log. | ⬜ Pending | Use Playwright network inspection to assert no `/api/notifications/count` requests fired. |
-| CS55-7 | Documentation: update `INSTRUCTIONS.md` notifications section with the "no polling, WS push + server cache" rule so future contributors don't regress. | ⬜ Pending | Cite this CS. |
+| CS55-7 | Documentation: update `CONVENTIONS.md` notifications guidance with the "no polling, WS push + server cache" rule so future contributors don't regress. | ⬜ Pending | Cite this CS. |
 
 ## Hard dependency on CS53-23 (2026-04-25)
 
-CS55 was originally planned around CS55-2 (server-side unread-count cache + the `X-User-Activity` header contract that the cache requires for Policy 1 compliance). On 2026-04-25 the contract foundation (CS55-2 v2 sub-tasks A–L) was **moved into CS53 as row CS53-23** because CS53-19 (boot-quiet enforcement across every boot/focus endpoint) blocks on the same contract and CS53 is being driven to closure first. The remaining CS55 work — CS55-1 (WS push), CS55-3 (client wiring), CS55-4 (achievement notifications), CS55-5 (admin announcements), CS55-6 (E2E test), CS55-7 (docs) — all depend on CS53-23 landing. Do not start CS55 implementation until CS53-23 is merged and the contract is stable in `INSTRUCTIONS.md`.
+CS55 was originally planned around CS55-2 (server-side unread-count cache + the `X-User-Activity` header contract that the cache requires for Policy 1 compliance). On 2026-04-25 the contract foundation (CS55-2 v2 sub-tasks A–L) was **moved into CS53 as row CS53-23** because CS53-19 (boot-quiet enforcement across every boot/focus endpoint) blocks on the same contract and CS53 is being driven to closure first. The remaining CS55 work — CS55-1 (WS push), CS55-3 (client wiring), CS55-4 (achievement notifications), CS55-5 (admin announcements), CS55-6 (E2E test), CS55-7 (docs) — all depend on CS53-23 landing. Do not start CS55 implementation until CS53-23 is merged and the contract is stable in `CONVENTIONS.md`.
 
 ## CS55-2 follow-ups — Policy 1 compliance gap (post PR #241 v1)
 
@@ -91,7 +91,7 @@ The current SPA does not poll on a timer (CS53-2 killed it; verified at `public/
 - A stale browser tab open for 24h, polling `/api/notifications/count` every 60s, causes **zero** DB queries past the first one (or zero total if CS55-2.B option (a) is chosen).
 - A tab opened with a 7-day JWT but immediately closed causes **zero** DB queries.
 - `X-User-Activity: 1` is present on exactly the legitimate user-activity-driven SPA calls and absent everywhere else; verified by an integration test that fails if a future change strips or spuriously adds the header.
-- `INSTRUCTIONS.md § Database & Data` documents the contract.
+- [CONVENTIONS.md § Database & Data](../../../CONVENTIONS.md#database--data) documents the contract.
 
 
 

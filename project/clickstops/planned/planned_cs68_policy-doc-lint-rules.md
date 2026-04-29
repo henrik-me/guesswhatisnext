@@ -17,7 +17,7 @@ CS65's plan-file-schema rules are orthogonal — they enforce that planned/activ
 
 1. Add a `brittle-step-reference` rule (warn-only) to `scripts/check-docs-consistency.js`.
 2. Audit the live policy doc set so the rule lands clean (no spurious warnings on first run).
-3. Document the pattern in `INSTRUCTIONS.md § Documentation Conventions` so authors prefer descriptive cross-doc references over step numbers.
+3. Document the pattern in `CONVENTIONS.md § Documentation Conventions` so authors prefer descriptive cross-doc references over step numbers.
 4. Land warn-only first; flip to error in a future follow-up CS once the baseline is stable for ≥1 week (CS43-2 / CS43-7 / CS62 pattern).
 
 ## Scope
@@ -47,7 +47,7 @@ Edge cases the heuristic must handle correctly:
 |---------|-------------|-----------|
 | CS68-1a | Implement the `brittle-step-reference` rule in `scripts/check-docs-consistency.js`. Include tests under `tests/check-docs-consistency.test.js` with at least one passing fixture (same-file step ref, code-block step ref, clickstop-file step ref) and one failing fixture (cross-doc step ref in INSTRUCTIONS.md). | parallel |
 | CS68-1b | Audit live policy docs (`npm run check:docs` after the rule lands). Fix any pre-existing legitimate hits by replacing step numbers with descriptions, OR add `<!-- check:ignore brittle-step-reference -->` annotations with a justifying comment. (The 2026-04-29 audit on the post-PR-#311 tree showed zero hits, so this task may be a no-op.) | parallel after 1a |
-| CS68-1c | Add a short bullet to `INSTRUCTIONS.md § Documentation Conventions` describing the convention: "When cross-doc references point at a numbered list item, refer by description ('the WORKBOARD registration item') not by step number ('step 6'). Step numbers in target docs change; descriptions are stable. Enforced by `brittle-step-reference` lint rule." | parallel |
+| CS68-1c | Add a short bullet to `CONVENTIONS.md § Documentation Conventions` describing the convention: "When cross-doc references point at a numbered list item, refer by description ('the WORKBOARD registration item') not by step number ('step 6'). Step numbers in target docs change; descriptions are stable. Enforced by `brittle-step-reference` lint rule." | parallel |
 | CS68-2 | After the rule has been clean for ≥1 week of normal repo activity, flip it from warn to error in `--strict` mode (mirrors CS43-7 and CS65-2). Separate commit. | sequential after 1* + soak |
 
 CS68-1a/1b/1c land in one PR. CS68-2 is a follow-up commit after the soak window.
@@ -57,7 +57,7 @@ CS68-1a/1b/1c land in one PR. CS68-2 is a follow-up commit after the soak window
 - `brittle-step-reference` rule implemented with passing + failing fixtures.
 - `npm run check:docs` is clean against the live policy doc set after CS68-1b cleanup (zero warnings from the new rule, or all remaining warnings are escape-hatched with justifications).
 - `npm run check:docs:strict` returns 0 errors (warn-only landing).
-- Rule documented in `INSTRUCTIONS.md § Documentation Conventions`.
+- Rule documented in `CONVENTIONS.md § Documentation Conventions`.
 - CS68-2 (the warn → error flip) is a separate follow-up commit, not part of the initial PR.
 
 ## Cross-references
