@@ -3,7 +3,7 @@
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
 Orchestrators update this file directly on main -- no PR required.
 
-> **Last updated:** 2026-04-29T15:34Z
+> **Last updated:** 2026-04-29T16:48Z
 
 ## Orchestrators
 
@@ -18,9 +18,9 @@ CS44-3 schema upgrade.
 | yoga-gwn-c3 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot3 | ⚪ Offline | 2026-04-27T04:36Z |
 | yoga-gwn-c4 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot4 | ⚪ Offline | 2026-04-27T04:36Z |
 | yoga-gwn-c5 | HENRIKM-YOGA | C:\src\guesswhatisnext_copilot5 | ⚪ Offline | 2026-04-27T06:20Z |
-| omni-gwn | HENRIKM-OMNI| C:\src\guesswhatisnext | 🟢 Active | 2026-04-29T04:08Z |
+| omni-gwn | HENRIKM-OMNI| C:\src\guesswhatisnext | 🟢 Active | 2026-04-29T16:44Z |
 | omni-gwn-c2 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot2 | ⚪ Offline | 2026-04-21T22:38Z |
-| omni-gwn-c3 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot3 | 🟢 Active | 2026-04-29T15:34Z |
+| omni-gwn-c3 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot3 | 🟢 Active | 2026-04-29T16:48Z |
 
 ## Active Work
 
