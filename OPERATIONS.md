@@ -4,7 +4,7 @@ This file contains day-to-day workflow procedures for orchestrators and sub-agen
 
 ## Agent Progress Reporting
 
-All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → local review loop → Copilot review (code/config PRs only). The orchestrating agent only intervenes to merge approved PRs.
+All implementation work happens in background agents on worktrees — never in the main session. Non-worktree tasks (research, investigation, planning) may also run as background agents without a worktree slot (see § Parallel Agent Workflow). Worktree agents handle the full implementation lifecycle autonomously: code changes → validation → PR creation → local review loop → Copilot review (code/config/CI PRs only). The orchestrating agent only intervenes to merge PRs that satisfy the review gate.
 
 Background agents **must** report progress to the orchestrating agent. Each milestone below maps to a canonical state in [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine); the sub-agent's prose update **must** be accompanied by a greppable `STATE: <value>` line so the orchestrator can extract the transition mechanically. **Only the orchestrator updates the `State` column in `WORKBOARD.md`** — sub-agents report events, the orchestrator records them. See [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) point D ("Reporting protocol") for the authoritative description.
 
@@ -15,8 +15,8 @@ Background agents **must** report progress to the orchestrating agent. Each mile
 - **On abort / cannot proceed:** "CS11-64: BLOCKED — \<reason\>. Needs orchestrator intervention." → `STATE: blocked` plus a `Blocked Reason: <short prose>` line so the orchestrator can populate the Blocked Reason column verbatim
 - **On PR created (`gh pr create` succeeded):** "CS11-64: PR #\<N\> created, running local review" → `STATE: pr_open` and `PR: <number>`
 - **On local review started:** "CS11-64: local review in progress" → `STATE: local_review`
-- **On Copilot review requested (code/config PRs):** "CS11-64: local review clean — requesting Copilot review" → `STATE: copilot_review`. For docs-only PRs: "CS11-64: local review clean — docs-only, skipping Copilot" (no Copilot transition; remain in `local_review` until ready).
-- **On ready (CI green AND all reviews approved):** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)" → `STATE: ready_to_merge`
+- **On Copilot review requested (code/config/CI PRs):** "CS11-64: local review clean — requesting Copilot review" → `STATE: copilot_review`. For docs-only PRs: "CS11-64: local review clean — docs-only, skipping Copilot" (no Copilot transition; remain in `local_review` until ready).
+- **On ready (CI green AND all required reviews satisfy the merge gate):** "CS11-64: PR #\<N\> ready for merge (reviews complete, CI green)" → `STATE: ready_to_merge`
 - **On deployment approval gate:** When monitoring a staging or production deploy, the monitoring agent must immediately report when an approval gate is reached — do not wait for the full workflow to complete. The orchestrator must immediately notify the user with the approval URL. Approval gates are:
   - **Staging:** After "Fast-Forward release/staging" job completes → "Deploy to Azure Staging" waits for `environment: staging` approval
   - **Production:** After "Validate Deployment Inputs" job completes → "Deploy to Azure Production" waits for `environment: production` approval
@@ -195,7 +195,7 @@ Ad-hoc `OPS-*` work uses the existing simple WORKBOARD pattern and does **not** 
 Sub-agents are responsible for:
 - All implementation file changes (code, docs, config) and all commits/pushes in worktrees
 - PR creation (`gh pr create`)
-- Copilot review loop (code/config PRs: reply to comments, resolve threads, re-request review; docs-only PRs: skip Copilot review)
+- Copilot review loop (code/config/CI PRs: reply to comments with commit SHA/change rationale, resolve threads, re-request review; docs-only PRs: skip Copilot review)
 - Merge conflict resolution (rebase/merge `origin/main` into the feature branch)
 
 This keeps `main` clean and ensures implementation changes flow through PRs. (Clickstop plan files and WORKBOARD.md are the exceptions — those are committed directly on `main` by the orchestrator.)
@@ -209,7 +209,7 @@ The canonical checklist lives in [docs/sub-agent-checklist.md](docs/sub-agent-ch
 - **Worktree path** (e.g. `C:\src\gwn-worktrees\wt-1`) and the **branch name** already checked out there.
 - **Required reads:** `INSTRUCTIONS.md`, `WORKBOARD.md`, the clickstop plan file under `project/clickstops/active/`, plus any task-specific docs.
 - **Validation commands:** the `npm run lint && npm test && npm run test:e2e` line (or `npm run check:docs:strict` for docs-only) the agent must run before opening a PR.
-- **Commit & PR steps:** commit message format (conventional + `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`), `git push -u origin <branch>`, `gh pr create` with title/body conventions, and (for code/config PRs) `gh pr edit <#> --add-reviewer Copilot`.
+- **Commit & PR steps:** commit message format (conventional + `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`), `git push -u origin <branch>`, `gh pr create` with title/body conventions, and (for code/config/CI PRs) `gh pr edit <#> --add-reviewer Copilot`.
 - **State-reporting protocol:** the explicit `STATE: <value>` line for each transition listed in § Agent Progress Reporting. The final report must end with greppable `STATE:` (and `PR:` when applicable) lines. Reference [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine) for the canonical vocabulary.
 - **Constraints:** do not edit `WORKBOARD.md` (this includes: do NOT add yourself to the Orchestrators table, do NOT use `(sub-agent)` annotation in any column, do NOT modify the State column); do not touch other agents' clickstop rows; do not work outside the assigned worktree; mark only the agent's own claimed task row `✅ Done` with the PR link.
 
@@ -297,9 +297,9 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 4. Push branch to origin
 5. Create PR: `gh pr create --base main --head {agent-id}/{task-id}-{description}`
 6. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop)) — fix issues, push fixes, repeat until clean
-7. **Code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` | **Docs-only PRs:** Skip Copilot review
-8. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
-9. After CI passes and reviews are complete (Copilot approval for code/config PRs; local review clean for docs-only PRs), **squash-merge** via GitHub UI or `gh pr merge --squash`
+7. **Code/config/CI PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` | **Docs-only PRs:** Skip Copilot review
+8. Address review feedback — commit each round of fixes separately, reply to every Copilot thread with disposition + commit SHA/change rationale, then resolve the thread.
+9. After CI passes and reviews are complete (Copilot clean for code/config/CI PRs; local review clean for docs-only PRs), **squash-merge** via GitHub UI or `gh pr merge --squash` / documented `gh pr merge --squash --admin` gate when Copilot is clean but branch protection still demands `APPROVED`
 10. Main orchestrating agent pulls after each merge: `git pull`
 
 **Recycling slots:** `git worktree remove <path> --force` → `git branch -d old-branch` → `git worktree add -b new-branch <path> main`
@@ -327,44 +327,50 @@ Branch protection requires the head branch to be up-to-date with `main` before m
 
 **`gh pr merge --auto` is disabled in this repo** (`enablePullRequestAutoMerge = false`), so the auto-queue escape hatch GitHub normally provides isn't available.
 
-**Escalation rule (owner / admin only, only after explicit user approval).**
+**Admin merge use cases.**
 
-This is an **exception path**, not default merge procedure. Per [§ WORKBOARD.md — Live Coordination in TRACKING.md](TRACKING.md#workboardmd--live-coordination) and the broader "no self-decided shortcuts" rule in [§ Quick Reference Checklist in INSTRUCTIONS.md](INSTRUCTIONS.md#quick-reference-checklist), a non-owner orchestrator must NOT use `--admin`. Once a PR satisfies all of the criteria below AND the user (or a delegated authority with admin rights) has explicitly approved the merge, the owner / admin may use `gh pr merge --squash --admin`:
+There are two distinct reasons `gh pr merge --squash --admin` may appear in this repo, and they must not be conflated:
+
+1. **Normal code/config/CI merge gate:** Copilot usually converges as `COMMENTED` with no new comments rather than `APPROVED`. For code/config/CI PRs, `--admin` is the documented merge mechanism once the [Copilot-clean gate](#merge-gate-copilot-commented-with-all-threads-resolved) below is satisfied. Do **not** wait for a bot `APPROVED` state.
+2. **Long-running up-to-date bypass:** when a PR is trapped in the `BEHIND → rebase → CI green → BEHIND` loop, `--admin` also bypasses the up-to-date requirement. This remains owner / delegated-admin only and requires explicit user approval before bypassing the up-to-date rule.
+
+For the long-running up-to-date bypass, a PR must satisfy all of the following before the owner / admin uses `gh pr merge --squash --admin`:
 
 - All required CI checks SUCCESS on the latest head commit
-- All required reviews satisfied per [§ Review state on the `--admin` exception path](#review-state-on-the---admin-exception-path) below (Copilot for code/config; local review for docs-only — see [REVIEWS.md](REVIEWS.md))
+- All required reviews satisfied per [§ Merge gate: Copilot COMMENTED with all threads resolved](#merge-gate-copilot-commented-with-all-threads-resolved) below (Copilot for code/config/CI; local review for docs-only — see [REVIEWS.md](REVIEWS.md))
 - The PR has been ready-to-merge for ≥30 minutes AND `main` has moved ≥3 times since the last successful CI
+- The user (or delegated authority with admin rights) explicitly approved bypassing the up-to-date requirement
 
-The `--admin` flag bypasses the up-to-date requirement; the squash strategy keeps `main` history clean. Do **not** use `--admin` to bypass actual content conflicts (`mergeStateStatus = DIRTY`) — that path requires a real rebase and conflict resolution.
+The `--admin` flag bypasses branch-protection blockers that are satisfied by policy evidence but not by GitHub's literal checks; the squash strategy keeps `main` history clean. Do **not** use `--admin` to bypass actual content conflicts (`mergeStateStatus = DIRTY`) — that path requires a real rebase and conflict resolution.
 
-**When using `--admin`, post a PR comment** documenting why the bypass was used, who approved it, and which CI sha was last successful (e.g., "Admin merge after 10 rebase cycles in churning main; CI green on `<sha>`, all reviews satisfied per OPERATIONS § Review state on the `--admin` exception path, user approved at `<time>`"). The comment **must** link to (or paraphrase) the review-state criteria below so the audit trail records exactly which gate was relied on. This preserves the audit trail for branch-protection exceptions.
+**When using `--admin` for a long-running up-to-date bypass, post a PR comment** documenting why the bypass was used, who approved it, and which CI sha was last successful (e.g., "Admin merge after 10 rebase cycles in churning main; CI green on `<sha>`, all reviews satisfied per OPERATIONS § Merge gate: Copilot COMMENTED with all threads resolved, user approved at `<time>`"). The comment **must** link to (or paraphrase) the review-state criteria below so the audit trail records exactly which gate was relied on. This preserves the audit trail for branch-protection bypasses.
 
-### Review state on the `--admin` exception path
+### Merge gate: Copilot COMMENTED with all threads resolved
 
-Branch protection nominally requires an `APPROVED` review, but the only configured PR reviewer (the Copilot bot) does not reliably issue `APPROVED` — in practice it almost always finishes a clean round as `COMMENTED`. CS53-21 surfaced this; CS53-21.A resolves which review state actually suffices on the `--admin` exception path so the rule above (`All required reviews satisfied`) is not underspecified.
+Branch protection nominally requires an `APPROVED` review, but the configured Copilot reviewer does not reliably issue `APPROVED` — in practice it almost always finishes a clean round as `COMMENTED` with no new comments. Treat that state as the normal, canonical merge gate for code/config/CI PRs once the criteria below are true; this is not an exception path.
 
-**Scope.** Everything below about *Copilot* review state applies to **code/config PRs** — the PR types where [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop) (and the "Copilot PR Review Policy" paragraph that follows it) requires Copilot review. **Docs-only PRs** (per the same REVIEWS.md table) skip Copilot review by design, so the Copilot-evidence and Copilot-inline-thread criteria below do **not** apply to them; for docs-only PRs the `--admin` review-state gate reduces to **(a)** local review (GPT-5.5 or higher) is clean and **(b)** all required CI checks are `SUCCESS` on the latest head commit. The CI prohibition below applies to *all* PR types. Note: in practice, docs-only PRs almost never need `--admin` (they do not invoke long Copilot review cycles), so this branch of the gate exists for completeness rather than as a routine path.
+**Scope.** Everything below about *Copilot* review state applies to **code/config/CI PRs** — the PR types where [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop) requires Copilot review. **Docs-only PRs** (per the same REVIEWS.md table) skip Copilot review by design, so the Copilot-evidence and Copilot-inline-thread criteria below do **not** apply to them. For docs-only PRs, any `--admin` merge still requires explicit user approval because Copilot is intentionally skipped; the review-state gate reduces to **(a)** local review (GPT-5.5 or higher) is clean and **(b)** all required CI checks are `SUCCESS` on the latest head commit. The CI prohibition below applies to *all* PR types. Note: in practice, docs-only PRs almost never need `--admin`, so this branch of the gate exists for completeness rather than as a routine path.
 
-**Recommended landing position (code/config PRs).** The latest Copilot review may be `COMMENTED` (rather than `APPROVED`) **provided all** of the following hold:
+**Canonical landing position (code/config/CI PRs).** The latest Copilot review may be `COMMENTED` (rather than `APPROVED`) **provided all** of the following hold:
 
 - All inline comment threads on the latest commit are resolved (no open `pending` threads — verify via the GraphQL `reviewThreads` query in [REVIEWS.md](REVIEWS.md)).
 - Local review (GPT-5.5 or higher, per [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop)) is clean — no open findings.
 - All required CI checks are `SUCCESS` on the latest head commit.
 - The orchestrator has explicitly tracked addressing each Copilot finding in commits visible in the PR thread (the per-thread "Fixed in `<commit>`" replies described in [REVIEWS.md](REVIEWS.md) are the audit trail for this).
 
-If the latest review is `APPROVED`, that of course also satisfies the gate; the point of this sub-section is that `COMMENTED` + the four conditions above is **explicitly acceptable** and is in fact the normal converged end state for Copilot-reviewed PRs in this repo.
+If the latest review is `APPROVED`, that of course also satisfies the gate; the point of this sub-section is that `COMMENTED` with no new comments + the four conditions above is **effective APPROVAL** and is the normal converged end state for Copilot-reviewed PRs in this repo.
 
-**Reading the broader workflow consistently.** Other docs use the shorthand "all reviews approved" when describing the `ready_to_merge` state (e.g. [§ Agent Progress Reporting in OPERATIONS.md](#agent-progress-reporting), and [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine)). On the `--admin` exception path, "approved" should be read as "satisfies the criteria above" — i.e. a clean `COMMENTED` round meeting the four conditions counts as `ready_to_merge` for the purpose of this exception path. The normal (non-`--admin`) merge path still requires whatever branch protection itself enforces.
+**Reading the broader workflow consistently.** Other docs use the shorthand "all reviews approved" when describing the `ready_to_merge` state (e.g. [§ Agent Progress Reporting in OPERATIONS.md](#agent-progress-reporting), and [§ WORKBOARD State Machine in TRACKING.md](TRACKING.md#workboard-state-machine)). Read "approved" as "satisfies the criteria above" — i.e. a clean `COMMENTED` round meeting the four conditions counts as `ready_to_merge`. The documented merge command for this state is `gh pr merge --squash --admin` because GitHub's literal branch-protection check may still demand an `APPROVED` state that the bot does not emit.
 
 **Hard prohibition — `--admin` MUST NOT be used when any of the following hold:**
 
-- **(Code/config PRs only.)** Zero Copilot review evidence exists on the PR (i.e., the bot never ran — no review record at all from `copilot-pull-request-reviewer`). Request the review and wait; do not bypass. (Does not apply to docs-only PRs, which legitimately skip Copilot review per [REVIEWS.md](REVIEWS.md).)
-- **(All PR types.)** Any required CI check is in `FAILURE` or `PENDING`. `--admin` exists to bypass the *up-to-date* requirement during main churn, **not** to bypass red or in-flight CI.
-- **(Code/config PRs only.)** Any Copilot inline comment on the latest commit is unresolved (open `pending` thread). Resolve or reply-and-resolve first; an unresolved thread means a finding has not been dispositioned.
+- **(Code/config/CI PRs only.)** Zero Copilot review evidence exists on the PR (i.e., the bot never ran — no review record at all from `copilot-pull-request-reviewer`). Request the review and wait; skipping Copilot on a non-docs PR is a process violation. (Does not apply to docs-only PRs, which legitimately skip Copilot review per [REVIEWS.md](REVIEWS.md).)
+- **(All PR types.)** Any required CI check is in `FAILURE` or `PENDING`. `--admin` exists to bridge branch-protection mechanics after the policy gate is satisfied, **not** to bypass red or in-flight CI.
+- **(Code/config/CI PRs only.)** Any Copilot inline comment on the latest commit is unresolved (open `pending` thread). Resolve or reply-and-resolve first; an unresolved thread means a finding has not been dispositioned.
 
 These prohibitions are absolute — owner approval does **not** override them, because they are about the *evidence base* for the merge, not about who is authorised to bypass branch protection.
 
-**Audit-trail restatement (see also the bullet above).** Every `--admin` use must be accompanied by a PR comment that (a) explains why the bypass was needed (typically: long-running PR, churning main, ≥N rebase cycles), (b) names the user / authority who approved the merge, (c) records the CI sha that was last `SUCCESS`, and (d) links to or paraphrases the four "Recommended landing position" criteria above so a future reader can verify the gate was actually satisfied.
+**Audit-trail restatement (see also the bullet above).** Every `--admin` use for a long-running up-to-date bypass must be accompanied by a PR comment that (a) explains why the bypass was needed (typically: long-running PR, churning main, ≥N rebase cycles), (b) names the user / authority who approved the bypass, (c) records the CI sha that was last `SUCCESS`, and (d) links to or paraphrases the four "Canonical landing position" criteria above so a future reader can verify the gate was actually satisfied.
 
 **Pre-merge sanity check via the merge tree**, even when bypassing the up-to-date check, to catch silent semantic conflicts that GitHub's mergeStateStatus wouldn't flag (e.g. two concurrent PRs both rewriting the same JSDoc):
 

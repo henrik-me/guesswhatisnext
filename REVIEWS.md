@@ -47,10 +47,14 @@ This preserves the review audit trail in the PR for future reference.
 
 **Docs-only PR definition:** A PR is docs-only if it modifies ONLY files with extensions `.md`, or files anywhere under `project/clickstops/` (including the `planned/`, `active/`, and `done/` subdirectories). If ANY non-docs file is changed, treat it as a code PR.
 
+**Merge gates by PR type:**
+- **Code/config/CI PRs:** Copilot clean (`COMMENTED` with no new comments and all inline threads resolved, or `APPROVED`) + local review clean + CI green. Copilot review is mandatory; skipping it on a non-docs PR is a process violation. If GitHub branch protection still blocks because Copilot did not emit `APPROVED`, use the normal `gh pr merge --squash --admin` path documented in [OPERATIONS.md § Merge gate: Copilot COMMENTED with all threads resolved](OPERATIONS.md#merge-gate-copilot-commented-with-all-threads-resolved).
+- **Docs-only PRs:** local review clean + CI green. Copilot is skipped by design; any `--admin` merge for a docs-only PR requires explicit user approval because the Copilot gate was intentionally skipped.
+
 **Copilot PR Review Policy:**
-- Every code/config PR must be reviewed by Copilot before merging (docs-only PRs may skip — see Local Review Loop above)
+- Every code/config/CI PR must be reviewed by Copilot before merging (docs-only PRs may skip — see Local Review Loop above)
 - Categorize comments as **Fix** (real bugs, security, correctness), **Skip** (cosmetic, by-design), or **Accept suggestion** (correct code improvement)
-- Fix valid issues, reply with rationale on each thread, resolve all threads
+- Fix valid issues, reply with disposition + commit SHA/change rationale on each thread, then resolve all threads
 - If Copilot re-reviews after fixes, repeat the cycle
 
 **Copilot-review checklist (must verify before merge, in addition to Copilot's own findings):**
@@ -64,10 +68,17 @@ Requesting review (requires gh CLI ≥ 2.88.0): `gh pr edit <PR#> --add-reviewer
 **Review loop (repeat until clean):**
 1. Read all review comments and suggestions
 2. Categorize each as **Fix** (real bugs, security, correctness), **Skip** (cosmetic, by-design), or **Accept suggestion** (correct code improvement)
-3. Reply to each comment with disposition and rationale, then fix valid issues
-4. Resolve all threads (fixed or acknowledged) — always reply BEFORE resolving
+3. Decide the disposition for each comment, fix valid issues, and commit the fixes
+4. Reply to each thread before resolving it. For fixes, the reply MUST cite the fixing commit SHA; for skips/by-design/duplicates/not-applicable findings, the reply MUST give the concrete rationale or target thread/change. Empty resolution without a reply is a process violation.
+
+   Good reply:
+   > Fixed in `abc1234`: switched to atomic write to avoid the race.
+
+   Bad reply:
+   > OK
+
 5. Re-request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"`
-6. Repeat from step 1 until Copilot review is clean — the latest Copilot review is `COMMENTED` with all inline threads resolved, OR `APPROVED`. The Copilot bot does not always issue `APPROVED`; in this repo it almost always converges as `COMMENTED` with no new comments, and that state — combined with all inline threads resolved — is acceptable per the merge gate. See [§ Long-running PRs in fast-churning main → Review state on the `--admin` exception path in OPERATIONS.md](OPERATIONS.md#review-state-on-the---admin-exception-path) for the full criteria that the merge gate uses.
+6. Repeat from step 1 until Copilot review is clean — the latest Copilot review is `COMMENTED` with no new comments and all inline threads resolved, OR `APPROVED`. The Copilot bot does not always issue `APPROVED`; in this repo it almost always converges as `COMMENTED` with no new comments, and that state — combined with all inline threads resolved — is effective approval per the normal merge gate. See [OPERATIONS.md § Merge gate: Copilot COMMENTED with all threads resolved](OPERATIONS.md#merge-gate-copilot-commented-with-all-threads-resolved) for the full criteria.
 
 ### Waiting for Copilot Review
 
@@ -85,7 +96,7 @@ gh api repos/henrik-me/guesswhatisnext/pulls/<PR#>/reviews --jq '[.[] | select(.
 gh api repos/henrik-me/guesswhatisnext/pulls/comments/<COMMENT_ID>/replies --method POST -f "body=YOUR_REPLY"
 ```
 
-**Reply conventions:** Fixed → reference commit hash. Acknowledged (by design) → explain rationale. Not applicable → note why observation is incorrect. Duplicate → reference original thread.
+**Reply conventions:** Fixed → MUST reference commit hash (`Fixed in abc1234: switched to atomic write`). Skip/by design → explain rationale (`Skip — by design: endpoint intentionally stays read-only because <reason>`). Not applicable → note why observation is incorrect (`Not applicable: <why>`). Duplicate → reference original thread or fixing commit (`Duplicate of thread <id>; fixed in abc1234`). Reply first, then resolve the thread.
 
 **Resolving review threads (GraphQL API):**
 ```powershell
