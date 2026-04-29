@@ -241,4 +241,4 @@ Realistic worktree usage: 1 sub-agent per PR; the bottleneck is migration orderi
 
 ## Cross-references
 
-- [INSTRUCTIONS.md § Multi-PR pattern for backward-incompatible migrations](../../../INSTRUCTIONS.md#multi-pr-pattern-for-backward-incompatible-migrations).
+- [CONVENTIONS.md § Multi-PR pattern for backward-incompatible migrations](../../../CONVENTIONS.md#multi-pr-pattern-for-backward-incompatible-migrations).

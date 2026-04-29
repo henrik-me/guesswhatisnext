@@ -289,7 +289,8 @@ guesswhatisnext/
 ├── infra/                          # Azure deployment (deploy.sh + README)
 ├── eslint.config.mjs               # ESLint flat config
 ├── package.json
-├── INSTRUCTIONS.md                 # Durable policy (architecture, coding, testing) + index to procedure docs
+├── INSTRUCTIONS.md                 # Orchestrator Quick Reference + index to policy/procedure docs
+├── CONVENTIONS.md                  # Architecture, coding, testing, telemetry, DB, and docs conventions
 ├── OPERATIONS.md                   # Agent workflow, parallelism, deployment procedures
 ├── REVIEWS.md                      # Local review loop + Copilot PR review policy
 ├── TRACKING.md                     # Clickstop lifecycle, WORKBOARD state machine, CONTEXT protocol

@@ -1,6 +1,6 @@
 # Operations
 
-This file contains day-to-day workflow procedures for orchestrators and sub-agents (claim/dispatch/handoff/deployment). For durable policy see `INSTRUCTIONS.md`. For review procedures see `REVIEWS.md`. For clickstop/workboard lifecycle see `TRACKING.md`.
+This file contains day-to-day workflow procedures for orchestrators and sub-agents (claim/dispatch/handoff/deployment). For orchestrator workflow policy see `INSTRUCTIONS.md`; for code/test conventions see `CONVENTIONS.md`. For review procedures see `REVIEWS.md`. For clickstop/workboard lifecycle see `TRACKING.md`.
 
 ## Agent Progress Reporting
 
@@ -217,7 +217,7 @@ This checklist exists so dispatched agents have everything needed to report stat
 
 ### Cold-start container validation
 
-Policy reference: [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data) — "Cold-start container validation gates every check-in".
+Policy reference: [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data) — "Cold-start container validation gates every check-in".
 
 **Why.** Container/cold-start behavior surfaces issues that unit and E2E tests routinely miss: lazy request-driven DB init, the `503 + Retry-After` warmup path, the SPA `progressive-loader` cycle, and the `Database not yet initialized` vs `Database temporarily unavailable` (no-retry) shape distinction. The `npm run container:validate` script restarts the local MSSQL Docker stack with `GWN_SIMULATE_COLD_START_MS=30000` so the first `mssql-adapter._connect()` after process start sleeps 30 seconds — mimicking Azure SQL serverless auto-pause resume timing — and asserts that a representative unauthenticated DB-touching endpoint (`/api/scores/leaderboard`) gets at least one `503 + Retry-After` then a `200` within `WARMUP_CAP_MS + 30s + COLD_START_MS` (the `COLD_START_MS` term accounts for the simulated server-side delay on top of the SPA-side warmup budget). Both halves of the assertion matter: the 503 proves the warmup retry path was exercised; the 200 proves the request-driven lazy init pattern actually heals without operator intervention.
 
@@ -403,7 +403,7 @@ curl "https://$fqdn/healthz"
 Cold-start budget on the first request after idle:
 
 - ~10–30s for the Container App replica to be allocated (`minReplicas: 0` → 1).
-- ~30s for the lazy DB init in `server/app.js` to complete its first connection (request-driven, see [§ Database & Data in INSTRUCTIONS.md](INSTRUCTIONS.md#database--data)).
+- ~30s for the lazy DB init in `server/app.js` to complete its first connection (request-driven, see [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
 
 Cooldown: after the Container Apps idle window of zero traffic, the replica is deallocated again, so a probe followed by a few minutes of silence returns staging to its $0 idle state. The exact FQDN, the `minReplicas` value, and the cooldown live authoritatively in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) and the live `az containerapp show` output — do not paraphrase them elsewhere. Until [CS58-1/CS58-2](project/clickstops/done/done_cs58_scale-staging-to-zero.md) land, the live `minReplicas` may still be `1`; check the CS task table for current state.
 
@@ -445,7 +445,7 @@ Every staging and production deploy runs through a defense-in-depth chain of aut
 
 **Pre-PR (PR-CI):**
 - § 4a Telemetry Validation gate — every PR body that touches code (not docs-only) must include a `## Telemetry Validation` section. Enforced by `actions/github-script` reading `pull_request.body` + `listFiles` (CS41-6).
-- Migration policy linter — `scripts/check-migration-policy.js` runs in `npm test` and rejects backward-incompatible patterns (`DROP COLUMN`, `RENAME`, new `NOT NULL` without `DEFAULT`, etc.) unless overridden via inline `// MIGRATION-POLICY-OVERRIDE: <reason + multi-PR-plan-link>` comment that references an [expand→migrate→contract](INSTRUCTIONS.md) plan (CS41-11 + CS41-13).
+- Migration policy linter — `scripts/check-migration-policy.js` runs in `npm test` and rejects backward-incompatible patterns (`DROP COLUMN`, `RENAME`, new `NOT NULL` without `DEFAULT`, etc.) unless overridden via inline `// MIGRATION-POLICY-OVERRIDE: <reason + multi-PR-plan-link>` comment that references an [expand→migrate→contract](CONVENTIONS.md#multi-pr-pattern-for-backward-incompatible-migrations) plan (CS41-11 + CS41-13).
 
 **Pre-traffic-shift (deploy workflow):**
 - DB migrations run via `node scripts/migrate.js` BEFORE the `az containerapp update` step (prod) or BEFORE `traffic set` (staging). Failure aborts the deploy with no traffic shift (CS41-4).

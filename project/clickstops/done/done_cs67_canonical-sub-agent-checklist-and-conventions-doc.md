@@ -1,6 +1,6 @@
 # CS67 — Canonical Sub Agent Checklist And Conventions Doc
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done
 **Origin:** 2026-04-29 conversation (omni-gwn). Two related observations: (1) the Sub-Agent Checklist lives buried inside a 50KB OPERATIONS.md, forcing orchestrators to paraphrase or misplace it on each dispatch; (2) ~70% of INSTRUCTIONS.md is code/test/architecture conventions a sub-agent needs every time it touches code, while the rest is orchestrator-only. Splitting both extracts canonical artifacts that are mechanically referenceable.
 **Depends on:** CS64 (uses the dep/parallelism conventions in the new docs)
 **Parallel-safe with:** CS65, CS66
@@ -35,20 +35,20 @@ A sub-agent currently has to scan the whole file to find code-relevant sections.
 | Task ID | Description | Parallel? |
 |---------|-------------|-----------|
 | CS67-1 | ✅ Done — Phase 1 extracts the canonical sub-agent checklist to `docs/sub-agent-checklist.md`, replaces OPERATIONS.md § Sub-Agent Checklist with a one-paragraph link reference, and adds warn-only `docs:strict` rule `sub-agent-checklist-canonical` asserting the canonical file exists and OPERATIONS.md links to it. | sequential (Phase 1) |
-| CS67-2a | Phase 2 — extract `CONVENTIONS.md`. Move INSTRUCTIONS.md sections §1, §2, §3, §4, §4a, §5, Database & Data, Documentation Conventions, §6 into a new `CONVENTIONS.md` at repo root. Preserve heading order, anchor stability where possible. INSTRUCTIONS.md keeps Quick Reference Checklist + Production deploys + Investigation artifacts + a "See CONVENTIONS.md for code/test policy" pointer at the top. | sequential after Phase 1 (Phase 2 may share PR with 2b/2c) |
-| CS67-2b | Update repo-wide cross-references. Every `(INSTRUCTIONS.md#anchor)` link to a moved section must be rewritten to `(CONVENTIONS.md#anchor)`. Use `grep -rn 'INSTRUCTIONS.md#'` to find all sites; mechanical sweep. | parallel with 2c |
-| CS67-2c | Update the canonical sub-agent checklist (from Phase 1) to add `CONVENTIONS.md` as a required read. Add a state marker convention: sub-agents emit `READS_COMPLETE: INSTRUCTIONS@<sha> CONVENTIONS@<sha>` before starting work, so PR-body gate (CS66) or dispatch-time check can verify. | parallel with 2b |
-| CS67-3 | Soak. Run for ≥ 2 weeks; collect feedback from sub-agents about whether CONVENTIONS.md scope is right. Adjust section split (e.g. move boundaries) if needed. | sequential after 2* |
+| CS67-2a | ✅ Done — Phase 2 extracts `CONVENTIONS.md`. Move INSTRUCTIONS.md sections §1, §2, §3, §4, §4a, §5, Database & Data, Documentation Conventions, §6 into a new `CONVENTIONS.md` at repo root. Preserve heading order, anchor stability where possible. INSTRUCTIONS.md keeps Quick Reference Checklist + Production deploys + Investigation artifacts + a "See CONVENTIONS.md for code/test policy" pointer at the top. | sequential after Phase 1 (Phase 2 may share PR with 2b/2c) |
+| CS67-2b | ✅ Done — Update repo-wide cross-references. Every `(INSTRUCTIONS.md#anchor)` link to a moved section must be rewritten to `(CONVENTIONS.md#anchor)`. Use `grep -rn 'INSTRUCTIONS.md#'` to find all sites; mechanical sweep. | parallel with 2c |
+| CS67-2c | ✅ Done — Update the canonical sub-agent checklist (from Phase 1) to add `CONVENTIONS.md` as a required read. Add a state marker convention: sub-agents emit `READS_COMPLETE: INSTRUCTIONS@<sha> CONVENTIONS@<sha>` before starting work, so PR-body gate (CS66) or dispatch-time check can verify. | parallel with 2b |
+| CS67-3 | ✅ Done — Phase 2 completes the canonical split; any future scope feedback should be filed as a follow-up clickstop per the deferred-work policy. | follow-up if needed |
 
 CS67-1 must complete before CS67-2* because Phase 2's CONVENTIONS.md split changes anchors that the canonical checklist (Phase 1) references. Phase 2's three subtasks can land in one PR or three depending on size.
 
 ## Acceptance
 
-- `docs/sub-agent-checklist.md` exists with the canonical 17-step checklist.
+- ✅ `docs/sub-agent-checklist.md` exists with the canonical 18-step checklist, including the CONVENTIONS.md required-read and `READS_COMPLETE` marker.
 - OPERATIONS.md no longer carries a verbatim duplicate (either deleted in favor of include marker, or kept synced via the `sub-agent-checklist-canonical` linter rule).
-- `CONVENTIONS.md` exists at repo root with the extracted sections; INSTRUCTIONS.md has been trimmed to orchestrator-facing content only and is < 25KB.
-- Every `INSTRUCTIONS.md#anchor` link in the repo that targets a moved section now correctly points at `CONVENTIONS.md#anchor`. Verified via `npm run check:docs:strict` (existing `link-resolves` rule).
-- Sub-agent dispatch prompts (post-CS67) reference `docs/sub-agent-checklist.md` and `CONVENTIONS.md` by path; orchestrators no longer paste the checklist body verbatim.
+- ✅ `CONVENTIONS.md` exists at repo root with the extracted sections; INSTRUCTIONS.md has been trimmed to orchestrator-facing content only and is < 25KB.
+- ✅ Every `INSTRUCTIONS.md#anchor` link in the repo that targets a moved section now correctly points at `CONVENTIONS.md#anchor`. Verified via `npm run check:docs:strict` (existing `link-resolves` rule).
+- ✅ Sub-agent dispatch prompts (post-CS67) include the canonical `docs/sub-agent-checklist.md` content verbatim and reference `CONVENTIONS.md` as a required read.
 - After ≥ 2 weeks of soak (CS67-3), no sub-agent has reported "I needed convention X but couldn't find it" (or, if they have, the section split is updated).
 
 ## Risks and mitigations

@@ -156,7 +156,7 @@ Daily detail lives in [`cs60-data-appendix.md`](cs60-data-appendix.md). Roll-up 
 
 - [ ] All three measurement windows (CS60-1/2/3) executed and recorded in the Measurements table.
 - [ ] CS60-3 +30d decision recorded (free-tier headroom: ≤ 1GB / 1-4GB / > 4GB).
-- [ ] CS60-4 (`dependencies` investigation): closed as one of {implemented, sampled, deferred-with-rationale, no-op-with-rationale}. Local + staging + prod telemetry validation per [INSTRUCTIONS.md § 4a](../../../INSTRUCTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work) if implemented.
+- [ ] CS60-4 (`dependencies` investigation): closed as one of {implemented, sampled, deferred-with-rationale, no-op-with-rationale}. Local + staging + prod telemetry validation per [CONVENTIONS.md § 4a](../../../CONVENTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work) if implemented.
 - [ ] CS60-5 (`traces` table): closed as one of {implemented-via-PinoTransport, implemented-via-OTelLogs, deferred-to-new-CS-with-link, decided-not-to-do-with-rationale}.
 - [ ] CS60-6 (`exceptions` table): closed as one of {free-from-CS60-5, implemented-via-trackException, deferred, decided-not-to-do-with-rationale}.
 - [ ] No CS54-9 deferred item ends CS60 in an unaddressed state.

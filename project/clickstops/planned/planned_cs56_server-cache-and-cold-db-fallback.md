@@ -48,7 +48,7 @@
 | CS56-5 | Add per-user caches: `GET /api/scores/me`, `/api/matches/history`, `/api/achievements`. Key includes `user_id`. Invalidation hooks on writes for the same user. | ⬜ Pending | Bound `maxEntries` per cache to prevent memory growth on large user counts. |
 | CS56-6 | Cold-DB resilience: confirm the `stale-fallback` path activates when the DB is unavailable. End-to-end test: pause the DB connection, request a hot leaderboard endpoint, expect the stale entry returned with the `X-Cache: stale-fallback` header instead of 503. | ⬜ Pending | This is the CS42/CS53 cold-DB UX win. |
 | CS56-7 | Observability: log cache metrics (hit/miss/stale/stale-fallback counts) via Pino structured logs. Once CS54 lands, surface a small KQL dashboard (hit ratio per endpoint, stale-fallback events). | ⬜ Pending | Don't ship a metrics framework — just structured log lines. |
-| CS56-8 | Documentation: add a "Server-side caching" section to INSTRUCTIONS.md with the opt-in pattern, the no-background-refresh rule, and the invalidation contract. | ⬜ Pending | Prevent drift back to polling/background-refresh patterns. |
+| CS56-8 | Documentation: add a "Server-side caching" section to CONVENTIONS.md with the opt-in pattern, the no-background-refresh rule, and the invalidation contract. | ⬜ Pending | Prevent drift back to polling/background-refresh patterns. |
 
 ## Acceptance
 

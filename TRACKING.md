@@ -1,7 +1,7 @@
 # Tracking Lifecycle Procedures
 
 
-This file contains the tracking-lifecycle procedures for orchestrators: clickstop file naming/location, `CONTEXT.md` update protocol, `WORKBOARD.md` update protocol (including the state machine and row-ownership/stale-lock policy), CS number conflict resolution, and deferred-task handling. For durable policy see `INSTRUCTIONS.md`. For day-to-day workflow see `OPERATIONS.md`. For review procedures see `REVIEWS.md`.
+This file contains the tracking-lifecycle procedures for orchestrators: clickstop file naming/location, `CONTEXT.md` update protocol, `WORKBOARD.md` update protocol (including the state machine and row-ownership/stale-lock policy), CS number conflict resolution, and deferred-task handling. For orchestrator workflow policy see `INSTRUCTIONS.md`; for code/test conventions see `CONVENTIONS.md`. For day-to-day workflow see `OPERATIONS.md`. For review procedures see `REVIEWS.md`.
 
 ## Clickstop & Task Management
 
