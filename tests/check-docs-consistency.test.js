@@ -25,7 +25,7 @@ function withoutPlanSchema(findings) {
 describe('check-docs-consistency', () => {
   test('happy fixture: zero findings', () => {
     const findings = run({ root: path.join(FIX, 'happy'), now: FIXED_NOW });
-    expect(withoutPlanSchema(findings)).toEqual([]);
+    expect(findings).toEqual([]);
   });
 
   test('broken-link fixture: link-resolves error', () => {
