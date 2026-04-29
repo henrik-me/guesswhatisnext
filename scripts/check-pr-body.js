@@ -21,9 +21,9 @@ function isDocsFile(file) {
 }
 
 function isCiConfigFile(file) {
-  return /^\.github\/workflows\/.*\.yml$/i.test(file) ||
+  return /^\.github\/workflows\/.*\.ya?ml$/i.test(file) ||
     file === 'Dockerfile' ||
-    /^docker-compose(?:\..*)?\.yml$/i.test(file);
+    /^docker-compose(?:\..*)?\.ya?ml$/i.test(file);
 }
 
 function isToolingOnlyFile(file) {
@@ -159,6 +159,10 @@ function hasPassingValidationRow(section) {
   return table.rows.some(row => row.cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed)?\b)/i.test(cell)));
 }
 
+function hasCheckedValidationItem(section) {
+  return /^\s*-\s+\[[xX]\]\s+\S+/m.test(section.content);
+}
+
 function validateOperationalSection(body, title, prType, files, findings) {
   const section = findSection(body, title);
   if (!section) {
@@ -171,8 +175,8 @@ function validateOperationalSection(body, title, prType, files, findings) {
   if (prType === 'CI-config-only' && /not applicable \((?:CI-config-only|docs\/CI-only)\)/i.test(text)) return;
   if (files.length > 0 && files.every(isToolingOnlyFile) && /not applicable \(tooling-only\)/i.test(text)) return;
 
-  if (!hasPassingValidationRow(section)) {
-    findings.push(`'## ${title}' must contain a markdown table with at least one passing row, or an allowed not-applicable marker`);
+  if (!hasPassingValidationRow(section) && !(title === TELEMETRY_VALIDATION && hasCheckedValidationItem(section))) {
+    findings.push(`'## ${title}' must contain a markdown table with at least one passing row, a checked telemetry checklist item, or an allowed not-applicable marker`);
   }
 }
 

@@ -45,6 +45,14 @@ describe('check-pr-body', () => {
     expect(runFixture('ci-only-escape')).toEqual([]);
   });
 
+  test('allows documented telemetry validation checklists for code PRs', () => {
+    expect(runFixture('telemetry-checklist')).toEqual([]);
+  });
+
+  test('allows CI-config-only escapes for yaml workflow files', () => {
+    expect(runFixture('ci-yaml-escape')).toEqual([]);
+  });
+
   test('flags malformed Local Review tables', () => {
     const findings = runFixture('malformed-local-review-table');
     expect(findings).toHaveLength(1);
