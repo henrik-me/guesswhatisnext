@@ -82,10 +82,10 @@ Ad-hoc work keeps the existing pattern documented in TRACKING.md:
 
 | Task ID | Description | Parallel? |
 |---------|-------------|-----------|
-| CS64-1a | Update INSTRUCTIONS.md Quick Reference with Convention C bullet AND a follow-up bullet making Convention E's scope carve-out explicit (one sentence: "These conventions apply to clickstop CS work only; ad-hoc work uses the OPS-* placeholder per [TRACKING.md § WORKBOARD — Live Coordination](../../../TRACKING.md#workboardmd--live-coordination)."). | parallel |
-| CS64-1b | Update TRACKING.md § Naming Conventions to describe Conventions A and B with examples. Cross-link to existing TRACKING.md ad-hoc OPS-* guidance (lines ~100 and ~164) so the two conventions are visibly co-located. | parallel |
-| CS64-1c | Add a small "Planning conventions" subsection to OPERATIONS.md § Agent Work Model linking to the TRACKING.md section. Include the Convention E carve-out so an orchestrator reading OPS workflow docs understands ad-hoc OPS-* work is still first-class. | parallel |
-| CS64-2 | Update this file (CS64) and the other three planned files (CS65, CS66, CS67) so their `**Depends on:**` / `**Parallel-safe with:**` frontmatter is in the new canonical position (post-merge sweep — they were authored using the convention pre-landing). | sequential after 1* |
+| CS64-1a | ✅ Done in [PR #312](https://github.com/henrik-me/guesswhatisnext/pull/312) — Update INSTRUCTIONS.md Quick Reference with Convention C bullet AND a follow-up bullet making Convention E's scope carve-out explicit (one sentence: "These conventions apply to clickstop CS work only; ad-hoc work uses the OPS-* placeholder per [TRACKING.md § WORKBOARD — Live Coordination](../../../TRACKING.md#workboardmd--live-coordination)."). | parallel |
+| CS64-1b | ✅ Done in [PR #312](https://github.com/henrik-me/guesswhatisnext/pull/312) — Update TRACKING.md § Naming Conventions to describe Conventions A and B with examples. Cross-link to existing TRACKING.md ad-hoc OPS-* guidance (lines ~100 and ~164) so the two conventions are visibly co-located. | parallel |
+| CS64-1c | ✅ Done in [PR #312](https://github.com/henrik-me/guesswhatisnext/pull/312) — Add a small "Planning conventions" subsection to OPERATIONS.md § Agent Work Model linking to the TRACKING.md section. Include the Convention E carve-out so an orchestrator reading OPS workflow docs understands ad-hoc OPS-* work is still first-class. | parallel |
+| CS64-2 | ✅ Done in [PR #312](https://github.com/henrik-me/guesswhatisnext/pull/312) — Verified this file (CS64) and the other three planned files (CS65, CS66, CS67) already have `**Depends on:**` / `**Parallel-safe with:**` frontmatter in the new canonical position. | sequential after 1* |
 
 All CS64-1* tasks land together in one PR (they're tightly coupled doc updates). CS64-2 is a no-op if the planned files were already authored with the convention; included for safety.
 
