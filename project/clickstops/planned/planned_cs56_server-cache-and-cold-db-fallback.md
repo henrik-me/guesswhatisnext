@@ -50,7 +50,7 @@
 | CS56-7 | Observability: log cache metrics (hit/miss/stale/stale-fallback counts) via Pino structured logs. Once CS54 lands, surface a small KQL dashboard (hit ratio per endpoint, stale-fallback events). | ⬜ Pending | Don't ship a metrics framework — just structured log lines. |
 | CS56-8 | Documentation: add a "Server-side caching" section to INSTRUCTIONS.md with the opt-in pattern, the no-background-refresh rule, and the invalidation contract. | ⬜ Pending | Prevent drift back to polling/background-refresh patterns. |
 
-## Acceptance criteria
+## Acceptance
 
 - DB read rate for the cached endpoints drops by ≥80% in steady-state load tests (or measured live after deploy).
 - During a simulated cold-DB window, cached endpoints return ≤300ms with `X-Cache: stale-fallback` instead of triggering the 30s warmup loader.
@@ -71,10 +71,6 @@
 - **CS42** — established the SPA cold-start UX (warmup loader). CS56's stale-fallback is the next-level upgrade: instead of a loader, show stale data instantly.
 - **CS54 (planned)** — App Insights enables proper measurement of cache effectiveness and DB read rate. CS56 doesn't depend on CS54 but benefits enormously from it.
 - **CS55 (planned)** — introduces the first per-user cache (unread notifications count). CS56 generalises the pattern.
-
-## Acceptance
-
-- See the acceptance criteria above.
 
 ## Cross-references
 

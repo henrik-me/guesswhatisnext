@@ -513,7 +513,7 @@ PUT /api/admin/game-configs/:mode
 - **Per-event multiplayer persistence during the match.** Multiplayer writes once on match completion (CS52-7d). Mid-match crashes lose the in-progress match, which matches today's behaviour and the user-stated rule that half-played games are not preserved.
 - **Admin UI for editing `game_configs`.** Initial mechanism is direct SQL or a minimal admin route (decided in CS52-1). A full admin UI is out of scope.
 
-## Acceptance criteria
+## Acceptance
 
 - New Ranked Free Play and Ranked Daily flows work end-to-end with server-authoritative scoring; the `score` value persisted is computed server-side from per-answer events, not accepted from the client.
 - Public leaderboards default to `source='ranked'`. The `Offline` and `All` filters surface offline scores with a clear provenance badge on every row. Legacy rows do not appear in any public-LB filter.
@@ -573,7 +573,3 @@ PUT /api/admin/game-configs/:mode
 - [`server/ws/matchHandler.js`](../../../server/ws/matchHandler.js) — multiplayer authority model that ranked single-player will mirror.
 - [`active_cs53_prod-cold-start-retry-investigation.md`](../active/active_cs53_prod-cold-start-retry-investigation.md) — defines the `UnavailableError` signal and `getDbUnavailability()` helper that CS52-7e consumes for DB-aware degradation.
 - [`planned_cs56_server-cache-and-cold-db-fallback.md`](../planned/planned_cs56_server-cache-and-cold-db-fallback.md) — read-side cold-DB fallback (stale-while-revalidate); CS52-7e is the write-side counterpart for ranked submissions.
-
-## Acceptance
-
-- All CS52 tasks are complete, validated, deployed, and ready for clickstop closeout.

@@ -33,15 +33,11 @@ After CS42 ships, there is no signal from production telling us whether the Prog
 - **Interaction with CS42.** Requires CS42-3 to be merged so the 503-retry path actually exists to instrument. Ideally starts the week CS42-3 lands so we gather baseline data alongside rollout.
 - **Not in scope.** Instrumenting other long-running UI operations (score sync, match lobby) — scope creep; do those as separate clickstops if the pattern proves valuable.
 
-## Acceptance Criteria
+## Acceptance
 
 - In production, we can answer "how many users hit the warmup retry path in the last 24h?" and "how often does the 35s cap exhaust?" without redeploying or reading source code.
 - An alert fires when cap-exhaustion rate exceeds an empirically-set threshold, pointing on-call at Azure SQL behaviour rather than client-side UX.
 - No PII or request-body data is collected.
-
-## Acceptance
-
-- See the existing acceptance criteria above.
 
 ## Cross-references
 
