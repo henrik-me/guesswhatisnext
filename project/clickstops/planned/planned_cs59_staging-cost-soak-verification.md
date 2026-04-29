@@ -1,4 +1,4 @@
-# CS59 — `gwn-staging` cost-soak verification (post-CS58)
+# CS59 — Staging Cost Soak Verification
 
 **Status:** ⬜ Planned
 **Depends on:** CS58

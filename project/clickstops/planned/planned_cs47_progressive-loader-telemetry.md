@@ -1,4 +1,4 @@
-# CS47 — ProgressiveLoader Client UX Telemetry & Alerting
+# CS47 — Progressive Loader Telemetry
 
 **Status:** ⬜ Planned
 **Depends on:** CS42

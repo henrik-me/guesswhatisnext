@@ -12,21 +12,24 @@
  *     - sub-agent-checklist-canonical — docs/sub-agent-checklist.md exists
  *         and OPERATIONS.md contains a markdown link resolving to it.
  *
- *   New in CS62 (warn-only on landing — flipped to error in a follow-up CS
- *   once the baseline is clean, mirroring the CS43-2 / CS43-7 pattern):
+ *   New in CS62 (warning by default; CS65-2 flips to error in --strict
+ *   once the live planned/active baseline is clean, mirroring the CS43-2 /
+ *   CS43-7 pattern):
  *     - clickstop-h1-matches-filename  — every file under
- *         project/clickstops/{planned,active,done}/ whose name matches
- *         `(planned|active|done)_cs<n>_<slug>.md` has an H1 of the form
+ *         project/clickstops/{planned,active}/ whose name matches
+ *         `(planned|active)_cs<n>_<slug>.md` has an H1 of the form
  *         `# CSnn — Human Title` whose CSID matches the filename CSID and
- *         whose kebab-cased title matches the filename slug. Files in
- *         those directories that do NOT match the clickstop naming
- *         convention (e.g. `cs60-data-appendix.md`) are NOT covered by
- *         this rule — they are companion docs, not clickstop files.
+ *         whose kebab-cased title matches the filename slug. Files under
+ *         project/clickstops/done/ are excluded as historical archive files
+ *         by the CS65-2 scope decision. Files in those directories that do
+ *         NOT match the clickstop naming convention (e.g.
+ *         `cs60-data-appendix.md`) are NOT covered by this rule — they are
+ *         companion docs, not clickstop files.
  *     - workboard-title-matches-h1     — each Active Work row's Title cell
  *         (line 1, before the first <br>, ** stripped) equals the human
  *         title of its parent CS file's H1.
  *
- *   New in CS65 (warn-only on landing — CS65-2 flips to error in --strict
+ *   New in CS65 (warning by default; CS65-2 flips to error in --strict
  *   after the baseline soaks clean):
  *     - plan-has-depends-on           — each planned_/active_ CS plan file
  *         matching the clickstop filename convention has a `**Depends on:**`
@@ -122,6 +125,16 @@ const PLAN_STATUS_LINE_RE = /^\*\*Status:\*\* (⬜ Planned|🔄 In Progress|✅ 
 const PLAN_DEPENDS_ON_RE = /^\*\*Depends on:\*\* .+$/;
 const PLAN_PARALLEL_SAFE_WITH_RE = /^\*\*Parallel-safe with:\*\* .+$/;
 const PLAN_TASK_ID_RE = /^CS\d+-\d+([a-z])?$/;
+
+const STRICT_ERROR_RULES = new Set([
+  'clickstop-h1-matches-filename',
+  'workboard-title-matches-h1',
+  'plan-has-depends-on',
+  'plan-has-parallel-safe-with',
+  'plan-has-status-line',
+  'plan-has-required-sections',
+  'plan-task-id-format',
+]);
 
 // Canonical WORKBOARD Active Work states (CS44-1). The human-readable source
 // of truth lives in INSTRUCTIONS.md § "WORKBOARD State Machine"; this
@@ -915,11 +928,11 @@ function checkActiveRowFreshness(repoRoot, now) {
   return findings.filter(f => !isIgnored(wbIgnores, f.rule, f.line));
 }
 
-// ---------- CS62: clickstop-h1-matches-filename (warn-only) -----------------
+// ---------- CS62: clickstop-h1-matches-filename (strict-scoped) -------------
 
 function checkClickstopH1MatchesFilename(repoRoot) {
   const findings = [];
-  for (const sub of ['planned', 'active', 'done']) {
+  for (const sub of ['planned', 'active']) {
     const dir = path.join(repoRoot, 'project', 'clickstops', sub);
     if (!fs.existsSync(dir)) continue;
     for (const name of fs.readdirSync(dir)) {
@@ -965,7 +978,7 @@ function checkClickstopH1MatchesFilename(repoRoot) {
   });
 }
 
-// ---------- CS65: plan-file schema rules (warn-only) ------------------------
+// ---------- CS65: plan-file schema rules (strict-scoped) --------------------
 
 function findPlanClickstopFiles(repoRoot) {
   const out = [];
@@ -1295,14 +1308,20 @@ function run(opts) {
     findings.push(...checkWorkboardTitleMatchesH1(repoRoot, wbLines, wbPath, wbIgnores));
   }
 
-  // CS62: clickstop H1 ↔ filename consistency (warn-only).
+  // CS62: clickstop H1 ↔ filename consistency.
   findings.push(...checkClickstopH1MatchesFilename(repoRoot));
 
-  // CS65: plan-file schema checks for planned_/active_ clickstops (warn-only).
+  // CS65: plan-file schema checks for planned_/active_ clickstops.
   findings.push(...checkPlanFileSchema(repoRoot));
 
   // CS67: canonical sub-agent checklist presence/link rule (warn-only).
   findings.push(...checkSubAgentChecklistCanonical(repoRoot));
+
+  if (opts.strict) {
+    for (const f of findings) {
+      if (STRICT_ERROR_RULES.has(f.rule)) f.severity = 'error';
+    }
+  }
 
   // Normalise file paths to repo-relative for output stability.
   for (const f of findings) {

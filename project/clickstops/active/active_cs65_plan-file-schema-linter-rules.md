@@ -1,4 +1,5 @@
-# CS65 — Plan File Schema Linter Rules
+<!-- check:ignore clickstop-h1-matches-filename — terminal CS65-2 task title intentionally differs from the original slug while the WORKBOARD row is active -->
+# CS65 — Plan-File Schema Linter Rules — Baseline Cleanup + Flip to Error
 
 **Status:** 🔄 In Progress
 **Origin:** 2026-04-29 conversation (omni-gwn). Direct follow-up to CS62 (merged warn-only) and CS64 (planning conventions). The plan-file structural linter is CS62's intended path; this CS finishes that work and adds new rules to enforce CS64's conventions.
@@ -11,7 +12,7 @@
 - `clickstop-h1-matches-filename`
 - `workboard-title-matches-h1`
 
-CS62's docstring promised a follow-up to flip them to error once the baseline is clean ("mirroring the CS43-2 / CS43-7 pattern"); that follow-up was never filed.
+CS62's docstring promised a follow-up to flip them to error once the baseline is clean ("mirroring the CS43-2 / CS43-7 pattern"); that follow-up was never filed. CS65-2 also scopes `clickstop-h1-matches-filename` to live `planned/` and `active/` clickstop files only so historical `done/` files are not revisionistically retitled.
 
 Additionally, today's plan files have **no enforced section schema** — a future planned file could omit `**Status:**`, `## Acceptance`, or the new CS64 frontmatter, and nothing would catch it. CS63 happens to follow the convention because the author chose to; the convention is not enforced.
 

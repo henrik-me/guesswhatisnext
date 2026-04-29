@@ -1,4 +1,4 @@
-# CS53 — Production cold-start retry hiccup investigation
+# CS53 — Prod Cold Start Retry Investigation
 
 **Status:** 🔄 In Progress
 **Depends on:** CS42

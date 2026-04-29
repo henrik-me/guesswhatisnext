@@ -1,4 +1,4 @@
-# CS56 — Server-side response cache + stale-while-revalidate for cold-DB resilience
+# CS56 — Server Cache And Cold DB Fallback
 
 **Status:** ⬜ Planned
 **Depends on:** CS53
