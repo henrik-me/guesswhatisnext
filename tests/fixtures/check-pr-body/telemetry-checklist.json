@@ -1,0 +1,15 @@
+{
+  "details": {
+    "body": "## Summary\n\nAdds a code change.\n\n## Local Review\n\n| Round | Finding | Fix |\n|-------|---------|-----|\n| 1 | Missing edge case | Fixed in abcdef1 |\n\n## Container Validation\n\n| Cycle | Result |\n|-------|--------|\n| Pre-local-review | ✅ pass |\n\n## Telemetry Validation\n\n- [x] Local (`npm run dev:mssql` + traces.json inspection): saw expected spans.\n- [x] Staging (`gwn-ai-staging`): KQL returned expected rows.\n",
+    "files": [
+      { "path": "server/app.js" }
+    ],
+    "headRefName": "feature",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      { "oid": "abcdef1234567890abcdef1234567890abcdef12" }
+    ]
+  }
+}

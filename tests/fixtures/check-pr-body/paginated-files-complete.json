@@ -1,0 +1,21 @@
+{
+  "details": {
+    "body": "## Summary\n\nLooks docs-only if the file list is incomplete.\n\n## Local Review: not applicable (docs-only)\n\n## Container Validation: not applicable (docs-only)\n\n## Telemetry Validation: not applicable (docs-only)\n",
+    "files": [
+      { "path": "README.md" }
+    ],
+    "headRefName": "feature",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      { "oid": "abcdef1234567890abcdef1234567890abcdef12" }
+    ]
+  },
+  "files": {
+    "files": [
+      "README.md",
+      "server/app.js"
+    ]
+  }
+}

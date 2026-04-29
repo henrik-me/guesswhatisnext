@@ -1,0 +1,16 @@
+{
+  "details": {
+    "body": "## Summary\n\nDocs only.\n\n## Local Review: not applicable (docs-only)\n\n## Container Validation: not applicable (docs/CI-only)\n\n## Telemetry Validation: not applicable (docs/CI-only)\n",
+    "files": [
+      { "path": "README.md" },
+      { "path": "project/clickstops/active/active_cs66_pr-body-and-commit-trailer-gates.md" }
+    ],
+    "headRefName": "docs",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      { "oid": "abcdef1234567890abcdef1234567890abcdef12" }
+    ]
+  }
+}

@@ -28,6 +28,8 @@
     "lint": "eslint . --max-warnings 50",
     "check:docs": "node scripts/check-docs-consistency.js",
     "check:docs:strict": "node scripts/check-docs-consistency.js --strict",
+    "check:pr-body": "node scripts/check-pr-body.js",
+    "check:commit-trailers": "node scripts/check-commit-trailers.js",
     "check:feature-flag-policy": "node scripts/check-feature-flag-policy.js",
     "check:migration-policy": "node scripts/check-migration-policy.js",
     "dev:full": "node scripts/dev-server.js",

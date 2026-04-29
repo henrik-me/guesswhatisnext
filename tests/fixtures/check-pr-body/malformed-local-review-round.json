@@ -1,0 +1,15 @@
+{
+  "details": {
+    "body": "## Summary\n\nAdds a code change.\n\n## Local Review\n\n| Round | Finding | Fix |\n|-------|---------|-----|\n| 1a | Reviewed | Fixed in abcdef1 |\n\n## Container Validation\n\n| Cycle | Result |\n|-------|--------|\n| Pre-local-review | ✅ pass |\n\n## Telemetry Validation\n\n| Cycle | Result |\n|-------|--------|\n| Local | ✅ pass |\n",
+    "files": [
+      { "path": "scripts/example.js" }
+    ],
+    "headRefName": "feature",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      { "oid": "abcdef1234567890abcdef1234567890abcdef12" }
+    ]
+  }
+}
