@@ -1,6 +1,8 @@
 # CS52 — Server-Authoritative Scoring with Offline-First Local Mode
 
-**Status:** 🔄 In Review (CS52-1 design lock-down PR open)
+**Status:** 🔄 In Progress
+**Depends on:** none
+**Parallel-safe with:** CS60, CS63, CS65, CS66, CS67, CS68
 **Owner:** yoga-gwn-c5 (claimed 2026-04-25T18:45Z for CS52-1 design lock-down)
 **Goal:** Address [issue #198](https://github.com/henrik-me/guesswhatisnext/issues/198) finding F2 / Recommendation 1 / Roadmap B — make scoring server-authoritative for ranked play — while preserving offline play as a first-class capability and treating offline scores as **personal data synced across the player's devices** rather than as second-class leaderboard entries.
 
@@ -571,3 +573,7 @@ PUT /api/admin/game-configs/:mode
 - [`server/ws/matchHandler.js`](../../../server/ws/matchHandler.js) — multiplayer authority model that ranked single-player will mirror.
 - [`active_cs53_prod-cold-start-retry-investigation.md`](../active/active_cs53_prod-cold-start-retry-investigation.md) — defines the `UnavailableError` signal and `getDbUnavailability()` helper that CS52-7e consumes for DB-aware degradation.
 - [`planned_cs56_server-cache-and-cold-db-fallback.md`](../planned/planned_cs56_server-cache-and-cold-db-fallback.md) — read-side cold-DB fallback (stale-while-revalidate); CS52-7e is the write-side counterpart for ranked submissions.
+
+## Acceptance
+
+- All CS52 tasks are complete, validated, deployed, and ready for clickstop closeout.

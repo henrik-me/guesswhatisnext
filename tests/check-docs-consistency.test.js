@@ -18,10 +18,14 @@ function rules(findings) {
   return findings.map(f => f.rule).sort();
 }
 
+function withoutPlanSchema(findings) {
+  return findings.filter(f => !f.rule.startsWith('plan-'));
+}
+
 describe('check-docs-consistency', () => {
   test('happy fixture: zero findings', () => {
     const findings = run({ root: path.join(FIX, 'happy'), now: FIXED_NOW });
-    expect(findings).toEqual([]);
+    expect(withoutPlanSchema(findings)).toEqual([]);
   });
 
   test('broken-link fixture: link-resolves error', () => {
@@ -34,14 +38,14 @@ describe('check-docs-consistency', () => {
   });
 
   test('prefix-mismatch fixture: prefix-matches-status error', () => {
-    const findings = run({ root: path.join(FIX, 'prefix-mismatch'), now: FIXED_NOW });
+    const findings = withoutPlanSchema(run({ root: path.join(FIX, 'prefix-mismatch'), now: FIXED_NOW }));
     expect(rules(findings)).toEqual(['prefix-matches-status']);
     expect(findings[0].message).toContain('CS1');
     expect(findings[0].message).toContain("'done_*'");
   });
 
   test('cs-in-two-states fixture: unique-cs-state error (one per file)', () => {
-    const findings = run({ root: path.join(FIX, 'cs-in-two-states'), now: FIXED_NOW });
+    const findings = withoutPlanSchema(run({ root: path.join(FIX, 'cs-in-two-states'), now: FIXED_NOW }));
     expect(findings.every(f => f.rule === 'unique-cs-state')).toBe(true);
     expect(findings.length).toBe(2);
     expect(findings[0].message).toContain('CS7');
@@ -248,7 +252,7 @@ describe('check-docs-consistency', () => {
 
   test('cs62-h1-happy: H1 + filename slug align → no findings', () => {
     const findings = run({ root: path.join(FIX, 'cs62-h1-happy'), now: FIXED_NOW });
-    expect(findings).toEqual([]);
+    expect(withoutPlanSchema(findings)).toEqual([]);
   });
 
   test('cs62-h1-slug-drift: H1 title kebabs to a slug other than the filename slug → warning', () => {
@@ -409,10 +413,51 @@ describe('check-docs-consistency', () => {
     try {
       fs.writeFileSync(targetFile, '<!-- check:ignore unique-cs-state -->\n' + original);
       const findings = run({ root, now: FIXED_NOW });
-      const byFile = findings.filter(f => f.file.endsWith('active_cs7_thing.md'));
+      const byFile = findings.filter(f => f.file.endsWith('active_cs7_thing.md') && f.rule === 'unique-cs-state');
       expect(byFile).toEqual([]);
       // The other file still produces its finding (ignore is file-scoped).
       expect(findings.some(f => f.file.endsWith('done_cs7_thing.md'))).toBe(true);
+    } finally {
+      fs.writeFileSync(targetFile, original);
+    }
+  });
+
+  // ---- CS65: planned/active clickstop plan-file schema ----------------------
+
+  test.each([
+    ['cs65-depends-on-happy', 'plan-has-depends-on'],
+    ['cs65-parallel-safe-happy', 'plan-has-parallel-safe-with'],
+    ['cs65-status-happy', 'plan-has-status-line'],
+    ['cs65-required-sections-happy', 'plan-has-required-sections'],
+    ['cs65-task-id-format-happy', 'plan-task-id-format'],
+  ])('%s: %s happy path has no findings', (fixture) => {
+    const findings = run({ root: path.join(FIX, fixture), now: FIXED_NOW });
+    expect(findings).toEqual([]);
+  });
+
+  test.each([
+    ['cs65-depends-on-missing', 'plan-has-depends-on', '`**Depends on:** ...`'],
+    ['cs65-parallel-safe-missing', 'plan-has-parallel-safe-with', '`**Parallel-safe with:** ...`'],
+    ['cs65-status-missing', 'plan-has-status-line', '`**Status:** ...`'],
+    ['cs65-required-sections-missing', 'plan-has-required-sections', '## Acceptance'],
+    ['cs65-task-id-format-invalid', 'plan-task-id-format', 'CS654-two'],
+  ])('%s: emits %s warning', (fixture, rule, messagePart) => {
+    const findings = run({ root: path.join(FIX, fixture), now: FIXED_NOW });
+    expect(rules(findings)).toEqual([rule]);
+    expect(findings[0].severity).toBe('warning');
+    expect(findings[0].message).toContain(messagePart);
+  });
+
+  test('cs65 plan rules honor justified check:ignore comments', () => {
+    const fs = require('fs');
+    const root = path.join(FIX, 'cs65-depends-on-missing');
+    const targetFile = path.join(root, 'project', 'clickstops', 'active', 'active_cs650_plan-schema.md');
+    const original = fs.readFileSync(targetFile, 'utf8');
+    try {
+      fs.writeFileSync(targetFile,
+        '<!-- check:ignore plan-has-depends-on — fixture intentionally omits dependency metadata -->\n' + original);
+      const findings = run({ root, now: FIXED_NOW });
+      expect(findings.filter(f => f.rule === 'plan-has-depends-on')).toEqual([]);
     } finally {
       fs.writeFileSync(targetFile, original);
     }

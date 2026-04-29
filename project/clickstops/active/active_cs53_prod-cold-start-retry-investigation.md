@@ -1,6 +1,8 @@
 # CS53 — Production cold-start retry hiccup investigation
 
 **Status:** 🔄 In Progress
+**Depends on:** CS42
+**Parallel-safe with:** CS52, CS60, CS63, CS65, CS66, CS67, CS68
 **Owner:** yoga-gwn
 **Origin:** Deferred from CS42-5c manual production verification (2026-04-23). The CS42 retry path itself worked — progressive messages rendered, the SW migration succeeded, and 503/`Retry-After` plumbing fired — but the user observed that the **profile screen required ~3 explicit Retry-button clicks** before the database came up, with the full incident spanning ~22 minutes (14:09:06 → 14:31:13 PT, 2026-04-23).
 
@@ -614,3 +616,12 @@ Browser-based validation today requires login because no public endpoint touches
 ### PR scope estimate
 
 ~250 lines (adapter changes + 3 test files + script extension). One PR. Sub-agent on Opus 4.7. Local review on GPT-5.4. Copilot review. `container:validate` must pass in `default` mode + at least the new `capacity-exhausted` mode before requesting any review (per Policy 2).
+
+## Acceptance
+
+- Remaining CS53 tasks are implemented or explicitly deferred with production cold-start behavior validated.
+
+## Cross-references
+
+- CS42 — origin clickstop for the cold-start retry observation.
+- [INSTRUCTIONS.md § Database & Data](../../../INSTRUCTIONS.md#database--data) — no DB-waking background work policy.

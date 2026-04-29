@@ -1,6 +1,8 @@
 # CS47 — ProgressiveLoader Client UX Telemetry & Alerting
 
-**Status:** ⬜ Planned
+**Status:** 🆕 Planned
+**Depends on:** CS42
+**Parallel-safe with:** any
 **Goal:** Emit lightweight client telemetry from ProgressiveLoader on entry/exit of the 503-retry warmup path, and wire an Azure Monitor alert on 35s-cap exhaustions. Replaces "test cold-start in production" (not safely possible) with continuous observation.
 
 **Origin:** Deferred from CS42 (see `project/clickstops/active/active_cs42_production-cold-start-messages.md` — Plan Refinement Round 2, finding #7, rubber-duck critique 2026-04-21). Originally proposed as CS42-5b, the rubber-duck review (gpt-5.4) flagged it as scope creep for a UX-polish clickstop: the existing `/api/telemetry/errors` endpoint is specifically error-shaped, and adding generic client UX telemetry + alerting is a new observability feature, not a small UX fix. CS42 is closing with E2E (CS42-5a/5b) + one-time manual prod verification (CS42-5c) as the evidence bar; CS47 adds the continuous-observation layer once CS42 lands.
@@ -36,3 +38,11 @@ After CS42 ships, there is no signal from production telling us whether the Prog
 - In production, we can answer "how many users hit the warmup retry path in the last 24h?" and "how often does the 35s cap exhaust?" without redeploying or reading source code.
 - An alert fires when cap-exhaustion rate exceeds an empirically-set threshold, pointing on-call at Azure SQL behaviour rather than client-side UX.
 - No PII or request-body data is collected.
+
+## Acceptance
+
+- See the existing acceptance criteria above.
+
+## Cross-references
+
+- CS42 — origin clickstop for the ProgressiveLoader retry path.

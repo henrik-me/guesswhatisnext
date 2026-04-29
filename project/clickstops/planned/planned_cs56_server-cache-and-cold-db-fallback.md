@@ -1,6 +1,8 @@
 # CS56 — Server-side response cache + stale-while-revalidate for cold-DB resilience
 
-**Status:** ⬜ Planned
+**Status:** 🆕 Planned
+**Depends on:** CS53
+**Parallel-safe with:** any
 **Origin:** During CS53 (Azure SQL Free Tier exhaustion incident) we identified that the app makes many DB reads that could be served from an in-process cache, especially for read-heavy public endpoints (leaderboards, feature flags, achievements catalog, community puzzle list, etc.). Two converging problems motivate this CS:
 
 1. **Cost / DB-keepalive (CS53):** every DB read keeps Azure SQL serverless awake. A cache layer reduces both the number of reads and the keepalive pressure.
@@ -69,3 +71,12 @@
 - **CS42** — established the SPA cold-start UX (warmup loader). CS56's stale-fallback is the next-level upgrade: instead of a loader, show stale data instantly.
 - **CS54 (planned)** — App Insights enables proper measurement of cache effectiveness and DB read rate. CS56 doesn't depend on CS54 but benefits enormously from it.
 - **CS55 (planned)** — introduces the first per-user cache (unread notifications count). CS56 generalises the pattern.
+
+## Acceptance
+
+- See the acceptance criteria above.
+
+## Cross-references
+
+- [CS53 active file](../active/active_cs53_prod-cold-start-retry-investigation.md) — source incident for cold-DB resilience work.
+- [CS55 planned file](planned_cs55_websocket-notifications-and-redesign.md) — related per-user cache pattern.

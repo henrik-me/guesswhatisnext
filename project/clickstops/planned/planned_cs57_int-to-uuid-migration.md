@@ -1,6 +1,8 @@
 # CS57 — Migrate int identifiers to UUIDs
 
-**Status:** ⬜ Planned
+**Status:** 🆕 Planned
+**Depends on:** none
+**Parallel-safe with:** any
 **Owner:** unassigned (planning by yoga-gwn-c2; not yet claimed for implementation)
 **Origin:** User request (2026-04-25) for cross-system ID stability (analytics, federation, future migrations). Plan reviewed by rubber-duck pass `cs57-plan-review` — 12 findings (6 blockers, 4 serious, 2 minor), all adopted before this file landed. Session-source plan: `~/.copilot/session-state/.../plan.md` (yoga-gwn-c2).
 
@@ -232,3 +234,11 @@ Realistic worktree usage: 1 sub-agent per PR; the bottleneck is migration orderi
 
 - This plan does **not** touch tables already keyed by TEXT (matches/match_rounds/achievements/puzzles, plus puzzle IDs themselves) — they're already external-stable.
 - The 7-day wait between CS57-8 production ship and CS57-9 cleanup is calendar time, not work time. CS57-9 should be slot-released during the wait.
+
+## Acceptance
+
+- The staged UUID migration tasks complete without breaking rollback safety or JWT compatibility.
+
+## Cross-references
+
+- [INSTRUCTIONS.md § Multi-PR pattern for backward-incompatible migrations](../../../INSTRUCTIONS.md#multi-pr-pattern-for-backward-incompatible-migrations).
