@@ -1,4 +1,4 @@
-# CS60 — Post-CS54 observability follow-up (cost watch + deferred-gap decisions)
+# CS60 — Post CS54 Observability Followup
 
 **Status:** 🔄 In Progress
 **Depends on:** CS54

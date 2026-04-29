@@ -1,4 +1,4 @@
-# CS63 — Investigate + fix `game_configs` boot-race window
+# CS63 — Game Configs Boot Race
 
 **Status:** ⬜ Planned
 **Depends on:** CS52

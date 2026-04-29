@@ -89,3 +89,7 @@ Conventions:
 - CS44-5b / CS44-2 — `active-row-stale` and `active-row-reclaimable` thresholds that also need the description-row guard.
 - CS43-2 / CS43-7 — warn-only-then-flip-to-error precedent for new docs-consistency rules.
 - Original planning notes: session `0a2fee72-e7a9-40b3-824c-4d6c37636f8b` plan.md and files/workboard-preview.md.
+
+## CS65-2 follow-up
+
+Flip-to-error completed in CS65-2 PR [#318](https://github.com/henrik-me/guesswhatisnext/pull/318).

@@ -1,4 +1,4 @@
-# CS55 — Real-time notifications via WebSocket + feature redesign
+# CS55 — Websocket Notifications And Redesign
 
 **Status:** ⬜ Planned
 **Depends on:** CS53-23

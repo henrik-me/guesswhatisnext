@@ -465,6 +465,20 @@ describe('check-docs-consistency', () => {
     expect(hits[0].message).toContain('CS9');
   });
 
+  test('no-orphan-active-work can be suppressed by an ignore above the done file H1', () => {
+    const fs = require('fs');
+    const root = path.join(FIX, 'orphan-active-work');
+    const doneFile = path.join(root, 'project', 'clickstops', 'done', 'done_cs9_done.md');
+    const original = fs.readFileSync(doneFile, 'utf8');
+    try {
+      fs.writeFileSync(doneFile, '<!-- check:ignore no-orphan-active-work -->\n' + original);
+      const findings = run({ root, now: FIXED_NOW });
+      expect(findings.filter(f => f.rule === 'no-orphan-active-work')).toEqual([]);
+    } finally {
+      fs.writeFileSync(doneFile, original);
+    }
+  });
+
   test('unique-cs-state can be suppressed by own-line ignore above the heading', () => {
     // Dynamic: add an ignore comment to the top of one of the cs-in-two-states
     // files, rerun, and assert the findings for that file are gone.
@@ -508,6 +522,26 @@ describe('check-docs-consistency', () => {
     expect(rules(findings)).toEqual([rule]);
     expect(findings[0].severity).toBe('warning');
     expect(findings[0].message).toContain(messagePart);
+  });
+
+  test.each([
+    ['cs62-h1-slug-drift', 'clickstop-h1-matches-filename'],
+    ['cs62-title-mismatch', 'workboard-title-matches-h1'],
+    ['cs65-depends-on-missing', 'plan-has-depends-on'],
+    ['cs65-parallel-safe-missing', 'plan-has-parallel-safe-with'],
+    ['cs65-status-missing', 'plan-has-status-line'],
+    ['cs65-required-sections-missing', 'plan-has-required-sections'],
+    ['cs65-task-id-format-invalid', 'plan-task-id-format'],
+  ])('%s: %s remains a warning by default and becomes an error in strict mode', (fixture, rule) => {
+    const defaultHits = run({ root: path.join(FIX, fixture), now: FIXED_NOW })
+      .filter(f => f.rule === rule);
+    expect(defaultHits.length).toBeGreaterThanOrEqual(1);
+    expect(defaultHits.every(f => f.severity === 'warning')).toBe(true);
+
+    const strictHits = run({ root: path.join(FIX, fixture), now: FIXED_NOW, strict: true })
+      .filter(f => f.rule === rule);
+    expect(strictHits).toHaveLength(defaultHits.length);
+    expect(strictHits.every(f => f.severity === 'error')).toBe(true);
   });
 
   test('cs65 plan rules honor justified check:ignore comments', () => {

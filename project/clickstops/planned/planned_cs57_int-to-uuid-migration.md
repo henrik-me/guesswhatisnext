@@ -1,4 +1,4 @@
-# CS57 — Migrate int identifiers to UUIDs
+# CS57 — Int To UUID Migration
 
 **Status:** ⬜ Planned
 **Depends on:** none

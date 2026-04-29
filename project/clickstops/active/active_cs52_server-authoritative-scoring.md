@@ -1,4 +1,4 @@
-# CS52 — Server-Authoritative Scoring with Offline-First Local Mode
+# CS52 — Server Authoritative Scoring
 
 **Status:** 🔄 In Progress
 **Depends on:** none
