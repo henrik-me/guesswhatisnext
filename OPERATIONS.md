@@ -159,6 +159,12 @@ NOT allowed on main checkout:
 - No `git push` from main (except WORKBOARD.md and clickstop plan file updates)
 - No merge conflict resolution on main, **except for conflicts confined to `WORKBOARD.md` and handled per the WORKBOARD.md conflict-handling guidance** — if `git pull` conflicts on anything else, abort (`git merge --abort` or `git rebase --abort` depending on pull strategy) and have a sub-agent handle the sync in the worktree
 
+**Planning conventions (CS64).**
+
+Clickstop plans use sequential task IDs for true dependencies, dash-letter IDs for parallel-safe siblings, and `**Depends on:**` / `**Parallel-safe with:**` frontmatter so orchestrators can reason about pickup order and fan-out quickly; [TRACKING.md § Naming Conventions](TRACKING.md#naming-conventions) is the canonical source for the full format.
+
+Ad-hoc `OPS-*` work uses the existing simple WORKBOARD pattern and does **not** need a plan file or plan-file frontmatter; see [TRACKING.md § WORKBOARD.md — Live Coordination](TRACKING.md#workboardmd--live-coordination) for that carve-out.
+
 **Orchestrator Startup Checklist** (first actions in every new session):
 1. Run `git pull` to ensure the latest changes from all agents
 2. Complete the Quick Reference Checklist's session-start full-reread requirement in [INSTRUCTIONS.md](INSTRUCTIONS.md#quick-reference-checklist) — view the entire file, then state both your derived agent ID and the `INSTRUCTIONS.md re-read complete @ <SHA>` receipt in your first response.
