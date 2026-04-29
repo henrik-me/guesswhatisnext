@@ -4,11 +4,11 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 
 - Claiming a clickstop → update WORKBOARD.md (commit+push), rename CS file to active_, update content, commit to main
 - Closing a clickstop → rename CS file to done_, move to `project/clickstops/done/`, update content with results, remove from WORKBOARD.md
-- Preferred model: Claude Opus (4.7 or higher, 1M context variant when available) for both orchestrators and sub-agents, GPT (5.4 or higher) for reviews
+- Preferred model: Claude Opus (4.7 or higher, 1M context variant when available) for both orchestrators and sub-agents, GPT (5.5 or higher) for reviews
 - CS number conflicts → check done_, active_, AND planned_ files before picking a new number
 - After claiming a task → prompt user to rename session: `/rename [{agent-id}]-{task-id}: {clickstop name}`
-- Session start → `git pull` before reading project files
-- After every `git pull` → re-read this checklist; if INSTRUCTIONS.md changed, re-read fully
+- Session start → `git pull`, then **derive your agent ID from `hostname`** as `{hostname-first-segment-lowercase}-gwn[-c<N> if folder is `guesswhatisnext_copilot<N>`]` using TRACKING.md's first-meaningful-hostname-segment rule (see [§ Agent Identification in TRACKING.md](TRACKING.md#agent-identification)). NEVER infer agent ID from cwd path alone — multiple machines share identical folder layouts. State the derived agent ID explicitly in your first response so the user can catch a mismatch.
+- After every `git pull` → re-read this checklist; if `INSTRUCTIONS.md` appears in the diff, view the **entire** file (use multiple `view_range` calls if it exceeds the 50KB single-read cap) and explicitly state `INSTRUCTIONS.md re-read complete @ <SHA>` before doing other work. Do not treat "carefully" as a substitute for verifiable full-file reads.
 - Never do implementation work in main checkout — dispatch to worktree sub-agents
 - Never modify files related to another agent's active task — check WORKBOARD.md first
 - Maximize parallelism — dispatch independent tasks simultaneously
@@ -19,7 +19,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Commit clickstop plan file to main BEFORE starting implementation work
 - Deferred items → must land in a CS via one of four dispositions (add to current CS / file new `planned_` CS / add to existing planned-or-active CS / cancel with reason). Appendix-in-done-file alone is INSUFFICIENT — see [§ Deferred work policy in TRACKING.md](TRACKING.md#clickstop-completion-checklist). Never silently drop.
 - Sub-agent prompts must include full Sub-Agent Checklist verbatim
-- Run local review loop (GPT 5.4 or higher) before Copilot review — skip Copilot for docs-only PRs
+- Run local review loop (GPT 5.5 or higher) before Copilot review — skip Copilot for docs-only PRs
 - Report progress to user after dispatching agents — never go silent; relay every sub-agent turn/state transition the same turn it lands, post a heartbeat update at least every ~10 min if nothing has transitioned, and on each heartbeat check the fallback progress signals (branch commits, PR state, file mtimes, `tool_calls_completed`) before claiming the agent is idle (see [§ Agent Progress Reporting in OPERATIONS.md](OPERATIONS.md#agent-progress-reporting) and [§ Fallback progress signals in OPERATIONS.md](OPERATIONS.md#fallback-progress-signals-when-sub-agent-is-silent))
 - Commit after each meaningful step — don't batch unrelated changes
 - Record local review findings in PR description

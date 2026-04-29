@@ -49,7 +49,7 @@ On every heartbeat (still ≤ 10 min cadence per the idle-poll floor above), if 
 
 1. **Sub-agent runtime signal.** `read_agent` returns `tool_calls_completed` and `current_intent`. If `tool_calls_completed` is increasing turn-over-turn, the agent is alive and working — even if it hasn't said `STATE:` yet.
 2. **Git branch activity.** `git fetch origin <branch> && git --no-pager log --oneline origin/<branch> -10` reveals new commits the sub-agent has pushed. **Each new commit is a real progress signal — far stronger than a missing `STATE:` line.**
-3. **PR state on GitHub.** `gh pr view <num> --json updatedAt,statusCheckRollup,reviews,comments,body` reveals new CI runs, new Copilot review turns, new comments, and updates the sub-agent has made to the PR body (which is where local-review findings are recorded per [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop-gpt-54-or-higher)). `updatedAt` advancing is a heartbeat by itself.
+3. **PR state on GitHub.** `gh pr view <num> --json updatedAt,statusCheckRollup,reviews,comments,body` reveals new CI runs, new Copilot review turns, new comments, and updates the sub-agent has made to the PR body (which is where local-review findings are recorded per [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop)). `updatedAt` advancing is a heartbeat by itself.
 4. **CI workflow runs.** `gh run list --branch <branch> --limit 5` shows new workflow runs being triggered by the sub-agent's pushes (a separate signal from PR `statusCheckRollup`, useful when CI is queued or just started).
 5. **Working-tree file mtimes.** Recent edits the agent hasn't yet committed (substitute the worktree path for `$worktreePath`):
 
@@ -204,8 +204,8 @@ This keeps `main` clean and ensures implementation changes flow through PRs. (Cl
 6. Rebase onto latest main before pushing: `git fetch origin && git rebase origin/main`. If conflicts arise, resolve them and re-run validation.
 7. Run full validation: `npm run lint && npm test && npm run test:e2e` (skip for docs-only PRs; docs-only PRs must still pass `npm run check:docs:strict`). **On all-green, emit `STATE: validating`.** If validation fails, fix and re-run (up to 3 attempts). If stuck, emit `STATE: blocked` with a `Blocked Reason: <short prose>` line, report failure details, and stop.
 8. Push branch and create PR with task ID in title and agent metadata in description. **On `gh pr create` success, emit `STATE: pr_open` and `PR: <number>` on a separate line.**
-9. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop-gpt-54-or-higher)): launch `code-review` agent with GPT 5.4 or higher (`model=gpt-5.4` is the floor), fix issues, push fixes, repeat until clean. **Emit `STATE: local_review` when the loop starts.**
-10. **Document local review findings in PR description** (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop-gpt-54-or-higher) for format)
+9. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop)): launch `code-review` agent with GPT 5.5 or higher (`model=gpt-5.5` is the floor), fix issues, push fixes, repeat until clean. **Emit `STATE: local_review` when the loop starts.**
+10. **Document local review findings in PR description** (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop) for format)
 11. **For code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` — wait for review per [§ Waiting for Copilot Review in REVIEWS.md](REVIEWS.md#waiting-for-copilot-review). **Emit `STATE: copilot_review` after the reviewer is added.**
 12. **For docs-only PRs:** Skip Copilot review — local review is sufficient (no `copilot_review` transition; stay in `local_review` until ready)
 13. Address all review comments (reply + fix + resolve threads)
@@ -255,7 +255,7 @@ If validation fails at any step, do not request the next review round; fix and r
 
 A docs-only or CI-config-only PR may instead state `## Container Validation: not applicable (docs/CI-only)`.
 
-**Model selection:** The preferred model for both orchestrators and sub-agents is Claude Opus 4.7 or higher (use the 1M context variant — e.g. `claude-opus-4.6-1m` — when available). GPT 5.4 or higher (`gpt-5.4` is the floor) is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
+**Model selection:** The preferred model for both orchestrators and sub-agents is Claude Opus 4.7 or higher (use the 1M context variant — e.g. `claude-opus-4.6-1m` — when available). GPT 5.5 or higher (`gpt-5.5` is the floor) is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 
 ## Parallel Agent Workflow
 
@@ -306,7 +306,7 @@ The orchestrator must maximize parallelism by running non-worktree tasks concurr
 3. Run full validation before pushing: `npm run lint && npm test && npm run test:e2e`
 4. Push branch to origin
 5. Create PR: `gh pr create --base main --head {agent-id}/{task-id}-{description}`
-6. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop-gpt-54-or-higher)) — fix issues, push fixes, repeat until clean
+6. Run local review loop (see [§ Local Review Loop in REVIEWS.md](REVIEWS.md#local-review-loop)) — fix issues, push fixes, repeat until clean
 7. **Code/config PRs:** Request Copilot review: `gh pr edit <PR#> --add-reviewer "@copilot"` | **Docs-only PRs:** Skip Copilot review
 8. Address review feedback — commit each round of fixes separately and answer each comment meaningfully and close comment when changes are committed.
 9. After CI passes and reviews are complete (Copilot approval for code/config PRs; local review clean for docs-only PRs), **squash-merge** via GitHub UI or `gh pr merge --squash`
@@ -353,12 +353,12 @@ The `--admin` flag bypasses the up-to-date requirement; the squash strategy keep
 
 Branch protection nominally requires an `APPROVED` review, but the only configured PR reviewer (the Copilot bot) does not reliably issue `APPROVED` — in practice it almost always finishes a clean round as `COMMENTED`. CS53-21 surfaced this; CS53-21.A resolves which review state actually suffices on the `--admin` exception path so the rule above (`All required reviews satisfied`) is not underspecified.
 
-**Scope.** Everything below about *Copilot* review state applies to **code/config PRs** — the PR types where [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop-gpt-54-or-higher) (and the "Copilot PR Review Policy" paragraph that follows it) requires Copilot review. **Docs-only PRs** (per the same REVIEWS.md table) skip Copilot review by design, so the Copilot-evidence and Copilot-inline-thread criteria below do **not** apply to them; for docs-only PRs the `--admin` review-state gate reduces to **(a)** local review (GPT-5.4 or higher) is clean and **(b)** all required CI checks are `SUCCESS` on the latest head commit. The CI prohibition below applies to *all* PR types. Note: in practice, docs-only PRs almost never need `--admin` (they do not invoke long Copilot review cycles), so this branch of the gate exists for completeness rather than as a routine path.
+**Scope.** Everything below about *Copilot* review state applies to **code/config PRs** — the PR types where [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop) (and the "Copilot PR Review Policy" paragraph that follows it) requires Copilot review. **Docs-only PRs** (per the same REVIEWS.md table) skip Copilot review by design, so the Copilot-evidence and Copilot-inline-thread criteria below do **not** apply to them; for docs-only PRs the `--admin` review-state gate reduces to **(a)** local review (GPT-5.5 or higher) is clean and **(b)** all required CI checks are `SUCCESS` on the latest head commit. The CI prohibition below applies to *all* PR types. Note: in practice, docs-only PRs almost never need `--admin` (they do not invoke long Copilot review cycles), so this branch of the gate exists for completeness rather than as a routine path.
 
 **Recommended landing position (code/config PRs).** The latest Copilot review may be `COMMENTED` (rather than `APPROVED`) **provided all** of the following hold:
 
 - All inline comment threads on the latest commit are resolved (no open `pending` threads — verify via the GraphQL `reviewThreads` query in [REVIEWS.md](REVIEWS.md)).
-- Local review (GPT-5.4 or higher, per [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop-gpt-54-or-higher)) is clean — no open findings.
+- Local review (GPT-5.5 or higher, per [REVIEWS.md § Local Review Loop](REVIEWS.md#local-review-loop)) is clean — no open findings.
 - All required CI checks are `SUCCESS` on the latest head commit.
 - The orchestrator has explicitly tracked addressing each Copilot finding in commits visible in the PR thread (the per-thread "Fixed in `<commit>`" replies described in [REVIEWS.md](REVIEWS.md) are the audit trail for this).
 
