@@ -31,7 +31,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Commit after each meaningful step — don't batch unrelated changes
 - Record local review findings in PR description
 - Do not remove task from WORKBOARD.md until PR is merged and task is fully complete
-- When removing content from INSTRUCTIONS.md, ensure it lands in CONTEXT.md or README.md — no information loss
+- When removing content from INSTRUCTIONS.md, ensure it lands in the appropriate canonical doc (CONVENTIONS.md, OPERATIONS.md, REVIEWS.md, TRACKING.md, CONTEXT.md, or README.md) — no information loss
 - Never skip any part of the process without asking the user first — no self-decided shortcuts
 - The process applies to all changes regardless of size — there is no "too small for a PR" threshold
 - **No DB-waking background work**: no timer/watchdog/scheduler/poller may issue a DB query (incl. `SELECT 1`) on its own — the DB is touched only in response to real user requests, operator curl, or operator-invoked batch jobs (see [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data))
