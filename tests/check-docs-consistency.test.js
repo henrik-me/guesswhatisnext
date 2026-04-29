@@ -81,6 +81,30 @@ describe('check-docs-consistency', () => {
     expect(findings).toEqual([]);
   });
 
+  // ---- CS67: sub-agent-checklist-canonical ---------------------------------
+
+  test('cs67-checklist-happy: OPERATIONS links to canonical checklist → no warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs67-checklist-happy'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'sub-agent-checklist-canonical')).toEqual([]);
+  });
+
+  test('cs67-checklist-missing-link: canonical checklist exists but OPERATIONS lacks link → warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs67-checklist-missing-link'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'sub-agent-checklist-canonical');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+    expect(hits[0].file).toBe('OPERATIONS.md');
+    expect(hits[0].message).toContain('markdown link');
+  });
+
+  test('cs67-checklist-broken: missing canonical checklist file → warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs67-checklist-broken'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'sub-agent-checklist-canonical');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+    expect(hits[0].message).toContain('does not exist');
+  });
+
   // ---- CS44-5a: state-vocabulary, ISO 8601, owner-in-orchestrators-table ----
 
   test('workboard-new-schema-happy: zero findings from new rules', () => {

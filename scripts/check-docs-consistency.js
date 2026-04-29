@@ -7,6 +7,11 @@
  * (or project/clickstops/done/done_cs43_*.md once archived) for the why.
  *
  * Checks:
+ *   New in CS67 (warn-only on landing — flipped to error after a soak
+ *   window):
+ *     - sub-agent-checklist-canonical — docs/sub-agent-checklist.md exists
+ *         and OPERATIONS.md contains a markdown link resolving to it.
+ *
  *   New in CS62 (warn-only on landing — flipped to error in a follow-up CS
  *   once the baseline is clean, mirroring the CS43-2 / CS43-7 pattern):
  *     - clickstop-h1-matches-filename  — every file under
@@ -1016,6 +1021,63 @@ function checkWorkboardTitleMatchesH1(repoRoot, lines, wbPath, ignores) {
   return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
 }
 
+// ---------- CS67: sub-agent-checklist-canonical (warn-only) ------------------
+
+function checkSubAgentChecklistCanonical(repoRoot) {
+  const findings = [];
+  const operationsPath = path.join(repoRoot, 'OPERATIONS.md');
+  const checklistPath = path.join(repoRoot, 'docs', 'sub-agent-checklist.md');
+
+  if (!fs.existsSync(operationsPath) && !fs.existsSync(checklistPath)) return findings;
+
+  let operationsLines = [];
+  let operationsIgnores = [];
+  if (fs.existsSync(operationsPath)) {
+    operationsLines = readLines(operationsPath);
+    operationsIgnores = parseIgnores(operationsLines);
+  }
+
+  const problems = [];
+  if (!fs.existsSync(checklistPath)) {
+    problems.push('docs/sub-agent-checklist.md does not exist');
+  }
+
+  if (!fs.existsSync(operationsPath)) {
+    problems.push('OPERATIONS.md does not exist');
+  } else {
+    let hasCanonicalLink = false;
+    for (const line of operationsLines) {
+      LINK_RE.lastIndex = 0;
+      let m;
+      while ((m = LINK_RE.exec(line)) !== null) {
+        const url = m[2].trim();
+        if (!url || isExternal(url) || url.startsWith('#')) continue;
+        const [pathPartRaw] = url.split('#');
+        const pathPart = pathPartRaw.split('?')[0];
+        const target = safeResolveInside(path.dirname(operationsPath), repoRoot, pathPart);
+        if (target && path.resolve(target) === path.resolve(checklistPath)) {
+          hasCanonicalLink = true;
+          break;
+        }
+      }
+      if (hasCanonicalLink) break;
+    }
+    if (!hasCanonicalLink) {
+      problems.push('OPERATIONS.md does not contain a markdown link resolving to docs/sub-agent-checklist.md');
+    }
+  }
+
+  if (problems.length > 0) {
+    const file = fs.existsSync(operationsPath) ? operationsPath : checklistPath;
+    findings.push({
+      rule: 'sub-agent-checklist-canonical', file, line: 1,
+      severity: 'warning',
+      message: problems.join('; '),
+    });
+  }
+  return findings.filter(f => !isIgnored(operationsIgnores, f.rule, f.line));
+}
+
 // ---------- main runner ------------------------------------------------------
 
 function run(opts) {
@@ -1065,6 +1127,9 @@ function run(opts) {
 
   // CS62: clickstop H1 ↔ filename consistency (warn-only).
   findings.push(...checkClickstopH1MatchesFilename(repoRoot));
+
+  // CS67: canonical sub-agent checklist presence/link rule (warn-only).
+  findings.push(...checkSubAgentChecklistCanonical(repoRoot));
 
   // Normalise file paths to repo-relative for output stability.
   for (const f of findings) {
