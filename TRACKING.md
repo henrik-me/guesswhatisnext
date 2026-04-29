@@ -25,7 +25,7 @@ Use the next number after the highest found across both sources.If in doubt, use
 
 ### Agent Identification
 Every orchestrating agent has a unique ID: `{machine-short}-{repo-suffix}`
-- **Machine short**: lowercase, first meaningful segment of hostname (e.g., `HENRIKM-YOGA` → `yoga`)
+- **Machine short**: lowercase, first meaningful segment of hostname — skip user/owner prefix segments. Examples: `HENRIKM-YOGA` → `yoga`, `HENRIKM-OMNI` → `omni`.
 - **Repo suffix**: derived from clone folder (e.g., `guesswhatisnext` → `gwn`, `guesswhatisnext_copilot2` → `gwn-c2`)
 - Override via `GWN_AGENT_MACHINE` env var if hostname is unhelpful
 

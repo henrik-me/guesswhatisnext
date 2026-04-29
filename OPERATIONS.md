@@ -161,7 +161,7 @@ NOT allowed on main checkout:
 
 **Orchestrator Startup Checklist** (first actions in every new session):
 1. Run `git pull` to ensure the latest changes from all agents
-2. Read INSTRUCTIONS.md in the repository root
+2. Complete the Quick Reference Checklist's session-start full-reread requirement in [INSTRUCTIONS.md](INSTRUCTIONS.md#quick-reference-checklist) — view the entire file, then state both your derived agent ID and the `INSTRUCTIONS.md re-read complete @ <SHA>` receipt in your first response.
 3. Read WORKBOARD.md for current active work and task assignments
 4. Read CONTEXT.md for project state and codebase architecture; browse `project/clickstops/active/` and `project/clickstops/planned/` for available clickstops (after `git pull`)
 5. Determine agent ID from hostname + repo suffix (see [§ Agent Identification in TRACKING.md](TRACKING.md#agent-identification))
