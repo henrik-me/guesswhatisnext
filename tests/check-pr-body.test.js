@@ -37,6 +37,14 @@ describe('check-pr-body', () => {
     expect(findings[0]).toContain('Container Validation');
   });
 
+  test('uses the complete paginated files payload for PR classification', () => {
+    const findings = runFixture('paginated-files-complete');
+    expect(findings).toHaveLength(3);
+    expect(findings.join('\n')).toContain('Local Review');
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
   test('does not count failed validation rows as passing', () => {
     const findings = runFixture('failing-validation-row');
     expect(findings).toHaveLength(1);
