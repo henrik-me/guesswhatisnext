@@ -37,8 +37,18 @@ describe('check-pr-body', () => {
     expect(findings[0]).toContain('Container Validation');
   });
 
+  test('does not count failed validation rows as passing', () => {
+    const findings = runFixture('failing-validation-row');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('Container Validation');
+  });
+
   test('allows docs-only not-applicable sections', () => {
     expect(runFixture('docs-only-escape')).toEqual([]);
+  });
+
+  test('treats files under docs as docs-only', () => {
+    expect(runFixture('docs-folder-escape')).toEqual([]);
   });
 
   test('allows CI-config-only validation escapes while still requiring Local Review evidence', () => {

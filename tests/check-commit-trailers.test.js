@@ -27,6 +27,11 @@ describe('check-commit-trailers', () => {
     expect(runLog(log, { [GOOD_HASH]: ['scripts/check.js'] })).toEqual([]);
   });
 
+  test('parses record-separated git log output when messages contain markdown rules', () => {
+    const log = `\u001e${GOOD_HASH}\u001ffeat: add gate\n\n---\n\nAgent: omni-gwn/wt-3\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`;
+    expect(runLog(log, { [GOOD_HASH]: ['scripts/check.js'] })).toEqual([]);
+  });
+
   test('flags missing Co-authored-by trailer', () => {
     const log = commit(NO_COPILOT_HASH, 'feat: add gate\n\nAgent: omni-gwn/wt-3');
     const findings = runLog(log, { [NO_COPILOT_HASH]: ['scripts/check.js'] });

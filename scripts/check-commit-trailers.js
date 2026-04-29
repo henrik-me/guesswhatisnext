@@ -18,12 +18,23 @@ function runGit(args) {
 }
 
 function fetchCommitLog(base, head) {
-  return runGit(['log', `${base}..${head}`, '--no-merges', '--format=%H%n%B%n---']);
+  return runGit(['log', `${base}..${head}`, '--no-merges', '--format=%x1e%H%x1f%B']);
 }
 
 function parseCommitLog(logText) {
+  const text = String(logText || '');
+  if (text.includes('\x1f')) {
+    return text.split('\x1e').map(record => {
+      const fieldIndex = record.indexOf('\x1f');
+      if (fieldIndex === -1) return null;
+      const hash = record.slice(0, fieldIndex).trim();
+      if (!hash) return null;
+      return { hash, message: record.slice(fieldIndex + 1).trimEnd() };
+    }).filter(Boolean);
+  }
+
   const commits = [];
-  const records = String(logText || '').split(/^---\s*$/m);
+  const records = text.split(/^---\s*$/m);
   for (const record of records) {
     const trimmed = record.replace(/^\s+|\s+$/g, '');
     if (!trimmed) continue;

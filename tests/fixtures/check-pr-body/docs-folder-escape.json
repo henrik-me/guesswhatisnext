@@ -1,0 +1,15 @@
+{
+  "details": {
+    "body": "## Summary\n\nDocs asset only.\n\n## Local Review: not applicable (docs-only)\n\n## Container Validation: not applicable (docs/CI-only)\n\n## Telemetry Validation: not applicable (docs/CI-only)\n",
+    "files": [
+      { "path": "docs/diagram.svg" }
+    ],
+    "headRefName": "docs",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      { "oid": "abcdef1234567890abcdef1234567890abcdef12" }
+    ]
+  }
+}

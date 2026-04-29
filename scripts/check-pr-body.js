@@ -17,9 +17,8 @@ function changedFileNames(files) {
 }
 
 function isDocsFile(file) {
-  return /\.md$/i.test(file) || file.startsWith('project/clickstops/');
+  return /\.md$/i.test(file) || file.startsWith('docs/') || file.startsWith('project/clickstops/');
 }
-
 function isCiConfigFile(file) {
   return /^\.github\/workflows\/.*\.ya?ml$/i.test(file) ||
     file === 'Dockerfile' ||
@@ -156,7 +155,11 @@ function validateLocalReview(body, prType, commitOids, findings) {
 function hasPassingValidationRow(section) {
   const table = parseFirstMarkdownTable(section.content);
   if (!table || table.rows.length === 0) return false;
-  return table.rows.some(row => row.cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed)?\b)/i.test(cell)));
+  return table.rows.some(row => {
+    const rowText = row.cells.join(' ');
+    if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed)?\b)/i.test(rowText)) return false;
+    return row.cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed|ing)?\b)/i.test(cell));
+  });
 }
 
 function hasCheckedValidationItem(section) {
