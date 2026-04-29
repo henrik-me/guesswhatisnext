@@ -7,6 +7,11 @@
  * (or project/clickstops/done/done_cs43_*.md once archived) for the why.
  *
  * Checks:
+ *   New in CS67 (warn-only on landing — flipped to error after a soak
+ *   window):
+ *     - sub-agent-checklist-canonical — docs/sub-agent-checklist.md exists
+ *         and OPERATIONS.md contains a markdown link resolving to it.
+ *
  *   New in CS62 (warn-only on landing — flipped to error in a follow-up CS
  *   once the baseline is clean, mirroring the CS43-2 / CS43-7 pattern):
  *     - clickstop-h1-matches-filename  — every file under
@@ -1160,6 +1165,89 @@ function checkWorkboardTitleMatchesH1(repoRoot, lines, wbPath, ignores) {
   return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
 }
 
+// ---------- CS67: sub-agent-checklist-canonical (warn-only) ------------------
+
+function checkSubAgentChecklistCanonical(repoRoot) {
+  const findings = [];
+  const operationsPath = path.join(repoRoot, 'OPERATIONS.md');
+  const checklistPath = path.join(repoRoot, 'docs', 'sub-agent-checklist.md');
+  const instructionsPath = path.join(repoRoot, 'INSTRUCTIONS.md');
+
+  const hasOperations = fs.existsSync(operationsPath);
+  const hasChecklist = fs.existsSync(checklistPath);
+  const hasRootPolicyMarker = fs.existsSync(instructionsPath) || fs.existsSync(path.join(repoRoot, 'package.json'));
+  if (!hasOperations && !hasChecklist && !hasRootPolicyMarker) return findings;
+
+  let operationsLines = [];
+  let checklistHeadingLine = 1;
+  let canonicalLinkLine = null;
+  if (fs.existsSync(operationsPath)) {
+    operationsLines = readLines(operationsPath);
+    const headingIdx = operationsLines.findIndex(line => /Sub-Agent Checklist/i.test(line));
+    if (headingIdx !== -1) checklistHeadingLine = headingIdx + 1;
+  }
+
+  const problems = [];
+  if (!fs.existsSync(checklistPath)) {
+    problems.push('docs/sub-agent-checklist.md does not exist');
+  }
+
+  if (!fs.existsSync(operationsPath)) {
+    problems.push('OPERATIONS.md does not exist');
+  } else {
+    let hasCanonicalLink = false;
+    for (let i = 0; i < operationsLines.length; i++) {
+      const line = operationsLines[i];
+      LINK_RE.lastIndex = 0;
+      let m;
+      while ((m = LINK_RE.exec(line)) !== null) {
+        const url = m[2].trim();
+        if (!url || isExternal(url) || url.startsWith('#')) continue;
+        const [pathPartRaw] = url.split('#');
+        const pathPart = pathPartRaw.split('?')[0];
+        const target = safeResolveInside(path.dirname(operationsPath), repoRoot, pathPart);
+        if (target && path.resolve(target) === path.resolve(checklistPath)) {
+          hasCanonicalLink = true;
+          canonicalLinkLine = i + 1;
+          break;
+        }
+      }
+      if (hasCanonicalLink) break;
+    }
+    if (!hasCanonicalLink) {
+      problems.push('OPERATIONS.md does not contain a markdown link resolving to docs/sub-agent-checklist.md');
+    }
+  }
+
+  if (problems.length > 0) {
+    const firstEligibleLine = (filePath) => {
+      const lines = readLines(filePath);
+      for (let i = 0; i < lines.length; i++) {
+        const t = lines[i].trim();
+        if (t === '') continue;
+        if (/^<!--.*-->\s*$/.test(t)) continue;
+        return i + 1;
+      }
+      return 1;
+    };
+    const fallbackPath = fs.existsSync(instructionsPath) ? instructionsPath : path.join(repoRoot, 'package.json');
+    const file = fs.existsSync(operationsPath) ? operationsPath : (fs.existsSync(checklistPath) ? checklistPath : fallbackPath);
+    const line = fs.existsSync(operationsPath) ?
+      (canonicalLinkLine || checklistHeadingLine) : (fs.existsSync(checklistPath) ? firstEligibleLine(checklistPath) : 1);
+    findings.push({
+      rule: 'sub-agent-checklist-canonical', file, line,
+      severity: 'warning',
+      message: problems.join('; '),
+    });
+  }
+  return findings.filter(f => {
+    try {
+      const ignores = parseIgnores(readLines(f.file));
+      return !isIgnored(ignores, f.rule, f.line);
+    } catch { return true; }
+  });
+}
+
 // ---------- main runner ------------------------------------------------------
 
 function run(opts) {
@@ -1212,6 +1300,9 @@ function run(opts) {
 
   // CS65: plan-file schema checks for planned_/active_ clickstops (warn-only).
   findings.push(...checkPlanFileSchema(repoRoot));
+
+  // CS67: canonical sub-agent checklist presence/link rule (warn-only).
+  findings.push(...checkSubAgentChecklistCanonical(repoRoot));
 
   // Normalise file paths to repo-relative for output stability.
   for (const f of findings) {
