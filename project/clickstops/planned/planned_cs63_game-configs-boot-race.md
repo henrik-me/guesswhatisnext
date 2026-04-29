@@ -1,6 +1,8 @@
 # CS63 — Investigate + fix `game_configs` boot-race window
 
-**Status:** 🆕 Planned
+**Status:** ⬜ Planned
+**Depends on:** CS52
+**Parallel-safe with:** CS65, CS66, CS67, CS68
 **Origin:** CS52-10 staging validation (yoga-gwn-c5, 2026-04-27).
 
 ## Symptom

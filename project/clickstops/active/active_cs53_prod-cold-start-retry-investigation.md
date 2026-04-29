@@ -1,6 +1,8 @@
 # CS53 — Production cold-start retry hiccup investigation
 
 **Status:** 🔄 In Progress
+**Depends on:** CS42
+**Parallel-safe with:** CS52, CS60, CS63, CS65, CS66, CS67, CS68
 **Owner:** yoga-gwn
 **Origin:** Deferred from CS42-5c manual production verification (2026-04-23). The CS42 retry path itself worked — progressive messages rendered, the SW migration succeeded, and 503/`Retry-After` plumbing fired — but the user observed that the **profile screen required ~3 explicit Retry-button clicks** before the database came up, with the full incident spanning ~22 minutes (14:09:06 → 14:31:13 PT, 2026-04-23).
 
@@ -453,8 +455,9 @@ CS53-23.G ── CS53-19.G (parallel doc update)
 - Service-worker `skipWaiting` behavior (CS53-16).
 - App Insights enablement (CS54) — though once CS54 lands, the boot-quiet rule becomes trivially monitorable in prod via `requests | where customDimensions.userActivity == "missing" and resultCode != 204`.
 
-## Acceptance Criteria
+## Acceptance
 
+- Remaining CS53 tasks are implemented or explicitly deferred with production cold-start behavior validated.
 - We can explain (citing log evidence from CS53-1) **why** profile required multiple manual retries on 2026-04-23, with a quantified cold-start duration.
 - Every distinct error class observed has been audited against `isTransientDbError`, with gaps either fixed or explicitly accepted.
 - Either a fix is shipped that demonstrably reduces the retry count to 0–1 on the affected screens (validated via CS53-5 cold-start re-runs), OR a documented decision exists explaining why the current behaviour is the accepted floor with the trade-offs spelled out.
@@ -614,3 +617,8 @@ Browser-based validation today requires login because no public endpoint touches
 ### PR scope estimate
 
 ~250 lines (adapter changes + 3 test files + script extension). One PR. Sub-agent on Opus 4.7. Local review on GPT-5.4. Copilot review. `container:validate` must pass in `default` mode + at least the new `capacity-exhausted` mode before requesting any review (per Policy 2).
+
+## Cross-references
+
+- CS42 — origin clickstop for the cold-start retry observation.
+- [INSTRUCTIONS.md § Database & Data](../../../INSTRUCTIONS.md#database--data) — no DB-waking background work policy.

@@ -1,6 +1,9 @@
 # CS60 — Post-CS54 observability follow-up (cost watch + deferred-gap decisions)
 
-**Status:** 🟡 Active — claimed by yoga-gwn-c3 on 2026-04-26T23:50Z. Long-lived CS (open through ~2026-05-25 for CS60-3 +30d window).
+**Status:** 🔄 In Progress
+**Depends on:** CS54
+**Parallel-safe with:** CS52, CS53, CS63, CS65, CS66, CS67, CS68
+**Notes:** Claimed by yoga-gwn-c3 on 2026-04-26T23:50Z. Long-lived CS (open through ~2026-05-25 for CS60-3 +30d window).
 **Origin:** CS54 closed cleanly with verification green, but left four pieces of work that were not actionable on close-out day:
 - 3 cost-measurement windows that depend on calendar dates (+24h / +7d / +30d after enable).
 - 3 qualitative observability gaps (`dependencies` / `traces` / `exceptions` tables) where the right answer depends on what the +30d cost measurement says about ingest headroom.
@@ -163,3 +166,12 @@ Daily detail lives in [`cs60-data-appendix.md`](cs60-data-appendix.md). Roll-up 
 Per the project rule that **all deferred items must be in a CS** (current / new / another existing — or explicitly cancelled), the CS54-9 appendix-in-done-file pattern was insufficient because it hid the work from `project/clickstops/planned/` browse. CS60 folds everything together because the four items have a shared decision dependency: CS60-3''s ingest headroom number is what makes CS60-4/5/6 actionable. Splitting them into four separate `planned_` files would create the same lost-context risk in reverse — a future orchestrator picking up "Gap 2 traces" would have to manually correlate it with the cost-watch CS to know whether to implement.
 
 If CS60-4 / CS60-5 / CS60-6 turn out to need significant implementation rather than a "decide and close" disposition, each splits off into its own dedicated CS at that point — recorded in CS60-7''s closing summary and linked from there.
+
+## Acceptance
+
+- All CS60 follow-up windows and observability-gap decisions are recorded or split into discoverable follow-up CS work.
+
+## Cross-references
+
+- [CS54 done file](../done/done_cs54_enable-app-insights-in-prod.md) — origin deferred observability analysis.
+- [CS60 data appendix](cs60-data-appendix.md) — empirical measurement record.

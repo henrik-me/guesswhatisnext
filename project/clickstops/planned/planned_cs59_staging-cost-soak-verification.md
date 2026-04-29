@@ -1,6 +1,8 @@
 # CS59 — `gwn-staging` cost-soak verification (post-CS58)
 
 **Status:** ⬜ Planned
+**Depends on:** CS58
+**Parallel-safe with:** CS65, CS66, CS67, CS68
 **Earliest claim date:** 2026-05-02 (7 days after CS58-2 was applied on 2026-04-25T18:30Z). Claiming earlier produces noisy or misleading data and the CS should not be picked up until the soak window has elapsed.
 **Origin:** Split out of CS58 (`done_cs58_scale-staging-to-zero.md`). CS58 set `gwn-staging` `minReplicas` to 0 on the live Container App. The cost-saving projection (~50.8 DKK/month, ~$7.30) needs empirical verification once Azure Cost Management has accumulated enough post-change data to trend reliably. A single CS exists for this work so that picking it up at the right time, doing the same analysis as CS58 used, and either closing the loop (✅) or filing a follow-up if the projection missed (❌) all happen as one auditable unit.
 
@@ -169,8 +171,9 @@ CS41 staging deploys add deterministic smoke-test traffic on every deploy via `g
 
 This must be resolved by CS59-8 before reporting cost-soak verification results. Without this, idle-meter drops attributable to scale-to-zero will be mixed with deploy-driven warm windows and the verdict will be unactionable.
 
-## Acceptance criteria
+## Acceptance
 
+- The post-CS58 staging cost-soak result is recorded and any miss is converted into follow-up work.
 - Pre-flight ran and passed (or the CS halted cleanly with the failure documented), **including the cross-agent quiescence step** (WORKBOARD note posted ahead of the cold probe and removed afterward).
 - Both 7-day windows queried and recorded.
 - Verdict (✅ / 🟡 / ❌) classified per the thresholds above.
@@ -196,3 +199,7 @@ This must be resolved by CS59-8 before reporting cost-soak verification results.
 - **CS58** (done) — set up the change being verified here. CS59 is the closing audit. CS59's verdict is appended to `done_cs58_*.md`.
 - **CS54** (App Insights, in flight) — independent. If CS54 lands before CS59, the cost-soak query is unaffected; App Insights ingestion has its own meters but those are on the Log Analytics workspace, not the Container App.
 - **Future CS60 (only if needed)** — staging cost regression investigation. CS59-6 decides whether to open it.
+
+## Cross-references
+
+- [CS58 done file](../done/done_cs58_scale-staging-to-zero.md) — origin scale-to-zero change.

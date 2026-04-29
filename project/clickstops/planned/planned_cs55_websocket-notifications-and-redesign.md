@@ -1,6 +1,8 @@
 # CS55 — Real-time notifications via WebSocket + feature redesign
 
 **Status:** ⬜ Planned
+**Depends on:** CS53-23
+**Parallel-safe with:** any
 **Origin:** During CS53-2 we killed the 60s notification polling timer (it kept Azure SQL serverless awake permanently, single-handedly responsible for blowing through the Free Tier monthly compute allowance). The badge is now refreshed only on login and when the user opens "My Submissions". This is correct for cost but loses real-time freshness. CS55 restores real-time freshness **without** reintroducing DB-keepalive polling, and takes the opportunity to think about whether the notification feature should grow beyond just "your community puzzle was reviewed".
 
 ## Goal
@@ -110,3 +112,11 @@ The current SPA does not poll on a timer (CS53-2 killed it; verified at `public/
 - **CS53** — established the no-polling rule and shipped the bare-minimum fix (badge fetch on login + on opening My Submissions). CS55 restores real-time UX on top of that rule.
 - **CS54 (planned)** — App Insights enables proper measurement of cache hit ratio and DB query rate, so CS55's "95% cache hit" acceptance criterion is much easier to verify after CS54 ships.
 - **CS56 (planned)** — general server-side caching layer. CS55 introduces the *first* per-user cache; CS56 generalises the pattern to other read-heavy endpoints (leaderboard, feature flags, achievements catalog, etc.) and adds the stale-while-revalidate behaviour for cold-DB resilience.
+
+## Acceptance
+
+- Remaining CS55 tasks are complete and validated without reintroducing DB-waking polling.
+
+## Cross-references
+
+- [CS53 active file](../active/active_cs53_prod-cold-start-retry-investigation.md) — boot-quiet contract foundation.

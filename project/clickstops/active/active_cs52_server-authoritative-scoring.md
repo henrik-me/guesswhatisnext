@@ -1,6 +1,8 @@
 # CS52 — Server-Authoritative Scoring with Offline-First Local Mode
 
-**Status:** 🔄 In Review (CS52-1 design lock-down PR open)
+**Status:** 🔄 In Progress
+**Depends on:** none
+**Parallel-safe with:** CS60, CS63, CS65, CS66, CS67, CS68
 **Owner:** yoga-gwn-c5 (claimed 2026-04-25T18:45Z for CS52-1 design lock-down)
 **Goal:** Address [issue #198](https://github.com/henrik-me/guesswhatisnext/issues/198) finding F2 / Recommendation 1 / Roadmap B — make scoring server-authoritative for ranked play — while preserving offline play as a first-class capability and treating offline scores as **personal data synced across the player's devices** rather than as second-class leaderboard entries.
 
@@ -511,7 +513,7 @@ PUT /api/admin/game-configs/:mode
 - **Per-event multiplayer persistence during the match.** Multiplayer writes once on match completion (CS52-7d). Mid-match crashes lose the in-progress match, which matches today's behaviour and the user-stated rule that half-played games are not preserved.
 - **Admin UI for editing `game_configs`.** Initial mechanism is direct SQL or a minimal admin route (decided in CS52-1). A full admin UI is out of scope.
 
-## Acceptance criteria
+## Acceptance
 
 - New Ranked Free Play and Ranked Daily flows work end-to-end with server-authoritative scoring; the `score` value persisted is computed server-side from per-answer events, not accepted from the client.
 - Public leaderboards default to `source='ranked'`. The `Offline` and `All` filters surface offline scores with a clear provenance badge on every row. Legacy rows do not appear in any public-LB filter.

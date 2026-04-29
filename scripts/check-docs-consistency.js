@@ -26,6 +26,23 @@
  *         (line 1, before the first <br>, ** stripped) equals the human
  *         title of its parent CS file's H1.
  *
+ *   New in CS65 (warn-only on landing — CS65-2 flips to error in --strict
+ *   after the baseline soaks clean):
+ *     - plan-has-depends-on           — each planned_/active_ CS plan file
+ *         matching the clickstop filename convention has a `**Depends on:**`
+ *         line between the H1 and the first `##` heading.
+ *     - plan-has-parallel-safe-with   — same scope, requiring a
+ *         `**Parallel-safe with:**` line in that frontmatter block.
+ *     - plan-has-status-line          — same scope, requiring an exact
+ *         status line: `⬜ Planned`, `🔄 In Progress`, `✅ Done`, or
+ *         `🚫 Blocked`.
+ *     - plan-has-required-sections    — same scope, requiring literal
+ *         `## Acceptance` and `## Cross-references` sections after the
+ *         frontmatter.
+ *     - plan-task-id-format           — in any markdown table whose first
+ *         column header is `Task ID`, every non-empty first-column cell must
+ *         match `^CS\d+-\d+([a-z])?$`.
+ *
  *   1. link-resolves           — every relative link [text](path[#anchor]) in
  *                                 any *.md resolves to an existing file (and
  *                                 anchor exists in that file when present).
@@ -100,6 +117,11 @@ const CS_TASK_ID_HEADER_RE = /^cs[-\s]*task\s*id$/i;
 // so that the H1 ↔ filename-slug check has a single canonical shape.
 const CLICKSTOP_H1_RE = /^#\s+(CS\d+)\s+\u2014\s+(.+?)\s*$/i;
 const CLICKSTOP_FILENAME_RE = /^(planned|active|done)_(cs\d+)_([a-z0-9-]+)\.md$/i;
+
+const PLAN_STATUS_LINE_RE = /^\*\*Status:\*\* (⬜ Planned|🔄 In Progress|✅ Done|🚫 Blocked)$/;
+const PLAN_DEPENDS_ON_RE = /^\*\*Depends on:\*\* .+$/;
+const PLAN_PARALLEL_SAFE_WITH_RE = /^\*\*Parallel-safe with:\*\* .+$/;
+const PLAN_TASK_ID_RE = /^CS\d+-\d+([a-z])?$/;
 
 // Canonical WORKBOARD Active Work states (CS44-1). The human-readable source
 // of truth lives in INSTRUCTIONS.md § "WORKBOARD State Machine"; this
@@ -243,8 +265,8 @@ function anchorsCached(p) {
 
 // Parse `<!-- check:ignore <rule> -->` directives. Inline (line has other
 // content) → this line only. On its own line → next non-blank line block.
-const IGNORE_RE = /<!--\s*check:ignore\s+([\w-]+)\s*-->/g;
-const IGNORE_STRIP_RE = /<!--\s*check:ignore\s+[\w-]+\s*-->/g;
+const IGNORE_RE = /<!--\s*check:ignore\s+([\w-]+)(?:\s+.*?)?\s*-->/g;
+const IGNORE_STRIP_RE = /<!--\s*check:ignore\s+[\w-]+(?:\s+.*?)?\s*-->/g;
 
 function parseIgnores(lines) {
   const ignores = []; // {rule, lines:Set<number>}
@@ -943,6 +965,128 @@ function checkClickstopH1MatchesFilename(repoRoot) {
   });
 }
 
+// ---------- CS65: plan-file schema rules (warn-only) ------------------------
+
+function findPlanClickstopFiles(repoRoot) {
+  const out = [];
+  for (const sub of ['planned', 'active']) {
+    const dir = path.join(repoRoot, 'project', 'clickstops', sub);
+    if (!fs.existsSync(dir)) continue;
+    let names;
+    try { names = fs.readdirSync(dir); } catch { continue; }
+    for (const name of names) {
+      if (!name.toLowerCase().endsWith('.md')) continue;
+      const parsed = parseClickstopFilename(name);
+      if (!parsed || parsed.state !== sub) continue;
+      out.push(path.join(dir, name));
+    }
+  }
+  return out;
+}
+
+function getPlanFrontmatterRange(lines) {
+  const text = lines.join('\n');
+  const h1 = parseClickstopH1WithLine(text);
+  const start = h1 ? h1.line : 0;
+  let end = lines.length;
+  for (let i = start; i < lines.length; i++) {
+    if (/^##\s+/.test(lines[i])) { end = i; break; }
+  }
+  return { start, end, line: h1 ? h1.line : 1 };
+}
+
+function checkPlanFrontmatterLine(file, lines, ignores, rule, requiredRe, label, candidateRe) {
+  const findings = [];
+  const range = getPlanFrontmatterRange(lines);
+  for (let i = range.start; i < range.end; i++) {
+    if (requiredRe.test(lines[i])) return findings;
+  }
+  let line = range.line;
+  if (candidateRe) {
+    for (let i = range.start; i < range.end; i++) {
+      if (candidateRe.test(lines[i])) { line = i + 1; break; }
+    }
+  }
+  findings.push({
+    rule, file, line,
+    severity: 'warning',
+    message: `missing valid ${label} line in clickstop frontmatter before the first ## heading`,
+  });
+  return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
+}
+
+function hasLiteralHeading(lines, heading) {
+  let inFence = false;
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    if (line === heading) return true;
+  }
+  return false;
+}
+
+function checkPlanRequiredSections(file, lines, ignores) {
+  const missing = [];
+  if (!hasLiteralHeading(lines, '## Acceptance')) missing.push('## Acceptance');
+  if (!hasLiteralHeading(lines, '## Cross-references')) missing.push('## Cross-references');
+  if (missing.length === 0) return [];
+  const range = getPlanFrontmatterRange(lines);
+  const findings = [{
+    rule: 'plan-has-required-sections', file, line: range.line,
+    severity: 'warning',
+    message: `missing required section(s): ${missing.join(', ')}`,
+  }];
+  return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
+}
+
+function checkPlanTaskIdFormat(file, lines, ignores) {
+  const findings = [];
+  let inFence = false;
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (/^\s*```/.test(lines[i])) { inFence = !inFence; continue; }
+    if (inFence) continue;
+    const cur = lines[i];
+    const next = lines[i + 1];
+    if (!/^\s*\|.*\|\s*$/.test(cur) || !/^\s*\|[\s:|-]+\|\s*$/.test(next)) continue;
+    const headers = splitMarkdownRow(cur);
+    if (!headers[0] || !/^task\s*id$/i.test(headers[0])) continue;
+    let j = i + 2;
+    for (; j < lines.length; j++) {
+      const line = lines[j];
+      if (!/^\s*\|/.test(line)) break;
+      const cells = splitMarkdownRow(line);
+      const taskId = (cells[0] || '').trim();
+      if (!taskId || /^task\s*id$/i.test(taskId) || /^:?-{3,}:?$/.test(taskId)) continue;
+      if (!PLAN_TASK_ID_RE.test(taskId)) {
+        findings.push({
+          rule: 'plan-task-id-format', file, line: j + 1,
+          severity: 'warning',
+          message: `Task ID '${taskId}' must match ^CS\\d+-\\d+([a-z])?$`,
+        });
+      }
+    }
+    i = j - 1;
+  }
+  return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
+}
+
+function checkPlanFileSchema(repoRoot) {
+  const findings = [];
+  for (const file of findPlanClickstopFiles(repoRoot)) {
+    const lines = readLines(file);
+    const ignores = parseIgnores(lines);
+    findings.push(...checkPlanFrontmatterLine(file, lines, ignores,
+      'plan-has-depends-on', PLAN_DEPENDS_ON_RE, '`**Depends on:** ...`', /^\*\*Depends on:\*\*/));
+    findings.push(...checkPlanFrontmatterLine(file, lines, ignores,
+      'plan-has-parallel-safe-with', PLAN_PARALLEL_SAFE_WITH_RE, '`**Parallel-safe with:** ...`', /^\*\*Parallel-safe with:\*\*/));
+    findings.push(...checkPlanFrontmatterLine(file, lines, ignores,
+      'plan-has-status-line', PLAN_STATUS_LINE_RE, '`**Status:** ...`', /^\*\*Status:\*\*/));
+    findings.push(...checkPlanRequiredSections(file, lines, ignores));
+    findings.push(...checkPlanTaskIdFormat(file, lines, ignores));
+  }
+  return findings;
+}
+
 // ---------- CS62: workboard-title-matches-h1 (warn-only) --------------------
 
 function findClickstopFilesByCs(repoRoot, cs) {
@@ -1153,6 +1297,9 @@ function run(opts) {
 
   // CS62: clickstop H1 ↔ filename consistency (warn-only).
   findings.push(...checkClickstopH1MatchesFilename(repoRoot));
+
+  // CS65: plan-file schema checks for planned_/active_ clickstops (warn-only).
+  findings.push(...checkPlanFileSchema(repoRoot));
 
   // CS67: canonical sub-agent checklist presence/link rule (warn-only).
   findings.push(...checkSubAgentChecklistCanonical(repoRoot));
