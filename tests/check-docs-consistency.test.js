@@ -102,7 +102,39 @@ describe('check-docs-consistency', () => {
     const hits = findings.filter(f => f.rule === 'sub-agent-checklist-canonical');
     expect(hits).toHaveLength(1);
     expect(hits[0].severity).toBe('warning');
+    expect(hits[0].line).toBe(5);
     expect(hits[0].message).toContain('does not exist');
+  });
+
+  test('cs67-checklist rule honors an ignore above the OPERATIONS checklist block', () => {
+    const fs = require('fs');
+    const root = path.join(FIX, 'cs67-checklist-missing-link');
+    const operations = path.join(root, 'OPERATIONS.md');
+    const original = fs.readFileSync(operations, 'utf8');
+    try {
+      const patched = original.replace(
+        '**Sub-Agent Checklist**',
+        '<!-- check:ignore sub-agent-checklist-canonical -->\n**Sub-Agent Checklist**');
+      fs.writeFileSync(operations, patched);
+      const findings = run({ root, now: FIXED_NOW });
+      expect(findings.filter(f => f.rule === 'sub-agent-checklist-canonical')).toEqual([]);
+    } finally {
+      fs.writeFileSync(operations, original);
+    }
+  });
+
+  test('cs67-checklist rule honors an ignore in the checklist file when OPERATIONS is missing', () => {
+    const fs = require('fs');
+    const root = path.join(FIX, 'cs67-checklist-missing-operations');
+    const checklist = path.join(root, 'docs', 'sub-agent-checklist.md');
+    const original = fs.readFileSync(checklist, 'utf8');
+    try {
+      fs.writeFileSync(checklist, '<!-- check:ignore sub-agent-checklist-canonical -->\n' + original);
+      const findings = run({ root, now: FIXED_NOW });
+      expect(findings.filter(f => f.rule === 'sub-agent-checklist-canonical')).toEqual([]);
+    } finally {
+      fs.writeFileSync(checklist, original);
+    }
   });
 
   // ---- CS44-5a: state-vocabulary, ISO 8601, owner-in-orchestrators-table ----

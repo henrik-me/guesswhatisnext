@@ -1031,10 +1031,12 @@ function checkSubAgentChecklistCanonical(repoRoot) {
   if (!fs.existsSync(operationsPath) && !fs.existsSync(checklistPath)) return findings;
 
   let operationsLines = [];
-  let operationsIgnores = [];
+  let checklistHeadingLine = 1;
+  let canonicalLinkLine = null;
   if (fs.existsSync(operationsPath)) {
     operationsLines = readLines(operationsPath);
-    operationsIgnores = parseIgnores(operationsLines);
+    const headingIdx = operationsLines.findIndex(line => /Sub-Agent Checklist/i.test(line));
+    if (headingIdx !== -1) checklistHeadingLine = headingIdx + 1;
   }
 
   const problems = [];
@@ -1046,7 +1048,8 @@ function checkSubAgentChecklistCanonical(repoRoot) {
     problems.push('OPERATIONS.md does not exist');
   } else {
     let hasCanonicalLink = false;
-    for (const line of operationsLines) {
+    for (let i = 0; i < operationsLines.length; i++) {
+      const line = operationsLines[i];
       LINK_RE.lastIndex = 0;
       let m;
       while ((m = LINK_RE.exec(line)) !== null) {
@@ -1057,6 +1060,7 @@ function checkSubAgentChecklistCanonical(repoRoot) {
         const target = safeResolveInside(path.dirname(operationsPath), repoRoot, pathPart);
         if (target && path.resolve(target) === path.resolve(checklistPath)) {
           hasCanonicalLink = true;
+          canonicalLinkLine = i + 1;
           break;
         }
       }
@@ -1068,14 +1072,31 @@ function checkSubAgentChecklistCanonical(repoRoot) {
   }
 
   if (problems.length > 0) {
+    const firstEligibleLine = (filePath) => {
+      const lines = readLines(filePath);
+      for (let i = 0; i < lines.length; i++) {
+        const t = lines[i].trim();
+        if (t === '') continue;
+        if (/^<!--.*-->\s*$/.test(t)) continue;
+        return i + 1;
+      }
+      return 1;
+    };
     const file = fs.existsSync(operationsPath) ? operationsPath : checklistPath;
+    const line = fs.existsSync(operationsPath) ?
+      (canonicalLinkLine || checklistHeadingLine) : firstEligibleLine(checklistPath);
     findings.push({
-      rule: 'sub-agent-checklist-canonical', file, line: 1,
+      rule: 'sub-agent-checklist-canonical', file, line,
       severity: 'warning',
       message: problems.join('; '),
     });
   }
-  return findings.filter(f => !isIgnored(operationsIgnores, f.rule, f.line));
+  return findings.filter(f => {
+    try {
+      const ignores = parseIgnores(readLines(f.file));
+      return !isIgnored(ignores, f.rule, f.line);
+    } catch { return true; }
+  });
 }
 
 // ---------- main runner ------------------------------------------------------
