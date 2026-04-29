@@ -1,6 +1,6 @@
 # CS47 — ProgressiveLoader Client UX Telemetry & Alerting
 
-**Status:** 🆕 Planned
+**Status:** ⬜ Planned
 **Depends on:** CS42
 **Parallel-safe with:** any
 **Goal:** Emit lightweight client telemetry from ProgressiveLoader on entry/exit of the 503-retry warmup path, and wire an Azure Monitor alert on 35s-cap exhaustions. Replaces "test cold-start in production" (not safely possible) with continuous observation.

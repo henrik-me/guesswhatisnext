@@ -1,6 +1,6 @@
 # CS59 — `gwn-staging` cost-soak verification (post-CS58)
 
-**Status:** 🆕 Planned
+**Status:** ⬜ Planned
 **Depends on:** CS58
 **Parallel-safe with:** CS65, CS66, CS67, CS68
 **Earliest claim date:** 2026-05-02 (7 days after CS58-2 was applied on 2026-04-25T18:30Z). Claiming earlier produces noisy or misleading data and the CS should not be picked up until the soak window has elapsed.

@@ -29,7 +29,7 @@
  *     - plan-has-parallel-safe-with   — same scope, requiring a
  *         `**Parallel-safe with:**` line in that frontmatter block.
  *     - plan-has-status-line          — same scope, requiring an exact
- *         status line: `🆕 Planned`, `🔄 In Progress`, `✅ Done`, or
+ *         status line: `⬜ Planned`, `🔄 In Progress`, `✅ Done`, or
  *         `🚫 Blocked`.
  *     - plan-has-required-sections    — same scope, requiring literal
  *         `## Acceptance` and `## Cross-references` sections after the
@@ -113,7 +113,7 @@ const CS_TASK_ID_HEADER_RE = /^cs[-\s]*task\s*id$/i;
 const CLICKSTOP_H1_RE = /^#\s+(CS\d+)\s+\u2014\s+(.+?)\s*$/i;
 const CLICKSTOP_FILENAME_RE = /^(planned|active|done)_(cs\d+)_([a-z0-9-]+)\.md$/i;
 
-const PLAN_STATUS_LINE_RE = /^\*\*Status:\*\* (🆕 Planned|🔄 In Progress|✅ Done|🚫 Blocked)$/;
+const PLAN_STATUS_LINE_RE = /^\*\*Status:\*\* (⬜ Planned|🔄 In Progress|✅ Done|🚫 Blocked)$/;
 const PLAN_DEPENDS_ON_RE = /^\*\*Depends on:\*\* .+$/;
 const PLAN_PARALLEL_SAFE_WITH_RE = /^\*\*Parallel-safe with:\*\* .+$/;
 const PLAN_TASK_ID_RE = /^CS\d+-\d+([a-z])?$/;

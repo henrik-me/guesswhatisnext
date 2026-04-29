@@ -1,6 +1,6 @@
 # CS57 — Migrate int identifiers to UUIDs
 
-**Status:** 🆕 Planned
+**Status:** ⬜ Planned
 **Depends on:** none
 **Parallel-safe with:** any
 **Owner:** unassigned (planning by yoga-gwn-c2; not yet claimed for implementation)

@@ -1,6 +1,6 @@
 # CS55 — Real-time notifications via WebSocket + feature redesign
 
-**Status:** 🆕 Planned
+**Status:** ⬜ Planned
 **Depends on:** CS53-23
 **Parallel-safe with:** any
 **Origin:** During CS53-2 we killed the 60s notification polling timer (it kept Azure SQL serverless awake permanently, single-handedly responsible for blowing through the Free Tier monthly compute allowance). The badge is now refreshed only on login and when the user opens "My Submissions". This is correct for cost but loses real-time freshness. CS55 restores real-time freshness **without** reintroducing DB-keepalive polling, and takes the opportunity to think about whether the notification feature should grow beyond just "your community puzzle was reviewed".

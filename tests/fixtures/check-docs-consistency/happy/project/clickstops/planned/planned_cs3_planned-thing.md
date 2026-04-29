@@ -1,6 +1,6 @@
 # CS3 — Planned Thing
 
-**Status:** 🆕 Planned
+**Status:** ⬜ Planned
 **Depends on:** none
 **Parallel-safe with:** any
 

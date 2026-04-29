@@ -1,6 +1,6 @@
 # CS652 — Plan Schema
 
-**Status:** 🆕 Planned
+**Status:** ⬜ Planned
 **Depends on:** none
 **Parallel-safe with:** any
 

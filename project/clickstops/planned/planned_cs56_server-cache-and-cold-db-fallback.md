@@ -1,6 +1,6 @@
 # CS56 — Server-side response cache + stale-while-revalidate for cold-DB resilience
 
-**Status:** 🆕 Planned
+**Status:** ⬜ Planned
 **Depends on:** CS53
 **Parallel-safe with:** any
 **Origin:** During CS53 (Azure SQL Free Tier exhaustion incident) we identified that the app makes many DB reads that could be served from an in-process cache, especially for read-heavy public endpoints (leaderboards, feature flags, achievements catalog, community puzzle list, etc.). Two converging problems motivate this CS:
