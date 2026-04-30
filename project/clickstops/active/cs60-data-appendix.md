@@ -17,7 +17,7 @@
 | Day 2 — 2026-04-27 (CS60-1c, backfill) | captured 2026-04-30T03:00Z | yoga-gwn-c3 | [§ Day 2 — 2026-04-27 (CS60-1c)](#day-2--2026-04-27-cs60-1c) |
 | Day 3 — 2026-04-28 (CS60-2c, backfill) | captured 2026-04-30T03:00Z | yoga-gwn-c3 | [§ Day 3 — 2026-04-28 (CS60-2c)](#day-3--2026-04-28-cs60-2c) |
 | Day 4 — 2026-04-29 (CS60-2d, backfill) | captured 2026-04-30T03:00Z | yoga-gwn-c3 | [§ Day 4 — 2026-04-29 (CS60-2d)](#day-4--2026-04-29-cs60-2d) |
-| +7d cost measurement | 2026-05-02T22:39Z | _pending — CS60-2_ | _to be appended (daily ticks via CS60-2c..2h)_ |
+| +7d cost measurement | 2026-05-02T22:39Z | _pending — CS60-2_ | _Day 2 recorded as CS60-1c; remaining daily ticks via CS60-2e, CS60-2f, and CS60-2h (CS60-2g unused)_ |
 | +30d cost measurement | 2026-05-25T22:39Z | _pending — CS60-3_ | _to be appended (daily ticks via CS60-3i..)_ |
 | Per-deploy ingest summary (rolling) | continuous from CS41 land | _pending — CS41 deploy summary_ | [§ Per-deploy ingest summary](#per-deploy-ingest-summary) |
 
