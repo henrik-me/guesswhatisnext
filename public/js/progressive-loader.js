@@ -24,6 +24,7 @@ const EXTENSION_PER_503_MS     = 15000;   // headroom added per server 503
 const MIN_EXTENSION_MS         =  5000;   // floor — always make progress
 const MAX_SLEEP_MS             =  8000;   // existing ceiling per attempt
 const JITTER_FRAC              = 0.20;    // ±20% on sleep to desync parallel callers
+const WARMUP_TELEMETRY_EVENT = 'progressiveLoader.warmupExhausted';
 
 /**
  * Typed error for retryable 503 responses.
@@ -70,6 +71,7 @@ export class UnavailableError extends Error {
  * @param {Array<{after: number, msg: string}>} messageSet - escalating messages
  * @param {Object} [options] - {maxRetries, backoff, timeout, onRetry}
  * @param {Function} [options.onRetry] - callback for retry button; if omitted, retries progressiveLoad directly
+ * @param {'leaderboard'|'profile'|'achievements'|'community'} [options.screen] - telemetry screen key
  * @returns {Promise<any>} the fetch result, or null on final failure
  */
 export async function progressiveLoad(fetchFn, containerEl, messageSet, options = {}) {
@@ -173,9 +175,20 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
   let deadline = warmupStart + currentBudget;
   // Sleep-schedule index for the next sleep: 1=2s, 2=4s, 3=6s, 4+=8s.
   let retryIdx = 1;
+  let attempts = 0;
+  const screen = options.screen || screenForMessageSet(messageSet);
+  const emitExitTelemetry = (outcome) => {
+    emitWarmupTelemetry({
+      screen,
+      attempts,
+      totalWaitMs: Math.max(0, Math.round(Date.now() - warmupStart)),
+      outcome,
+    });
+  };
 
-  const bailOutToRetryButton = () => {
+  const bailOutToRetryButton = (outcome = 'cap-exhausted') => {
     clearTimers(escalationTimers);
+    emitExitTelemetry(outcome);
     const retryHandler = onRetry || (() => progressiveLoad(fetchFn, containerEl, messageSet, options));
     showRetryButton(containerEl, retryHandler);
     return null;
@@ -183,7 +196,7 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
 
   while (true) {
     const remaining = deadline - Date.now();
-    if (remaining <= 0) return bailOutToRetryButton();
+    if (remaining <= 0) return bailOutToRetryButton('cap-exhausted');
 
     const baseSleep = baseSleepFor(retryIdx);
     const sleepMs = computeSleepMs(baseSleep, lastErr.retryAfterMs, remaining);
@@ -192,7 +205,7 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
 
     // Re-check remaining after sleep
     const remainingAfterSleep = deadline - Date.now();
-    if (remainingAfterSleep <= 0) return bailOutToRetryButton();
+    if (remainingAfterSleep <= 0) return bailOutToRetryButton('cap-exhausted');
 
     const requestTimers = [];
     try {
@@ -201,12 +214,14 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
       const timeoutId = setTimeout(() => controller.abort(), effectiveTimeout);
       requestTimers.push(timeoutId);
 
+      attempts++;
       const result = await fetchFn(controller.signal);
 
       // Success
       clearTimers(requestTimers);
       clearTimers(escalationTimers);
       clearMessage(containerEl);
+      emitExitTelemetry('success');
       return result;
     } catch (retryErr) {
       clearTimers(requestTimers);
@@ -222,12 +237,13 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
       // UnavailableError mid-retry-loop — bail out of warmup and show banner.
       if (retryErr instanceof UnavailableError) {
         clearTimers(escalationTimers);
+        emitExitTelemetry('aborted');
         showUnavailableBanner(containerEl, retryErr.message);
         return null;
       }
 
       // AbortError or other non-retryable error — terminate
-      return bailOutToRetryButton();
+      return bailOutToRetryButton(Date.now() >= deadline ? 'cap-exhausted' : 'aborted');
     }
   }
 }
@@ -478,6 +494,50 @@ function startMessageEscalation(el, messageSet, timers) {
 function clearTimers(timers) {
   for (const id of timers) clearTimeout(id);
   timers.length = 0;
+}
+
+function screenForMessageSet(messageSet) {
+  for (const [screen, set] of Object.entries(MESSAGE_SETS)) {
+    if (set === messageSet) return screen;
+  }
+  return undefined;
+}
+
+export function emitWarmupTelemetry({ screen, attempts, totalWaitMs, outcome }) {
+  if (!screen) return;
+
+  const payload = {
+    event: WARMUP_TELEMETRY_EVENT,
+    screen,
+    attempts,
+    totalWaitMs,
+    outcome,
+  };
+  const body = JSON.stringify(payload);
+
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      const blob = typeof Blob === 'function'
+        ? new Blob([body], { type: 'application/json' })
+        : body;
+      if (navigator.sendBeacon('/api/telemetry/ux-events', blob)) return;
+    }
+  } catch {
+    // Fall back to keepalive fetch below.
+  }
+
+  try {
+    if (typeof fetch === 'function') {
+      void fetch('/api/telemetry/ux-events', {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }).catch(() => {});
+    }
+  } catch {
+    // Telemetry is fire-and-forget; never throw into UI code.
+  }
 }
 
 function sleep(ms) {

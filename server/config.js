@@ -12,6 +12,21 @@ const isProduction = NODE_ENV === 'production' || NODE_ENV === 'staging';
 // by single dots, followed by an optional port.  No underscores, no consecutive
 // dots, no leading/trailing hyphens in labels.
 const CANONICAL_HOST_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::\d{1,5})?$/i;
+const DEPLOY_ENVIRONMENTS = ['local-container', 'staging', 'production'];
+
+function getDeployEnvironment(env = process.env) {
+  const override = (env.GWN_ENV || '').trim();
+  if (override) {
+    if (!DEPLOY_ENVIRONMENTS.includes(override)) {
+      throw new Error(`Invalid GWN_ENV="${override}"; expected one of: ${DEPLOY_ENVIRONMENTS.join(', ')}`);
+    }
+    return override;
+  }
+
+  if (env.NODE_ENV === 'staging') return 'staging';
+  if (env.NODE_ENV === 'production') return 'production';
+  return 'local-container';
+}
 
 const config = {
   NODE_ENV,
@@ -83,4 +98,4 @@ function validateConfig() {
   }
 }
 
-module.exports = { config, validateConfig, CANONICAL_HOST_RE };
+module.exports = { config, validateConfig, CANONICAL_HOST_RE, getDeployEnvironment };
