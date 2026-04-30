@@ -25,6 +25,7 @@ const MIN_EXTENSION_MS         =  5000;   // floor — always make progress
 const MAX_SLEEP_MS             =  8000;   // existing ceiling per attempt
 const JITTER_FRAC              = 0.20;    // ±20% on sleep to desync parallel callers
 const WARMUP_TELEMETRY_EVENT = 'progressiveLoader.warmupExhausted';
+const WARMUP_TELEMETRY_ENDPOINT = '/api/telemetry/ux-events';
 
 /**
  * Typed error for retryable 503 responses.
@@ -520,7 +521,7 @@ export function emitWarmupTelemetry({ screen, attempts, totalWaitMs, outcome }) 
       const blob = typeof Blob === 'function'
         ? new Blob([body], { type: 'application/json' })
         : body;
-      if (navigator.sendBeacon('/api/telemetry/ux-events', blob)) return;
+      if (navigator.sendBeacon(WARMUP_TELEMETRY_ENDPOINT, blob)) return;
     }
   } catch {
     // Fall back to keepalive fetch below.
@@ -528,7 +529,7 @@ export function emitWarmupTelemetry({ screen, attempts, totalWaitMs, outcome }) 
 
   try {
     if (typeof fetch === 'function') {
-      void fetch('/api/telemetry/ux-events', {
+      void fetch(WARMUP_TELEMETRY_ENDPOINT, {
         method: 'POST',
         keepalive: true,
         headers: { 'Content-Type': 'application/json' },
