@@ -33,7 +33,6 @@ describe('validateConfig — GWN_ENV startup validation', () => {
   function loadValidate() {
     const configPath = require.resolve('../server/config');
     delete require.cache[configPath];
-    // eslint-disable-next-line global-require
     return require('../server/config').validateConfig;
   }
 

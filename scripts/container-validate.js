@@ -603,7 +603,7 @@ async function runCs53_10Mode(mode) {
     GWN_SIMULATE_DB_UNAVAILABLE: '',
     HTTPS_PORT,
     HTTP_PORT,
-    GWN_ENV: 'local-container',
+    GWN_ENV: process.env.GWN_ENV !== undefined ? process.env.GWN_ENV : 'local-container',
   };
   if (mode === 'cold-start-fails') {
     env.GWN_SIMULATE_COLD_START_FAILS = '3';
@@ -781,7 +781,7 @@ async function main() {
     GWN_SIMULATE_COLD_START_MS: String(COLD_START_MS),
     HTTPS_PORT,
     HTTP_PORT,
-    GWN_ENV: 'local-container',
+    GWN_ENV: process.env.GWN_ENV || 'local-container',
   };
   const up = compose('up -d --build', { env });
   if (up.status !== 0) {

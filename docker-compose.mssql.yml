@@ -64,8 +64,8 @@ services:
       GWN_SIMULATE_DB_UNAVAILABLE: "${GWN_SIMULATE_DB_UNAVAILABLE:-}"
       GWN_ENV: "${GWN_ENV:-}"
       APPLICATIONINSIGHTS_CONNECTION_STRING: "${APPLICATIONINSIGHTS_CONNECTION_STRING:-}"
-      # OTLP exporter — sends traces to the local collector (no Azure conn string
-      # so telemetry.js uses the OTLP HTTP fallback path)
+      # OTLP exporter endpoint for the local collector. telemetry.js uses this
+      # OTLP HTTP fallback path only when APPLICATIONINSIGHTS_CONNECTION_STRING is unset.
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
     volumes:
       - ./scripts/docker-mssql-entrypoint.sh:/app/docker-mssql-entrypoint.sh:ro

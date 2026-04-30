@@ -176,7 +176,7 @@ async function retryLoop(fetchFn, containerEl, escalationTimers, initialErr, tim
   let deadline = warmupStart + currentBudget;
   // Sleep-schedule index for the next sleep: 1=2s, 2=4s, 3=6s, 4+=8s.
   let retryIdx = 1;
-  let attempts = 0;
+  let attempts = 1; // Count the initial request that triggered the retry loop.
   const screen = options.screen || screenForMessageSet(messageSet);
   const emitExitTelemetry = (outcome) => {
     emitWarmupTelemetry({
