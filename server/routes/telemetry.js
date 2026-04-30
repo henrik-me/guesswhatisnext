@@ -38,10 +38,10 @@ function validateUxEventPayload(body) {
     return { error: `event must be ${UX_EVENT_NAME}` };
   }
   if (!UX_SCREENS.has(screen)) {
-    return { error: 'screen must be one of leaderboard, profile, achievements, community' };
+    return { error: `screen must be one of ${Array.from(UX_SCREENS).join(', ')}` };
   }
   if (!UX_OUTCOMES.has(outcome)) {
-    return { error: 'outcome must be one of success, cap-exhausted, aborted' };
+    return { error: `outcome must be one of ${Array.from(UX_OUTCOMES).join(', ')}` };
   }
   if (!Number.isInteger(attempts) || attempts < 0 || attempts > 50) {
     return { error: 'attempts must be an integer from 0 to 50' };
