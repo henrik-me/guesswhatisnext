@@ -781,7 +781,7 @@ async function main() {
     GWN_SIMULATE_COLD_START_MS: String(COLD_START_MS),
     HTTPS_PORT,
     HTTP_PORT,
-    GWN_ENV: process.env.GWN_ENV || 'local-container',
+    GWN_ENV: process.env.GWN_ENV !== undefined ? process.env.GWN_ENV : 'local-container',
   };
   const up = compose('up -d --build', { env });
   if (up.status !== 0) {
