@@ -517,10 +517,12 @@ export function emitWarmupTelemetry({ screen, attempts, totalWaitMs, outcome }) 
   const body = JSON.stringify(payload);
 
   try {
-    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-      const blob = typeof Blob === 'function'
-        ? new Blob([body], { type: 'application/json' })
-        : body;
+    if (
+      typeof navigator !== 'undefined'
+      && typeof navigator.sendBeacon === 'function'
+      && typeof Blob === 'function'
+    ) {
+      const blob = new Blob([body], { type: 'application/json' });
       if (navigator.sendBeacon(WARMUP_TELEMETRY_ENDPOINT, blob)) return;
     }
   } catch {
