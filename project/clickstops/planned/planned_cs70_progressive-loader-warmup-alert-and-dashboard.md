@@ -62,6 +62,7 @@ Budget is negligible; the threshold for caring about Azure Monitor cost in this 
 
 ## Cross-references
 
-- [CS47 (active → soon done) — Progressive Loader Telemetry](../active/active_cs47_progressive-loader-telemetry.md) (will be in `done/` by the time CS70 is claimed)
+- [CS47 (active → soon done) — Progressive Loader Telemetry](../done/done_cs47_progressive-loader-telemetry.md) (will be in `done/` by the time CS70 is claimed)
 - CS54-9 (deferred) — Pino → AI log forwarding gap; if that closes, CS70's KQL may unify Pino + OTel paths.
 - `docs/observability.md` § B.15 — auth-warmup-deadline-exhausted is the closest existing precedent for the alert design.
+

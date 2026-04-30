@@ -1,6 +1,6 @@
 # CS47 — Progressive Loader Telemetry
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done — merged via [PR #322](https://github.com/henrik-me/guesswhatisnext/pull/322) (squash 836aa48, 2026-04-30T07:11Z)
 **Depends on:** CS42
 **Parallel-safe with:** any
 **Goal:** Emit lightweight client telemetry from ProgressiveLoader on exit of the 503-retry warmup path so we can observe in production how often the path fires, how long real users wait, and how often the 35s wall-clock cap exhausts. Replaces "test cold-start in production" (not safely possible) with continuous observation.
