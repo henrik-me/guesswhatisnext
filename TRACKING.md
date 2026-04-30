@@ -184,6 +184,7 @@ Every Active Work entry is **two markdown rows**: a status row, then a descripti
 Conventions:
 
 - **Title cell, line 1:** bolded human title with **no** `CSnn —` prefix. It must equal the parent CS file's H1 human title exactly. The CS file's H1 lives at `project/clickstops/{planned,active,done}/{state}_cs<n>_<slug>.md` and follows the form `# CSnn — Human Title` (em-dash U+2014, not `-` or `--`). The warn-only rule `workboard-title-matches-h1` enforces this; the warn-only rule `clickstop-h1-matches-filename` enforces the `kebab-case(human title) === <slug>` invariant on the file itself.
+  - **Anti-pattern: appending sub-task scope suffixes to the WORKBOARD title** (e.g. `**Post CS54 Observability Followup — daily cost-watch backfill**` when the row is for one specific backfill PR within a long-running CS). Doing so fails `workboard-title-matches-h1`, and the cheapest-looking "fix" — editing the CS file's H1 to match — corrupts the canonical CS title and breaks every other PR/agent that relies on it. **Hit on 2026-04-30**: CS60 row title was extended for a CS60-1c/2c/2d backfill scope, the dispatched sub-agent then "fixed" the lint by appending the same suffix to the CS60 plan-file H1, and the resulting H1 mismatch blocked an unrelated open PR ([#319 CS68-1](https://github.com/henrik-me/guesswhatisnext/pull/319)) until both edits were reverted in commit `ca58920`. **Rule:** keep the title cell verbatim from the H1; put sub-task scope (which Days, which sub-IDs) in the description-continuation row's italic prose or in the `CS-Task ID` cell (e.g. `CS60-1c/2c/2d`).
 - **Title cell, lines 2-3:** ``WT: `worktree-path` `` (line 2) and ``B:&nbsp; `branch-name` `` (line 3), separated by `<br>`. The `&nbsp;` keeps the `B:` and `WT:` labels visually aligned in rendered markdown.
 - **Renaming a CS file → must update the H1**, and vice versa. The two warn-only rules will flag drift on the next `npm run check:docs` run.
 - **Description row prose:** wrap in `_…_` italics. Preserve PR refs as inline markdown links rather than the legacy `PR: #NNN` column. Keep prose terse — the description row is a narrative, not a status field.
@@ -207,7 +208,7 @@ This section defines the canonical vocabulary for the lifecycle of an Active Wor
 | `local_review` | Local code-review pass (e.g. via the `code-review` sub-agent) is in flight. |
 | `copilot_review` | Awaiting or addressing GitHub Copilot's review on the PR. |
 | `ready_to_merge` | All reviews approved, CI green, awaiting orchestrator's `gh pr merge`. |
-| `blocked` | Work cannot proceed; reason recorded in the Blocked Reason column. |
+| `blocked` | Work cannot proceed; reason recorded in the Blocked Reason column. **Also covers scheduled-pause / between-tick waits** for long-running CS work (e.g. daily cost-watch ticks, soak windows, +Nd re-checks) — record the next-tick trigger in Blocked Reason (e.g. `Awaiting next daily cost-watch tick — CS60-2e (Day 5 = 2026-04-30, earliest pickup ~2026-05-01T01:00Z UTC once Cost Management closes the day)`). Do **not** invent additional states like `waiting` or `idle`; the `state-in-vocabulary` strict rule will reject them. |
 
 **B. Allowed transitions.**
 
