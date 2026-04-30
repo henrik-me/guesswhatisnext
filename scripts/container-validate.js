@@ -534,6 +534,7 @@ async function probeUntilStatus({ url, statusPredicate, budgetMs, label }) {
 }
 
 async function validateCs47TelemetryLog() {
+  const expectedEnv = process.env.GWN_ENV !== undefined ? process.env.GWN_ENV : 'local-container';
   const payload = {
     event: 'progressiveLoader.warmupExhausted',
     screen: 'leaderboard',
@@ -542,7 +543,7 @@ async function validateCs47TelemetryLog() {
     totalWaitMs: CS53_10_NEVER_RECOVER_PROBES * CS53_10_PROBE_INTERVAL_MS,
   };
   const url = new URL('/api/telemetry/ux-events', BASE_URL).href;
-  log(`Posting CS47 telemetry probe to ${url} — expect 204 and a Pino warn with environment=local-container.`);
+  log(`Posting CS47 telemetry probe to ${url} — expect 204 and a Pino warn with environment=${expectedEnv}.`);
   const res = await httpsPostJson(url, payload, { timeoutMs: 10000 });
   if (res.error || res.status !== 204) {
     logErr(`FAIL: CS47 telemetry probe expected 204, got ${res.error || res.status}.`);
@@ -554,10 +555,10 @@ async function validateCs47TelemetryLog() {
   const line = text.split(/\r?\n/).find((entry) => (
     entry.includes('progressiveLoader.warmupExhausted')
       && entry.includes('environment')
-      && entry.includes('local-container')
+      && entry.includes(expectedEnv)
   ));
   if (!line) {
-    logErr('FAIL: CS47 telemetry Pino warn was not found in app container logs.');
+    logErr(`FAIL: CS47 telemetry Pino warn was not found in app container logs (expected environment=${expectedEnv}).`);
     return false;
   }
 
