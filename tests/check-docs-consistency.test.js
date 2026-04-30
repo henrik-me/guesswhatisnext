@@ -81,6 +81,37 @@ describe('check-docs-consistency', () => {
     expect(findings).toEqual([]);
   });
 
+  // ---- CS68: brittle-step-reference ----------------------------------------
+
+  test('cs68-brittle-step-pass: same-file, code, clickstop, no-link, and external cases do not warn', () => {
+    const findings = run({ root: path.join(FIX, 'cs68-brittle-step-pass'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'brittle-step-reference')).toEqual([]);
+    expect(findings).toEqual([]);
+  });
+
+  test('cs68-brittle-step-cross-doc: cross-doc step reference emits warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs68-brittle-step-cross-doc'), now: FIXED_NOW });
+    const hits = findings.filter(f => f.rule === 'brittle-step-reference');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+    expect(hits[0].file).toBe('INSTRUCTIONS.md');
+    expect(hits[0].line).toBe(3);
+    expect(hits[0].message).toContain('brittle "step 6" reference near link to OPERATIONS.md');
+  });
+
+  test('cs68-brittle-step-reference remains warn-only in strict mode', () => {
+    const findings = run({ root: path.join(FIX, 'cs68-brittle-step-cross-doc'), now: FIXED_NOW, strict: true });
+    const hits = findings.filter(f => f.rule === 'brittle-step-reference');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('warning');
+  });
+
+  test('cs68-brittle-step-ignored: escape hatch suppresses cross-doc step warning', () => {
+    const findings = run({ root: path.join(FIX, 'cs68-brittle-step-ignored'), now: FIXED_NOW });
+    expect(findings.filter(f => f.rule === 'brittle-step-reference')).toEqual([]);
+    expect(findings).toEqual([]);
+  });
+
   // ---- CS67: sub-agent-checklist-canonical ---------------------------------
 
   test('cs67-checklist-happy: OPERATIONS links to canonical checklist → no warning', () => {
