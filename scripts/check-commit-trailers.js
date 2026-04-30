@@ -4,10 +4,7 @@
 const { spawnSync } = require('child_process');
 
 const COPILOT_TRAILER = 'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>';
-// Some Copilot session environments emit Agent-Logs-Url instead of Agent: <token>/<token>.
-const AGENT_TRAILER_RE = /^(?:Agent:\s+\S+\/\S+|Agent-Logs-Url:\s+https?:\/\/\S+)\s*$/m;
-// Copilot bot account email used when copilot-swe-agent[bot] is the commit author.
-const COPILOT_AUTHOR_EMAIL_RE = /copilot@users\.noreply\.github\.com$/i;
+const AGENT_TRAILER_RE = /^Agent:\s+\S+\/\S+\s*$/m;
 
 function runGit(args) {
   const result = spawnSync('git', args, {
@@ -56,10 +53,6 @@ function fetchChangedPaths(hash) {
     .filter(Boolean);
 }
 
-function fetchCommitAuthor(hash) {
-  return runGit(['log', '-1', '--format=%ae', hash]).trim();
-}
-
 function isAllowlistedPath(file) {
   return file === 'WORKBOARD.md' || file.startsWith('project/clickstops/');
 }
@@ -72,16 +65,13 @@ function hasCopilotTrailer(message) {
   return String(message || '').split(/\r?\n/).some(line => line.trim() === COPILOT_TRAILER);
 }
 
-function checkCommits(commits, getChangedPaths = fetchChangedPaths, getCommitAuthor = fetchCommitAuthor) {
+function checkCommits(commits, getChangedPaths = fetchChangedPaths) {
   const findings = [];
   for (const commit of commits) {
     const paths = getChangedPaths(commit.hash);
     if (isAllowlistedCommit(paths)) continue;
 
-    // Accept the trailer OR a commit authored by the Copilot bot account.
-    const authorEmail = getCommitAuthor(commit.hash);
-    const hasCopilot = hasCopilotTrailer(commit.message) || COPILOT_AUTHOR_EMAIL_RE.test(authorEmail);
-    if (!hasCopilot) {
+    if (!hasCopilotTrailer(commit.message)) {
       findings.push(`${commit.hash}: missing '${COPILOT_TRAILER}' trailer`);
     }
     if (!AGENT_TRAILER_RE.test(commit.message)) {
@@ -96,11 +86,7 @@ function run(options = {}) {
   const head = options.head || 'HEAD';
   const logText = options.gitLog != null ? options.gitLog : fetchCommitLog(base, head);
   const commits = parseCommitLog(logText);
-  return checkCommits(
-    commits,
-    options.getChangedPaths || fetchChangedPaths,
-    options.getCommitAuthor || fetchCommitAuthor,
-  );
+  return checkCommits(commits, options.getChangedPaths || fetchChangedPaths);
 }
 
 function formatWarnings(findings) {
@@ -145,7 +131,6 @@ if (require.main === module) {
 
 module.exports = {
   AGENT_TRAILER_RE,
-  COPILOT_AUTHOR_EMAIL_RE,
   COPILOT_TRAILER,
   checkCommits,
   formatWarnings,
