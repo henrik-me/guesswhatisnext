@@ -18,7 +18,7 @@ function postUxEvent(payload) {
   ipCounter += 1;
   return getAgent()
     .post('/api/telemetry/ux-events')
-    .set('X-Forwarded-For', `198.51.101.${100 + (ipCounter % 50)}`)
+    .set('X-Forwarded-For', `198.51.100.${100 + (ipCounter % 50)}`)
     .send(payload);
 }
 

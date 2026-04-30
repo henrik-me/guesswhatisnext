@@ -564,11 +564,20 @@ async function validateCs47TelemetryLog() {
 
   const logs = compose('logs --tail=200 app', { silent: true });
   const text = `${logs.stdout || ''}${logs.stderr || ''}`;
-  const line = text.split(/\r?\n/).find((entry) => (
-    entry.includes('progressiveLoader.warmupExhausted')
-      && entry.includes('environment')
-      && entry.includes(expectedEnv)
-  ));
+  const line = text.split(/\r?\n/).find((entry) => {
+    const jsonStart = entry.indexOf('{');
+    if (jsonStart === -1) return false;
+    try {
+      const parsed = JSON.parse(entry.slice(jsonStart));
+      return (
+        parsed
+          && parsed.event === 'progressiveLoader.warmupExhausted'
+          && parsed.environment === expectedEnv
+      );
+    } catch {
+      return false;
+    }
+  });
   if (!line) {
     logErr(`FAIL: CS47 telemetry Pino warn was not found in app container logs (expected environment=${expectedEnv}).`);
     return false;
