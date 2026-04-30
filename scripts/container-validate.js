@@ -141,6 +141,38 @@ function httpsGet(url, { timeoutMs = 5000, headers = {} } = {}) {
   });
 }
 
+function httpsPostJson(url, body, { timeoutMs = 5000, headers = {} } = {}) {
+  const payload = JSON.stringify(body);
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const req = https.request(url, {
+      method: 'POST',
+      rejectUnauthorized: false,
+      timeout: timeoutMs,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        ...headers,
+      },
+    }, (res) => {
+      let responseBody = '';
+      res.on('data', (chunk) => { responseBody += chunk; });
+      res.on('end', () => {
+        resolve({
+          status: res.statusCode,
+          headers: res.headers,
+          body: responseBody,
+          elapsedMs: Date.now() - start,
+        });
+      });
+    });
+    req.on('error', (err) => resolve({ error: err.message, elapsedMs: Date.now() - start }));
+    req.on('timeout', () => { req.destroy(); resolve({ error: 'timeout', elapsedMs: Date.now() - start }); });
+    req.write(payload);
+    req.end();
+  });
+}
+
 async function waitForHealthz(timeoutMs = 180000) {
   const url = new URL('/healthz', BASE_URL).href;
   log(`Waiting for ${url} to respond 200 (up to ${Math.round(timeoutMs / 1000)}s)…`);
@@ -501,6 +533,38 @@ async function probeUntilStatus({ url, statusPredicate, budgetMs, label }) {
   return { attempts, saw503, firstRetryAfter, firstSuccessElapsedMs, lastBody, lastHeaders };
 }
 
+async function validateCs47TelemetryLog() {
+  const payload = {
+    event: 'progressiveLoader.warmupExhausted',
+    screen: 'leaderboard',
+    outcome: 'cap-exhausted',
+    attempts: CS53_10_NEVER_RECOVER_PROBES,
+    totalWaitMs: CS53_10_NEVER_RECOVER_PROBES * CS53_10_PROBE_INTERVAL_MS,
+  };
+  const url = new URL('/api/telemetry/ux-events', BASE_URL).href;
+  log(`Posting CS47 telemetry probe to ${url} — expect 204 and a Pino warn with environment=local-container.`);
+  const res = await httpsPostJson(url, payload, { timeoutMs: 10000 });
+  if (res.error || res.status !== 204) {
+    logErr(`FAIL: CS47 telemetry probe expected 204, got ${res.error || res.status}.`);
+    return false;
+  }
+
+  const logs = compose('logs --tail=200 app', { silent: true });
+  const text = `${logs.stdout || ''}${logs.stderr || ''}`;
+  const line = text.split(/\r?\n/).find((entry) => (
+    entry.includes('progressiveLoader.warmupExhausted')
+      && entry.includes('environment')
+      && entry.includes('local-container')
+  ));
+  if (!line) {
+    logErr('FAIL: CS47 telemetry Pino warn was not found in app container logs.');
+    return false;
+  }
+
+  log(`CS47 telemetry log excerpt: ${line.slice(0, 500)}`);
+  return true;
+}
+
 async function probeNeverRecover({ url, label, count }) {
   const responses = [];
   for (let i = 0; i < count; i++) {
@@ -539,6 +603,7 @@ async function runCs53_10Mode(mode) {
     GWN_SIMULATE_DB_UNAVAILABLE: '',
     HTTPS_PORT,
     HTTP_PORT,
+    GWN_ENV: 'local-container',
   };
   if (mode === 'cold-start-fails') {
     env.GWN_SIMULATE_COLD_START_FAILS = '3';
@@ -643,6 +708,9 @@ async function runCs53_10Mode(mode) {
         ok = false;
       }
     }
+    if (ok) {
+      ok = await validateCs47TelemetryLog();
+    }
   }
 
   if (!ok) {
@@ -672,7 +740,9 @@ async function main() {
     'default', 'boot-quiet', 'cold-start-fails', 'capacity-exhausted', 'transient',
   ]);
   const modeArg = process.argv.find((a) => a.startsWith('--mode='));
-  const mode = modeArg ? modeArg.slice('--mode='.length) : 'default';
+  const mode = modeArg
+    ? modeArg.slice('--mode='.length)
+    : (process.env.npm_config_mode || 'default');
   if (!SUPPORTED_MODES.has(mode)) {
     logErr(`Unknown --mode=${mode} (supported: ${Array.from(SUPPORTED_MODES).join(', ')}).`);
     process.exit(2);
@@ -711,6 +781,7 @@ async function main() {
     GWN_SIMULATE_COLD_START_MS: String(COLD_START_MS),
     HTTPS_PORT,
     HTTP_PORT,
+    GWN_ENV: 'local-container',
   };
   const up = compose('up -d --build', { env });
   if (up.status !== 0) {

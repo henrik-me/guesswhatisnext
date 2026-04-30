@@ -62,6 +62,7 @@ services:
       GWN_ENABLE_DB_CONNECT_SIMULATORS: "${GWN_ENABLE_DB_CONNECT_SIMULATORS:-}"
       GWN_SIMULATE_COLD_START_FAILS: "${GWN_SIMULATE_COLD_START_FAILS:-}"
       GWN_SIMULATE_DB_UNAVAILABLE: "${GWN_SIMULATE_DB_UNAVAILABLE:-}"
+      GWN_ENV: "${GWN_ENV:-}"
       # OTLP exporter — sends traces to the local collector (no Azure conn string
       # so telemetry.js uses the OTLP HTTP fallback path)
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
