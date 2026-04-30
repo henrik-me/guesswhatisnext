@@ -7,6 +7,12 @@
  * (or project/clickstops/done/done_cs43_*.md once archived) for the why.
  *
  * Checks:
+ *   New in CS68 (warn-only on landing; intentionally NOT promoted by
+ *   --strict until CS68-2 after a soak window):
+ *     - brittle-step-reference — top-level live policy docs must not refer
+ *         to numbered steps in other policy docs by `step N` near a
+ *         cross-doc markdown link; refer by description instead.
+ *
  *   New in CS67 (warn-only on landing — flipped to error after a soak
  *   window):
  *     - sub-agent-checklist-canonical — docs/sub-agent-checklist.md exists
@@ -79,6 +85,9 @@
  *                                 Conditional on the column existing.
  *  12. active-row-reclaimable  — same row > 7d old (error). Conditional on
  *                                 the column existing. (CS44-5b)
+ *  13. brittle-step-reference
+ *                              — top-level live policy docs warn on `step N`
+ *                                 references near cross-doc markdown links.
  *
  * Escape hatch:`<!-- check:ignore <rule-name> -->` on the line itself or on
  * its own line above the next markdown block.
@@ -125,6 +134,11 @@ const PLAN_STATUS_LINE_RE = /^\*\*Status:\*\* (⬜ Planned|🔄 In Progress|✅ 
 const PLAN_DEPENDS_ON_RE = /^\*\*Depends on:\*\* .+$/;
 const PLAN_PARALLEL_SAFE_WITH_RE = /^\*\*Parallel-safe with:\*\* .+$/;
 const PLAN_TASK_ID_RE = /^CS\d+-\d+([a-z])?$/;
+
+const BRITTLE_STEP_RULE = 'brittle-step-reference';
+const BRITTLE_STEP_RE = /\bstep\s+\d+\b/gi;
+const BRITTLE_STEP_CONTEXT_CHARS = 80;
+
 
 const STRICT_ERROR_RULES = new Set([
   'clickstop-h1-matches-filename',
@@ -372,6 +386,120 @@ function checkLinkResolves(file, lines, ignores, repoRoot) {
     }
   }
   return findings.filter(f => !isIgnored(ignores, f.rule, f.line));
+}
+
+
+// ---------- CS68: brittle-step-reference (warn-only) -------------------------
+
+function findLivePolicyDocFiles(repoRoot) {
+  const out = [];
+  let entries;
+  try { entries = fs.readdirSync(repoRoot, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    if (!e.isFile()) continue;
+    if (!e.name.toLowerCase().endsWith('.md')) continue;
+    out.push(path.join(repoRoot, e.name));
+  }
+  return out;
+}
+
+function maskInlineCode(text) {
+  return String(text).replace(/`[^`\n]*(?:`|$)/g, (m) => ' '.repeat(m.length));
+}
+
+function lineForIndex(paragraphLines, idx) {
+  let offset = 0;
+  for (const item of paragraphLines) {
+    const len = item.text.length;
+    if (idx <= offset + len) return item.lineNo;
+    offset += len + 1; // joined with '\n'
+  }
+  return paragraphLines[paragraphLines.length - 1]?.lineNo || 1;
+}
+
+function collectMarkdownLinks(maskedParagraph) {
+  const links = [];
+  LINK_RE.lastIndex = 0;
+  let m;
+  while ((m = LINK_RE.exec(maskedParagraph)) !== null) {
+    links.push({ start: m.index, end: LINK_RE.lastIndex, url: m[2].trim() });
+  }
+  return links;
+}
+
+function resolveMarkdownLinkTarget(currentFile, repoRoot, url) {
+  if (!url || isExternal(url) || url.startsWith('#')) return null;
+  const [pathPartRaw] = url.split('#');
+  const pathPart = pathPartRaw.split('?')[0];
+  if (!pathPart) return null;
+  const target = safeResolveInside(path.dirname(currentFile), repoRoot, pathPart);
+  if (!target) return null;
+  if (!target.toLowerCase().endsWith('.md')) return null;
+  return target;
+}
+
+function checkBrittleStepReferencesInParagraph(file, paragraphLines, ignores, repoRoot) {
+  const findings = [];
+  if (paragraphLines.length === 0) return findings;
+  const paragraph = paragraphLines.map(p => p.text).join('\n');
+  const masked = maskInlineCode(paragraph);
+  const links = collectMarkdownLinks(masked);
+  if (links.length === 0) return findings;
+
+  BRITTLE_STEP_RE.lastIndex = 0;
+  let m;
+  while ((m = BRITTLE_STEP_RE.exec(masked)) !== null) {
+    const line = lineForIndex(paragraphLines, m.index);
+    if (isIgnored(ignores, BRITTLE_STEP_RULE, line)) continue;
+    const windowStart = Math.max(0, m.index - BRITTLE_STEP_CONTEXT_CHARS);
+    const windowEnd = Math.min(masked.length, BRITTLE_STEP_RE.lastIndex + BRITTLE_STEP_CONTEXT_CHARS);
+    const nearby = links.filter(link => link.end >= windowStart && link.start <= windowEnd);
+    for (const link of nearby) {
+      const target = resolveMarkdownLinkTarget(file, repoRoot, link.url);
+      if (!target) continue;
+      if (path.resolve(target) === path.resolve(file)) continue;
+      const other = path.relative(repoRoot, target).replace(/\\/g, '/');
+      findings.push({
+        rule: BRITTLE_STEP_RULE,
+        file,
+        line,
+        severity: 'warning',
+        message: `brittle "${m[0]}" reference near link to ${other} (renumbering breaks this; refer by description instead)`,
+      });
+      break;
+    }
+  }
+  return findings;
+}
+
+function checkBrittleStepReferences(repoRoot) {
+  const findings = [];
+  for (const file of findLivePolicyDocFiles(repoRoot)) {
+    const lines = readLines(file);
+    const ignores = parseIgnores(lines);
+    let inFence = false;
+    let paragraph = [];
+    const flush = () => {
+      findings.push(...checkBrittleStepReferencesInParagraph(file, paragraph, ignores, repoRoot));
+      paragraph = [];
+    };
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\s*```/.test(line)) {
+        flush();
+        inFence = !inFence;
+        continue;
+      }
+      if (inFence) continue;
+      if (line.trim() === '') {
+        flush();
+        continue;
+      }
+      paragraph.push({ text: line, lineNo: i + 1 });
+    }
+    flush();
+  }
+  return findings;
 }
 
 // ---------- CONTEXT.md / clickstop parsing -----------------------------------
@@ -1332,6 +1460,9 @@ function run(opts) {
 
   // CS67: canonical sub-agent checklist presence/link rule (warn-only).
   findings.push(...checkSubAgentChecklistCanonical(repoRoot));
+
+  // CS68: top-level live policy docs should avoid brittle cross-doc step refs.
+  findings.push(...checkBrittleStepReferences(repoRoot));
 
   if (opts.strict) {
     for (const f of findings) {
