@@ -113,7 +113,7 @@ describe('POST /api/telemetry/ux-events', () => {
     const res = await getAgent()
       .post('/api/telemetry/ux-events')
       .set('Content-Type', 'application/json')
-      .set('X-Forwarded-For', '198.51.101.250')
+      .set('X-Forwarded-For', '198.51.100.250')
       .send('{"event":');
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Malformed JSON body');
