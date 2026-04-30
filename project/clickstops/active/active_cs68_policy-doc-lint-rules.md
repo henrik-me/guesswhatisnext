@@ -1,13 +1,14 @@
 # CS68 — Policy Doc Lint Rules
 
 **Status:** 🔄 In Progress
-**Owner:** yoga-gwn
-**Claimed:** 2026-04-30T02:47Z
-**CS68-1 PR (merged):** [#319](https://github.com/henrik-me/guesswhatisnext/pull/319) (squash `d04286b`, merged 2026-04-30T03:29Z)
-**CS68-2 status:** ⬜ Pending — earliest claim 2026-05-07 (≥1 week soak window from CS68-1 merge). Mirrors the CS43-7 / CS65-2 flip-after-soak pattern. CS68 stays in `active/` until CS68-2 lands; only then does it move to `done/`.
+**Substatus:** CS68-1 merged; CS68-2 awaiting soak window (see Earliest claim date below)
+**Owner:** unassigned (CS68-1 was completed by yoga-gwn; CS68-2 is open for any orchestrator to claim)
+**Earliest claim date (CS68-2):** **2026-05-07** (7 days after CS68-1 merged on 2026-04-30T03:29Z). Claiming earlier defeats the soak intent — see [§ CS68-2 Pickup Instructions](#cs68-2--pickup-instructions) for the three reasons.
+**Depends on:** CS68-1 (merged in [PR #319](https://github.com/henrik-me/guesswhatisnext/pull/319), squash `d04286b`, 2026-04-30T03:29Z) + ≥1 week soak window
+**Parallel-safe with:** CS47, CS55, CS56, CS57, CS59, CS63, CS69 (any CS not touching `scripts/check-docs-consistency.js`); rebase coordination required if CS65 follow-ups, CS66, CS67, or another rule-adding PR is open simultaneously since they share the same surface file
+**Open sub-tasks:** **CS68-2 only** — warn → error flip for `brittle-step-reference` in `--strict` mode. See [§ CS68-2 Pickup Instructions](#cs68-2--pickup-instructions) and the Tasks table below.
+**Claim history:** CS68-1 claimed 2026-04-30T02:47Z by yoga-gwn; merged 2026-04-30T03:29Z.
 **Origin:** PR #311 (`OPS-checklist-session-start`, merged 2026-04-29) local-review round 2 caught a brittle `step 6` cross-doc reference in `TRACKING.md § Claim effectiveness` that pointed at `OPERATIONS.md § Orchestrator Startup Checklist` step 6 — but that step had just been renumbered (5 → removed, 6 → 5, 7 → 6) in the same PR. The bug shipped because nothing flagged it; it was caught only by a careful gpt-5.5 reviewer. The general pattern — "step N" cross-doc references silently rotting when the target doc renumbers — is lintable.
-**Depends on:** none
-**Parallel-safe with:** CS65, CS66, CS67 (different rule scope from CS65's plan-file-schema rules; same surface file `scripts/check-docs-consistency.js` so rebase coordination required if both PRs are open simultaneously)
 
 ## Problem
 
