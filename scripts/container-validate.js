@@ -55,6 +55,18 @@ function validateComposeProjectName(name) {
   return /^[a-z0-9][a-z0-9_-]*$/.test(name);
 }
 
+// Single source of truth for the GWN_ENV value passed to the docker compose
+// stack and asserted against in CS47 telemetry probes. Mirrors the trim +
+// default behavior of server/config.js getDeployEnvironment() so the harness
+// agrees with what the server resolves at runtime — an empty-but-defined
+// `process.env.GWN_ENV` collapses to the same `local-container` default the
+// server uses, and any surrounding whitespace is stripped.
+function getHarnessGwnEnv() {
+  const raw = process.env.GWN_ENV;
+  const trimmed = raw === undefined ? '' : String(raw).trim();
+  return trimmed || 'local-container';
+}
+
 const ROOT = path.resolve(__dirname, '..');
 const COMPOSE_FILE = 'docker-compose.mssql.yml';
 const COLD_START_MS = parseNonNegativeIntEnv('COLD_START_MS', 30000);
@@ -534,7 +546,7 @@ async function probeUntilStatus({ url, statusPredicate, budgetMs, label }) {
 }
 
 async function validateCs47TelemetryLog() {
-  const expectedEnv = process.env.GWN_ENV !== undefined ? process.env.GWN_ENV : 'local-container';
+  const expectedEnv = getHarnessGwnEnv();
   const payload = {
     event: 'progressiveLoader.warmupExhausted',
     screen: 'leaderboard',
@@ -604,7 +616,7 @@ async function runCs53_10Mode(mode) {
     GWN_SIMULATE_DB_UNAVAILABLE: '',
     HTTPS_PORT,
     HTTP_PORT,
-    GWN_ENV: process.env.GWN_ENV !== undefined ? process.env.GWN_ENV : 'local-container',
+    GWN_ENV: getHarnessGwnEnv(),
   };
   if (mode === 'cold-start-fails') {
     env.GWN_SIMULATE_COLD_START_FAILS = '3';
@@ -782,7 +794,7 @@ async function main() {
     GWN_SIMULATE_COLD_START_MS: String(COLD_START_MS),
     HTTPS_PORT,
     HTTP_PORT,
-    GWN_ENV: process.env.GWN_ENV !== undefined ? process.env.GWN_ENV : 'local-container',
+    GWN_ENV: getHarnessGwnEnv(),
   };
   const up = compose('up -d --build', { env });
   if (up.status !== 0) {
