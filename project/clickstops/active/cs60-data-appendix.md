@@ -400,7 +400,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 
 ### +7d cost-watch summary (CS60-2h preview — partial)
 
-> **Status:** PARTIAL — Day 0 through Day 4 are recorded. CS60-2e..2h (Days 5-7 = 2026-04-30..2026-05-02) will append daily rows as their windows close; Day 4 cost may still have Cost Management closing-day lag and should be rechecked at CS60-2e.
+> **Status:** PARTIAL — Day 0 through Day 4 are recorded. CS60-2e, CS60-2f, and CS60-2h (Days 5-7 = 2026-04-30..2026-05-02) will append daily rows as their windows close; CS60-2g is not used for a daily tick in the current split, so the Manifest remains the source of truth. Day 4 cost may still have Cost Management closing-day lag and should be rechecked at CS60-2e.
 
 #### Days observed so far (5 of 7)
 
@@ -413,7 +413,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 | Day 4 — 2026-04-29 | 0.03 | 1.05 | 0.00 | **1.08** | Partial/lag-sensitive Cost Management close; recheck at CS60-2e. |
 | Day 5 — 2026-04-30 | _pending CS60-2e_ | _pending_ | _pending_ | _pending_ | |
 | Day 6 — 2026-05-01 | _pending CS60-2f_ | _pending_ | _pending_ | _pending_ | |
-| Day 7 — 2026-05-02 | _pending CS60-2h_ | _pending_ | _pending_ | _pending_ | **Canonical +7d window — interpretive close-out for CS60-2.** |
+| Day 7 — 2026-05-02 | _pending CS60-2h_ | _pending_ | _pending_ | _pending_ | **Canonical +7d window — interpretive close-out for CS60-2.** CS60-2g is not used for a daily tick in the current split. |
 
 #### 5-day preview — running totals & extrapolations
 
@@ -426,7 +426,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 
 > **Caveat (must read before quoting these numbers):** The 5-day projection still blends one-time conditions: Day 0 pre-CS58 staging idle billing, Day 2 staging/prod verification and exception-storm noise, and Day 4 Cost Management closing-day lag. The steady-state staging cost remains closer to 0.00 DKK/day than the 0.56 DKK/day average when no deploy/probe traffic wakes it; prod remains the dominant recurring cost at roughly 1.9 DKK/day in this sample.
 >
-> The +7d data added through CS60-2e..2h will replace this preview with the actual measurement.
+> The +7d data added through CS60-2e, CS60-2f, and CS60-2h will replace this preview with the actual measurement.
 
 #### Container Apps compute / memory — running min/max
 
