@@ -56,6 +56,46 @@ Edge cases the heuristic must handle correctly:
 
 CS68-1a/1b/1c land in one PR. CS68-2 is a follow-up commit after the soak window.
 
+## CS68-2 — Pickup Instructions
+
+**When (earliest claim date):** **2026-05-07** (one full week after CS68-1 merged on 2026-04-30T03:29Z). Earlier pickups are not blocked by tooling but contradict the soak intent — wait the full week.
+
+**Why a soak window:**
+1. **Detect false positives in real authoring.** The `brittle-step-reference` heuristic is regex-based with edge-case handling (anchor-only links, external links, code blocks, escape-hatch comments). A week of normal authoring across multiple agents exposes regex blind spots that the unit-test fixtures didn't cover. If anyone hits a false positive during the soak, fix the heuristic FIRST and restart the soak window.
+2. **Avoid CI-blocking surprises.** Flipping warn → error converts "annotation in PR diff" into "merge blocker." Doing this with a fresh, unproven rule risks blocking unrelated PRs on a rule bug. The soak gives confidence the rule fires only on the intended pattern.
+3. **Established repo precedent.** CS43-7 (PR after CS43-2) and CS65-2 (PR #318 after CS65-1*) both followed the same one-week soak-then-flip cadence. CS68-2 mirrors this on purpose.
+
+**Pre-flight check before claiming CS68-2:**
+1. `git pull` and `git log --since="2026-04-30" --grep="brittle-step-reference"` — look for any post-merge commits that touched the rule (would indicate a false-positive fix that resets the soak clock).
+2. `npm run check:docs` — the `brittle-step-reference` rule should report **zero warnings** against the live tree. If non-zero, those are either real findings to fix in CS68-2's PR or false positives that need the rule itself adjusted (in which case do that first as CS68-1d, restart soak).
+3. Look for any `<!-- check:ignore brittle-step-reference -->` comments added during the soak — each one is a signal that either (a) an author legitimately needed to write a cross-doc step ref (rare; document the case in CS68-2's PR body), or (b) the rule is over-firing (fix the rule, not the doc).
+
+**What to do (concrete steps for CS68-2):**
+
+1. **Locate the rule registration in `scripts/check-docs-consistency.js`.** CS68-1 added `brittle-step-reference` to whichever rule-registry list controls warn-vs-error promotion in `--strict` mode. Search for the string `brittle-step-reference` in the script — it should appear in (a) the rule-name registry, (b) the rule's emit-warning call site. The flip is typically achieved by either:
+   - Adding the rule name to the `--strict`-promoted list (look at how CS65-2 PR #318 promoted its 7 rules — `0e5213c` is the canonical reference commit), OR
+   - Changing the rule's `severity: 'warning'` to `severity: 'error'` if the script uses per-rule severity records.
+
+   Read CS65-2's PR #318 diff (`gh pr diff 318`) — that's the most recent canonical example of the warn→error flip pattern in this script and shows the exact mechanical change shape.
+
+2. **Update the rule's docstring/comment in the script** to note the flip date and reference CS68-2's PR (mirrors how CS43-7 and CS65-2 documented the flip in-source).
+
+3. **Run `npm run check:docs:strict` locally** — must return 0 errors. If it errors on a `brittle-step-reference` finding, that finding needs to be fixed (rewrite the step ref to a description) BEFORE the PR can land — the flip has zero tolerance for outstanding warnings.
+
+4. **No new tests required** — the existing CS68-1 unit tests already cover both severities (the rule's emit logic is unchanged; only the `--strict` promotion changes). Optionally add one strict-mode test asserting the rule is in the promoted list.
+
+5. **Update this CS file:** mark CS68-2 ✅ Done with PR link, set CS68 frontmatter Status to ✅ Done with Closed timestamp, then move the file `active/` → `done/` as part of the closing commit (orchestrator step, not the implementation PR).
+
+6. **Update WORKBOARD.md** to add a CS68-2 row when claimed and remove it on merge — same lifecycle as CS68-1.
+
+**PR characteristics:**
+- Tooling-only PR (touches `scripts/check-docs-consistency.js` and possibly one new test). Not docs-only — Copilot review is required (same allowlist analysis as CS68-1's PR #319).
+- Should be a single commit; very small diff (likely <20 lines in the script).
+- Container Validation: not applicable (tooling-only).
+- Telemetry Validation: not applicable.
+
+**Reverse coordination:** CS69 ([planned](../planned/planned_cs69_workboard-row-colspan.md)) depends on **CS65-2** being settled, not CS68-2 — so CS68-2 doesn't unblock anything else and can land at its own pace.
+
 ## Acceptance
 
 - `brittle-step-reference` rule implemented with passing + failing fixtures.
