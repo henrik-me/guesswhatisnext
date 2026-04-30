@@ -579,12 +579,14 @@ ContainerAppConsoleLogs_CL
 
 The ProgressiveLoader retry loop in [`public/js/progressive-loader.js`](../public/js/progressive-loader.js) emits one client beacon to [`POST /api/telemetry/ux-events`](../server/routes/telemetry.js) when a 503 warmup-retry session exits. The server validates the shape, attaches `environment` from [`getDeployEnvironment()`](../server/config.js), emits a Pino warn, and adds an OTel span event named `progressiveLoader.warmupExhausted`. The event name is historical: use the `outcome` dimension (`success`, `cap-exhausted`, `aborted`) to tell whether the warmup recovered or failed.
 
-**B.18.a OTel customEvents query (any env with AI connection string, including local containers tagged `environment=local-container`):**
+**B.18.a OTel span-event query (any env with AI connection string, including local containers tagged `environment=local-container`):**
+
+The route emits this path with `trace.getActiveSpan()?.addEvent(...)`. The Azure Monitor OpenTelemetry exporter version currently installed maps non-exception span events to AI trace/message telemetry, so query `traces` for `message == "progressiveLoader.warmupExhausted"`. If a future exporter maps span events to `customEvents`, keep the same dimensions and switch only the table/name predicate.
 
 ```kusto
-customEvents
-| where TimeGenerated > ago(7d)
-| where name == "progressiveLoader.warmupExhausted"
+traces
+| where timestamp > ago(7d)
+| where message == "progressiveLoader.warmupExhausted"
 | extend env = tostring(customDimensions.environment),
          outcome = tostring(customDimensions.outcome),
          screen = tostring(customDimensions.screen),
