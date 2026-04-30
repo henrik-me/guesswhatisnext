@@ -1,4 +1,4 @@
-# CS60 — Post CS54 Observability Followup
+# CS60 — Post CS54 Observability Followup — daily cost-watch backfill
 
 **Status:** 🔄 In Progress
 **Depends on:** CS54
