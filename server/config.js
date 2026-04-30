@@ -60,6 +60,24 @@ const config = {
  * Fails fast with a clear error if secrets are missing in production.
  */
 function validateConfig() {
+  // Validate GWN_ENV early so a typo fails boot in prod/staging instead of
+  // surfacing as intermittent 500s from request-time callers (e.g. telemetry).
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const failFast = nodeEnv === 'production' || nodeEnv === 'staging';
+  if ((process.env.GWN_ENV || '').trim()) {
+    try {
+      getDeployEnvironment(process.env);
+    } catch (err) {
+      if (failFast) {
+        // console.error used here — logger depends on config, can't require it
+        console.error(`❌ ${err.message}`);
+        throw err;
+      }
+      // console.warn used here — logger depends on config, can't require it
+      console.warn(`⚠️  ${err.message}`);
+    }
+  }
+
   const missing = [];
   if (!(process.env.JWT_SECRET || '').trim()) missing.push('JWT_SECRET');
   if (!(process.env.SYSTEM_API_KEY || '').trim()) missing.push('SYSTEM_API_KEY');

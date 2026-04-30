@@ -24,3 +24,67 @@ describe('getDeployEnvironment', () => {
     expect(getDeployEnvironment({})).toBe('local-container');
   });
 });
+
+describe('validateConfig — GWN_ENV startup validation', () => {
+  const originalEnv = { ...process.env };
+  let warnSpy;
+  let errorSpy;
+
+  function loadValidate() {
+    const configPath = require.resolve('../server/config');
+    delete require.cache[configPath];
+    // eslint-disable-next-line global-require
+    return require('../server/config').validateConfig;
+  }
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    process.env.JWT_SECRET = 'test-secret';
+    process.env.SYSTEM_API_KEY = 'test-key';
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  test('valid GWN_ENV passes without warning or throw', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.GWN_ENV = 'staging';
+    process.env.CANONICAL_HOST = 'example.com';
+    const validateConfig = loadValidate();
+    expect(() => validateConfig()).not.toThrow();
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringMatching(/Invalid GWN_ENV/));
+    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringMatching(/Invalid GWN_ENV/));
+  });
+
+  test('invalid GWN_ENV in production throws to fail boot', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.GWN_ENV = 'prod';
+    process.env.CANONICAL_HOST = 'example.com';
+    const validateConfig = loadValidate();
+    expect(() => validateConfig()).toThrow(/Invalid GWN_ENV/);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/Invalid GWN_ENV/));
+  });
+
+  test('invalid GWN_ENV in development warns and does not throw', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.GWN_ENV = 'prod';
+    const validateConfig = loadValidate();
+    expect(() => validateConfig()).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/Invalid GWN_ENV/));
+  });
+
+  test('unset GWN_ENV is preserved as default behaviour', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.GWN_ENV;
+    process.env.CANONICAL_HOST = 'example.com';
+    const validateConfig = loadValidate();
+    expect(() => validateConfig()).not.toThrow();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+});
