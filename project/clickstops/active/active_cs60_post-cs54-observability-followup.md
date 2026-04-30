@@ -1,5 +1,4 @@
-<!-- check:ignore clickstop-h1-matches-filename -->
-# CS60 — Post CS54 Observability Followup — daily cost-watch backfill
+# CS60 — Post CS54 Observability Followup
 
 **Status:** 🔄 In Progress
 **Depends on:** CS54
