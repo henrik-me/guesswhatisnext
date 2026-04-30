@@ -1,11 +1,10 @@
 # CS68 — Policy Doc Lint Rules
 
-**Status:** ✅ Done
+**Status:** 🔄 In Progress
 **Owner:** yoga-gwn
 **Claimed:** 2026-04-30T02:47Z
-**Closed:** 2026-04-30T03:30Z
-**PR:** [#319](https://github.com/henrik-me/guesswhatisnext/pull/319) (squash `d04286b`, merged 2026-04-30T03:29Z)
-**Deferred follow-up:** CS68-2 (warn → error flip in `--strict`) — after ≥1 week soak with no regressions, mirroring the CS43-7 / CS65-2 pattern.
+**CS68-1 PR (merged):** [#319](https://github.com/henrik-me/guesswhatisnext/pull/319) (squash `d04286b`, merged 2026-04-30T03:29Z)
+**CS68-2 status:** ⬜ Pending — earliest claim 2026-05-07 (≥1 week soak window from CS68-1 merge). Mirrors the CS43-7 / CS65-2 flip-after-soak pattern. CS68 stays in `active/` until CS68-2 lands; only then does it move to `done/`.
 **Origin:** PR #311 (`OPS-checklist-session-start`, merged 2026-04-29) local-review round 2 caught a brittle `step 6` cross-doc reference in `TRACKING.md § Claim effectiveness` that pointed at `OPERATIONS.md § Orchestrator Startup Checklist` step 6 — but that step had just been renumbered (5 → removed, 6 → 5, 7 → 6) in the same PR. The bug shipped because nothing flagged it; it was caught only by a careful gpt-5.5 reviewer. The general pattern — "step N" cross-doc references silently rotting when the target doc renumbers — is lintable.
 **Depends on:** none
 **Parallel-safe with:** CS65, CS66, CS67 (different rule scope from CS65's plan-file-schema rules; same surface file `scripts/check-docs-consistency.js` so rebase coordination required if both PRs are open simultaneously)
@@ -53,7 +52,7 @@ Edge cases the heuristic must handle correctly:
 | CS68-1a | ✅ Done in [PR #319](https://github.com/henrik-me/guesswhatisnext/pull/319): implement the `brittle-step-reference` rule in `scripts/check-docs-consistency.js`. Include tests under `tests/check-docs-consistency.test.js` with at least one passing fixture (same-file step ref, code-block step ref, clickstop-file step ref) and one failing fixture (cross-doc step ref in INSTRUCTIONS.md). | parallel |
 | CS68-1b | ✅ Done in [PR #319](https://github.com/henrik-me/guesswhatisnext/pull/319): audit live policy docs (`npm run check:docs` after the rule lands). Fix any pre-existing legitimate hits by replacing step numbers with descriptions, OR add `<!-- check:ignore brittle-step-reference -->` annotations with a justifying comment. (The 2026-04-29 audit on the post-PR-#311 tree showed zero hits, so this task may be a no-op.) | parallel after 1a |
 | CS68-1c | ✅ Done in [PR #319](https://github.com/henrik-me/guesswhatisnext/pull/319): add a short bullet to `CONVENTIONS.md § Documentation Conventions` describing the convention: "When cross-doc references point at a numbered list item, refer by description ('the WORKBOARD registration item') not by step number ('step 6'). Step numbers in target docs change; descriptions are stable. Enforced by `brittle-step-reference` lint rule." | parallel |
-| CS68-2 | After the rule has been clean for ≥1 week of normal repo activity, flip it from warn to error in `--strict` mode (mirrors CS43-7 and CS65-2). Separate commit. | sequential after 1* + soak |
+| CS68-2 | ⬜ Pending (earliest claim 2026-05-07): after the rule has been clean for ≥1 week of normal repo activity, flip it from warn to error in `--strict` mode (mirrors CS43-7 and CS65-2). Separate commit/PR. | sequential after 1* + soak |
 
 CS68-1a/1b/1c land in one PR. CS68-2 is a follow-up commit after the soak window.
 
