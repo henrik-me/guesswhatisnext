@@ -153,7 +153,7 @@ Daily detail lives in [`cs60-data-appendix.md`](cs60-data-appendix.md). Roll-up 
 | Window | Date run | `gwn-ai-staging` (MB) | `gwn-ai-production` (MB) | Notes |
 |--------|----------|----------------------|-------------------------|-------|
 | +24h   | 2026-04-26 (CS60-1a/1b) | _see appendix_ | _see appendix_ | KQL bug fixed mid-execution; appendix has corrected workspace-tables data. |
-| +7d    | _pending_ | _pending_ | _pending_ | _pending — daily ticks via CS60-2c..2h_ |
+| +7d    | _pending_ | _pending_ | _pending_ | Day 3/4 recorded via CS60-2c/2d; remaining daily ticks via CS60-2e, CS60-2f, and CS60-2h; CS60-2g unused. |
 | +30d   | _pending_ | _pending_ | _pending_ | Decision recorded here. Drives CS60-4/5/6. |
 
 ## Acceptance criteria
