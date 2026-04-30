@@ -575,6 +575,45 @@ ContainerAppConsoleLogs_CL
 - **Sustained ≥30 probes/min from one IP** → also likely a misbehaving external monitor; the rate limiter (`30/min/IP`) will start returning 429s. Check the `429` count via § B.2.
 - **Sudden zero rows after a deploy** → the route is not being hit at all. Verify the route is mounted (search for `/api/db-status` in `server/app.js`) and the bypass list in the request gate still includes it (otherwise a cold container would 503 the probe).
 
+### B.18 Progressive Loader warmup outcomes (CS47)
+
+The ProgressiveLoader retry loop in [`public/js/progressive-loader.js`](../public/js/progressive-loader.js) emits one client beacon to [`POST /api/telemetry/ux-events`](../server/routes/telemetry.js) when a 503 warmup-retry session exits. The server validates the shape, attaches `environment` from [`getDeployEnvironment()`](../server/config.js), emits a Pino warn, and adds an OTel span event named `progressiveLoader.warmupExhausted`. The event name is historical: use the `outcome` dimension (`success`, `cap-exhausted`, `aborted`) to tell whether the warmup recovered or failed.
+
+**B.18.a OTel span-event query (any env with AI connection string, including local containers tagged `environment=local-container`):**
+
+The route emits this path with `trace.getActiveSpan()?.addEvent(...)`. The Azure Monitor OpenTelemetry exporter version currently installed maps non-exception span events to AI trace/message telemetry, so query `traces` for `message == "progressiveLoader.warmupExhausted"`. If a future exporter maps span events to `customEvents`, keep the same dimensions and switch only the table/name predicate.
+
+```kusto
+traces
+| where timestamp > ago(7d)
+| where message == "progressiveLoader.warmupExhausted"
+| extend env = tostring(customDimensions.environment),
+         outcome = tostring(customDimensions.outcome),
+         screen = tostring(customDimensions.screen),
+         attempts = toint(customDimensions.attempts),
+         waitMs = toint(customDimensions.totalWaitMs)
+| summarize count(), avg(waitMs), percentile(waitMs, 95) by env, outcome, screen
+```
+
+**B.18.b Pino ContainerAppConsoleLogs_CL query (Azure-deployed envs only):**
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(7d)
+| extend pino = parse_json(Log_s)
+| where tostring(pino.event) == "progressiveLoader.warmupExhausted"
+| summarize count(), avg(toint(pino.totalWaitMs)), percentile(toint(pino.totalWaitMs), 95) by env=tostring(pino.environment), outcome=tostring(pino.outcome)
+```
+
+**Healthy interpretation:** `success` should dominate and p95 `totalWaitMs` should stay within the adaptive warmup budget. `environment=local-container` rows are expected during validation only and must be filtered out of production alerting. Low, isolated `aborted` counts are usually users navigating away or closing tabs mid-warmup.
+
+**Unhealthy interpretation (investigate):**
+- **Any sustained `cap-exhausted` rate in `staging` or `production`** → the DB warmup path is exceeding the client cap or the backend is returning repeated retryable 503s; cross-check slow requests (§ B.4) and mssql connect telemetry (§ B.6).
+- **Spike in `aborted` immediately after a deploy** → a client timeout or route regression may be terminating retry attempts before recovery; inspect recent ProgressiveLoader and route changes.
+- **Rows missing from both queries after a simulator run** → the client beacon or `/api/telemetry/ux-events` route is broken. Check the Playwright request-capture test and local container logs before looking at Azure ingestion.
+
+**Cross-link:** [CS70](../project/clickstops/planned/planned_cs70_progressive-loader-warmup-alert-and-dashboard.md) owns the Azure Monitor alert and workbook/dashboard built on these queries once at least one week of post-deploy baseline data is available.
+
 ### Ranked puzzle pool seed (CS52-2 / CS52-followup)
 
 Both the operator-invoked CLI (`scripts/seed-ranked-puzzles.js`) and the in-container admin endpoint (`POST /api/admin/seed-ranked-puzzles`) emit the same structured log line `Ranked puzzles seeded` with `inserted/skipped/total/version` fields, so a single KQL covers both surfaces. The HTTP path additionally emits `audit.seed-ranked-puzzles` with `actor='admin-route'` for invocation tracing.

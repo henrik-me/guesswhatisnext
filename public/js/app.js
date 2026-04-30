@@ -1568,7 +1568,7 @@ async function fetchLeaderboard(period) {
     },
     container,
     MESSAGE_SETS.leaderboard,
-    { onRetry: () => fetchLeaderboard(period) },
+    { screen: 'leaderboard', onRetry: () => fetchLeaderboard(period) },
   );
 
   if (data) {
@@ -1720,7 +1720,7 @@ async function fetchAchievements() {
     },
     container,
     MESSAGE_SETS.achievements,
-    { onRetry: () => fetchAchievements() },
+    { screen: 'achievements', onRetry: () => fetchAchievements() },
   );
 
   if (data) {
@@ -3569,7 +3569,7 @@ async function fetchProfile() {
     },
     container,
     MESSAGE_SETS.profile,
-    { maxRetries: 0, onRetry: () => fetchProfile() },
+    { screen: 'profile', maxRetries: 0, onRetry: () => fetchProfile() },
   );
 
   if (results) {
@@ -4393,6 +4393,7 @@ async function loadGallery(append = false) {
     }
   } else {
     data = await progressiveLoad(fetchData, grid, MESSAGE_SETS.community, {
+      screen: 'community',
       onRetry: () => loadGallery(false),
     });
   }

@@ -12,6 +12,21 @@ const isProduction = NODE_ENV === 'production' || NODE_ENV === 'staging';
 // by single dots, followed by an optional port.  No underscores, no consecutive
 // dots, no leading/trailing hyphens in labels.
 const CANONICAL_HOST_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::\d{1,5})?$/i;
+const DEPLOY_ENVIRONMENTS = ['local-container', 'staging', 'production'];
+
+function getDeployEnvironment(env = process.env) {
+  const override = (env.GWN_ENV || '').trim();
+  if (override) {
+    if (!DEPLOY_ENVIRONMENTS.includes(override)) {
+      throw new Error(`Invalid GWN_ENV="${override}"; expected one of: ${DEPLOY_ENVIRONMENTS.join(', ')}`);
+    }
+    return override;
+  }
+
+  if (env.NODE_ENV === 'staging') return 'staging';
+  if (env.NODE_ENV === 'production') return 'production';
+  return 'local-container';
+}
 
 const config = {
   NODE_ENV,
@@ -45,6 +60,24 @@ const config = {
  * Fails fast with a clear error if secrets are missing in production.
  */
 function validateConfig() {
+  // Validate GWN_ENV early so a typo fails boot in prod/staging instead of
+  // surfacing as intermittent 500s from request-time callers (e.g. telemetry).
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const failFast = nodeEnv === 'production' || nodeEnv === 'staging';
+  if ((process.env.GWN_ENV || '').trim()) {
+    try {
+      getDeployEnvironment(process.env);
+    } catch (err) {
+      if (failFast) {
+        // console.error used here — logger depends on config, can't require it
+        console.error(`❌ ${err.message}`);
+        throw err;
+      }
+      // console.warn used here — logger depends on config, can't require it
+      console.warn(`⚠️  ${err.message}`);
+    }
+  }
+
   const missing = [];
   if (!(process.env.JWT_SECRET || '').trim()) missing.push('JWT_SECRET');
   if (!(process.env.SYSTEM_API_KEY || '').trim()) missing.push('SYSTEM_API_KEY');
@@ -83,4 +116,4 @@ function validateConfig() {
   }
 }
 
-module.exports = { config, validateConfig, CANONICAL_HOST_RE };
+module.exports = { config, validateConfig, CANONICAL_HOST_RE, getDeployEnvironment };

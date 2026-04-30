@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { optionalAuth } = require('../middleware/auth');
 const logger = require('../logger');
+const { getDeployEnvironment } = require('../config');
 
 const router = express.Router();
 const telemetryJsonParser = express.json({ type: 'application/json' });
@@ -14,6 +15,56 @@ function parseTelemetryJson(req, res, next) {
     }
     return next(err);
   });
+}
+
+
+const UX_EVENT_NAME = 'progressiveLoader.warmupExhausted';
+const UX_SCREENS = new Set(['leaderboard', 'profile', 'achievements', 'community']);
+const UX_OUTCOMES = new Set(['success', 'cap-exhausted', 'aborted']);
+const UX_EVENT_FIELDS = ['event', 'screen', 'outcome', 'attempts', 'totalWaitMs'];
+
+function validateUxEventPayload(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { error: 'body must be a JSON object' };
+  }
+
+  const extraFields = Object.keys(body).filter((key) => !UX_EVENT_FIELDS.includes(key));
+  if (extraFields.length > 0) {
+    return { error: `unexpected field: ${extraFields[0]}` };
+  }
+
+  const { event, screen, outcome, attempts, totalWaitMs } = body;
+  if (event !== UX_EVENT_NAME) {
+    return { error: `event must be ${UX_EVENT_NAME}` };
+  }
+  if (!UX_SCREENS.has(screen)) {
+    return { error: `screen must be one of ${Array.from(UX_SCREENS).join(', ')}` };
+  }
+  if (!UX_OUTCOMES.has(outcome)) {
+    return { error: `outcome must be one of ${Array.from(UX_OUTCOMES).join(', ')}` };
+  }
+  if (!Number.isInteger(attempts) || attempts < 0 || attempts > 50) {
+    return { error: 'attempts must be an integer from 0 to 50' };
+  }
+  if (!Number.isInteger(totalWaitMs) || totalWaitMs < 0 || totalWaitMs > 600000) {
+    return { error: 'totalWaitMs must be an integer from 0 to 600000' };
+  }
+
+  return { value: { event, screen, outcome, attempts, totalWaitMs } };
+}
+
+function addUxEventToActiveSpan(attributes) {
+  try {
+    const { trace } = require('@opentelemetry/api');
+    const span = trace && typeof trace.getActiveSpan === 'function'
+      ? trace.getActiveSpan()
+      : null;
+    if (span && typeof span.addEvent === 'function') {
+      span.addEvent(UX_EVENT_NAME, attributes);
+    }
+  } catch {
+    // OpenTelemetry is best-effort telemetry; never fail ingestion if unavailable.
+  }
 }
 
 const telemetryLimiter = rateLimit({
@@ -76,6 +127,22 @@ router.post('/errors', telemetryLimiter, optionalAuth, parseTelemetryJson, (req,
 // signal is best-effort observability (input is client-supplied + IP can be
 // spoofed) — never use it for security decisions. KQL: docs/observability.md
 // § B.15 (auth-warmup-deadline-exhausted incidents per day per action).
+
+router.post('/ux-events', telemetryLimiter, parseTelemetryJson, (req, res) => {
+  const parsed = validateUxEventPayload(req.body);
+  if (parsed.error) {
+    return res.status(400).json({ error: parsed.error });
+  }
+
+  const environment = getDeployEnvironment();
+  const fields = { ...parsed.value, environment };
+
+  logger.warn(fields, 'ProgressiveLoader warmup retry loop exited');
+  addUxEventToActiveSpan(fields);
+
+  res.status(204).end();
+});
+
 router.post('/auth-deadline-exhausted', telemetryLimiter, parseTelemetryJson, (req, res) => {
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
     ? req.body
