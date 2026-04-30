@@ -1,8 +1,11 @@
 # CS68 — Policy Doc Lint Rules
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done
 **Owner:** yoga-gwn
 **Claimed:** 2026-04-30T02:47Z
+**Closed:** 2026-04-30T03:30Z
+**PR:** [#319](https://github.com/henrik-me/guesswhatisnext/pull/319) (squash `d04286b`, merged 2026-04-30T03:29Z)
+**Deferred follow-up:** CS68-2 (warn → error flip in `--strict`) — after ≥1 week soak with no regressions, mirroring the CS43-7 / CS65-2 pattern.
 **Origin:** PR #311 (`OPS-checklist-session-start`, merged 2026-04-29) local-review round 2 caught a brittle `step 6` cross-doc reference in `TRACKING.md § Claim effectiveness` that pointed at `OPERATIONS.md § Orchestrator Startup Checklist` step 6 — but that step had just been renumbered (5 → removed, 6 → 5, 7 → 6) in the same PR. The bug shipped because nothing flagged it; it was caught only by a careful gpt-5.5 reviewer. The general pattern — "step N" cross-doc references silently rotting when the target doc renumbers — is lintable.
 **Depends on:** none
 **Parallel-safe with:** CS65, CS66, CS67 (different rule scope from CS65's plan-file-schema rules; same surface file `scripts/check-docs-consistency.js` so rebase coordination required if both PRs are open simultaneously)
