@@ -1,6 +1,6 @@
 {
   "details": {
-    "body": "## Summary\n\nAdds a code change.\n\n## Local Review\n\n| Round | Finding | Fix |\n|-------|---------|-----|\n| 1 | Missing edge case | Fixed in abcdef1 |\n\n## Container Validation\n\n| Cycle | Result | Notes |\n|-------|--------|-------|\n| Pre-local-review | ✅ pass | local validation completed |\n\n## Telemetry Validation\n\n| Cycle | Result | Notes |\n|-------|--------|-------|\n| Local | ✅ pass | no telemetry changes |\n",
+    "body": "## Summary\n\nAdds a code change.\n\n## Local Review\n\n| Round | Finding | Fix |\n|-------|---------|-----|\n| 1 | Missing edge case | Fixed in abcdef1 |\n\n## Container Validation\n\n| Cycle | Timestamp (UTC) | Result | Notes |\n|-------|-----------------|--------|-------|\n| Pre-local-review | 2026-05-01T12:00Z | ✅ pass | local validation completed |\n\n## Telemetry Validation\n\n| Cycle | Result | Notes |\n|-------|--------|-------|\n| Local | ✅ pass | no telemetry changes |\n",
     "files": [
       { "path": "server/app.js" }
     ],
@@ -13,3 +13,4 @@
     ]
   }
 }
+

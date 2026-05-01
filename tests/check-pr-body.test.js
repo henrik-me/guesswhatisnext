@@ -24,9 +24,9 @@ describe('check-pr-body', () => {
   test('failure messages link to canonical PR-body section docs', () => {
     const findings = runFixture('paginated-files-complete');
     expect(findings).toHaveLength(3);
-    expect(findings.find(finding => finding.includes('Local Review'))).toContain('See: REVIEWS.md#local-review-loop');
-    expect(findings.find(finding => finding.includes('Container Validation'))).toContain('See: OPERATIONS.md#cold-start-container-validation');
-    expect(findings.find(finding => finding.includes('Telemetry Validation'))).toContain('See: CONVENTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work');
+    expect(findings.find(finding => finding.startsWith('PR body missing exact'))).toContain('See: REVIEWS.md#local-review-loop');
+    expect(findings.find(finding => finding.startsWith("'## Container Validation'"))).toContain('See: OPERATIONS.md#cold-start-container-validation');
+    expect(findings.find(finding => finding.startsWith("'## Telemetry Validation'"))).toContain('See: CONVENTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work');
   });
 
   test('passes for a full code/config PR body', () => {
@@ -57,6 +57,16 @@ describe('check-pr-body', () => {
     const findings = runFixture('failing-validation-row');
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain('Container Validation');
+  });
+
+  test('requires documented Container Validation table columns', () => {
+    const findings = checkPrBody({
+      body: '## Local Review\n| Round | Finding | Fix |\n|---|---|---|\n| 1 | Clean | clean - no issues found |\n\n## Container Validation\n| Whatever |\n|---|\n| ✅ pass |\n\n## Telemetry Validation\n- [x] No telemetry changes needed for probe fixture.',
+      files: ['server/index.js'],
+      commitOids: new Set(),
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('Cycle, Timestamp (UTC), Result, and Notes');
   });
 
   test('allows docs-only not-applicable sections', () => {

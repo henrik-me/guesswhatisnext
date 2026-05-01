@@ -24,7 +24,7 @@ const LOCAL_REVIEW_TABLE_TEMPLATE = `Use the canonical template:
 | 1 | <description> | <fix or \"clean — no issues found\"> |`;
 
 const OPERATIONAL_SECTION_TEMPLATE = `Use either:
-(a) a markdown table with at least one passing row (✅ / pass / passed); or
+(a) for Container Validation, a markdown table with Cycle, Timestamp (UTC), Result, and Notes columns plus at least one passing Result row (✅ / pass / passed); for Telemetry Validation, a markdown table with at least one passing row or a checklist with at least one checked item; or
 (b) a not-applicable marker using 'not applicable' or 'N/A', followed by either '(<category>)' or '— <category>', where <category> is one or more + joined tokens from: docs-only, docs, tooling-only, tooling, CI-config-only, CI-config, CI, docs/CI-only. Optional clarification text is accepted inside the parens or after the category in the dash form.`;
 
 function normalizePath(file) {
@@ -223,14 +223,28 @@ function validateLocalReview(body, prType, commitOids, findings) {
   }
 }
 
+function rowHasPassingCell(row, resultIdx = -1) {
+  const rowText = row.cells.join(' ');
+  if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed)?\b)/i.test(rowText)) return false;
+  const cells = resultIdx === -1 ? row.cells : [row.cells[resultIdx] || ''];
+  return cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed|ing)?\b)/i.test(cell));
+}
+
 function hasPassingValidationRow(section) {
   const table = parseFirstMarkdownTable(section.content);
   if (!table || table.rows.length === 0) return false;
-  return table.rows.some(row => {
-    const rowText = row.cells.join(' ');
-    if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed)?\b)/i.test(rowText)) return false;
-    return row.cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed|ing)?\b)/i.test(cell));
-  });
+  return table.rows.some(row => rowHasPassingCell(row));
+}
+
+function hasContainerValidationTable(section) {
+  const table = parseFirstMarkdownTable(section.content);
+  if (!table || table.rows.length === 0) return false;
+  const cycleIdx = columnIndex(table.headers, /^cycle$/i);
+  const timestampIdx = columnIndex(table.headers, /^timestamp(?:\s*\(utc\))?$/i);
+  const resultIdx = columnIndex(table.headers, /^result$/i);
+  const notesIdx = columnIndex(table.headers, /^notes$/i);
+  if (cycleIdx === -1 || timestampIdx === -1 || resultIdx === -1 || notesIdx === -1) return false;
+  return table.rows.some(row => rowHasPassingCell(row, resultIdx));
 }
 
 function hasCheckedValidationItem(section) {
@@ -245,8 +259,9 @@ function validateOperationalSection(body, title, prType, files, findings) {
   }
 
   const hasAllowedEscape = hasAllowedNotApplicableMarker(section.fullText, prType, files);
-  const hasPassingEvidence = hasPassingValidationRow(section) ||
-    (title === TELEMETRY_VALIDATION && hasCheckedValidationItem(section));
+  const hasPassingEvidence = title === CONTAINER_VALIDATION
+    ? hasContainerValidationTable(section)
+    : hasPassingValidationRow(section) || hasCheckedValidationItem(section);
 
   if (!hasPassingEvidence && !hasAllowedEscape) {
     findings.push(withSee(title, `'## ${title}' is missing valid validation evidence. ${OPERATIONAL_SECTION_TEMPLATE}`));
