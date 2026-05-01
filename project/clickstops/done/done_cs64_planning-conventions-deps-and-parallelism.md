@@ -1,9 +1,21 @@
 # CS64 — Planning Conventions Deps And Parallelism
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done — merged in [PR #312](https://github.com/henrik-me/guesswhatisnext/pull/312) (`bc6065c9`) on 2026-04-29T17:13Z. Closed out 2026-05-01 by `yoga-gwn`.
 **Origin:** 2026-04-29 conversation (omni-gwn) about how to make sub-agent review enforcement, doc structure, and process gates more robust. The user observed: planning needs to encode both **dependencies** (so pickup is unambiguous) and **parallelism** (so multiple agents can fan out without colliding), at both intra-CS (task-level) and inter-CS levels.
 **Depends on:** none
 **Parallel-safe with:** any (this CS lands the conventions; consumers reference them but can land in any order if they accept format-churn rebase)
+
+## Outcome
+
+Conventions A–E landed in [PR #312](https://github.com/henrik-me/guesswhatisnext/pull/312) (docs-only, +38/-4 across INSTRUCTIONS.md, TRACKING.md, OPERATIONS.md, and this plan file):
+
+- **Convention C** (parallel-friendly planning preference) — INSTRUCTIONS.md Quick Reference bullet.
+- **Convention E** (CS-only scope; OPS-* carve-out preserved) — INSTRUCTIONS.md Quick Reference bullet + TRACKING.md cross-link + OPERATIONS.md cross-link.
+- **Conventions A & B** (task-ID structure + frontmatter shape) — TRACKING.md § Naming Conventions, with worked example table.
+- **Convention D** (mechanical enforcement) — handed off to and delivered by [CS65](../done/done_cs65_plan-file-schema-linter-rules.md) (already closed).
+- Frontmatter (`Depends on` / `Parallel-safe with`) verified present on CS64, CS65, CS66, CS67 at PR-time; no fix-ups required.
+
+Local review: GPT-5.5 round 1 clean; `npm run check:docs:strict` reported 0 errors. Docs-only PR, so Copilot review correctly skipped per [REVIEWS.md PR-type matrix](../../../REVIEWS.md#local-review-loop). No code or tests changed (by design — enforcement was scoped to CS65).
 
 ## Problem
 
