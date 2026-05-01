@@ -99,6 +99,16 @@ describe('check-pr-body', () => {
     expect(findings.join('\n')).toContain('heading must be exact');
   });
 
+  test('requires operational not-applicable suffixes to start with the marker', () => {
+    const findings = checkPrBody({
+      body: '## Local Review: not applicable (docs-only)\n\n## Container Validation: custom suffix not applicable (docs-only)\n\n## Telemetry Validation: custom suffix not applicable (docs-only)',
+      files: ['README.md'],
+      commitOids: new Set(),
+    });
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('heading must be exact');
+  });
+
   test('does not treat not passing as passing validation evidence', () => {
     const findings = checkPrBody({
       body: '## Local Review\n| Round | Finding | Fix |\n|---|---|---|\n| 1 | Clean | clean - no issues found |\n\n## Container Validation\n| Cycle | Timestamp (UTC) | Result | Notes |\n|---|---|---|---|\n| Pre-local-review | 2026-05-01T12:00Z | not passing | local validation incomplete |\n\n## Telemetry Validation\n- [x] No telemetry changes needed for probe fixture.',

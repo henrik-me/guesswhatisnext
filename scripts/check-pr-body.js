@@ -109,6 +109,17 @@ function hasAllowedNotApplicableMarker(text, prType, files) {
   return false;
 }
 
+function headingSuffix(header, title) {
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`^##\\s+${escapedTitle}(?::\\s*(.*))?\\s*$`, 'i').exec(String(header || '').trim());
+  return match ? (match[1] || '') : null;
+}
+
+function headingHasAllowedNotApplicableMarker(header, title, prType, files) {
+  const suffix = headingSuffix(header, title);
+  return suffix != null && /^(?:not applicable|N\/A)\b/i.test(suffix) && hasAllowedNotApplicableMarker(suffix, prType, files);
+}
+
 function findSection(body, title, options = {}) {
   const { exact = false } = options;
   const lines = String(body || '').split(/\r?\n/);
@@ -191,7 +202,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
     return;
   }
 
-  if (prType === 'docs-only' && /not applicable \(docs-only\b[^)]*\)/i.test(section.header)) return;
+  if (prType === 'docs-only' && /^not applicable \(docs-only\b[^)]*\)$/i.test(headingSuffix(section.header, LOCAL_REVIEW) || '')) return;
 
   const table = parseFirstMarkdownTable(section.content);
   if (!table) {
@@ -257,7 +268,7 @@ function validateOperationalSection(body, title, prType, files, findings) {
     return;
   }
 
-  const hasAllowedEscape = hasAllowedNotApplicableMarker(section.header, prType, files);
+  const hasAllowedEscape = headingHasAllowedNotApplicableMarker(section.header, title, prType, files);
   if (section.header.trim() !== `## ${title}` && !hasAllowedEscape) {
     findings.push(withSee(title, `'## ${title}' heading must be exact unless it uses a valid not-applicable category. ${OPERATIONAL_SECTION_TEMPLATE}`));
     return;
