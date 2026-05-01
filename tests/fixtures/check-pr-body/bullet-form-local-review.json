@@ -1,0 +1,28 @@
+{
+  "details": {
+    "body": "## Summary\n\nTooling only.\n\n## Local Review\n\n- Round 1: Clean — no issues found\n\n## Container Validation: not applicable (tooling-only — no server/client/DB code changed)\n\n## Telemetry Validation: not applicable (tooling-only — no runtime code path changed)\n",
+    "files": [
+      {
+        "path": "scripts/check-pr-body.js"
+      },
+      {
+        "path": "tests/check-pr-body.test.js"
+      }
+    ],
+    "headRefName": "feature",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      {
+        "oid": "abcdef1234567890abcdef1234567890abcdef12"
+      }
+    ]
+  },
+  "files": {
+    "files": [
+      "scripts/check-pr-body.js",
+      "tests/check-pr-body.test.js"
+    ]
+  }
+}

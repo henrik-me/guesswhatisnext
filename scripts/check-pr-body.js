@@ -7,6 +7,16 @@ const LOCAL_REVIEW = 'Local Review';
 const CONTAINER_VALIDATION = 'Container Validation';
 const TELEMETRY_VALIDATION = 'Telemetry Validation';
 
+const LOCAL_REVIEW_TABLE_TEMPLATE = `Use the canonical template:
+## Local Review
+| Round | Finding | Fix |
+|-------|---------|-----|
+| 1 | <description> | <fix or \"clean — no issues found\"> |`;
+
+const OPERATIONAL_SECTION_TEMPLATE = `Use either:
+(a) a markdown table with at least one passing row (✅ / pass / passed); or
+(b) 'not applicable (<category>)' or 'N/A (<category>)' where <category> is one of: docs-only, tooling-only, CI-config-only, docs/CI-only (or a + combination). Optional clarification text inside the parens is accepted.`;
+
 function normalizePath(file) {
   if (typeof file === 'string') return file.replace(/\\/g, '/');
   return String(file.path || file.filename || file.name || '').replace(/\\/g, '/');
@@ -38,6 +48,48 @@ function classifyPr(files) {
   if (files.length > 0 && files.every(isDocsFile)) return 'docs-only';
   if (files.length > 0 && files.every(isCiConfigFile)) return 'CI-config-only';
   return 'code/config';
+}
+
+const CATEGORY_TOKEN_PATTERN = '(?:CI-config-only|docs\/CI-only|tooling-only|docs-only|CI-config|tooling|docs|CI)';
+const CATEGORY_SEQUENCE_RE = new RegExp(`^\\s*(${CATEGORY_TOKEN_PATTERN}(?:\\s*\\+\\s*${CATEGORY_TOKEN_PATTERN})*)\\b`, 'i');
+
+function normalizeCategoryToken(token) {
+  return String(token || '').trim().toLowerCase();
+}
+
+function categoryTokenMatchesFiles(token, prType, files) {
+  const normalized = normalizeCategoryToken(token);
+  const hasFiles = files.length > 0;
+  const allToolingOnly = hasFiles && files.every(isToolingOnlyFile);
+  if (normalized === 'docs-only' || normalized === 'docs') {
+    return prType === 'docs-only' || (allToolingOnly && files.some(isDocsFile));
+  }
+  if (normalized === 'ci-config-only' || normalized === 'ci-config' || normalized === 'ci') {
+    return prType === 'CI-config-only' || (allToolingOnly && files.some(isCiConfigFile));
+  }
+  if (normalized === 'tooling-only' || normalized === 'tooling') {
+    return allToolingOnly;
+  }
+  if (normalized === 'docs/ci-only') {
+    return prType === 'docs-only' || prType === 'CI-config-only' || (hasFiles && files.every(file => isDocsFile(file) || isCiConfigFile(file)));
+  }
+  return false;
+}
+
+function parseCategoryTokens(categoryText) {
+  const match = CATEGORY_SEQUENCE_RE.exec(String(categoryText || ''));
+  if (!match) return [];
+  return match[1].split(/\s*\+\s*/).map(normalizeCategoryToken);
+}
+
+function hasAllowedNotApplicableMarker(text, prType, files) {
+  const markerRe = /\b(?:not applicable|N\/A)\b\s*(?:[—:-]\s*)?(?:\(([^)\r\n]+)\)|([^\r\n|]+))/ig;
+  let match;
+  while ((match = markerRe.exec(String(text || ''))) !== null) {
+    const tokens = parseCategoryTokens(match[1] || match[2]);
+    if (tokens.length > 0 && tokens.every(token => categoryTokenMatchesFiles(token, prType, files))) return true;
+  }
+  return false;
 }
 
 function findSection(body, title, options = {}) {
@@ -119,7 +171,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
     section = flexibleSection;
   }
   if (!section) {
-    findings.push(`PR body missing exact '## ${LOCAL_REVIEW}' section`);
+    findings.push(`PR body missing exact '## ${LOCAL_REVIEW}' section. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
     return;
   }
 
@@ -127,7 +179,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
 
   const table = parseFirstMarkdownTable(section.content);
   if (!table) {
-    findings.push(`'## ${LOCAL_REVIEW}' must contain a markdown table`);
+    findings.push(`'## ${LOCAL_REVIEW}' must contain a markdown table. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
     return;
   }
 
@@ -135,7 +187,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
   const findingIdx = columnIndex(table.headers, /^finding$/i);
   const fixIdx = columnIndex(table.headers, /^fix$/i);
   if (roundIdx === -1 || fixIdx === -1) {
-    findings.push(`'## ${LOCAL_REVIEW}' table must include Round and Fix columns`);
+    findings.push(`'## ${LOCAL_REVIEW}' table must include Round and Fix columns. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
     return;
   }
 
@@ -150,7 +202,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
   });
 
   if (!hasValidRow) {
-    findings.push(`'## ${LOCAL_REVIEW}' table needs a Round >= 1 row whose Fix references a PR commit SHA (or a clean-review row)`);
+    findings.push(`'## ${LOCAL_REVIEW}' table needs a Round >= 1 row whose Fix references a PR commit SHA (or a clean-review row). ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
   }
 }
 
@@ -171,17 +223,16 @@ function hasCheckedValidationItem(section) {
 function validateOperationalSection(body, title, prType, files, findings) {
   const section = findSection(body, title);
   if (!section) {
-    findings.push(`PR body missing '## ${title}' section`);
+    findings.push(`PR body missing '## ${title}' section. ${OPERATIONAL_SECTION_TEMPLATE}`);
     return;
   }
 
-  const text = section.fullText;
-  if (prType === 'docs-only' && /not applicable \((?:docs-only|docs\/CI-only)\)/i.test(text)) return;
-  if (prType === 'CI-config-only' && /not applicable \((?:CI-config-only|docs\/CI-only)\)/i.test(text)) return;
-  if (files.length > 0 && files.every(isToolingOnlyFile) && /not applicable \(tooling-only\)/i.test(text)) return;
+  const hasAllowedEscape = hasAllowedNotApplicableMarker(section.fullText, prType, files);
+  const hasPassingEvidence = hasPassingValidationRow(section) ||
+    (title === TELEMETRY_VALIDATION && hasCheckedValidationItem(section));
 
-  if (!hasPassingValidationRow(section) && !(title === TELEMETRY_VALIDATION && hasCheckedValidationItem(section))) {
-    findings.push(`'## ${title}' must contain a markdown table with at least one passing row, a checked telemetry checklist item, or an allowed not-applicable marker`);
+  if (!hasPassingEvidence && !hasAllowedEscape) {
+    findings.push(`'## ${title}' is missing valid validation evidence. ${OPERATIONAL_SECTION_TEMPLATE}`);
   }
 }
 

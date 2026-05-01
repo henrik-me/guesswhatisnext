@@ -1,0 +1,32 @@
+{
+  "details": {
+    "body": "## Summary\n\nDocs and tooling only.\n\n## Local Review\n\n| Round | Finding | Fix |\n|-------|---------|-----|\n| 1 | Clean — no issues found | — |\n\n## Container Validation: not applicable (docs+tooling, no server/client/DB)\n\n## Telemetry Validation: not applicable (docs+tooling — no runtime code path changed)\n",
+    "files": [
+      {
+        "path": "docs/sub-agent-checklist.md"
+      },
+      {
+        "path": "scripts/check-pr-body.js"
+      },
+      {
+        "path": "tests/check-pr-body.test.js"
+      }
+    ],
+    "headRefName": "feature",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      {
+        "oid": "abcdef1234567890abcdef1234567890abcdef12"
+      }
+    ]
+  },
+  "files": {
+    "files": [
+      "docs/sub-agent-checklist.md",
+      "scripts/check-pr-body.js",
+      "tests/check-pr-body.test.js"
+    ]
+  }
+}
