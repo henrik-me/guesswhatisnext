@@ -89,6 +89,16 @@ describe('check-pr-body', () => {
     expect(findings.join('\n')).toContain('heading must be exact');
   });
 
+  test('does not allow operational body prose to exempt non-exact headings', () => {
+    const findings = checkPrBody({
+      body: '## Local Review\n| Round | Finding | Fix |\n|---|---|---|\n| 1 | Clean | clean - no issues found |\n\n## Container Validation: custom suffix\nnot applicable (docs-only)\n\n## Telemetry Validation: custom suffix\nnot applicable (docs-only)',
+      files: ['README.md'],
+      commitOids: new Set(),
+    });
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('heading must be exact');
+  });
+
   test('does not treat not passing as passing validation evidence', () => {
     const findings = checkPrBody({
       body: '## Local Review\n| Round | Finding | Fix |\n|---|---|---|\n| 1 | Clean | clean - no issues found |\n\n## Container Validation\n| Cycle | Timestamp (UTC) | Result | Notes |\n|---|---|---|---|\n| Pre-local-review | 2026-05-01T12:00Z | not passing | local validation incomplete |\n\n## Telemetry Validation\n- [x] No telemetry changes needed for probe fixture.',
@@ -97,6 +107,14 @@ describe('check-pr-body', () => {
     });
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain('Container Validation');
+  });
+
+  test('allows Container Validation notes to mention previous failures when Result passes', () => {
+    expect(checkPrBody({
+      body: '## Local Review\n| Round | Finding | Fix |\n|---|---|---|\n| 1 | Clean | clean - no issues found |\n\n## Container Validation\n| Cycle | Timestamp (UTC) | Result | Notes |\n|---|---|---|---|\n| Pre-local-review | 2026-05-01T12:00Z | ✅ pass | failed previously; reran clean |\n\n## Telemetry Validation\n- [x] No telemetry changes needed for probe fixture.',
+      files: ['server/index.js'],
+      commitOids: new Set(),
+    })).toEqual([]);
   });
 
   test('allows docs-only not-applicable sections', () => {
@@ -119,6 +137,16 @@ describe('check-pr-body', () => {
     });
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain("missing exact '## Local Review'");
+  });
+
+  test('requires Local Review not-applicable marker in the heading', () => {
+    const findings = checkPrBody({
+      body: '## Local Review\n\nnot applicable (docs-only)\n\n## Container Validation: not applicable (docs-only)\n\n## Telemetry Validation: not applicable (docs-only)',
+      files: ['README.md'],
+      commitOids: new Set(),
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('must contain a markdown table');
   });
 
   test('treats files under docs as docs-only', () => {

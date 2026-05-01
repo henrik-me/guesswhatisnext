@@ -184,14 +184,14 @@ function validateLocalReview(body, prType, commitOids, findings) {
   let section = findSection(body, LOCAL_REVIEW, { exact: true });
   if (!section && prType === 'docs-only') {
     const flexibleSection = findSection(body, LOCAL_REVIEW);
-    if (flexibleSection && /not applicable \(docs-only\b[^)]*\)/i.test(flexibleSection.fullText)) return;
+    if (flexibleSection && /not applicable \(docs-only\b[^)]*\)/i.test(flexibleSection.header)) return;
   }
   if (!section) {
     findings.push(withSee(LOCAL_REVIEW, `PR body missing exact '## ${LOCAL_REVIEW}' section. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
     return;
   }
 
-  if (prType === 'docs-only' && /not applicable \(docs-only\b[^)]*\)/i.test(section.fullText)) return;
+  if (prType === 'docs-only' && /not applicable \(docs-only\b[^)]*\)/i.test(section.header)) return;
 
   const table = parseFirstMarkdownTable(section.content);
   if (!table) {
@@ -223,9 +223,9 @@ function validateLocalReview(body, prType, commitOids, findings) {
 }
 
 function rowHasPassingCell(row, resultIdx = -1) {
-  const rowText = row.cells.join(' ');
-  if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed|ing)?\b)/i.test(rowText)) return false;
   const cells = resultIdx === -1 ? row.cells : [row.cells[resultIdx] || ''];
+  const textToCheck = cells.join(' ');
+  if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed|ing)?\b)/i.test(textToCheck)) return false;
   return cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed|ing)?\b)/i.test(cell));
 }
 
@@ -257,7 +257,7 @@ function validateOperationalSection(body, title, prType, files, findings) {
     return;
   }
 
-  const hasAllowedEscape = hasAllowedNotApplicableMarker(section.fullText, prType, files);
+  const hasAllowedEscape = hasAllowedNotApplicableMarker(section.header, prType, files);
   if (section.header.trim() !== `## ${title}` && !hasAllowedEscape) {
     findings.push(withSee(title, `'## ${title}' heading must be exact unless it uses a valid not-applicable category. ${OPERATIONAL_SECTION_TEMPLATE}`));
     return;
