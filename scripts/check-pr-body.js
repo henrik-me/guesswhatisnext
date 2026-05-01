@@ -240,7 +240,7 @@ function hasContainerValidationTable(section) {
   const table = parseFirstMarkdownTable(section.content);
   if (!table || table.rows.length === 0) return false;
   const cycleIdx = columnIndex(table.headers, /^cycle$/i);
-  const timestampIdx = columnIndex(table.headers, /^timestamp(?:\s*\(utc\))?$/i);
+  const timestampIdx = columnIndex(table.headers, /^timestamp\s*\(utc\)$/i);
   const resultIdx = columnIndex(table.headers, /^result$/i);
   const notesIdx = columnIndex(table.headers, /^notes$/i);
   if (cycleIdx === -1 || timestampIdx === -1 || resultIdx === -1 || notesIdx === -1) return false;

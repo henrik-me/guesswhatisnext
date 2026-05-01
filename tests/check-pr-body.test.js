@@ -69,6 +69,16 @@ describe('check-pr-body', () => {
     expect(findings[0]).toContain('Cycle, Timestamp (UTC), Result, and Notes');
   });
 
+  test('requires the Container Validation timestamp column to specify UTC', () => {
+    const findings = checkPrBody({
+      body: '## Local Review\n| Round | Finding | Fix |\n|---|---|---|\n| 1 | Clean | clean - no issues found |\n\n## Container Validation\n| Cycle | Timestamp | Result | Notes |\n|---|---|---|---|\n| Pre-local-review | 2026-05-01T12:00Z | ✅ pass | local validation completed |\n\n## Telemetry Validation\n- [x] No telemetry changes needed for probe fixture.',
+      files: ['server/index.js'],
+      commitOids: new Set(),
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('Cycle, Timestamp (UTC), Result, and Notes');
+  });
+
   test('allows docs-only not-applicable sections', () => {
     expect(runFixture('docs-only-escape')).toEqual([]);
   });
