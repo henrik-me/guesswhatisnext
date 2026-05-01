@@ -261,7 +261,13 @@ Each new telemetry signal must be confirmed working in three environments before
 2. **Staging (`gwn-ai-staging`).** Wake `gwn-staging` if scale-to-zero (per [CS58](project/clickstops/done/done_cs58_scale-staging-to-zero.md) the live state is `minReplicas=0`), hit the new code path with at least one real request, wait ~5 min, run the documented KQL query, confirm rows appear with the expected shape. Use `az monitor app-insights query --app gwn-ai-staging -g gwn-rg --analytics-query '<kql>'` for scripted runs.
 3. **Production (`gwn-ai-production`).** Same as staging, against `gwn-ai-production`. Production validation can lag the PR merge if the change is gated behind a feature flag — but it must happen before the change is enabled in prod, and the validation result must be recorded somewhere durable (PR description follow-up comment, or a workboard note that points back to the PR).
 
-Capture the validation in the PR body under a `## Telemetry Validation` section that mirrors the existing `## Container Validation` section. Format:
+Capture the validation in the PR body under a `## Telemetry Validation` section. This is the canonical PR-body schema for the telemetry-validation gate:
+
+- The heading must be exactly `## Telemetry Validation` unless the PR is exempt as described below.
+- Evidence may be either a markdown table with at least one passing row (`✅`, `pass`, or `passed`) or a checklist with at least one checked item (`- [x] ...`).
+- Docs-only, CI-config-only, docs/CI-only, tooling-only, or supported `+` combinations may use `## Telemetry Validation: not applicable (<category>)`, with optional clarification text after the category inside the parentheses; canonical category tokens are `docs-only`, `CI-config-only`, `docs/CI-only`, and `tooling-only` (plus combinations such as `tooling-only+docs-only`). The gate also accepts the legacy marker `N/A`, dash/colon separators, and aliases `docs`, `CI-config`, `CI`, and `tooling`; prefer the canonical parenthesized form in new PR bodies.
+
+Checklist format:
 
 ```markdown
 ## Telemetry Validation
@@ -271,7 +277,7 @@ Capture the validation in the PR body under a `## Telemetry Validation` section 
 - [x] Production (`gwn-ai-production`): same query returned N rows within 5 min of probe. (Or: deferred to feature-flag enablement; tracking in <CS-link or PR comment>.)
 ```
 
-If any of the three is "not applicable" (e.g. a backend-only change with no client-facing trigger means production validation has to wait for real user traffic), say so explicitly and explain — the empty checkbox is the point. Skipping the section entirely fails the PR review gate.
+If any of the three is "not applicable" (e.g. a backend-only change with no client-facing trigger means production validation has to wait for real user traffic), say so explicitly and explain — the empty checkbox is the point. Skipping the section entirely fails the PR review gate. Example exemption: `## Telemetry Validation: not applicable (tooling-only — no runtime code path or telemetry surface changed)`.
 
 ### How this interacts with existing rules
 
@@ -324,6 +330,17 @@ Commit locally after every meaningful, working change — each commit should be 
 
 **Commit messages must be descriptive** — they are the audit trail for what happened and why. Use conventional commit format (see above).
 
+Every non-merge commit on a PR branch must include both trailers below:
+
+```
+Agent: <orchestrator>/<context>
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+```
+
+The `Agent:` value is slash-separated; use the orchestrator id and task/context, for example `Agent: yoga-gwn/cs66-3-doc-hardening`. The commit-trailer gate checks every non-merge commit in `origin/main..HEAD` for both trailers.
+
+Allowlist: commits whose **all** changed paths are `WORKBOARD.md` and/or `project/clickstops/**` are exempt because they are direct-on-main orchestrator coordination commits. Those commits follow [TRACKING.md § WORKBOARD.md — Live Coordination](TRACKING.md#workboardmd--live-coordination) and may use the single-token `Agent: <orchestrator-id>` form instead of the slash-separated PR-branch form. Mixed commits that also touch any other path are not exempt.
+
 **Do not** batch unrelated changes into one commit. Two distinct actions = two commits.
 
 
@@ -360,7 +377,7 @@ Commit locally after every meaningful, working change — each commit should be 
 - **No DB-waking background work.** The database must only be touched in response to actual application usage: real user requests, operator-initiated health probes (curl), or batch jobs explicitly invoked by an operator. **Forbidden**: any timer, watchdog, scheduler, polling loop, or recurring mechanism that issues a DB query (including `SELECT 1`) on its own. This applies equally to pool health watchdogs, periodic warm-up pings, SPA pollers that hit DB-backed endpoints, and recovery loops that re-attempt initialization on a timer. If you need to detect a dead pool, do it lazily on the next real request. If you need a `/api/db-status` endpoint, it must read in-memory state ONLY (`dbInitialized` flag, init-guard `isInFlight()`, `getDbUnavailability` cached last-error) and never issue a DB query. Rationale: an idle DB (e.g. Azure SQL serverless on its way to auto-pause, or Free Tier with a finite monthly compute allowance) must be allowed to stay idle so it can pause cleanly; background DB-keepalive activity has historically caused both unnecessary cost and stuck-state failure modes (CS53).
 - **Test/debug env vars that affect production behavior require an explicit arming gate, never `NODE_ENV` alone (CS53-10 PR #301 R1 finding).** Local container validation runs the app with `NODE_ENV=production` by design (CS53 Policy 2 — "not in real prod" is the gate, not "not in production-mode locally"), so `NODE_ENV` is *not* a safe predicate for "are we really in real prod?". Any env-driven hook that could turn a healthy live DB into a fake-failure surface (or otherwise alter request handling) MUST require a separate arming env var (e.g. `GWN_ENABLE_DB_CONNECT_SIMULATORS=1`) AND emit a structured Pino warn whenever the env vars are set — armed or not — so a misconfigured deploy that copies the SIMULATE_* var without the gate is still surfaced via KQL (e.g. § B.16 in `docs/observability.md`). Pattern: see `server/db/mssql-adapter.js` `_simulatorsArmed()` helper.
 - **Boot-quiet rule (CS53-23 / CS53-19).** No browser-driven boot, focus, refresh, bfcache-restore, or service-worker-lifecycle code path may fire a request that touches the DB. The mechanism is the **`X-User-Activity: 1` request header**: SPA code sets it on requests originating from a real user gesture (click, screen-open, mark-read, etc.); for any read endpoint that participates in the boot-quiet contract, the server route handler MUST NOT issue a DB query in response to a request that lacks the header (or carries any other value). The contract applies only to endpoints explicitly enrolled in it (today: `/api/notifications/count`; CS53-19 will enroll the rest of the boot/focus set). It does **not** apply to operator/system-key requests, write endpoints, or `/healthz`-style probes — those have their own rules. **Cold-start caveat (CS53-19.D scope):** the global `/api/*` request gate in `server/app.js` currently calls `runInit()` for any header-less request when `!dbInitialized`, which can touch the DB before an enrolled handler runs. The route-level guarantee above holds once the DB is initialized; CS53-19.D will gate the init path on `X-User-Activity: 1` to close this gap end-to-end. On cache miss without the header on an enrolled endpoint (post-init), the server returns the cached value if any, else the empty default for that endpoint (`{ unread_count: 0 }` for `/api/notifications/count`, `204 No Content` where no body shape is meaningful). The header is the boot-quiet contract that lets the server act as the guard against untrusted or stale clients without heuristics. Cross-link: `project/clickstops/active/active_cs53_prod-cold-start-retry-investigation.md` row CS53-23 (contract foundation, fully wired today only on `/api/notifications/count`) and CS53-19 (apply contract to every other boot/focus endpoint, plus close the cold-start init-gate gap in CS53-19.D).
-- **Cold-start container validation gates every check-in.** For any PR that changes server-side code, client-side runtime code, or DB-touching code (i.e., everything except docs/markdown/CI-config-only changes), the author must run a "cold-start container validation" cycle (`npm run container:validate`) before requesting local review, after local-review fixes are pushed, and after each Copilot review iteration's fixes are pushed. Capture pass/fail per cycle in the PR body under `## Container Validation`. The container restarts cleanly with `GWN_SIMULATE_COLD_START_MS=30000` so the warmup retry path is exercised on every restart, mimicking Azure SQL serverless cold-start behavior. See [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation) for the procedure.
+- **Cold-start container validation gates every check-in.** For any PR that changes server-side code, client-side runtime code, or DB-touching code (i.e., anything that is not docs-only, CI-config-only, docs/CI-only, tooling-only, or a supported `+` combination), the author must run a "cold-start container validation" cycle (`npm run container:validate`) before requesting local review, after local-review fixes are pushed, and after each Copilot review iteration's fixes are pushed. Capture pass/fail per cycle in the PR body under `## Container Validation`. The container restarts cleanly with `GWN_SIMULATE_COLD_START_MS=30000` so the warmup retry path is exercised on every restart, mimicking Azure SQL serverless cold-start behavior. See [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation) for the procedure.
 
 ### Multi-PR pattern for backward-incompatible migrations
 

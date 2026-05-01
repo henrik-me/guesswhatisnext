@@ -5,6 +5,12 @@ const { spawnSync } = require('child_process');
 
 const COPILOT_TRAILER = 'Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>';
 const AGENT_TRAILER_RE = /^Agent:\s+\S+\/\S+\s*$/m;
+const TRAILER_DOC_LINK = 'CONVENTIONS.md#5-git-workflow';
+const TRAILER_FORMAT_REMINDER = `Required trailers:\nAgent: <orchestrator>/<context>\n${COPILOT_TRAILER}`;
+
+function trailerFinding(hash, message) {
+  return `${hash}: ${message}\n${TRAILER_FORMAT_REMINDER}\nSee: ${TRAILER_DOC_LINK}`;
+}
 
 function runGit(args) {
   const result = spawnSync('git', args, {
@@ -72,10 +78,10 @@ function checkCommits(commits, getChangedPaths = fetchChangedPaths) {
     if (isAllowlistedCommit(paths)) continue;
 
     if (!hasCopilotTrailer(commit.message)) {
-      findings.push(`${commit.hash}: missing '${COPILOT_TRAILER}' trailer`);
+      findings.push(trailerFinding(commit.hash, `missing '${COPILOT_TRAILER}' trailer`));
     }
     if (!AGENT_TRAILER_RE.test(commit.message)) {
-      findings.push(`${commit.hash}: missing 'Agent: <token>/<token>' trailer`);
+      findings.push(trailerFinding(commit.hash, `missing 'Agent: <token>/<token>' trailer`));
     }
   }
   return findings;

@@ -221,7 +221,7 @@ Policy reference: [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database
 
 **Why.** Container/cold-start behavior surfaces issues that unit and E2E tests routinely miss: lazy request-driven DB init, the `503 + Retry-After` warmup path, the SPA `progressive-loader` cycle, and the `Database not yet initialized` vs `Database temporarily unavailable` (no-retry) shape distinction. The `npm run container:validate` script restarts the local MSSQL Docker stack with `GWN_SIMULATE_COLD_START_MS=30000` so the first `mssql-adapter._connect()` after process start sleeps 30 seconds — mimicking Azure SQL serverless auto-pause resume timing — and asserts that a representative unauthenticated DB-touching endpoint (`/api/scores/leaderboard`) gets at least one `503 + Retry-After` then a `200` within `WARMUP_CAP_MS + 30s + COLD_START_MS` (the `COLD_START_MS` term accounts for the simulated server-side delay on top of the SPA-side warmup budget). Both halves of the assertion matter: the 503 proves the warmup retry path was exercised; the 200 proves the request-driven lazy init pattern actually heals without operator intervention.
 
-**When.** Every PR that changes server/client runtime or DB-touching code (i.e. anything that is NOT a docs-only or CI-config-only change) must run validation:
+**When.** Every PR that changes server/client runtime or DB-touching code (i.e. anything that is NOT a docs-only, CI-config-only, docs/CI-only, or tooling-only change) must run validation:
 
 1. **Before requesting local review** — stop the local container, restart it, exercise the affected code paths against the freshly-restarted container.
 2. **After local-review fixes are pushed** — repeat.
@@ -231,7 +231,11 @@ If validation fails at any step, do not request the next review round; fix and r
 
 **How.** Run `npm run container:validate` from the worktree root. The script (`scripts/container-validate.js`) handles full restart, readiness wait, smoke probe, log capture on failure, and teardown. Override env vars: `COLD_START_MS` (default 30000), `HTTPS_PORT` / `HTTP_PORT` (defaults 8443 / 3001), `COMPOSE_PROJECT` (default derived from cwd basename + 8-char hash of the absolute path so concurrent worktrees do not collide), `KEEP_RUNNING=1` (skip teardown for debugging). Note: `/api/db-status` (when CS53-8b lands) is safe to probe externally — it reads in-memory state only and does not touch the DB.
 
-**What to record.** Append a `## Container Validation` section to the PR body with one entry per cycle, e.g.:
+**What to record.** Append a `## Container Validation` section to the PR body. This is the canonical PR-body schema for the container-validation gate:
+
+- The heading must be exactly `## Container Validation` unless the PR is exempt as described below.
+- Runtime / DB-touching PRs must use a markdown table with the columns `Cycle`, `Timestamp (UTC)`, `Result`, and `Notes`, and at least one row whose `Result` cell is passing (`✅`, `pass`, or `passed`) and not failing. The `Notes` cell may mention previous failures when the current `Result` is passing.
+- Docs-only, CI-config-only, docs/CI-only, tooling-only, or supported `+` combinations may use `## Container Validation: not applicable (<category>)`, with optional clarification text after the category inside the parentheses; canonical category tokens are `docs-only`, `CI-config-only`, `docs/CI-only`, and `tooling-only` (plus combinations such as `tooling-only+docs-only`). The gate also accepts the legacy marker `N/A`, dash/colon separators, and aliases `docs`, `CI-config`, `CI`, and `tooling`; prefer the canonical parenthesized form in new PR bodies.
 
 ```
 ## Container Validation
@@ -243,7 +247,7 @@ If validation fails at any step, do not request the next review round; fix and r
 | Post-Copilot R1    | 2026-04-24T09:55Z | ✅ pass | saw 1×503 then 200 in 31s |
 ```
 
-A docs-only or CI-config-only PR may instead state `## Container Validation: not applicable (docs/CI-only)`.
+Example exemption: `## Container Validation: not applicable (tooling-only — no server/client/DB code changed)`.
 
 **Model selection:** The preferred model for both orchestrators and sub-agents is Claude Opus 4.7 or higher (use the 1M context variant — e.g. `claude-opus-4.6-1m` — when available). GPT 5.5 or higher (`gpt-5.5` is the floor) is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 

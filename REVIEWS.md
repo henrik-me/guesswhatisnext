@@ -23,17 +23,22 @@ Before requesting Copilot PR review, sub-agents **must** run a local review loop
 
 **Local-review checklist (must verify in addition to whatever the model surfaces):**
 - No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
-- PR body has a `## Container Validation` section with at least one passing cycle dated within the last hour, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
+- PR body has a `## Container Validation` section with at least one passing cycle dated within the last hour, OR the PR is exempt as docs-only / CI-config-only / docs/CI-only / tooling-only (or a supported combination) per [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation).
 
 **Documenting review findings:**
-After each local review round, update the PR description with a log of findings and fixes:
+After each local review round, update the PR description with a `## Local Review` section. This is the canonical PR-body schema for the local-review gate:
+
+- The heading must be exactly `## Local Review`. For docs-only PRs, the section may instead be headed `## Local Review: not applicable (docs-only)` with optional clarification text after the category.
+- The body must be a markdown table with the columns `Round`, `Finding`, and `Fix`. Bullet lists and prose-only summaries are not accepted by the gate.
+- At least one row must have a numeric `Round` (`1` or higher). The `Fix` cell must reference a PR commit SHA, or the row must contain `clean — no issues found` / `clean - no issues found` to document a clean review round.
+
 ```
-### Local Review Log
+## Local Review
 | Round | Finding | Fix |
 |-------|---------|-----|
 | 1 | CONTEXT.md workflow text still says "pre-branch-protection" | Fixed in [`abc1234`](commit-url) |
 | 2 | CS26-8 references WORKBOARD.md instead of INSTRUCTIONS.md | Fixed in [`def5678`](commit-url) |
-| 3 | Clean — no issues found | — |
+| 3 | Clean — no issues found | clean — no issues found |
 ```
 This preserves the review audit trail in the PR for future reference.
 
@@ -45,7 +50,7 @@ This preserves the review audit trail in the PR for future reference.
 | **Docs-only** (clickstop files, CONTEXT.md, README, INSTRUCTIONS.md) | ✅ Required | ⏭️ Skip | Local review is sufficient; Copilot review adds 10+ min overhead for no additional value |
 | **Config/CI changes** (workflows, Dockerfile, docker-compose) | ✅ Required | ✅ Required | Security-sensitive changes need Copilot review |
 
-**Docs-only PR definition:** A PR is docs-only if it modifies ONLY files with extensions `.md`, or files anywhere under `project/clickstops/` (including the `planned/`, `active/`, and `done/` subdirectories). If ANY non-docs file is changed, treat it as a code PR.
+**Docs-only PR definition:** A PR is docs-only if it modifies ONLY files with extensions `.md`, files anywhere under `docs/`, or files anywhere under `project/clickstops/` (including the `planned/`, `active/`, and `done/` subdirectories). If ANY non-docs file outside those paths is changed, treat it as a code PR.
 
 **Merge gates by PR type:**
 - **Code/config/CI PRs:** Copilot clean (`COMMENTED` with no new comments and all inline threads resolved, or `APPROVED`) + local review clean + CI green. Copilot review is mandatory; skipping it on a non-docs PR is a process violation. If GitHub branch protection still blocks because Copilot did not emit `APPROVED`, use the normal `gh pr merge --squash --admin` path documented in [OPERATIONS.md § Merge gate: Copilot COMMENTED with all threads resolved](OPERATIONS.md#merge-gate-copilot-commented-with-all-threads-resolved).
@@ -59,7 +64,7 @@ This preserves the review audit trail in the PR for future reference.
 
 **Copilot-review checklist (must verify before merge, in addition to Copilot's own findings):**
 - No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
-- PR body's `## Container Validation` section has a fresh passing cycle from after the last fix push, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
+- PR body's `## Container Validation` section has a fresh passing cycle from after the last fix push, OR the PR is exempt as docs-only / CI-config-only / docs/CI-only / tooling-only (or a supported combination) per [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation).
 
 **Copilot Review — Detailed Workflow:**
 

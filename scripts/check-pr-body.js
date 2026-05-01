@@ -7,6 +7,16 @@ const LOCAL_REVIEW = 'Local Review';
 const CONTAINER_VALIDATION = 'Container Validation';
 const TELEMETRY_VALIDATION = 'Telemetry Validation';
 
+const SECTION_DOC_LINKS = {
+  [LOCAL_REVIEW]: 'REVIEWS.md#local-review-loop',
+  [CONTAINER_VALIDATION]: 'OPERATIONS.md#cold-start-container-validation',
+  [TELEMETRY_VALIDATION]: 'CONVENTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work',
+};
+
+function withSee(title, message) {
+  return `${message}\nSee: ${SECTION_DOC_LINKS[title]}`;
+}
+
 const LOCAL_REVIEW_TABLE_TEMPLATE = `Use the canonical template:
 ## Local Review
 | Round | Finding | Fix |
@@ -14,7 +24,7 @@ const LOCAL_REVIEW_TABLE_TEMPLATE = `Use the canonical template:
 | 1 | <description> | <fix or \"clean — no issues found\"> |`;
 
 const OPERATIONAL_SECTION_TEMPLATE = `Use either:
-(a) a markdown table with at least one passing row (✅ / pass / passed); or
+(a) for Container Validation, a markdown table with Cycle, Timestamp (UTC), Result, and Notes columns plus at least one passing Result row (✅ / pass / passed); for Telemetry Validation, a markdown table with at least one passing row or a checklist with at least one checked item; or
 (b) a not-applicable marker using 'not applicable' or 'N/A', followed by either '(<category>)' or '— <category>', where <category> is one or more + joined tokens from: docs-only, docs, tooling-only, tooling, CI-config-only, CI-config, CI, docs/CI-only. Optional clarification text is accepted inside the parens or after the category in the dash form.`;
 
 function normalizePath(file) {
@@ -99,6 +109,17 @@ function hasAllowedNotApplicableMarker(text, prType, files) {
   return false;
 }
 
+function headingSuffix(header, title) {
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`^##\\s+${escapedTitle}(?::\\s*(.*))?\\s*$`, 'i').exec(String(header || '').trim());
+  return match ? (match[1] || '') : null;
+}
+
+function headingHasAllowedNotApplicableMarker(header, title, prType, files) {
+  const suffix = headingSuffix(header, title);
+  return suffix != null && /^(?:not applicable|N\/A)\b/i.test(suffix) && hasAllowedNotApplicableMarker(suffix, prType, files);
+}
+
 function findSection(body, title, options = {}) {
   const { exact = false } = options;
   const lines = String(body || '').split(/\r?\n/);
@@ -174,27 +195,26 @@ function validateLocalReview(body, prType, commitOids, findings) {
   let section = findSection(body, LOCAL_REVIEW, { exact: true });
   if (!section && prType === 'docs-only') {
     const flexibleSection = findSection(body, LOCAL_REVIEW);
-    if (flexibleSection && /not applicable \(docs-only\)/i.test(flexibleSection.fullText)) return;
-    section = flexibleSection;
+    if (flexibleSection && /not applicable \(docs-only\b[^)]*\)/i.test(flexibleSection.header)) return;
   }
   if (!section) {
-    findings.push(`PR body missing exact '## ${LOCAL_REVIEW}' section. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
+    findings.push(withSee(LOCAL_REVIEW, `PR body missing exact '## ${LOCAL_REVIEW}' section. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
     return;
   }
 
-  if (prType === 'docs-only' && /not applicable \(docs-only\)/i.test(section.fullText)) return;
+  if (prType === 'docs-only' && /^not applicable \(docs-only\b[^)]*\)$/i.test(headingSuffix(section.header, LOCAL_REVIEW) || '')) return;
 
   const table = parseFirstMarkdownTable(section.content);
   if (!table) {
-    findings.push(`'## ${LOCAL_REVIEW}' must contain a markdown table. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
+    findings.push(withSee(LOCAL_REVIEW, `'## ${LOCAL_REVIEW}' must contain a markdown table. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
     return;
   }
 
   const roundIdx = columnIndex(table.headers, /^round$/i);
   const findingIdx = columnIndex(table.headers, /^finding$/i);
   const fixIdx = columnIndex(table.headers, /^fix$/i);
-  if (roundIdx === -1 || fixIdx === -1) {
-    findings.push(`'## ${LOCAL_REVIEW}' table must include Round and Fix columns. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
+  if (roundIdx === -1 || findingIdx === -1 || fixIdx === -1) {
+    findings.push(withSee(LOCAL_REVIEW, `'## ${LOCAL_REVIEW}' table must include Round, Finding, and Fix columns. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
     return;
   }
 
@@ -209,18 +229,32 @@ function validateLocalReview(body, prType, commitOids, findings) {
   });
 
   if (!hasValidRow) {
-    findings.push(`'## ${LOCAL_REVIEW}' table needs a Round >= 1 row whose Fix references a PR commit SHA (or a clean-review row). ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
+    findings.push(withSee(LOCAL_REVIEW, `'## ${LOCAL_REVIEW}' table needs a Round >= 1 row whose Fix references a PR commit SHA (or a clean-review row). ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
   }
+}
+
+function rowHasPassingCell(row, resultIdx = -1) {
+  const cells = resultIdx === -1 ? row.cells : [row.cells[resultIdx] || ''];
+  const textToCheck = cells.join(' ');
+  if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed|ing)?\b)/i.test(textToCheck)) return false;
+  return cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed|ing)?\b)/i.test(cell));
 }
 
 function hasPassingValidationRow(section) {
   const table = parseFirstMarkdownTable(section.content);
   if (!table || table.rows.length === 0) return false;
-  return table.rows.some(row => {
-    const rowText = row.cells.join(' ');
-    if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed)?\b)/i.test(rowText)) return false;
-    return row.cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed|ing)?\b)/i.test(cell));
-  });
+  return table.rows.some(row => rowHasPassingCell(row));
+}
+
+function hasContainerValidationTable(section) {
+  const table = parseFirstMarkdownTable(section.content);
+  if (!table || table.rows.length === 0) return false;
+  const cycleIdx = columnIndex(table.headers, /^cycle$/i);
+  const timestampIdx = columnIndex(table.headers, /^timestamp\s*\(utc\)$/i);
+  const resultIdx = columnIndex(table.headers, /^result$/i);
+  const notesIdx = columnIndex(table.headers, /^notes$/i);
+  if (cycleIdx === -1 || timestampIdx === -1 || resultIdx === -1 || notesIdx === -1) return false;
+  return table.rows.some(row => rowHasPassingCell(row, resultIdx));
 }
 
 function hasCheckedValidationItem(section) {
@@ -230,16 +264,22 @@ function hasCheckedValidationItem(section) {
 function validateOperationalSection(body, title, prType, files, findings) {
   const section = findSection(body, title);
   if (!section) {
-    findings.push(`PR body missing '## ${title}' section. ${OPERATIONAL_SECTION_TEMPLATE}`);
+    findings.push(withSee(title, `PR body missing '## ${title}' section. ${OPERATIONAL_SECTION_TEMPLATE}`));
     return;
   }
 
-  const hasAllowedEscape = hasAllowedNotApplicableMarker(section.fullText, prType, files);
-  const hasPassingEvidence = hasPassingValidationRow(section) ||
-    (title === TELEMETRY_VALIDATION && hasCheckedValidationItem(section));
+  const hasAllowedEscape = headingHasAllowedNotApplicableMarker(section.header, title, prType, files);
+  if (section.header.trim() !== `## ${title}` && !hasAllowedEscape) {
+    findings.push(withSee(title, `'## ${title}' heading must be exact unless it uses a valid not-applicable category. ${OPERATIONAL_SECTION_TEMPLATE}`));
+    return;
+  }
+
+  const hasPassingEvidence = title === CONTAINER_VALIDATION
+    ? hasContainerValidationTable(section)
+    : hasPassingValidationRow(section) || hasCheckedValidationItem(section);
 
   if (!hasPassingEvidence && !hasAllowedEscape) {
-    findings.push(`'## ${title}' is missing valid validation evidence. ${OPERATIONAL_SECTION_TEMPLATE}`);
+    findings.push(withSee(title, `'## ${title}' is missing valid validation evidence. ${OPERATIONAL_SECTION_TEMPLATE}`));
   }
 }
 

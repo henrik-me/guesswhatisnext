@@ -37,6 +37,8 @@ describe('check-commit-trailers', () => {
     const findings = runLog(log, { [NO_COPILOT_HASH]: ['scripts/check.js'] });
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain('Co-authored-by');
+    expect(findings[0]).toContain('Agent: <orchestrator>/<context>');
+    expect(findings[0]).toContain('See: CONVENTIONS.md#5-git-workflow');
   });
 
   test('flags missing Agent trailer', () => {
@@ -44,6 +46,8 @@ describe('check-commit-trailers', () => {
     const findings = runLog(log, { [NO_AGENT_HASH]: ['scripts/check.js'] });
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain('Agent: <token>/<token>');
+    expect(findings[0]).toContain('Agent: <orchestrator>/<context>');
+    expect(findings[0]).toContain('See: CONVENTIONS.md#5-git-workflow');
   });
 
   test('skips allowlisted path-only commits', () => {
