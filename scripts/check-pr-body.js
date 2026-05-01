@@ -203,8 +203,8 @@ function validateLocalReview(body, prType, commitOids, findings) {
   const roundIdx = columnIndex(table.headers, /^round$/i);
   const findingIdx = columnIndex(table.headers, /^finding$/i);
   const fixIdx = columnIndex(table.headers, /^fix$/i);
-  if (roundIdx === -1 || fixIdx === -1) {
-    findings.push(withSee(LOCAL_REVIEW, `'## ${LOCAL_REVIEW}' table must include Round and Fix columns. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
+  if (roundIdx === -1 || findingIdx === -1 || fixIdx === -1) {
+    findings.push(withSee(LOCAL_REVIEW, `'## ${LOCAL_REVIEW}' table must include Round, Finding, and Fix columns. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
     return;
   }
 

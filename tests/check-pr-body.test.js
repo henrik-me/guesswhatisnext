@@ -90,7 +90,17 @@ describe('check-pr-body', () => {
   test('flags malformed Local Review tables', () => {
     const findings = runFixture('malformed-local-review-table');
     expect(findings).toHaveLength(1);
-    expect(findings[0]).toContain('Round and Fix');
+    expect(findings[0]).toContain('Round, Finding, and Fix');
+  });
+
+  test('requires the documented Local Review Finding column', () => {
+    const findings = checkPrBody({
+      body: '## Local Review\n| Round | Fix |\n|---|---|\n| 1 | clean - no issues found |\n\n## Container Validation: not applicable (tooling-only)\n\n## Telemetry Validation: not applicable (tooling-only)',
+      files: ['scripts/check-pr-body.js'],
+      commitOids: new Set(),
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('Round, Finding, and Fix');
   });
 
   test('flags non-numeric Local Review rounds', () => {
