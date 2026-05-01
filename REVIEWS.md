@@ -23,7 +23,7 @@ Before requesting Copilot PR review, sub-agents **must** run a local review loop
 
 **Local-review checklist (must verify in addition to whatever the model surfaces):**
 - No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
-- PR body has a `## Container Validation` section with at least one passing cycle dated within the last hour, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
+- PR body has a `## Container Validation` section with at least one passing cycle dated within the last hour, OR the PR is exempt as docs-only / CI-config-only / docs/CI-only / tooling-only (or a supported combination) per [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation).
 
 **Documenting review findings:**
 After each local review round, update the PR description with a `## Local Review` section. This is the canonical PR-body schema for the local-review gate:
@@ -64,7 +64,7 @@ This preserves the review audit trail in the PR for future reference.
 
 **Copilot-review checklist (must verify before merge, in addition to Copilot's own findings):**
 - No new code introduces a `setInterval` / `setTimeout` / cron / scheduler that issues a DB query without an explicit user/operator action (CS53 / [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
-- PR body's `## Container Validation` section has a fresh passing cycle from after the last fix push, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
+- PR body's `## Container Validation` section has a fresh passing cycle from after the last fix push, OR the PR is exempt as docs-only / CI-config-only / docs/CI-only / tooling-only (or a supported combination) per [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation).
 
 **Copilot Review — Detailed Workflow:**
 
