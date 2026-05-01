@@ -15,7 +15,7 @@ const LOCAL_REVIEW_TABLE_TEMPLATE = `Use the canonical template:
 
 const OPERATIONAL_SECTION_TEMPLATE = `Use either:
 (a) a markdown table with at least one passing row (✅ / pass / passed); or
-(b) 'not applicable (<category>)' or 'N/A (<category>)' where <category> is one of: docs-only, tooling-only, CI-config-only, docs/CI-only (or a + combination). Optional clarification text inside the parens is accepted.`;
+(b) 'not applicable (<category>)' or 'N/A (<category>)' where <category> is one or more + joined tokens from: docs-only, docs, tooling-only, tooling, CI-config-only, CI-config, CI, docs/CI-only. Optional clarification text inside the parens is accepted.`;
 
 function normalizePath(file) {
   if (typeof file === 'string') return file.replace(/\\/g, '/');
@@ -51,7 +51,7 @@ function classifyPr(files) {
 }
 
 const CATEGORY_TOKEN_PATTERN = '(?:CI-config-only|docs\/CI-only|tooling-only|docs-only|CI-config|tooling|docs|CI)';
-const CATEGORY_SEQUENCE_RE = new RegExp(`^\\s*(${CATEGORY_TOKEN_PATTERN}(?:\\s*\\+\\s*${CATEGORY_TOKEN_PATTERN})*)\\b`, 'i');
+const CATEGORY_SEQUENCE_RE = new RegExp(`^\\s*(${CATEGORY_TOKEN_PATTERN}(?:\\s*\\+\\s*${CATEGORY_TOKEN_PATTERN})*)\\b(?![-/])`, 'i');
 
 function normalizeCategoryToken(token) {
   return String(token || '').trim().toLowerCase();

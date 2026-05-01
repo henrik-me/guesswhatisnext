@@ -109,6 +109,13 @@ describe('check-pr-body', () => {
     expect(findings.join('\n')).toContain('Telemetry Validation');
   });
 
+  test('rejects non-canonical partial category tokens', () => {
+    const findings = runFixture('ci-only-category-rejected');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
   test('rejects tooling-only claims when changed files include runtime code', () => {
     const findings = runFixture('tooling-only-claim-but-files-are-code');
     expect(findings).toHaveLength(2);
