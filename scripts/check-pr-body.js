@@ -15,7 +15,7 @@ const LOCAL_REVIEW_TABLE_TEMPLATE = `Use the canonical template:
 
 const OPERATIONAL_SECTION_TEMPLATE = `Use either:
 (a) a markdown table with at least one passing row (✅ / pass / passed); or
-(b) 'not applicable (<category>)' or 'N/A (<category>)' where <category> is one or more + joined tokens from: docs-only, docs, tooling-only, tooling, CI-config-only, CI-config, CI, docs/CI-only. Optional clarification text inside the parens is accepted.`;
+(b) a not-applicable marker using 'not applicable' or 'N/A', followed by either '(<category>)' or '— <category>', where <category> is one or more + joined tokens from: docs-only, docs, tooling-only, tooling, CI-config-only, CI-config, CI, docs/CI-only. Optional clarification text is accepted inside the parens or after the category in the dash form.`;
 
 function normalizePath(file) {
   if (typeof file === 'string') return file.replace(/\\/g, '/');
