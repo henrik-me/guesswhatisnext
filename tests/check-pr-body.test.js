@@ -115,4 +115,11 @@ describe('check-pr-body', () => {
     expect(findings.join('\n')).toContain('Container Validation');
     expect(findings.join('\n')).toContain('Telemetry Validation');
   });
+
+  test('rejects standalone docs-only claims for mixed docs and tooling files', () => {
+    const findings = runFixture('docs-only-claim-but-files-are-tooling');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
 });

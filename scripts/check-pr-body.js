@@ -57,21 +57,25 @@ function normalizeCategoryToken(token) {
   return String(token || '').trim().toLowerCase();
 }
 
-function categoryTokenMatchesFiles(token, prType, files) {
+function isGenericToolingFile(file) {
+  return isToolingOnlyFile(file) && !isDocsFile(file) && !isCiConfigFile(file);
+}
+
+function categoryTokenMatchesFiles(token, prType, files, isHybrid) {
   const normalized = normalizeCategoryToken(token);
   const hasFiles = files.length > 0;
   const allToolingOnly = hasFiles && files.every(isToolingOnlyFile);
   if (normalized === 'docs-only' || normalized === 'docs') {
-    return prType === 'docs-only' || (allToolingOnly && files.some(isDocsFile));
+    return isHybrid ? allToolingOnly && files.some(isDocsFile) : prType === 'docs-only';
   }
   if (normalized === 'ci-config-only' || normalized === 'ci-config' || normalized === 'ci') {
-    return prType === 'CI-config-only' || (allToolingOnly && files.some(isCiConfigFile));
+    return isHybrid ? allToolingOnly && files.some(isCiConfigFile) : prType === 'CI-config-only';
   }
   if (normalized === 'tooling-only' || normalized === 'tooling') {
-    return allToolingOnly;
+    return isHybrid ? allToolingOnly && files.some(isGenericToolingFile) : allToolingOnly;
   }
   if (normalized === 'docs/ci-only') {
-    return prType === 'docs-only' || prType === 'CI-config-only' || (hasFiles && files.every(file => isDocsFile(file) || isCiConfigFile(file)));
+    return hasFiles && files.every(file => isDocsFile(file) || isCiConfigFile(file));
   }
   return false;
 }
@@ -87,7 +91,7 @@ function hasAllowedNotApplicableMarker(text, prType, files) {
   let match;
   while ((match = markerRe.exec(String(text || ''))) !== null) {
     const tokens = parseCategoryTokens(match[1] || match[2]);
-    if (tokens.length > 0 && tokens.every(token => categoryTokenMatchesFiles(token, prType, files))) return true;
+    if (tokens.length > 0 && tokens.every(token => categoryTokenMatchesFiles(token, prType, files, tokens.length > 1))) return true;
   }
   return false;
 }
