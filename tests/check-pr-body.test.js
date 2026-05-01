@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { run } = require('../scripts/check-pr-body.js');
+const { checkPrBody, run } = require('../scripts/check-pr-body.js');
 
 const FIXTURES = path.join(__dirname, 'fixtures', 'check-pr-body');
 
@@ -61,6 +61,14 @@ describe('check-pr-body', () => {
 
   test('allows docs-only not-applicable sections', () => {
     expect(runFixture('docs-only-escape')).toEqual([]);
+  });
+
+  test('allows docs-only Local Review exemption with inline clarification', () => {
+    expect(checkPrBody({
+      body: '## Local Review: not applicable (docs-only — no code changed)\n\n## Container Validation: not applicable (docs-only)\n\n## Telemetry Validation: not applicable (docs-only)',
+      files: ['README.md'],
+      commitOids: new Set(),
+    })).toEqual([]);
   });
 
   test('treats files under docs as docs-only', () => {

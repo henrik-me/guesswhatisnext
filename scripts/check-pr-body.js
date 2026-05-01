@@ -184,7 +184,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
   let section = findSection(body, LOCAL_REVIEW, { exact: true });
   if (!section && prType === 'docs-only') {
     const flexibleSection = findSection(body, LOCAL_REVIEW);
-    if (flexibleSection && /not applicable \(docs-only\)/i.test(flexibleSection.fullText)) return;
+    if (flexibleSection && /not applicable \(docs-only\b[^)]*\)/i.test(flexibleSection.fullText)) return;
     section = flexibleSection;
   }
   if (!section) {
@@ -192,7 +192,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
     return;
   }
 
-  if (prType === 'docs-only' && /not applicable \(docs-only\)/i.test(section.fullText)) return;
+  if (prType === 'docs-only' && /not applicable \(docs-only\b[^)]*\)/i.test(section.fullText)) return;
 
   const table = parseFirstMarkdownTable(section.content);
   if (!table) {
