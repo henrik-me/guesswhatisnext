@@ -5,7 +5,7 @@
 **Parallel-safe with:** any
 **Goal:** Emit lightweight client telemetry from ProgressiveLoader on exit of the 503-retry warmup path so we can observe in production how often the path fires, how long real users wait, and how often the 35s wall-clock cap exhausts. Replaces "test cold-start in production" (not safely possible) with continuous observation.
 
-**Scope carve-out (2026-04-29):** Originally CS47 also included the Azure Monitor alert (was CS47-4) and workbook/dashboard (was CS47-5). Both depend on ≥1 week of real prod baseline data to set thresholds and design the panels meaningfully — and prod cold-start telemetry is currently noisy / not representative because Azure SQL is in capacity-exhausted state. Both items are moved to **[CS70 — Progressive Loader Warmup Alert And Dashboard](../planned/planned_cs70_progressive-loader-warmup-alert-and-dashboard.md)**, picked up after CS47 ships and the DB is healthy. CS47 now ends at "telemetry pipeline shipped + verified end-to-end against staging AI from a local container, with `environment` tag in place so dev traffic never trips a future prod alert."
+**Scope carve-out (2026-04-29):** Originally CS47 also included the Azure Monitor alert (was CS47-4) and workbook/dashboard (was CS47-5). Both depend on ≥1 week of real prod baseline data to set thresholds and design the panels meaningfully — and prod cold-start telemetry is currently noisy / not representative because Azure SQL is in capacity-exhausted state. Both items are moved to **[CS72 — Progressive Loader Warmup Alert And Dashboard](../planned/planned_cs72_progressive-loader-warmup-alert-and-dashboard.md)** (renumbered from CS70 on 2026-05-01 to resolve a number collision with CS70 role-change JWT invalidation), picked up after CS47 ships and the DB is healthy. CS47 now ends at "telemetry pipeline shipped + verified end-to-end against staging AI from a local container, with `environment` tag in place so dev traffic never trips a future prod alert."
 
 **Origin:** Deferred from CS42 (see `project/clickstops/done/done_cs42_production-cold-start-messages.md` — Plan Refinement Round 2, finding #7, rubber-duck critique 2026-04-21). Originally proposed as CS42-5b, the rubber-duck review (gpt-5.4) flagged it as scope creep for a UX-polish clickstop: the existing `/api/telemetry/errors` endpoint is specifically error-shaped, and adding generic client UX telemetry + alerting is a new observability feature, not a small UX fix. CS42 is closing with E2E (CS42-5a/5b) + one-time manual prod verification (CS42-5c) as the evidence bar; CS47 adds the continuous-observation layer once CS42 lands.
 
@@ -51,9 +51,9 @@ After CS42 ships, there is no signal from production telling us whether the Prog
 
 ## Will not be done as part of this clickstop
 
-- **Azure Monitor alert rule.** Provisioning the scheduled query rule + Action Group + threshold tuning. → **[CS70](../planned/planned_cs70_progressive-loader-warmup-alert-and-dashboard.md)**.
-- **Azure Monitor workbook / dashboard.** Panels, queries, layout. → **[CS70](../planned/planned_cs70_progressive-loader-warmup-alert-and-dashboard.md)**.
-- **Threshold tuning** for the future alert — needs ≥1 week of real prod data with a healthy Azure SQL. → CS70.
+- **Azure Monitor alert rule.** Provisioning the scheduled query rule + Action Group + threshold tuning. → **[CS72](../planned/planned_cs72_progressive-loader-warmup-alert-and-dashboard.md)**.
+- **Azure Monitor workbook / dashboard.** Panels, queries, layout. → **[CS72](../planned/planned_cs72_progressive-loader-warmup-alert-and-dashboard.md)**.
+- **Threshold tuning** for the future alert — needs ≥1 week of real prod data with a healthy Azure SQL. → CS72.
 - **Production cold-start probe.** This CS does not run real cold-start in prod; the local-container → staging path with the CS53-10 simulator is the validation channel.
 
 ## Cross-references
@@ -61,4 +61,4 @@ After CS42 ships, there is no signal from production telling us whether the Prog
 - CS42 (done) — origin clickstop for the ProgressiveLoader retry path.
 - CS53-10 (done) — `GWN_SIMULATE_DB_UNAVAILABLE=transient` + `GWN_SIMULATE_COLD_START_FAILS=N` simulator, used by CS47-4 to drive the warmup path during validation.
 - CS54-9 (deferred) — Pino → AI log forwarding gap that justifies the dual-emit design.
-- [CS70 — Progressive Loader Warmup Alert And Dashboard](../planned/planned_cs70_progressive-loader-warmup-alert-and-dashboard.md) — picks up where CS47 ends.
+- [CS72 — Progressive Loader Warmup Alert And Dashboard](../planned/planned_cs72_progressive-loader-warmup-alert-and-dashboard.md) — picks up where CS47 ends (renumbered from CS70 on 2026-05-01 to resolve a number collision).

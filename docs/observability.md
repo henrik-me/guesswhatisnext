@@ -612,7 +612,7 @@ ContainerAppConsoleLogs_CL
 - **Spike in `aborted` immediately after a deploy** → a client timeout or route regression may be terminating retry attempts before recovery; inspect recent ProgressiveLoader and route changes.
 - **Rows missing from both queries after a simulator run** → the client beacon or `/api/telemetry/ux-events` route is broken. Check the Playwright request-capture test and local container logs before looking at Azure ingestion.
 
-**Cross-link:** [CS70](../project/clickstops/planned/planned_cs70_progressive-loader-warmup-alert-and-dashboard.md) owns the Azure Monitor alert and workbook/dashboard built on these queries once at least one week of post-deploy baseline data is available.
+**Cross-link:** [CS72](../project/clickstops/planned/planned_cs72_progressive-loader-warmup-alert-and-dashboard.md) owns the Azure Monitor alert and workbook/dashboard built on these queries once at least one week of post-deploy baseline data is available.
 
 ### Ranked puzzle pool seed (CS52-2 / CS52-followup)
 
