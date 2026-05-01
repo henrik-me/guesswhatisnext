@@ -225,7 +225,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
 
 function rowHasPassingCell(row, resultIdx = -1) {
   const rowText = row.cells.join(' ');
-  if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed)?\b)/i.test(rowText)) return false;
+  if (/(?:❌|:x:|\bfail(?:ed|ure)?\b|\bnot\s+pass(?:ed|ing)?\b)/i.test(rowText)) return false;
   const cells = resultIdx === -1 ? row.cells : [row.cells[resultIdx] || ''];
   return cells.some(cell => /(?:✅|:white_check_mark:|\bpass(?:ed|ing)?\b)/i.test(cell));
 }
@@ -259,6 +259,11 @@ function validateOperationalSection(body, title, prType, files, findings) {
   }
 
   const hasAllowedEscape = hasAllowedNotApplicableMarker(section.fullText, prType, files);
+  if (section.header.trim() !== `## ${title}` && !hasAllowedEscape) {
+    findings.push(withSee(title, `'## ${title}' heading must be exact unless it uses a valid not-applicable category. ${OPERATIONAL_SECTION_TEMPLATE}`));
+    return;
+  }
+
   const hasPassingEvidence = title === CONTAINER_VALIDATION
     ? hasContainerValidationTable(section)
     : hasPassingValidationRow(section) || hasCheckedValidationItem(section);
