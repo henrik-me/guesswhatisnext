@@ -50,7 +50,7 @@ This preserves the review audit trail in the PR for future reference.
 | **Docs-only** (clickstop files, CONTEXT.md, README, INSTRUCTIONS.md) | ✅ Required | ⏭️ Skip | Local review is sufficient; Copilot review adds 10+ min overhead for no additional value |
 | **Config/CI changes** (workflows, Dockerfile, docker-compose) | ✅ Required | ✅ Required | Security-sensitive changes need Copilot review |
 
-**Docs-only PR definition:** A PR is docs-only if it modifies ONLY files with extensions `.md`, or files anywhere under `project/clickstops/` (including the `planned/`, `active/`, and `done/` subdirectories). If ANY non-docs file is changed, treat it as a code PR.
+**Docs-only PR definition:** A PR is docs-only if it modifies ONLY files with extensions `.md`, files anywhere under `docs/`, or files anywhere under `project/clickstops/` (including the `planned/`, `active/`, and `done/` subdirectories). If ANY non-docs file outside those paths is changed, treat it as a code PR.
 
 **Merge gates by PR type:**
 - **Code/config/CI PRs:** Copilot clean (`COMMENTED` with no new comments and all inline threads resolved, or `APPROVED`) + local review clean + CI green. Copilot review is mandatory; skipping it on a non-docs PR is a process violation. If GitHub branch protection still blocks because Copilot did not emit `APPROVED`, use the normal `gh pr merge --squash --admin` path documented in [OPERATIONS.md § Merge gate: Copilot COMMENTED with all threads resolved](OPERATIONS.md#merge-gate-copilot-commented-with-all-threads-resolved).
