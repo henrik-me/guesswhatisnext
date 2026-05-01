@@ -265,7 +265,7 @@ Capture the validation in the PR body under a `## Telemetry Validation` section.
 
 - The heading must be exactly `## Telemetry Validation` unless the PR is exempt as described below.
 - Evidence may be either a markdown table with at least one passing row (`✅`, `pass`, or `passed`) or a checklist with at least one checked item (`- [x] ...`).
-- Docs-only, CI-config-only, docs/CI-only, tooling-only, or supported `+` combinations may use `## Telemetry Validation: not applicable (<category>)`, with optional clarification text after the category inside the parentheses; accepted category tokens are `docs-only`, `CI-config-only`, `docs/CI-only`, and `tooling-only` (plus combinations such as `tooling-only+docs-only`).
+- Docs-only, CI-config-only, docs/CI-only, tooling-only, or supported `+` combinations may use `## Telemetry Validation: not applicable (<category>)`, with optional clarification text after the category inside the parentheses; canonical category tokens are `docs-only`, `CI-config-only`, `docs/CI-only`, and `tooling-only` (plus combinations such as `tooling-only+docs-only`). The gate also accepts the legacy marker `N/A`, dash/colon separators, and aliases `docs`, `CI-config`, `CI`, and `tooling`; prefer the canonical parenthesized form in new PR bodies.
 
 Checklist format:
 

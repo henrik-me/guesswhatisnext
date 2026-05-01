@@ -235,7 +235,7 @@ If validation fails at any step, do not request the next review round; fix and r
 
 - The heading must be exactly `## Container Validation` unless the PR is exempt as described below.
 - Runtime / DB-touching PRs must use a markdown table with the columns `Cycle`, `Timestamp (UTC)`, `Result`, and `Notes`, and at least one row whose `Result`/row text is passing (`✅`, `pass`, or `passed`) and not failing.
-- Docs-only, CI-config-only, docs/CI-only, tooling-only, or supported `+` combinations may use `## Container Validation: not applicable (<category>)`, with optional clarification text after the category inside the parentheses; accepted category tokens are `docs-only`, `CI-config-only`, `docs/CI-only`, and `tooling-only` (plus combinations such as `tooling-only+docs-only`).
+- Docs-only, CI-config-only, docs/CI-only, tooling-only, or supported `+` combinations may use `## Container Validation: not applicable (<category>)`, with optional clarification text after the category inside the parentheses; canonical category tokens are `docs-only`, `CI-config-only`, `docs/CI-only`, and `tooling-only` (plus combinations such as `tooling-only+docs-only`). The gate also accepts the legacy marker `N/A`, dash/colon separators, and aliases `docs`, `CI-config`, `CI`, and `tooling`; prefer the canonical parenthesized form in new PR bodies.
 
 ```
 ## Container Validation
