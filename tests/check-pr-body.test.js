@@ -116,6 +116,20 @@ describe('check-pr-body', () => {
     expect(findings.join('\n')).toContain('Telemetry Validation');
   });
 
+  test('rejects whitespace-only not-applicable category separators', () => {
+    const findings = runFixture('whitespace-only-category-separator-rejected');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
+  test('rejects malformed hybrid category suffixes', () => {
+    const findings = runFixture('malformed-hybrid-category-rejected');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
   test('rejects tooling-only claims when changed files include runtime code', () => {
     const findings = runFixture('tooling-only-claim-but-files-are-code');
     expect(findings).toHaveLength(2);

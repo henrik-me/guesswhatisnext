@@ -81,13 +81,16 @@ function categoryTokenMatchesFiles(token, prType, files, isHybrid) {
 }
 
 function parseCategoryTokens(categoryText) {
-  const match = CATEGORY_SEQUENCE_RE.exec(String(categoryText || ''));
+  const text = String(categoryText || '');
+  const match = CATEGORY_SEQUENCE_RE.exec(text);
   if (!match) return [];
+  const remainder = text.slice(match[0].length);
+  if (/^\s*\+/.test(remainder)) return [];
   return match[1].split(/\s*\+\s*/).map(normalizeCategoryToken);
 }
 
 function hasAllowedNotApplicableMarker(text, prType, files) {
-  const markerRe = /\b(?:not applicable|N\/A)\b\s*(?:[—:-]\s*)?(?:\(([^)\r\n]+)\)|([^\r\n|]+))/ig;
+  const markerRe = /\b(?:not applicable|N\/A)\b\s*(?:(?:[—:-]\s*)?\(([^)\r\n]+)\)|[—:-]\s*([^\r\n|]+))/ig;
   let match;
   while ((match = markerRe.exec(String(text || ''))) !== null) {
     const tokens = parseCategoryTokens(match[1] || match[2]);
