@@ -111,6 +111,16 @@ describe('check-pr-body', () => {
     })).toEqual([]);
   });
 
+  test('rejects docs-only Local Review suffixes that are not exemptions', () => {
+    const findings = checkPrBody({
+      body: '## Local Review: custom suffix\n| Round | Finding | Fix |\n|---|---|---|\n| 1 | Clean | clean - no issues found |\n\n## Container Validation: not applicable (docs-only)\n\n## Telemetry Validation: not applicable (docs-only)',
+      files: ['README.md'],
+      commitOids: new Set(),
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain("missing exact '## Local Review'");
+  });
+
   test('treats files under docs as docs-only', () => {
     expect(runFixture('docs-folder-escape')).toEqual([]);
   });

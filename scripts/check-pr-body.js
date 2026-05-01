@@ -185,7 +185,6 @@ function validateLocalReview(body, prType, commitOids, findings) {
   if (!section && prType === 'docs-only') {
     const flexibleSection = findSection(body, LOCAL_REVIEW);
     if (flexibleSection && /not applicable \(docs-only\b[^)]*\)/i.test(flexibleSection.fullText)) return;
-    section = flexibleSection;
   }
   if (!section) {
     findings.push(withSee(LOCAL_REVIEW, `PR body missing exact '## ${LOCAL_REVIEW}' section. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
