@@ -7,6 +7,16 @@ const LOCAL_REVIEW = 'Local Review';
 const CONTAINER_VALIDATION = 'Container Validation';
 const TELEMETRY_VALIDATION = 'Telemetry Validation';
 
+const SECTION_DOC_LINKS = {
+  [LOCAL_REVIEW]: 'REVIEWS.md#local-review-loop',
+  [CONTAINER_VALIDATION]: 'OPERATIONS.md#cold-start-container-validation',
+  [TELEMETRY_VALIDATION]: 'CONVENTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work',
+};
+
+function withSee(title, message) {
+  return `${message}\nSee: ${SECTION_DOC_LINKS[title]}`;
+}
+
 const LOCAL_REVIEW_TABLE_TEMPLATE = `Use the canonical template:
 ## Local Review
 | Round | Finding | Fix |
@@ -178,7 +188,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
     section = flexibleSection;
   }
   if (!section) {
-    findings.push(`PR body missing exact '## ${LOCAL_REVIEW}' section. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
+    findings.push(withSee(LOCAL_REVIEW, `PR body missing exact '## ${LOCAL_REVIEW}' section. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
     return;
   }
 
@@ -186,7 +196,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
 
   const table = parseFirstMarkdownTable(section.content);
   if (!table) {
-    findings.push(`'## ${LOCAL_REVIEW}' must contain a markdown table. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
+    findings.push(withSee(LOCAL_REVIEW, `'## ${LOCAL_REVIEW}' must contain a markdown table. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
     return;
   }
 
@@ -194,7 +204,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
   const findingIdx = columnIndex(table.headers, /^finding$/i);
   const fixIdx = columnIndex(table.headers, /^fix$/i);
   if (roundIdx === -1 || fixIdx === -1) {
-    findings.push(`'## ${LOCAL_REVIEW}' table must include Round and Fix columns. ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
+    findings.push(withSee(LOCAL_REVIEW, `'## ${LOCAL_REVIEW}' table must include Round and Fix columns. ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
     return;
   }
 
@@ -209,7 +219,7 @@ function validateLocalReview(body, prType, commitOids, findings) {
   });
 
   if (!hasValidRow) {
-    findings.push(`'## ${LOCAL_REVIEW}' table needs a Round >= 1 row whose Fix references a PR commit SHA (or a clean-review row). ${LOCAL_REVIEW_TABLE_TEMPLATE}`);
+    findings.push(withSee(LOCAL_REVIEW, `'## ${LOCAL_REVIEW}' table needs a Round >= 1 row whose Fix references a PR commit SHA (or a clean-review row). ${LOCAL_REVIEW_TABLE_TEMPLATE}`));
   }
 }
 
@@ -230,7 +240,7 @@ function hasCheckedValidationItem(section) {
 function validateOperationalSection(body, title, prType, files, findings) {
   const section = findSection(body, title);
   if (!section) {
-    findings.push(`PR body missing '## ${title}' section. ${OPERATIONAL_SECTION_TEMPLATE}`);
+    findings.push(withSee(title, `PR body missing '## ${title}' section. ${OPERATIONAL_SECTION_TEMPLATE}`));
     return;
   }
 
@@ -239,7 +249,7 @@ function validateOperationalSection(body, title, prType, files, findings) {
     (title === TELEMETRY_VALIDATION && hasCheckedValidationItem(section));
 
   if (!hasPassingEvidence && !hasAllowedEscape) {
-    findings.push(`'## ${title}' is missing valid validation evidence. ${OPERATIONAL_SECTION_TEMPLATE}`);
+    findings.push(withSee(title, `'## ${title}' is missing valid validation evidence. ${OPERATIONAL_SECTION_TEMPLATE}`));
   }
 }
 

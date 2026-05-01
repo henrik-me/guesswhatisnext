@@ -231,7 +231,11 @@ If validation fails at any step, do not request the next review round; fix and r
 
 **How.** Run `npm run container:validate` from the worktree root. The script (`scripts/container-validate.js`) handles full restart, readiness wait, smoke probe, log capture on failure, and teardown. Override env vars: `COLD_START_MS` (default 30000), `HTTPS_PORT` / `HTTP_PORT` (defaults 8443 / 3001), `COMPOSE_PROJECT` (default derived from cwd basename + 8-char hash of the absolute path so concurrent worktrees do not collide), `KEEP_RUNNING=1` (skip teardown for debugging). Note: `/api/db-status` (when CS53-8b lands) is safe to probe externally — it reads in-memory state only and does not touch the DB.
 
-**What to record.** Append a `## Container Validation` section to the PR body with one entry per cycle, e.g.:
+**What to record.** Append a `## Container Validation` section to the PR body. This is the canonical PR-body schema for the container-validation gate:
+
+- The heading must be exactly `## Container Validation` unless the PR is exempt as described below.
+- Runtime / DB-touching PRs must use a markdown table with the columns `Cycle`, `Timestamp (UTC)`, `Result`, and `Notes`, and at least one row whose `Result`/row text is passing (`✅`, `pass`, or `passed`) and not failing.
+- Docs-only, CI-config-only, docs/CI-only, tooling-only, or supported `+` combinations may use `## Container Validation: not applicable (<category>)`, with optional clarification text after the category inside the parentheses; accepted category tokens are `docs-only`, `CI-config-only`, `docs/CI-only`, and `tooling-only` (plus combinations such as `tooling-only+docs-only`).
 
 ```
 ## Container Validation
@@ -243,7 +247,7 @@ If validation fails at any step, do not request the next review round; fix and r
 | Post-Copilot R1    | 2026-04-24T09:55Z | ✅ pass | saw 1×503 then 200 in 31s |
 ```
 
-A docs-only or CI-config-only PR may instead state `## Container Validation: not applicable (docs/CI-only)`.
+Example exemption: `## Container Validation: not applicable (tooling-only — no server/client/DB code changed)`.
 
 **Model selection:** The preferred model for both orchestrators and sub-agents is Claude Opus 4.7 or higher (use the 1M context variant — e.g. `claude-opus-4.6-1m` — when available). GPT 5.5 or higher (`gpt-5.5` is the floor) is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 

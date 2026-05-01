@@ -21,6 +21,14 @@ function runFixture(name) {
 }
 
 describe('check-pr-body', () => {
+  test('failure messages link to canonical PR-body section docs', () => {
+    const findings = runFixture('paginated-files-complete');
+    expect(findings).toHaveLength(3);
+    expect(findings.find(finding => finding.includes('Local Review'))).toContain('See: REVIEWS.md#local-review-loop');
+    expect(findings.find(finding => finding.includes('Container Validation'))).toContain('See: OPERATIONS.md#cold-start-container-validation');
+    expect(findings.find(finding => finding.includes('Telemetry Validation'))).toContain('See: CONVENTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work');
+  });
+
   test('passes for a full code/config PR body', () => {
     expect(runFixture('passing')).toEqual([]);
   });

@@ -261,7 +261,13 @@ Each new telemetry signal must be confirmed working in three environments before
 2. **Staging (`gwn-ai-staging`).** Wake `gwn-staging` if scale-to-zero (per [CS58](project/clickstops/done/done_cs58_scale-staging-to-zero.md) the live state is `minReplicas=0`), hit the new code path with at least one real request, wait ~5 min, run the documented KQL query, confirm rows appear with the expected shape. Use `az monitor app-insights query --app gwn-ai-staging -g gwn-rg --analytics-query '<kql>'` for scripted runs.
 3. **Production (`gwn-ai-production`).** Same as staging, against `gwn-ai-production`. Production validation can lag the PR merge if the change is gated behind a feature flag — but it must happen before the change is enabled in prod, and the validation result must be recorded somewhere durable (PR description follow-up comment, or a workboard note that points back to the PR).
 
-Capture the validation in the PR body under a `## Telemetry Validation` section that mirrors the existing `## Container Validation` section. Format:
+Capture the validation in the PR body under a `## Telemetry Validation` section. This is the canonical PR-body schema for the telemetry-validation gate:
+
+- The heading must be exactly `## Telemetry Validation` unless the PR is exempt as described below.
+- Evidence may be either a markdown table with at least one passing row (`✅`, `pass`, or `passed`) or a checklist with at least one checked item (`- [x] ...`).
+- Docs-only, CI-config-only, docs/CI-only, tooling-only, or supported `+` combinations may use `## Telemetry Validation: not applicable (<category>)`, with optional clarification text after the category inside the parentheses; accepted category tokens are `docs-only`, `CI-config-only`, `docs/CI-only`, and `tooling-only` (plus combinations such as `tooling-only+docs-only`).
+
+Checklist format:
 
 ```markdown
 ## Telemetry Validation
@@ -271,7 +277,7 @@ Capture the validation in the PR body under a `## Telemetry Validation` section 
 - [x] Production (`gwn-ai-production`): same query returned N rows within 5 min of probe. (Or: deferred to feature-flag enablement; tracking in <CS-link or PR comment>.)
 ```
 
-If any of the three is "not applicable" (e.g. a backend-only change with no client-facing trigger means production validation has to wait for real user traffic), say so explicitly and explain — the empty checkbox is the point. Skipping the section entirely fails the PR review gate.
+If any of the three is "not applicable" (e.g. a backend-only change with no client-facing trigger means production validation has to wait for real user traffic), say so explicitly and explain — the empty checkbox is the point. Skipping the section entirely fails the PR review gate. Example exemption: `## Telemetry Validation: not applicable (tooling-only — no runtime code path or telemetry surface changed)`.
 
 ### How this interacts with existing rules
 
@@ -323,6 +329,17 @@ Commit locally after every meaningful, working change — each commit should be 
 - Each round of PR review fixes
 
 **Commit messages must be descriptive** — they are the audit trail for what happened and why. Use conventional commit format (see above).
+
+Every non-merge commit on a PR branch must include both trailers below:
+
+```
+Agent: <orchestrator>/<context>
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+```
+
+The `Agent:` value is slash-separated; use the orchestrator id and task/context, for example `Agent: yoga-gwn/cs66-3-doc-hardening`. The commit-trailer gate checks every non-merge commit in `origin/main..HEAD` for both trailers.
+
+Allowlist: commits whose **all** changed paths are `WORKBOARD.md` and/or `project/clickstops/**` are exempt because they are direct-on-main orchestrator coordination commits. Those commits follow [TRACKING.md § WORKBOARD.md — Live Coordination](TRACKING.md#workboardmd--live-coordination) and may use the single-token `Agent: <orchestrator-id>` form instead of the slash-separated PR-branch form. Mixed commits that also touch any other path are not exempt.
 
 **Do not** batch unrelated changes into one commit. Two distinct actions = two commits.
 

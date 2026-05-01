@@ -26,14 +26,19 @@ Before requesting Copilot PR review, sub-agents **must** run a local review loop
 - PR body has a `## Container Validation` section with at least one passing cycle dated within the last hour, OR the PR is a docs/CI-only change (see [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation)).
 
 **Documenting review findings:**
-After each local review round, update the PR description with a log of findings and fixes:
+After each local review round, update the PR description with a `## Local Review` section. This is the canonical PR-body schema for the local-review gate:
+
+- The heading must be exactly `## Local Review`. For docs-only PRs, the section may instead be headed `## Local Review: not applicable (docs-only)` with optional clarification text after the category.
+- The body must be a markdown table with the columns `Round`, `Finding`, and `Fix`. Bullet lists and prose-only summaries are not accepted by the gate.
+- At least one row must have a numeric `Round` (`1` or higher). The `Fix` cell must reference a PR commit SHA, or the row must contain `clean — no issues found` / `clean - no issues found` to document a clean review round.
+
 ```
-### Local Review Log
+## Local Review
 | Round | Finding | Fix |
 |-------|---------|-----|
 | 1 | CONTEXT.md workflow text still says "pre-branch-protection" | Fixed in [`abc1234`](commit-url) |
 | 2 | CS26-8 references WORKBOARD.md instead of INSTRUCTIONS.md | Fixed in [`def5678`](commit-url) |
-| 3 | Clean — no issues found | — |
+| 3 | Clean — no issues found | clean — no issues found |
 ```
 This preserves the review audit trail in the PR for future reference.
 
