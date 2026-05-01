@@ -1,0 +1,24 @@
+{
+  "details": {
+    "body": "## Summary\n\nDocs only.\n\n## Local Review\n\n| Round | Finding | Fix |\n|-------|---------|-----|\n| 1 | Clean — no issues found | — |\n\n## Container Validation: not applicable (docs-only+made-up)\n\n## Telemetry Validation: N/A (docs-only + typo)\n",
+    "files": [
+      {
+        "path": "README.md"
+      }
+    ],
+    "headRefName": "feature",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      {
+        "oid": "abcdef1234567890abcdef1234567890abcdef12"
+      }
+    ]
+  },
+  "files": {
+    "files": [
+      "README.md"
+    ]
+  }
+}

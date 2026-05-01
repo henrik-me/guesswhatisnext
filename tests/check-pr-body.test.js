@@ -82,4 +82,65 @@ describe('check-pr-body', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain('Round >= 1');
   });
+
+  test('allows tooling-only not-applicable markers with inline clarification', () => {
+    expect(runFixture('tooling-only-with-clarification')).toEqual([]);
+  });
+
+  test('allows hybrid docs+tooling not-applicable categories', () => {
+    expect(runFixture('hybrid-category-docs-tooling')).toEqual([]);
+  });
+
+  test('allows N/A as a docs-only operational-section synonym', () => {
+    expect(runFixture('na-synonym-docs-only')).toEqual([]);
+  });
+
+  test('keeps bullet-form Local Review sections rejected', () => {
+    const findings = runFixture('bullet-form-local-review');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('must contain a markdown table');
+    expect(findings[0]).toContain('| Round | Finding | Fix |');
+  });
+
+  test('rejects unknown not-applicable categories', () => {
+    const findings = runFixture('bogus-category-rejected');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
+  test('rejects non-canonical partial category tokens', () => {
+    const findings = runFixture('ci-only-category-rejected');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
+  test('rejects whitespace-only not-applicable category separators', () => {
+    const findings = runFixture('whitespace-only-category-separator-rejected');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
+  test('rejects malformed hybrid category suffixes', () => {
+    const findings = runFixture('malformed-hybrid-category-rejected');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
+  test('rejects tooling-only claims when changed files include runtime code', () => {
+    const findings = runFixture('tooling-only-claim-but-files-are-code');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
+
+  test('rejects standalone docs-only claims for mixed docs and tooling files', () => {
+    const findings = runFixture('docs-only-claim-but-files-are-tooling');
+    expect(findings).toHaveLength(2);
+    expect(findings.join('\n')).toContain('Container Validation');
+    expect(findings.join('\n')).toContain('Telemetry Validation');
+  });
 });

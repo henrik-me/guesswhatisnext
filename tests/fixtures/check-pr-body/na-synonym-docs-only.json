@@ -1,0 +1,28 @@
+{
+  "details": {
+    "body": "## Summary\n\nDocs only.\n\n## Local Review: not applicable (docs-only)\n\n## Container Validation: N/A — docs-only PR (no server, client, DB, schema, or CI-config code touched).\n\n## Telemetry Validation: n/a: docs-only PR (no runtime code path changed).\n",
+    "files": [
+      {
+        "path": "README.md"
+      },
+      {
+        "path": "project/clickstops/active/active_cs66_pr-body-and-commit-trailer-gates.md"
+      }
+    ],
+    "headRefName": "feature",
+    "headRefOid": "abcdef1234567890abcdef1234567890abcdef12"
+  },
+  "commits": {
+    "commits": [
+      {
+        "oid": "abcdef1234567890abcdef1234567890abcdef12"
+      }
+    ]
+  },
+  "files": {
+    "files": [
+      "README.md",
+      "project/clickstops/active/active_cs66_pr-body-and-commit-trailer-gates.md"
+    ]
+  }
+}
