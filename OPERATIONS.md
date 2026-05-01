@@ -221,7 +221,7 @@ Policy reference: [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database
 
 **Why.** Container/cold-start behavior surfaces issues that unit and E2E tests routinely miss: lazy request-driven DB init, the `503 + Retry-After` warmup path, the SPA `progressive-loader` cycle, and the `Database not yet initialized` vs `Database temporarily unavailable` (no-retry) shape distinction. The `npm run container:validate` script restarts the local MSSQL Docker stack with `GWN_SIMULATE_COLD_START_MS=30000` so the first `mssql-adapter._connect()` after process start sleeps 30 seconds — mimicking Azure SQL serverless auto-pause resume timing — and asserts that a representative unauthenticated DB-touching endpoint (`/api/scores/leaderboard`) gets at least one `503 + Retry-After` then a `200` within `WARMUP_CAP_MS + 30s + COLD_START_MS` (the `COLD_START_MS` term accounts for the simulated server-side delay on top of the SPA-side warmup budget). Both halves of the assertion matter: the 503 proves the warmup retry path was exercised; the 200 proves the request-driven lazy init pattern actually heals without operator intervention.
 
-**When.** Every PR that changes server/client runtime or DB-touching code (i.e. anything that is NOT a docs-only or CI-config-only change) must run validation:
+**When.** Every PR that changes server/client runtime or DB-touching code (i.e. anything that is NOT a docs-only, CI-config-only, docs/CI-only, or tooling-only change) must run validation:
 
 1. **Before requesting local review** — stop the local container, restart it, exercise the affected code paths against the freshly-restarted container.
 2. **After local-review fixes are pushed** — repeat.
