@@ -542,6 +542,36 @@ Following the evaluate-first deferral pattern: each gap below is documented with
 
 If at any point one or more of these gaps is filed as a follow-up, **do not call the new CS "CS55" or any specific number** without first checking `done/`, `active/`, AND `planned/` — CS-numbering is global per the project conventions. Likely the new number is the next free integer after whatever's most recently been filed.
 
+### Refinement notes (2026-05-02)
+
+A draft of the CS54-9 appendix prepared on 2026-04-25 (abandoned PR [#254](https://github.com/henrik-me/guesswhatisnext/pull/254), branch `yoga-gwn-c2/cs54-9-deferred-work-eval`) carried a few package-level details and trade-off arguments that the on-main appendix above does not. They are folded in here so the analysis is durable; the PR itself is being closed without merge because (a) it targeted the now-moved `active/active_cs54_*.md` path, and (b) ~25% of its Gap 1 framing was superseded by the post-CS54 `execSql` finding (see Gap 1 above) before the PR could land.
+
+**Pinned dependency context (2026-04-25 npm registry snapshot — re-verify before acting on the recommendations below):** [`package.json`](../../../package.json) carried `@opentelemetry/sdk-node@^0.214.0`, `@opentelemetry/auto-instrumentations-node@^0.72.0`, `@opentelemetry/api@^1.9.1`, `@azure/monitor-opentelemetry-exporter@^1.0.0-beta.32`. Any future Gap 1 / Gap 2 implementation PR must do an `npm install --dry-run` peer-version compat check before committing.
+
+**Gap 1 — concrete package identification.** The recommended Option A is `@opentelemetry/instrumentation-tedious` (Apache-2.0, last published 0.34.0 on 2026-04-17). `npm view @opentelemetry/instrumentation-mssql` returns 404 — there is no first-party `mssql` package, only the `tedious`-driver instrumentation. CS60-4's filter-widening investigation should target the `instrumentationLibrary.name` produced by `instrumentation-tedious` when verifying whether [`server/telemetry.js:23-27`](../../../server/telemetry.js)'s allow-list filter drops `execSql gwn` spans on the way to the Azure Monitor exporter.
+
+**Gap 2 — `pino-applicationinsights` maintenance staleness (this is the dominant cost of Option A).** `pino-applicationinsights@2.1.0` was last published 2022-05-12 — ~4 years stale at the time of the abandoned PR. The package still installs and works against current Pino majors, but a stale upstream is a long-tail risk for security patches and Node-version compat. If CS60-5 picks Option A, the rollout PR should pair it with a vendoring fallback plan (the package is small; vendoring is feasible if upstream goes fully unmaintained). License is MIT — no concern there. Pino transports run in a worker thread by default, so a stuck/throttled AI ingestion would build a worker-thread queue and eventually drop log records, *not* block the request-handling event loop — but that backpressure model should be verified with a load probe before prod.
+
+**Gap 2 — Option B sharper framing (unified distro).** `@azure/monitor-opentelemetry@1.16.0` (the unified distro, last published 2026-03-19) is the direction Microsoft is steering customers; the standalone `@azure/monitor-opentelemetry-exporter` we use today is technically still a beta package (`1.0.0-beta.32`). Sequencing argument for keeping Option B deferred: don't pay the distro-migration cost until either (i) the standalone exporter announces GA-with-deprecation, or (ii) CS60-5 needs metrics/logs alongside spans for an unrelated reason. Bundling the migration with that future trigger is cheaper than doing it now in isolation.
+
+**Gap 3 — Option B (global handlers) supervisor-conflict argument.** Beyond the brief "explicit `trackException`" framing in Gap 3 above, Option B (global `unhandledRejection`/`uncaughtException` handlers) was originally proposed but should stay deferred regardless of the Gap 2 outcome: an `uncaughtException` handler that does NOT exit turns a fail-fast crash into a zombie process; one that DOES exit duplicates what Container Apps' restart policy already does for free, AND adds a window where the crashing process tries to flush AI buffers (typically a few seconds) before exit, potentially racing the supervisor's kill signal. Either variant changes the operational shape of the service in ways that need their own evaluation outside this gap. `unhandledRejection` is also per-Node-version subtle (the default mode has shifted across Node majors), making the handler easy to get wrong. **Recommendation: file Option B as a separate CS only if a real production incident proves background-failure invisibility is the bottleneck — do not pre-emptively combine it with Gap 3.**
+
+**Gap 1 / Gap 2 explicit "headroom flip" thresholds for CS60-3 readers.** When the +30d ingest measurement lands in the CS60-3{Day30} decision row:
+- If `gwn-ai-production` is > 3 GB/month from `requests` alone → flip Gap 1 to Option C (defer); adding `dependencies` cardinality on top would push us into paid tier.
+- If 1-4 GB/month → consider sampled-export (manual span wrapping in `mssql-adapter.js` for slow paths only) rather than full filter-widening.
+- If < 1 GB/month → Option A (filter widening per the post-close finding) is essentially free.
+For Gap 2: if logs would be 10-20× the request-span volume (typical), > 3 GB/month from `requests` alone implies blowing the 5 GB free tier with logs added — flip Gap 2 to Option C and stay on the cross-table KQL bridge from `docs/observability.md` § B.5.
+
+**Cross-gap summary (refined).**
+
+| Gap | Current recommendation | Sequencing | Implementation home |
+|---|---|---|---|
+| 1 — `dependencies` (mssql / `tedious`) | Filter widening in `server/telemetry.js:23-27` (post-close finding); fall back to `instrumentation-tedious@0.34.0` only if the local `execSql` spans are not actually emitted from the auto-instrumentations bundle | Independent; prefer before CS47 if CS60-3 headroom allows | CS60-4 |
+| 2 — `traces` (Pino → AI) | Stay on cross-table KQL bridge (`docs/observability.md` § B.5) until an incident proves it inadequate; if/when implementing, prefer `pino-applicationinsights` (Option A) over the unified distro (Option B) and pair with a vendoring fallback | After CS60-3 +30d ingest data + first incident-investigation pain point | CS60-5 |
+| 3 — `exceptions` | If CS60-5 picks Option A and Pino's `err` flows through, this is mostly free (Option C). If CS60-5 stays on the bridge, then add explicit `recordException` / `trackException` in [`server/app.js:457`](../../../server/app.js)'s error middleware (Option A); Option B (global handlers) stays out regardless. | Sequenced after CS60-5 | CS60-6 |
+
+Future orchestrators reading this section: re-evaluate after CS60-3{Day30} ingest data is captured. The "what data would change this" signals are explicit so the re-evaluation is mechanical, not subjective.
+
 ---
 
 ## Closing summary (2026-04-25T22:39Z)
