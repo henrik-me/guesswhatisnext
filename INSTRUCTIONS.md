@@ -88,14 +88,18 @@ The `<orchestrator-id>` matches the `<machine>-gwn[-cN]` format in [WORKBOARD.md
 
 ## Production deploys — approval gate is on the user
 
-`prod-deploy.yml` uses GitHub Environment `production` with required reviewers. After `gh workflow run prod-deploy.yml ...` is dispatched, the run sits in **`waiting`** state until a human reviewer clicks **Approve** in the GitHub Actions UI. The workflow does **not** progress on its own.
+Both `prod-deploy.yml` (Environment: `production`) and `staging-deploy.yml` (Environment: `staging`) use GitHub Environments with **required reviewers**, so dispatched runs sit in **`waiting`** state until a human reviewer clicks **Approve** in the GitHub Actions UI. The workflow does **not** progress on its own. *(Verified via `gh api repos/<owner>/<repo>/environments` 2026-05-03; `staging.protection_rules[].type=required_reviewers` is now configured. The earlier statement that "staging deploys have no such gate" is no longer accurate.)*
 
-**Orchestrator rule when triggering a prod deploy:** the response that triggers the deploy MUST surface the approval state prominently. Recommended template:
+**Orchestrator rule when triggering a deploy:** the response that triggers the deploy MUST surface the approval state prominently. Recommended template:
 
-> ⚠️ **Production deploy `<run-id>` is now waiting on YOUR approval.**
+> ⚠️ **`<environment>` deploy `<run-id>` is now waiting on YOUR approval.**
 > Approve here: `https://github.com/<owner>/<repo>/actions/runs/<run-id>`
 > Image: `<sha>`. Replaces: `<previous-sha>`. Watcher will resume once you click Approve.
 
 Do not bury the approval link inside a status table. Do not assume the user is watching the Actions tab. The deploy is blocked on them, and the orchestrator's job is to make that blocking state unmissable.
 
-Staging deploys have no such gate (they auto-run when `vars.STAGING_AUTO_DEPLOY == 'true'` *or* when triggered via `workflow_dispatch`), so this rule is production-only. Note that Azure `gwn-staging` is being moved to `minReplicas: 0` (scale-to-zero, live state tracks [CS58-1/CS58-2](project/clickstops/done/done_cs58_scale-staging-to-zero.md)) and is not a pre-prod release gate — the enforced gate is the in-CI Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local `npm run container:validate` cycles. See [§ Waking staging for ad-hoc validation in OPERATIONS.md](OPERATIONS.md#waking-staging-for-ad-hoc-validation) for the operator probe procedure.
+**Reruns re-arm the gate.** `gh run rerun --failed` on a workflow run that previously crossed an Environment gate causes the gate to fire **again** for the rerun. Each rerun = one fresh approval click. Plan for this when iterating on a partial-failure recovery (a single recovery may cost multiple approval clicks). Hit four times in CS52-11 prod ceremony.
+
+**`gh run watch` does not signal Environment-approval blocks.** The watcher just sits silently in `waiting` with no output until the human clicks Approve. To distinguish "compute pending" from "approval pending", check job-level state via `gh run view <run-id> --json jobs` and look for a job whose `status == "waiting"` (vs `"in_progress"` for compute). The orchestrator must not assume `gh run watch` will alert on the approval-needed transition — it will not.
+
+Note that Azure `gwn-staging` is being moved to `minReplicas: 0` (scale-to-zero, live state tracks [CS58-1/CS58-2](project/clickstops/done/done_cs58_scale-staging-to-zero.md)) and is not a pre-prod release gate — the enforced gate is the in-CI Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local `npm run container:validate` cycles. See [§ Waking staging for ad-hoc validation in OPERATIONS.md](OPERATIONS.md#waking-staging-for-ad-hoc-validation) for the operator probe procedure.
