@@ -65,7 +65,7 @@ Let user A create a **challenge** (a fixed puzzle set + expiration window), shar
 ## Cross-references
 
 - Architecture review issue [#198](https://github.com/henrik-me/guesswhatisnext/issues/198) Roadmap item H (parent).
-- [CS52](../active/active_cs52_server-authoritative-scoring.md) — server-authoritative scoring (hard prerequisite).
+- [CS52](../done/done_cs52_server-authoritative-scoring.md) — server-authoritative scoring (hard prerequisite, completed 2026-05-03).
 - [CS55](planned_cs55_websocket-notifications-and-redesign.md) — WS notifications (soft dependency for CS71-8 push delivery).
 - [CONVENTIONS.md § Database & Data](../../../CONVENTIONS.md#database--data) — no DB-waking background work (informs CS71-9 design).
 - [CONVENTIONS.md § 4a Telemetry & Observability](../../../CONVENTIONS.md#4a-telemetry--observability-mandatory-for-all-new-work) — telemetry gate.

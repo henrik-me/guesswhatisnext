@@ -394,6 +394,34 @@ Option 1 is preferable because it preserves the simple integer model; option 2 i
 
 ---
 
+### Legacy score reclassification — design deviation in CS52-11 deploy (CS52)
+
+**Date:** 2026-05-03 — applied during CS52-11 production closeout
+
+CS52-2's design tagged pre-CS52 `scores` rows with `source='legacy'` and explicitly excluded them from all public leaderboard filters (profile-only). When the CS52 stack went live in production on 2026-05-03 (image `76f5705`, revision `gwn-production--0000020`), the public leaderboard appeared empty under the default `Ranked` filter (only fresh ranked-mode rows existed yet) and the legacy rows didn't surface under `Offline` either, because the LB query also filters by `variant ∈ {freeplay, daily}` and legacy rows had `variant=NULL`.
+
+The user's reaction at deploy time — "all the old scores are gone!!!! they should have shown up as free play practice" — exposed a mismatch between the design's contract ("legacy is profile-only, predates the validated/self-reported distinction") and the user's mental model ("pre-CS52 single-player play *was* Free Play practice — that's literally the only mode that existed for that data; show it under Offline/All with the Offline badge").
+
+The user direction won. Surgical data fix in prod Azure SQL during CS52-11 closeout:
+
+```sql
+SET QUOTED_IDENTIFIER ON;
+UPDATE scores SET source='offline', variant='freeplay' WHERE source='legacy';
+-- 32 rows updated
+```
+
+After the update, `GET /api/scores/leaderboard?variant=freeplay&source=offline` and `?source=all` return the historical rows including `alex@sandergi.com:3030` at top, with the "Offline" provenance badge.
+
+**Reusable lessons:**
+
+1. **A "predates the contract" data class is fragile UX.** When a new schema introduces a provenance contract (here: ranked vs offline vs legacy), the temptation is to add a third class for pre-existing data and make it invisible to the new surfaces. That's defensible from a contract-purity standpoint but invisible from the player's standpoint — what they see is "my scores disappeared". Either backfill into the closest existing class on day 0, or keep them visible somewhere obvious that the player can opt into without an onboarding flow.
+2. **`SET QUOTED_IDENTIFIER ON` is required for any UPDATE on `scores` in Azure SQL** — the table participates in indexed views / filtered indexes that reject sessions without it. `sqlcmd -I` (`SET QUOTED_IDENTIFIER ON` for the connection) achieves the same; bare `sqlcmd` defaults to OFF.
+3. **A migration policy that's "additive only" still doesn't free you from data-shape decisions.** The CS52 schema migration was perfectly additive (no DROPs, no NOT NULL tightening) and the static linter (CS41-11) and old-rev smoke (CS41-12) both passed cleanly. The user-facing breakage came from a *value* choice — what to populate `source` and `variant` with — not a schema change. The migration policy linter cannot catch this; only deploy-time human review of the user-visible surfaces can.
+
+**Note for future doc reviews:** the CS52-2 design text in [`done_cs52_server-authoritative-scoring.md`](project/clickstops/done/done_cs52_server-authoritative-scoring.md) still describes legacy as profile-only; the CS52-11 outcome section at the top of that file records the production deviation. Anyone reading the design later for guidance on a new mode should treat the live data as authoritative, not the original spec. If a future CS materially re-enters this area (e.g. CS70 / CS71 / leaderboard redesign under CS55), update the LB design doc accordingly so the deviation is rolled into the canonical spec rather than living indefinitely in a closeout addendum.
+
+---
+
 ### `docs/observability.md § B.x` section conflicts under parallel-PR churn (CS53-23)
 
 **Date:** 2026-04-26 — landed via PR #255, squash commit `819e3e1`

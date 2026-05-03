@@ -116,6 +116,15 @@ git rebase --continue   # accepts the existing commit message without prompting
 
 This is unrelated to the user's `~/.gitconfig` editor preference — the env var override is scoped to the agent's session. Equivalent on Unix-like agents: `export GIT_EDITOR=true`.
 
+**`gh secret set` from PowerShell — never pipe via stdin.** The pattern `$pw | gh secret set NAME --body -` silently appends a trailing newline (`\r\n` on Windows PowerShell, `\n` on PowerShell 7) to the secret value because PowerShell pipelines append a record terminator. The secret then arrives at the workflow with a trailing newline, which breaks any downstream consumer that compares it byte-for-byte (e.g. a password going into bcrypt, a token going into an `Authorization` header literal). Hit during CS52-11 prod-deploy ceremony — `SMOKE_USER_PASSWORD_PROD` set via stdin pipe caused CS41-12 login=401 because the stored bcrypt hash was for the password without the newline. **Always pass the value as a `--body` argument directly:**
+
+```powershell
+gh secret set SMOKE_USER_PASSWORD_PROD --body $pw     # ✅ clean
+$pw | gh secret set SMOKE_USER_PASSWORD_PROD --body -  # ❌ appends trailing newline
+```
+
+If the value contains characters that PowerShell's argument parser would mangle (rare for password / token use cases since alphanumeric is sufficient), prefer `--body-file <utf8-no-bom-no-trailing-newline.txt>` over the stdin pipe.
+
 **Worked example — bad vs good heartbeat.** Sub-agent in slot wt-N has been silent on `STATE:` for ~70 minutes but has pushed 4 commits and turned PR #N's CI green:
 
 | ❌ Bad heartbeat (the failure mode) | ✅ Good heartbeat (what the user should see) |
