@@ -6,7 +6,7 @@ This file describes the project's current codebase state and known blockers. **C
 - **Architecture decisions & learnings:** [LEARNINGS.md](LEARNINGS.md)
 - **Development guidelines:** [INSTRUCTIONS.md](INSTRUCTIONS.md)
 
-> **Last updated:** 2026-04-23
+> **Last updated:** 2026-05-03
 
 ---
 
@@ -105,6 +105,6 @@ public/
 - **Staging is being moved to scale-to-zero, on-demand cold-start**: Azure `gwn-staging` is being rolled to `minReplicas: 0` (live state tracks [CS58-1/CS58-2](project/clickstops/done/done_cs58_scale-staging-to-zero.md)). First request after idle pays a cold-start (~10–30s replica + ~30s DB lazy init); a few minutes of zero traffic returns it to $0. It is not a pre-prod release gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local `npm run container:validate`. See the CS file for cost figures and rationale, and [§ Waking staging for ad-hoc validation in OPERATIONS.md](OPERATIONS.md#waking-staging-for-ad-hoc-validation) for the operator probe procedure.
 - **Azure Files storage cleanup**: ✅ Done (PR #49). Azure storage resources (`gwn-storage-staging`, `gwn-storage-production`) still exist in Azure and should be deleted manually.
 - **Staging auto-deploy disabled**: Must manually trigger `workflow_dispatch` after merging to main. Re-enable once stable.
-- **Production deployed**: ✅ Running on Azure SQL (serverless free tier) at [gwn.metzger.dk](https://gwn.metzger.dk). All migrations applied, 504 puzzles seeded.
+- **Production deployed**: ✅ Running on Azure SQL (serverless free tier) at [gwn.metzger.dk](https://gwn.metzger.dk). All migrations applied (8/8 including CS52 ranked schema), 504 puzzles + 54 ranked puzzles seeded. CS52 server-authoritative scoring (Ranked Free Play + Ranked Daily + multiplayer unification + `/api/sync` + `pending_writes` cold-DB queue + `game_configs` admin route) live as of 2026-05-03 on image `76f5705` (revision `gwn-production--0000020`). See [done_cs52](project/clickstops/done/done_cs52_server-authoritative-scoring.md) for the full closeout.
 - **Azure SQL free tier limit**: 1 free DB per subscription. Production gets the free DB; staging uses ephemeral local SQLite.
 - **Artillery / OTel peer-dep warnings on Node ≥ 22.13**: `npm ci` emits OpenTelemetry peer-dependency warnings from the optional `artillery` load-testing dependency tree. Non-blocking install noise; does not affect the runtime telemetry path. No dependency changes planned.

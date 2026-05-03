@@ -1,14 +1,52 @@
 # CS52 — Server Authoritative Scoring
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Complete (2026-05-03T01:55Z, deployed to production)
 **Depends on:** none
 **Parallel-safe with:** CS60, CS63, CS65, CS66, CS67, CS68
-**Owner:** yoga-gwn-c5 (claimed 2026-04-25T18:45Z for CS52-1 design lock-down)
+**Owner:** yoga-gwn-c5 (claimed 2026-04-25T18:45Z for CS52-1 design lock-down; closed 2026-05-03T01:55Z after CS52-11 prod deploy + soak)
 **Goal:** Address [issue #198](https://github.com/henrik-me/guesswhatisnext/issues/198) finding F2 / Recommendation 1 / Roadmap B — make scoring server-authoritative for ranked play — while preserving offline play as a first-class capability and treating offline scores as **personal data synced across the player's devices** rather than as second-class leaderboard entries.
 
 **Origin:** Issue #198 architecture review and a planning conversation on 2026-04-22 with rubber-duck critique. The reframing insight (gameplay-mode split rather than scoring-layer fix) came out of the user observing that you cannot meaningfully separate "scoring" from "gameplay loop" — offline play and server-validated play are different game shapes, not the same loop with different submit endpoints.
 
 ---
+
+## CS52-11 outcome (production deploy + closeout)
+
+**Image deployed:** `ghcr.io/henrik-me/guesswhatisnext:76f5705` → revision `gwn-production--0000020` on `gwn.metzger.dk`. Replaced previous image `6b368de` (286 commits behind main; predated all CS52 work).
+
+**Deploy ceremony runs:**
+- Initial dispatch [25263941898](https://github.com/henrik-me/guesswhatisnext/actions/runs/25263941898) — failed at migration step (Azure SQL serverless auto-paused, 5s connect timeout).
+- Rerun [25263941898](https://github.com/henrik-me/guesswhatisnext/actions/runs/25263941898) — migration applied, then CS41-12 fail-closed because `secrets.SMOKE_USER_PASSWORD_PROD` was unset. Operator manually rolled forward via `az containerapp update --image ghcr.io/henrik-me/guesswhatisnext:76f5705` per playbook (a) in [`prod-deploy.yml` lines 258–269](../../../.github/workflows/prod-deploy.yml). New revision `0000020` came up `Healthy` with 100% traffic.
+- Ceremony rerun [25266752869](https://github.com/henrik-me/guesswhatisnext/actions/runs/25266752869) — first attempt failed CS41-12 login=401 (PowerShell stdin pipe `| gh secret set --body -` appended trailing newline to secret). Re-set secret via `gh secret set --body $pw` directly with alphanumeric-only password; smoke user reseeded; rerun passed all jobs (CS41-12 ✅, CS41-1+2 ✅, CS41-3 ✅, deploy summary ✅, FF release/production ✅, deployment tag pushed ✅).
+
+**Pre-prod root-cause fix folded into CS52-11 (no follow-up CS):**
+- Provisioned `gwn-smoke-bot` user in prod Azure SQL via the existing `POST /api/admin/seed-smoke-user` admin endpoint (CS61-3 D1 — narrow admin endpoint that bypasses the reserved-prefix block via `requireSystem` auth).
+- Set GitHub secret `SMOKE_USER_PASSWORD_PROD` (alphanumeric 32-char password, set via `gh secret set --body $pw` not stdin pipe).
+- Future prod deploys go through `prod-deploy.yml` end-to-end without the operator workaround.
+
+**Post-deploy validation (manual operator probe against `gwn.metzger.dk`):**
+- `scripts/cs52-10-staging-probe.js` against prod = **5 PASS / 0 FAIL / 1 SKIP** (e=manual App Insights):
+  - (a) Ranked Free Play `score=395`, Ranked Daily second attempt `409`
+  - (b) Concurrent active-session race `[201, 409]` (UNIQUE INDEX `idx_ranked_sessions_user_active` enforced)
+  - (c) `POST /api/sync` happy path `200`
+  - (d) Admin `PUT /api/admin/game-configs/multiplayer` flip→7 `200` / bounds-reject `400` / unauth `401` / revert `200`
+  - (f) `GET /api/admin/migrations` `200`, `applied=8/8`, `cs52-ranked-schema-applied=true`
+  - (e) App Insights spot-check (T+30min post-deploy): **0 exceptions, 0 5xx**, all CS52 endpoints serving 200s. Hits visible: `POST /api/sessions/:id/answer` ×20, `POST /api/sessions/:id/next-round` ×18, `POST /api/sessions` ×8 (4×201 + 4×409), `POST /api/sessions/:id/finish` ×2, `POST /api/sync` ×4, `PUT /api/admin/game-configs/:mode` ×2, `POST /api/admin/seed-ranked-puzzles` ×1, `POST /api/admin/seed-smoke-user` ×2.
+
+**Operator data fixes applied to prod DB (also in CS52-11 scope):**
+1. `POST /api/admin/seed-ranked-puzzles` → `{inserted:54, skipped:0, total:54, version:1}`. Required because the CS52-2 seed runs against staging's container-local SQLite; prod's Azure SQL needed a one-time post-deploy seed.
+2. **Legacy score reclassification (deviation from original CS52-2 design — owner-approved):** the original design tagged pre-CS52 rows `source='legacy'` and excluded them from all public leaderboard filters (profile-only). Per user direction at closeout (*"all the old scores are gone!!!! they should have shown up as free play practice"*), applied:
+   ```sql
+   UPDATE scores SET source='offline', variant='freeplay' WHERE source='legacy';
+   ```
+   32 rows updated. Verified: `GET /api/scores/leaderboard?variant=freeplay&source=offline` and `&source=all` now return the historical rows including `alex@sandergi.com:3030` at top. The 32 legacy rows are now treated as Local Free Play / Offline practice with the "Offline" provenance badge — matching the user's mental model that pre-CS52 single-player play was Free Play practice (which it literally was — Local Free Play is the only mode that existed for that data).
+
+**Open questions / not covered:**
+- The legacy→offline data fix was applied directly to prod DB without an automated migration. If we ever rebuild prod from scratch (unlikely), the migration would need a similar UPDATE step. Acceptable risk: prod DB is the source of truth and isn't rebuilt.
+- App Insights soak was a single T+30min spot-check, not the originally-planned 60-min continuous monitor. Operator should keep an eye on App Insights through the next 24h and roll back via `prod-deploy.yml` rollback path if anything regresses.
+
+---
+
 
 ## Problem
 
