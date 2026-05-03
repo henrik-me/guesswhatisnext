@@ -1,4 +1,4 @@
-# CS73 — Prod-Deploy Migration Step Hardened Against Azure SQL Cold-Pause
+# CS73 — Prod-Deploy Cold DB Handling
 
 **Status:** ⬜ Planned
 **Depends on:** none
