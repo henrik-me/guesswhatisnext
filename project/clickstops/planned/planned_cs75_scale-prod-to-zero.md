@@ -1,4 +1,4 @@
-# CS75 — Scale `gwn-production` Container App to zero (cost optimization)
+# CS75 — Scale prod to zero
 
 **Status:** ⬜ Planned
 **Depends on:** [CS73](planned_cs73_prod-deploy-cold-db-handling.md) — must merge first (see § Dependency rationale)
@@ -37,19 +37,19 @@ Live source-of-truth query: see [§ Querying Azure cost in OPERATIONS.md](../../
 
 ## Dependency rationale (why CS73 blocks CS75)
 
-Today the prod DB stays warm because of ambient traffic. After CS75 lands, traffic drops to near-zero overnight and on quiet days, so `gwn-production` Azure SQL (autoPause 60min) will pause far more often. **Every prod deploy will then reliably hit the [CS73](planned_cs73_prod-deploy-cold-db-handling.md) cold-DB migration timeout** (`mssql` 5s connect timeout vs ~30–60s resume window). Today this is rare; post-CS75 it is the steady state.
+Azure SQL serverless auto-pause is governed by **DB idleness** (sessions/workload), not by Container App replica count directly. The current Azure runtime is already DB-lazy: `server/app.js` does not init the DB at startup, and `/healthz`, `/api/health`, `/api/db-status`, `/api/admin/*`, and telemetry routes bypass the DB-init gate (see `server/app.js:277-298,637-645`). So `minReplicas=1` does not by itself keep the DB warm — and CS73's deploy-time cold-DB failure has already been observed in production while still on `minReplicas=1` (see [CS73 origin](planned_cs73_prod-deploy-cold-db-handling.md#symptom)).
 
-CS73 must be merged and verified before CS75-2 (live `az` apply) so that the very first post-CS75 deploy doesn't immediately fail.
+What CS75 changes is that **post-CS75 there is no warm process or ambient real traffic to keep DB sessions alive between deploys**, so the cold-DB-on-deploy failure mode becomes more visible and consistent rather than intermittent. CS73 is therefore a hard blocker for **CS75-5 closure** (the post-CS75 first deploy must succeed without operator intervention) — not because CS75 *causes* the failure mode, but because CS75 makes operator-visible cold paths the steady state and removes the ambient cushion that today sometimes hides them.
 
 ## Tasks
 
 | # | Task | Status | Depends On | Notes |
 |---|------|--------|------------|-------|
 | CS75-1 | Update [`.github/workflows/prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) line ~338 from `--min-replicas 1` → `--min-replicas 0`, keep `--max-replicas 5` unchanged. Single PR. Run local `npm run container:validate` + Copilot review per the standard non-docs PR gate. | ⬜ Planned | CS73 merged | One-line YAML change. PR body must include `## Container Validation` table per gate. |
-| CS75-2 | Apply `minReplicas=0` to live `gwn-production` Container App: `az containerapp update --name gwn-production --resource-group gwn-rg --min-replicas 0`. Then per CS58-2 lesson: `az containerapp ingress traffic set --revision-weight <new>=100` and deactivate the previous revision so we don't double-bill. Confirm via `az containerapp show` that `minReplicas=0` and via `az containerapp revision list` that exactly one revision is active. | ⬜ Planned | CS75-1 merged, CS73 merged & verified | Reversible in one command. |
+| CS75-2 | Apply `minReplicas=0` to live `gwn-production` Container App: `az containerapp update --name gwn-production --resource-group gwn-rg --min-replicas 0`. **Then handle revision-mode correctly** (prod is documented as single-revision mode in [`prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) lines ~181-184 and ~364-368, in which case `az containerapp update` shifts traffic atomically; CS58 was multi-revision mode and needed an explicit traffic-shift): query the active revision mode with `az containerapp show --query "properties.configuration.activeRevisionsMode"`; if **single**, verify `latestRevision` is active and deactivate any lingering old revisions only if present; if **multiple**, run `az containerapp ingress traffic set --revision-weight <new>=100` and `az containerapp revision deactivate --revision <old>` per the CS58-2 lesson. Confirm via `az containerapp show` that `minReplicas=0` and via `az containerapp revision list` that exactly one revision is active. | ⬜ Planned | CS75-1 merged, CS73 merged & verified | Reversible in one command. |
 | CS75-3 | Documentation update (apply "link, don't restate"). Update CONTEXT.md (Blockers section, mirror staging entry), INSTRUCTIONS.md (production-deploys section if it references warm replica assumptions), OPERATIONS.md (add "Waking production for ad-hoc validation" subsection paralleling the staging one — though prod waking is just *visit the site*), [`infra/README.md`](../../../infra/README.md) if it pins prod's `minReplicas`. Audit secrets on the GH `production` environment — confirm still needed (no secrets removed by this CS, but the audit is the same shape as CS58-3). Audit `.github/workflows/health-monitor.yml` — already verified (2026-05-08) that the 6h cron runs Azure-API-only checks (does NOT wake the container); the deep HTTP probe is `workflow_dispatch`-gated. **No change to health-monitor.yml is required.** Capture this finding in the docs PR. | ⬜ Planned | — (independent of CS75-1/2) | Can ship in parallel with CS75-1/2. |
 | CS75-4 | Cost-verification soak. Wait ~7 days post-CS75-2, re-run the Cost Management meter query, document actual idle-meter drop and total saving. Expected: idle quantities drop >95% week-over-week, total trends <1 DKK/month. **Split out** as its own clickstop (`CS76-prod-cost-soak-verification`, paralleling [CS59](planned_cs59_staging-cost-soak-verification.md)) at CS75-2 close time so the wait is tracked properly with explicit "earliest claim date." Verdict appends back to this file under § CS76 cost-soak verification once CS76 closes. | ⬜ Planned (will be split out) | CS75-2 (+ ~7 days soak) | Detached at close per CS58 lesson — multi-day soaks should not park as `blocked` rows. |
-| CS75-5 | **End-to-end functional validation via `prod-deploy.yml workflow_dispatch`.** Per CS58 lesson ("Live `az` update applied is NOT the same as deployed via workflow"): trigger a no-op prod deploy against `main` (containing the CS75-1 YAML change), confirm (a) workflow completes successfully end-to-end including CS73 wake step, (b) the new revision has `minReplicas=0`, and (c) the new revision serves a healthy `/healthz` after the workflow completes. Cold-wake `/healthz` from a deallocated state is harder to test reliably here (deploy itself warms the DB) — record this as a known limitation; the natural cold-start verification will happen organically the first time a real user hits the site after off-hours. | ⬜ Planned | CS75-1 merged, CS75-2 applied, CS73 merged | Mirrors CS58-5. The deploy itself counts as the first post-scale-to-zero deploy and exercises CS73's wake step against real prod load. |
+| CS75-5 | **End-to-end functional validation via `prod-deploy.yml workflow_dispatch`.** Per CS58 lesson ("Live `az` update applied is NOT the same as deployed via workflow"): trigger a no-op prod deploy against `main` (containing the CS75-1 YAML change), confirm (a) workflow completes successfully end-to-end including CS73 wake step, (b) the new revision has `minReplicas=0`, (c) the new revision serves a healthy `/healthz` after the workflow completes (ingress + container + custom-domain wake), and (d) a **DB-touching** endpoint also returns healthy after the workflow completes (e.g. `/api/health` invoked through the existing CS41-1+2 smoke job which already runs in `prod-deploy.yml`, or a manual probe of an unauthenticated DB-backed route such as `/api/puzzles`). The (d) probe is what proves the cold-DB path, since `/healthz` bypasses the DB-init gate (`server/app.js:298`). Note that the deploy itself warms both container and DB, so cold-state `/healthz` from a deallocated replica cannot be tested as part of CS75-5 — the natural cold-start verification will happen organically the first time a real user hits the site after off-hours, and is folded into CS76's pre-flight rather than blocking CS75 closure. | ⬜ Planned | CS75-1 merged, CS75-2 applied, CS73 merged | Mirrors CS58-5 with the `/healthz`-vs-DB distinction made explicit. |
 
 ### Dependency graph
 
@@ -72,14 +72,20 @@ CS75 cannot be closed until **all** of:
 
 CS76 (7-day cost soak) appends results back to this file post-closure but does NOT block closure.
 
-## Acceptance Criteria
+## Acceptance
+
+CS75 closure-blocking criteria (all must hold before CS75 moves to `done/`):
 
 - `az containerapp show --name gwn-production --resource-group gwn-rg --query "properties.template.scale.minReplicas"` returns `0`.
 - After ~10 min of zero traffic, `az containerapp replica list --name gwn-production --resource-group gwn-rg` shows zero active replicas.
-- A cold probe to `https://gwn.metzger.dk/healthz` returns 200 within ~120s after wake (budget: container cold start + DB serverless resume).
-- The next regular `prod-deploy.yml workflow_dispatch` run completes successfully on the **first** attempt without operator pre-wake (validated by CS73's wake step).
-- 7-day cost soak (CS76) shows `gwn-production`'s "Idle Usage" meter quantities dropped >95% week-over-week and total monthly cost trends toward <1 DKK.
+- A cold probe to `https://gwn.metzger.dk/healthz` returns 200 within ~60s after wake (budget: container cold start + ingress + custom-domain SNI; **DB resume is not in this budget because `/healthz` bypasses the DB-init gate** — see CS75-5 task (d) for the DB cold-path probe).
+- The CS75-5 `prod-deploy.yml workflow_dispatch` run completes successfully on the **first** attempt without operator pre-wake (validated by CS73's wake step) AND a DB-touching endpoint (CS41-1+2 smoke job and/or `/api/puzzles`) returns healthy.
 - Documentation describes production accurately as a scale-to-zero environment with a documented cold-start expectation.
+
+### Post-closure verification (does NOT block CS75 closure — tracked under CS76)
+
+- 7-day cost soak shows `gwn-production`'s "Idle Usage" meter quantities dropped >95% week-over-week and total monthly cost trends toward <1 DKK.
+- Cold-state `/healthz` and DB-touching probe from a fully deallocated replica (cannot be tested as part of CS75 itself — the deploy warms both layers) — folded into CS76 pre-flight per CS58-5 → CS59 pattern.
 
 ## Will not be done as part of this clickstop
 
@@ -93,7 +99,8 @@ CS76 (7-day cost soak) appends results back to this file post-closure but does N
 
 ## Risks & rollback
 
-- **First user request after off-hours pays ~60–90s.** User-visible. Trade-off explicitly accepted during planning.
+- **First user request after off-hours pays ~60–90s.** User-visible. Trade-off explicitly accepted during planning. Note that container cold start (~10–30s) and Azure SQL serverless resume (~30–60s) are governed by independent clocks: the container deallocates after ~5 min of zero ingress traffic, while SQL pauses after its own DB-idleness window (autoPause 60min). It is therefore possible to pay only the container cold start (DB still warm from a recent admin/operator probe) or only the DB resume (replica kept warm by App Insights / OTel exporter heartbeats — see next bullet) on a given first request.
+- **App Insights / OTel exporter heartbeats may keep the replica partially warm** even with `minReplicas=0`, because background flushes from the in-process telemetry SDK count as activity. The Container App scale rule is HTTP-traffic-based (not process-activity-based), so this is unlikely to defeat scale-to-zero, but if CS76 cost soak shows idle-meter savings significantly below the projected >95%, this is the first hypothesis to check.
 - **Multiplayer WebSocket sessions:** active traffic keeps the replica warm, so an in-progress match is not affected. A user trying to *start* multiplayer cold pays the cold start, same as a normal page load. No mitigation planned.
 - **Cooldown period (~300s default) means prod takes ~5 min of zero traffic to actually deallocate.** During active hours the replica likely stays warm continuously.
 - **Deploy-time cold-DB hit** — addressed by CS73 (hard dependency).
@@ -104,7 +111,7 @@ CS76 (7-day cost soak) appends results back to this file post-closure but does N
 
 Source of truth for current cost is Azure Cost Management. The canonical PowerShell snippet for regenerating the meter-level breakdown lives in [§ Querying Azure cost in OPERATIONS.md](../../../OPERATIONS.md#querying-azure-cost) — run it from there so future cost analyses use a single source.
 
-## Relationship to other clickstops
+## Cross-references
 
 - **[CS58](../done/done_cs58_scale-staging-to-zero.md)** — direct precedent on staging. CS75 reuses the same task structure, the same `az` command pattern (with the traffic-shift + old-revision-deactivate lesson baked in), and the same cost-soak-as-separate-CS pattern.
 - **[CS73](planned_cs73_prod-deploy-cold-db-handling.md)** — **hard dependency.** Must merge before CS75-2 because CS75 makes the deploy-time cold-DB failure mode the steady state instead of an edge case.
