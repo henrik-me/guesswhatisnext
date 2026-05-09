@@ -13,7 +13,11 @@ function isHookActive(repoRoot = process.cwd()) {
   let hooksPath = '';
   try {
     hooksPath = execSync('git config core.hooksPath', {
-      stdio: ['ignore', 'pipe', 'ignore'],
+      // Pipe stderr so the catch block can inspect Git's actual error
+      // text (e.g. "fatal: not a git repository") instead of degrading
+      // to a generic "Command failed" reason. We swallow it via the
+      // catch — never leak to the user's terminal.
+      stdio: ['ignore', 'pipe', 'pipe'],
       cwd: repoRoot,
     })
       .toString()
@@ -22,13 +26,14 @@ function isHookActive(repoRoot = process.cwd()) {
       // accepts either form but strict equality below would miss them.
       .replace(/\/+$/, '');
   } catch (e) {
-    // git config exits non-zero when the key is unset (the common
-    // "no hook installed yet" case). It can also fail because git is
-    // not on PATH or this isn't a git repo — surface that to the user
-    // rather than misreporting it as "not set".
-    const msg = e && e.message ? e.message : String(e);
-    if (/not a git repository|fatal:|ENOENT|spawn/i.test(msg)) {
-      return { active: false, reason: `git config probe failed: ${msg.split('\n')[0]}` };
+    // git config exits non-zero (without writing to stderr) when the
+    // key is unset — that's the common "no hook installed yet" case.
+    // It writes to stderr when git itself fails (not a repo, git not
+    // on PATH, permissions, etc.) — surface that instead of misreporting
+    // it as "not set".
+    const stderr = (e && e.stderr ? e.stderr.toString() : '').trim();
+    if (stderr) {
+      return { active: false, reason: `git config probe failed: ${stderr.split('\n')[0]}` };
     }
     return { active: false, reason: 'core.hooksPath is not set' };
   }
