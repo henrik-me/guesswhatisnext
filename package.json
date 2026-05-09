@@ -80,7 +80,7 @@
     "postcss": "^8.5.10",
     "uuid": "^14.0.0",
     "fast-xml-builder": "^1.1.7",
-    "ip-address": "^10.1.1"
+    "ip-address": "^10.2.0"
   },
   "engines": {
     "node": ">=20"
