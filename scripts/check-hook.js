@@ -21,7 +21,15 @@ function isHookActive(repoRoot = process.cwd()) {
       // Normalize trailing slashes ('.husky/_/' -> '.husky/_'); Git
       // accepts either form but strict equality below would miss them.
       .replace(/\/+$/, '');
-  } catch {
+  } catch (e) {
+    // git config exits non-zero when the key is unset (the common
+    // "no hook installed yet" case). It can also fail because git is
+    // not on PATH or this isn't a git repo — surface that to the user
+    // rather than misreporting it as "not set".
+    const msg = e && e.message ? e.message : String(e);
+    if (/not a git repository|fatal:|ENOENT|spawn/i.test(msg)) {
+      return { active: false, reason: `git config probe failed: ${msg.split('\n')[0]}` };
+    }
     return { active: false, reason: 'core.hooksPath is not set' };
   }
   if (hooksPath !== '.husky' && hooksPath !== '.husky/_') {

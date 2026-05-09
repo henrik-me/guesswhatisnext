@@ -68,7 +68,18 @@ if (isConfiguredAndPresent(currentHooksPath())) {
   process.exit(0);
 }
 
-console.log('→ configuring CS77 pre-push hook');
-const { default: husky } = await import('husky');
-const out = husky();
-if (out) console.log(out);
+try {
+  console.log('→ configuring CS77 pre-push hook');
+  const { default: husky } = await import('husky');
+  const out = husky();
+  if (out) console.log(out);
+} catch (e) {
+  // Defense-in-depth: never let `prepare` crash `npm install`. If husky
+  // can't run (no .git directory, git not on PATH, source-zip install,
+  // etc.), warn loudly to stderr but exit 0 so devDep installs still
+  // succeed — `npm run check:hook` will surface the missing hook on
+  // next invocation.
+  process.stderr.write(`⚠ CS77 husky install skipped: ${e && e.message ? e.message : String(e)}\n`);
+  process.stderr.write(`  Run \`npm run check:hook\` after install to verify hook state.\n`);
+  process.exit(0);
+}
