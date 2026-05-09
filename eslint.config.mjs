@@ -49,7 +49,9 @@ export default [
   {
     files: ['**/*.mjs', 'tests/**/*.js', 'vitest.config.mjs'],
     languageOptions: {
-      ecmaVersion: 2020,
+      // ES2022 enables top-level await, which `.husky/install.mjs` (CS77)
+      // relies on for the husky() install step.
+      ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
         // Node.js globals

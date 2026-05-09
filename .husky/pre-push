@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# CS77 — pre-push docs lint hook.
+#
+# Runs `npm run check:docs:strict` before every `git push`. Blocks push on
+# any error so plan-file and WORKBOARD edits can't silently land on main
+# with broken cross-doc references / schema violations. Matches the CI gate.
+#
+# Bypass (only with documented justification in the commit/PR body):
+#   git push --no-verify          # skip all hooks once
+#   HUSKY=0 git push ...          # disable husky for this invocation
+#   ~/.config/husky/init.sh       # global per-user disable (see CS77-3 docs)
+#
+# See: OPERATIONS.md § Pre-push docs lint hook (CS77)
+#      project/clickstops/active/active_cs77_pre-push-docs-lint-hook.md
+
+if ! npm run --silent check:docs:strict; then
+  echo ""
+  echo "✗ blocked by CS77 pre-push hook — npm run check:docs:strict failed."
+  echo "  Fix the errors above, or — only with documented justification in the"
+  echo "  commit/PR body — re-run with: git push --no-verify"
+  exit 1
+fi

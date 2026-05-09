@@ -152,6 +152,24 @@ The bad version is technically true but operationally useless: it tells the user
   - No force pushes
   - No direct commits (except WORKBOARD.md and clickstop plan files by orchestrating agents)
 
+### Pre-push docs lint hook (CS77)
+
+The repo ships a [husky](https://typicode.github.io/husky/) pre-push hook (`.husky/pre-push`) that runs `npm run check:docs:strict` before every `git push`. Any docs-consistency error blocks the push. This is a client-side belt-and-braces gate: the matching CI check still runs on PRs as the backstop, but the hook catches errors on the orchestrator's direct-to-main pushes for `WORKBOARD.md` and clickstop plan files (where server-side branch-protection bypass is intentional and would otherwise let broken docs land silently).
+
+**Activation.** The hook activates when `npm install` runs the `prepare` script (`node .husky/install.mjs`), which calls `husky()` to set `core.hooksPath`. The shim is a **no-op** when `CI=true` or `NODE_ENV=production`, so `npm ci --omit=dev` in the Dockerfile + prod-deploy + staging-deploy paths is unaffected. Each clone (and each new orchestrator worktree's parent clone) needs `npm install` once. Verify with `npm run check:hook` (exits 0 with `✓ active`, non-zero with `✗ NOT active — run \`npm install\`...`). `scripts/check-docs-consistency.js` also prints a stderr warning if the hook is missing (suppressed under `CI=true` and in `--json` mode).
+
+**Bypass mechanisms — allowed only with documented justification in the same commit/PR body.** All three of these silently skip the hook:
+
+| Mechanism | Effect |
+|---|---|
+| `git push --no-verify` | Skip hooks for one push. |
+| `HUSKY=0 git push ...` | Disable husky for this invocation only. |
+| `~/.config/husky/init.sh` | Per-user global disablement (sourced before every hook). |
+
+If you use any of them, name CS77 and the reason in the commit message or PR body so the choice is auditable. The CI gate on PRs still catches docs errors that bypass the hook on a non-`main` push.
+
+**GUI / version-manager caveat.** Editor Git UIs (VS Code, JetBrains, etc.) invoke `git push` and the hook fires, but if the editor's environment lacks `node`/`npm` on `PATH` (common with `nvm`/`fnm` version managers) the hook fails closed and the GUI push appears to fail mysteriously. Remedy: add the version-manager init line to `~/.config/husky/init.sh` per [Husky's how-to: Node version managers and GUIs](https://typicode.github.io/husky/how-to.html#node-version-managers-and-guis).
+
 ## Agent Work Model
 
 **Main agent (orchestration only)** — operates on the main checkout (`C:\src\guesswhatisnext<suffix>`).

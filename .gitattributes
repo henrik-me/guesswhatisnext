@@ -1,6 +1,12 @@
 # Force LF line endings for shell scripts (Docker containers need Unix endings)
 *.sh text eol=lf
 
+# CS77: husky hooks are POSIX shell scripts (no .sh extension); without
+# this, Windows clones with core.autocrlf=true could end up with CRLF
+# and fail with "bad interpreter: /usr/bin/env sh\r" on macOS/Linux/WSL.
+.husky/pre-push text eol=lf
+.husky/install.mjs text eol=lf
+
 # Force LF for service worker and all public text assets so build-sw.js
 # produces identical content hashes on Windows and Linux
 public/sw.js text eol=lf
