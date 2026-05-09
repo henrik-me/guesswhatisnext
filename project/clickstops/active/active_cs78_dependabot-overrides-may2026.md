@@ -1,6 +1,7 @@
 # CS78 — Dependabot overrides may2026
 
-**Status:** ⬜ Planned
+**Status:** 🔄 In Progress
+**Claimed:** yoga-gwn 2026-05-09T20:45Z (branch `cs78-dependabot-overrides`)
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72, CS73, CS75
 **Origin:** User direction 2026-05-09: *"investigate the open dependabot / security issues. tell me what they are and let me know what is needed for each of them"*. Three open Dependabot alerts surfaced (#10, #11, #12). All three resolvable with `package.json` `overrides` entries — no upstream waiting required.
