@@ -482,7 +482,7 @@ Long-term, if the contention becomes painful enough, candidates to consider: per
 | @opentelemetry/sdk-node | Distributed tracing | v0.214.0 — auto-instruments HTTP/Express/DB |
 | @azure/monitor-opentelemetry-exporter | Azure Monitor export | v1.0.0-beta.32 — sends traces to App Insights |
 | helmet | Security headers | v8.1.0 — HSTS, CSP with wss:, HTTPS redirect |
-| express-rate-limit | Rate limiting | v8.3.1 — auth endpoints, telemetry, submissions |
+| express-rate-limit | Rate limiting | v8.5.1 — auth endpoints, telemetry, submissions (CS78 bumped 8.3.1 → 8.5.1 to bring patched ip-address ≥ 10.2.0 transitively) |
 | Docker | Containerization | Same Dockerfile for local dev, staging, and production |
 | GitHub Container Registry | Image storage | Free, integrated with GitHub Actions |
 | Azure Container Apps | Hosting (staging + prod) | Consumption plan, scale-to-zero, WebSocket support |

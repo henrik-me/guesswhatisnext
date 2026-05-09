@@ -4,16 +4,18 @@ Load tests for the Guess What's Next API and WebSocket server using [Artillery](
 
 ## Prerequisites
 
-Artillery is listed as an optional dependency (requires **Node.js >= 22.13.0**).
-It will be installed automatically on compatible Node versions:
+Artillery is listed as a dev dependency (requires **Node.js >= 22.13.0**).
+It will be installed by `npm install` on compatible Node versions:
 
 ```bash
 npm install          # installs artillery on Node >= 22.13
 ```
 
-> **Note:** On Node versions below 22.13, `npm install` will skip Artillery
-> without failing. To run load tests, you need Node >= 22.13. The rest of the
-> project works with Node.js v20+.
+> **Note:** On Node versions below 22.13, `npm install` emits an `engines`
+> warning for artillery but does not fail (`engine-strict` is off by default).
+> To actually run load tests you need Node >= 22.13. Production Docker images
+> use `npm ci --omit=dev` and skip artillery (and the rest of the dev tree)
+> entirely. The rest of the project works with Node.js v20+.
 
 Alternatively, install Artillery globally:
 
