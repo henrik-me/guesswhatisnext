@@ -1,7 +1,7 @@
 # Work Board
 
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
-Orchestrators update this file directly on main -- no PR required. **Run `npm run check:docs:strict` locally before every direct-to-main push** (WORKBOARD or clickstop plan files) — direct push admin-bypasses ALL required status checks alongside the PR requirement, so the linter never runs server-side. Tracked under [CS77](project/clickstops/active/active_cs77_pre-push-docs-lint-hook.md) until a pre-push hook makes this automatic.
+Orchestrators update this file directly on main -- no PR required. **Run `npm run check:docs:strict` locally before every direct-to-main push** (WORKBOARD or clickstop plan files) — direct push admin-bypasses ALL required status checks alongside the PR requirement, so the linter never runs server-side. [CS77](project/clickstops/active/active_cs77_pre-push-docs-lint-hook.md) provides a husky `pre-push` hook that runs the linter automatically; activate per-clone with `npm install` (verify via `npm run check:hook`).
 
 > **Last updated:** 2026-05-09T19:35Z
 
