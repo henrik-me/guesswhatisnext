@@ -2,6 +2,10 @@
 node_modules/
 npm-debug.log*
 
+# Husky internal staging dir (CS77) — only .husky/install.mjs and the hook
+# scripts (e.g. .husky/pre-push) are tracked; .husky/_ is generated.
+.husky/_/
+
 # Database
 data/*.db
 data/*.sqlite

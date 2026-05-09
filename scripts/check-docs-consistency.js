@@ -1517,6 +1517,24 @@ function parseArgs(argv) {
 
 if (require.main === module) {
   const opts = parseArgs(process.argv);
+  // CS77-2c: warn (stderr only) when the husky pre-push hook is not active
+  // in this clone. Suppress in CI (CI=true) and in --json mode so machine
+  // output stays clean. Does NOT affect exit code.
+  if (!opts.json && process.env.CI !== 'true') {
+    try {
+      const { isHookActive } = require('./check-hook.js');
+      const hook = isHookActive();
+      if (!hook.active) {
+        process.stderr.write(
+          `⚠ CS77 pre-push hook is NOT active in this clone (${hook.reason}).\n` +
+          `  Run \`npm install\` once to activate it; without it, broken docs can land\n` +
+          `  on main via direct push. See OPERATIONS.md § Pre-push docs lint hook (CS77).\n\n`
+        );
+      }
+    } catch {
+      // probe is best-effort; never fail the linter on this.
+    }
+  }
   const findings = run(opts);
   if (opts.json) {
     process.stdout.write(JSON.stringify({ findings }, null, 2) + '\n');
