@@ -16,7 +16,16 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 
-if (process.env.CI === 'true' || process.env.NODE_ENV === 'production') {
+if (
+  process.env.CI === 'true' ||
+  process.env.NODE_ENV === 'production' ||
+  // npm sets these when called with --omit=dev / --production. Guard
+  // against the case where someone runs `npm ci --omit=dev` locally
+  // without CI or NODE_ENV set: husky is a devDep so it isn't installed,
+  // and a bare `import('husky')` would throw ERR_MODULE_NOT_FOUND.
+  /\bdev\b/i.test(process.env.npm_config_omit || '') ||
+  process.env.npm_config_production === 'true'
+) {
   // Silent no-op in CI / production-style installs (npm ci --omit=dev).
   process.exit(0);
 }
