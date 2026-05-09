@@ -24,16 +24,27 @@ function isHookActive(repoRoot = process.cwd()) {
   if (hooksPath !== '.husky' && hooksPath !== '.husky/_') {
     return { active: false, reason: `core.hooksPath is '${hooksPath || '(unset)'}', expected '.husky' or '.husky/_'` };
   }
-  const hookFile = path.join(repoRoot, '.husky', 'pre-push');
-  if (!fs.existsSync(hookFile)) {
+  // Husky 9 wires Git to '.husky/_/<hook>' wrappers that source the user's
+  // '.husky/<hook>' file. Both must exist for the hook to actually fire.
+  // '.husky/_' is gitignored and can be removed by `git clean -dfx` / by a
+  // bare `git pull` into a clone where it was never written, so we can't
+  // assume it's present just because core.hooksPath points at it.
+  const userHook = path.join(repoRoot, '.husky', 'pre-push');
+  if (!fs.existsSync(userHook)) {
     return { active: false, reason: `.husky/pre-push does not exist` };
+  }
+  if (hooksPath === '.husky/_') {
+    const wrapper = path.join(repoRoot, '.husky', '_', 'pre-push');
+    if (!fs.existsSync(wrapper)) {
+      return { active: false, reason: `.husky/_/pre-push wrapper missing — run \`npm install\` to regenerate` };
+    }
   }
   // On Windows, Git tracks executability via core.fileMode and the actual
   // exec bit isn't meaningful — file existence is sufficient. On POSIX,
-  // require the owner-execute bit.
+  // require the owner-execute bit on the user hook.
   if (process.platform !== 'win32') {
     try {
-      const st = fs.statSync(hookFile);
+      const st = fs.statSync(userHook);
       if ((st.mode & 0o100) === 0) {
         return { active: false, reason: `.husky/pre-push is not executable (chmod +x .husky/pre-push)` };
       }

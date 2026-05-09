@@ -14,6 +14,7 @@
 // and https://typicode.github.io/husky/how-to.html#ci-server-and-docker
 
 import { execSync } from 'node:child_process';
+import fs from 'node:fs';
 
 if (process.env.CI === 'true' || process.env.NODE_ENV === 'production') {
   // Silent no-op in CI / production-style installs (npm ci --omit=dev).
@@ -31,12 +32,19 @@ function currentHooksPath() {
 }
 
 // Husky 9 sets core.hooksPath to '.husky/_' (wrapper scripts that source
-// the user's .husky/<hook>). Treat that as "configured".
-function isConfigured(p) {
-  return p === '.husky' || p === '.husky/_';
+// the user's .husky/<hook>). Treat that as "configured" only if the
+// generated wrapper actually exists — '.husky/_' is gitignored so a
+// `git clean -dfx` (or a fresh worktree that inherits the parent's
+// core.hooksPath but doesn't have the wrapper directory yet) can leave
+// the config pointing at a missing directory; we must re-install in
+// that case rather than silently skip.
+function isConfiguredAndPresent(p) {
+  if (p !== '.husky' && p !== '.husky/_') return false;
+  if (p === '.husky/_' && !fs.existsSync('.husky/_/pre-push')) return false;
+  return fs.existsSync('.husky/pre-push');
 }
 
-if (isConfigured(currentHooksPath())) {
+if (isConfiguredAndPresent(currentHooksPath())) {
   console.log('✓ CS77 pre-push hook already configured (no changes)');
   process.exit(0);
 }

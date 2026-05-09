@@ -2,6 +2,14 @@
 FROM node:22-slim
 WORKDIR /app
 
+# CS77: set NODE_ENV=production BEFORE `npm ci` so the husky `prepare`
+# script (`.husky/install.mjs`) — which is not yet copied into the image
+# — short-circuits via its NODE_ENV=production guard. Without this the
+# prepare script would try to load a missing file. Final ENV line below
+# is kept for runtime intent; this earlier setting only needs to cover
+# the install step.
+ENV NODE_ENV=production
+
 # Install production dependencies (better-sqlite3 has prebuilt binaries)
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
@@ -18,5 +26,5 @@ COPY server/ ./server/
 
 EXPOSE 3000
 
-ENV NODE_ENV=production
+# NODE_ENV already set near the top (CS77) so it persists at runtime too.
 CMD ["node", "server/index.js"]
