@@ -1,9 +1,9 @@
 # Work Board
 
 Live coordination file for multi-agent work. Only orchestrating agents update this file.
-Orchestrators update this file directly on main -- no PR required. **Run `npm run check:docs:strict` locally before every direct-to-main push** (WORKBOARD or clickstop plan files) — direct push admin-bypasses ALL required status checks alongside the PR requirement, so the linter never runs server-side. Tracked under [CS77](project/clickstops/planned/planned_cs77_pre-push-docs-lint-hook.md) until a pre-push hook makes this automatic.
+Orchestrators update this file directly on main -- no PR required. **Run `npm run check:docs:strict` locally before every direct-to-main push** (WORKBOARD or clickstop plan files) — direct push admin-bypasses ALL required status checks alongside the PR requirement, so the linter never runs server-side. Tracked under [CS77](project/clickstops/active/active_cs77_pre-push-docs-lint-hook.md) until a pre-push hook makes this automatic.
 
-> **Last updated:** 2026-05-03T01:55Z
+> **Last updated:** 2026-05-09T19:35Z
 
 ## Orchestrators
 
@@ -21,12 +21,15 @@ CS44-3 schema upgrade.
 | omni-gwn | HENRIKM-OMNI| C:\src\guesswhatisnext | 🟢 Active | 2026-04-29T16:52Z |
 | omni-gwn-c2 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot2 | ⚪ Offline | 2026-04-21T22:38Z |
 | omni-gwn-c3 | HENRIKM-OMNI | C:\src\guesswhatisnext_copilot3 | 🟢 Active | 2026-04-29T16:48Z |
+| _unassigned_ | — | — | 🟡 Placeholder | n/a |
 
 ## Active Work
 
 | CS-Task ID | Title | State | Owner | Last Updated | Blocked Reason |
 |------------|-------|-------|-------|--------------|----------------|
-| CS60 | **Post CS54 Observability Followup**<br>WT: _(none — between daily ticks)_<br>B:&nbsp; _(no PR yet — next tick CS60-3i)_ | blocked | _unassigned_ | 2026-05-02T19:05Z | **Unassigned by yoga-gwn 2026-05-02T19:05Z** after closing CS60-2 (PR [#325](https://github.com/henrik-me/guesswhatisnext/pull/325) merged) — next actionable item is in the future. **Next pickup: CS60-3i (Day 8 = 2026-05-03)**, claimable from approximately **2026-05-04T01:00Z UTC** (once Cost Management closes the 2026-05-03 UTC day; daily cadence thereafter through CS60-3{Day30} on 2026-05-25). Day 6/7 cost rows from CS60-2 are partial and will retro-fill at CS60-3i. Any orchestrator may claim. |
+| CS60 | **Post CS54 Observability Followup**<br>WT: _(none — between daily ticks)_<br>B:&nbsp; _(no PR yet — next tick CS60-3i)_ | blocked | _unassigned_ | 2026-05-09T19:35Z | **Unassigned by yoga-gwn 2026-05-02T19:05Z** after closing CS60-2 (PR [#325](https://github.com/henrik-me/guesswhatisnext/pull/325) merged) — next actionable item is in the future. **Next pickup: CS60-3i (Day 8 = 2026-05-03)**, claimable from approximately **2026-05-04T01:00Z UTC** (once Cost Management closes the 2026-05-03 UTC day; daily cadence thereafter through CS60-3{Day30} on 2026-05-25). Day 6/7 cost rows from CS60-2 are partial and will retro-fill at CS60-3i. Any orchestrator may claim. **Last Updated stamp refreshed 2026-05-09T19:35Z by yoga-gwn (orchestrator action, no state change) to clear the `active-row-reclaimable` ERROR that was blocking CS77 PR #328 CI; the underlying "next pickup ≥ 2026-05-04" state is unchanged.** |
 |  | _CS60-2 close-out merged via PR [#325](https://github.com/henrik-me/guesswhatisnext/pull/325) (`669fe4e`, 2026-05-02T18:54Z): Days 5/6/7 recorded, +7d close-out written, CS60-3 first-pass extrapolation added (worst-case 30-day workspace ingest 111 MB = 2.17% of 5GB free tier; steady-state 30-day cost ~65 DKK ≈$9.30 USD). CS60-4 Gap 1 disposition tightened to "provisional: prod auto-resolved; staging parity still unverified" — `gwn-ai-production` AppDependencies populating every day Days 4-7 (17.32 MB / 64% of 8-day workspace ingest); deliberate ≥20-leaderboard staging probe still owed. Earlier rollups: Day 0 staging 2.13 DKK + 0.77 MB AI / prod 2.09 DKK + 0.09 MB; Day 1 staging $0 (CS58 ✓) + 0.11 MB / prod 1.36 DKK + 0.78 MB; Day 2/3/4/5/6/7 detail in [`cs60-data-appendix.md`](project/clickstops/active/cs60-data-appendix.md)._ |  |  |  |  |
+| CS77 | **Pre-push docs lint hook**<br>WT: `C:\src\guesswhatisnext_cs77`<br>B:&nbsp; `cs77-pre-push-docs-lint-hook` | implementing | yoga-gwn | 2026-05-09T17:08Z | — |
+|  | _Implementing CS77-1 (husky + install.mjs CI-skip shim) + CS77-2 (.husky/pre-push) + CS77-2b (check:hook probe) + CS77-2c (linter warns if hook missing) + CS77-3 (docs) + CS77-4 (validation) in a single PR. Sub-agent dispatched 2026-05-09T17:08Z. CS77-5 (per-clone ack tracking) follows after merge. Plan: [active_cs77_pre-push-docs-lint-hook.md](project/clickstops/active/active_cs77_pre-push-docs-lint-hook.md)._ |  |  |  |  |
 
 > **Note:** Clickstop files live under lifecycle subdirectories: `project/clickstops/planned/` (queued), `project/clickstops/active/` (in flight), `project/clickstops/done/` (completed). See the task tables inside those files for task-level status. Completion history is recoverable via `git log --diff-filter=A -- project/clickstops/done/`.
