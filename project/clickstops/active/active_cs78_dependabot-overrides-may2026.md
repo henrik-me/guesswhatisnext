@@ -32,7 +32,7 @@ Eliminates the entire `fast-xml-builder` chain from the production image. `artil
 
 ### Belt-and-braces: keep an `overrides` entry as backstop
 
-Because the `express-rate-limit` bump is a minor version (8.3.1 → 8.5.1) and we want defense-in-depth in case a future re-resolution drifts, also add `"ip-address": "^10.1.1"` to the existing `overrides` block. Same for `fast-xml-builder` in case the artillery move is later reverted.
+Because the `express-rate-limit` bump is a minor version (8.3.1 → 8.5.1) and we want defense-in-depth in case a future re-resolution drifts, also add `"ip-address": "^10.2.0"` to the existing `overrides` block (pinning at the floor that `express-rate-limit@8.5.1` natively resolves, not just the CVE-patched 10.1.1). Same for `fast-xml-builder` in case the artillery move is later reverted.
 
 ```jsonc
 // package.json
@@ -53,7 +53,7 @@ Because the `express-rate-limit` bump is a minor version (8.3.1 → 8.5.1) and w
   "postcss": "^8.5.10",
   "uuid": "^14.0.0",
   "fast-xml-builder": "^1.1.7",     // CS78 backstop: closes #11 #12 even if artillery returns to non-dev scope
-  "ip-address": "^10.1.1"           // CS78 backstop: closes #10 even if express-rate-limit re-resolves transitively
+  "ip-address": "^10.2.0"           // CS78 backstop: closes #10 even if express-rate-limit re-resolves transitively (pinned at express-rate-limit@8.5.1's natural floor, not just the CVE-patched 10.1.1)
 }
 ```
 
@@ -97,7 +97,7 @@ CS78 cannot be closed until **all** of:
 
 - **`express-rate-limit` 8.3.1 → 8.5.1 is a minor bump** (semver-compatible). Risk of breaking middleware behavior is low but non-zero — minor versions can introduce config-default changes. Container Validation cycle (`npm run container:validate`) catches functional regressions; the e2e suite covers auth/scores/telemetry endpoints which exercise rate limiting.
 - **Moving `artillery` from `optionalDependencies` → `devDependencies`** changes only its install-scope classification, not its installable-ness for developers. `npm install` (no flags) and `npm ci` (no flags) both still install it. Only `npm ci --omit=dev` (production path) now skips it. Smoke check `npx artillery --version` after the move.
-- **`overrides` are belt-and-braces** here. If the natural `express-rate-limit` 8.5.1 dependency graph already pulls `ip-address ≥ 10.1.1`, the `overrides` entries are no-ops; if not (e.g. due to a peer-dep conflict) the override forces the fix. Either way, the alerts close.
+- **`overrides` are belt-and-braces** here. If the natural `express-rate-limit` 8.5.1 dependency graph already pulls `ip-address ≥ 10.2.0`, the `overrides` entries are no-ops; if not (e.g. due to a peer-dep conflict) the override forces the fix. Either way, the alerts close.
 - **Rollback:** revert the PR. Single-commit revert restores `package.json` and `package-lock.json` to pre-CS78 state. The Dependabot alerts will re-open within ~24h.
 
 ## Cross-references
