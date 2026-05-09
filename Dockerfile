@@ -3,15 +3,17 @@ FROM node:22-slim
 WORKDIR /app
 
 # CS77: set NODE_ENV=production BEFORE `npm ci` so the husky `prepare`
-# script (`.husky/install.mjs`) — which is not yet copied into the image
-# — short-circuits via its NODE_ENV=production guard. Without this the
-# prepare script would try to load a missing file. Final ENV line below
-# is kept for runtime intent; this earlier setting only needs to cover
-# the install step.
+# script (`.husky/install.mjs`) short-circuits via its NODE_ENV guard.
+# We also COPY the shim itself so `node .husky/install.mjs` can at
+# least *load* — without the file present, npm's `prepare` lifecycle
+# would fail with ERR_MODULE_NOT_FOUND before our env guard could
+# run. Belt-and-braces: the env-guard makes the shim a no-op even if
+# husky is absent (which it is, since we use `--omit=dev`).
 ENV NODE_ENV=production
 
 # Install production dependencies (better-sqlite3 has prebuilt binaries)
 COPY package.json package-lock.json ./
+COPY .husky/install.mjs ./.husky/install.mjs
 RUN npm ci --omit=dev
 
 # Copy build scripts and templates needed for sw.js generation
