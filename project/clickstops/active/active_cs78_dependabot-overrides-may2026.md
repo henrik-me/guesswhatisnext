@@ -32,7 +32,7 @@ Eliminates the entire `fast-xml-builder` chain from the production image. `artil
 
 ### Belt-and-braces: keep an `overrides` entry as backstop
 
-Because the `express-rate-limit` bump is a minor version (8.3.1 → 8.5.1) and we want defense-in-depth in case a future re-resolution drifts, also add `"ip-address": "^10.1.1"` to the existing `overrides` block. Same for `fast-xml-builder` in case the artillery move is later reverted.
+Because the `express-rate-limit` bump is a minor version (8.3.1 → 8.5.1) and we want defense-in-depth in case a future re-resolution drifts, also add `"ip-address": "^10.2.0"` to the existing `overrides` block (pinning at the floor that `express-rate-limit@8.5.1` natively resolves, not just the CVE-patched 10.1.1). Same for `fast-xml-builder` in case the artillery move is later reverted.
 
 ```jsonc
 // package.json
@@ -53,7 +53,7 @@ Because the `express-rate-limit` bump is a minor version (8.3.1 → 8.5.1) and w
   "postcss": "^8.5.10",
   "uuid": "^14.0.0",
   "fast-xml-builder": "^1.1.7",     // CS78 backstop: closes #11 #12 even if artillery returns to non-dev scope
-  "ip-address": "^10.1.1"           // CS78 backstop: closes #10 even if express-rate-limit re-resolves transitively
+  "ip-address": "^10.2.0"           // CS78 backstop: closes #10 even if express-rate-limit re-resolves transitively (pinned at express-rate-limit@8.5.1's natural floor, not just the CVE-patched 10.1.1)
 }
 ```
 
@@ -61,10 +61,10 @@ Because the `express-rate-limit` bump is a minor version (8.3.1 → 8.5.1) and w
 
 | # | Task | Notes |
 |---|------|-------|
-| CS78-1 | Apply the three `package.json` changes: (a) move `artillery` from `optionalDependencies` → `devDependencies`, (b) bump `express-rate-limit` from `^8.3.1` to `^8.5.1`, (c) add `fast-xml-builder` and `ip-address` backstop entries to the `overrides` block (with inline CS78 + CVE comments). Run `npm install` to regenerate `package-lock.json`. Verify: `npm ls fast-xml-builder` shows 1.1.7+ in any remaining occurrence; `npm ls ip-address` shows 10.1.1+; `npm ls --omit=dev fast-xml-builder` returns "(empty)" / not-found (proving the artillery move took effect for production installs). | Single PR; lockfile churn is expected. |
-| CS78-2 | Full validation: `npm run lint && npm test && npm run test:e2e`. Then `npm ci --omit=dev` in a clean clone (or via `docker build -t cs78-test .`) to verify production install completes cleanly without `fast-xml-builder` or `artillery`. Then `npm audit --omit=dev` to verify the production install set has zero high/medium vulnerabilities related to these alerts. Smoke-check artillery still works in dev: `npx artillery --version`. | Standard non-docs PR validation plus the production-install audit (the load-bearing check that proves the `optionalDependencies` → `devDependencies` move actually shrank the production surface). |
-| CS78-3 | PR with body containing `## Local Review`, `## Container Validation` (= run `npm run container:validate` since the `express-rate-limit` bump touches a runtime middleware path; the rate-limit-touching paths — auth, scores submit, telemetry — are runtime-critical), `## Telemetry Validation` (= `not applicable (tooling-only)` for the dependency-graph changes; no new telemetry signals introduced). | Container Validation is **not** "not applicable" here — `express-rate-limit` is in the request hot path. Treat this as a non-trivial dependency bump and run the full container validate cycle. |
-| CS78-4 | After merge, verify all three Dependabot alerts auto-close (Dependabot polls and closes resolved alerts within ~24h). If any remain open after 24h, investigate via `gh api repos/henrik-me/guesswhatisnext/dependabot/alerts/{N}` to see what state they're in (likely `auto_dismissed` or stuck in `open` if the override didn't propagate). Do **not** manually `state=dismissed` with `fix_started` — that's a "we're working on it" disposition, not a "we fixed it" one. If forced to manually intervene, use `state=dismissed` with `dismissed_reason=tolerable_risk` only if the technical fix really is in place and Dependabot is just slow. | Post-merge verification step. |
+| CS78-1 ✅ Done | Apply the three `package.json` changes: (a) move `artillery` from `optionalDependencies` → `devDependencies`, (b) bump `express-rate-limit` from `^8.3.1` to `^8.5.1`, (c) add `fast-xml-builder` and `ip-address` backstop entries to the `overrides` block. _(Note: `package.json` is strict JSON and does not support inline comments — the CS78 + CVE rationale for each override entry is documented in this plan file and in the PR body, mirroring the existing un-annotated `postcss` / `uuid` entries.)_ Run `npm install` to regenerate `package-lock.json`. Verify: `npm ls fast-xml-builder` shows 1.1.7+ in any remaining occurrence; `npm ls ip-address` shows ≥ 10.2.0 (the natural floor pulled by `express-rate-limit@8.5.1` and matching the override backstop); `npm ls --omit=dev fast-xml-builder` returns "(empty)" / not-found (proving the artillery move took effect for production installs). | Single PR; lockfile churn is expected. |
+| CS78-2 ✅ Done | Full validation: `npm run lint && npm test && npm run test:e2e`. Then `npm ci --omit=dev` in a clean clone (or via `docker build -t cs78-test .`) to verify production install completes cleanly without `fast-xml-builder` or `artillery`. Then `npm audit --omit=dev` to verify the production install set has zero high/medium vulnerabilities related to these alerts. Smoke-check artillery still works in dev: `npx artillery --version`. | Standard non-docs PR validation plus the production-install audit (the load-bearing check that proves the `optionalDependencies` → `devDependencies` move actually shrank the production surface). |
+| CS78-3 ✅ Done | PR with body containing `## Local Review`, `## Container Validation` (= run `npm run container:validate` since the `express-rate-limit` bump touches a runtime middleware path; the rate-limit-touching paths — auth, scores submit, telemetry — are runtime-critical), `## Telemetry Validation` (= `not applicable (tooling-only)` for the dependency-graph changes; no new telemetry signals introduced). | Container Validation is **not** "not applicable" here — `express-rate-limit` is in the request hot path. Treat this as a non-trivial dependency bump and run the full container validate cycle. |
+| CS78-4 ⬜ Planned | After merge, verify all three Dependabot alerts auto-close (Dependabot polls and closes resolved alerts within ~24h). If any remain open after 24h, investigate via `gh api repos/henrik-me/guesswhatisnext/dependabot/alerts/{N}` to see what state they're in (likely `auto_dismissed` or stuck in `open` if the override didn't propagate). Do **not** manually `state=dismissed` with `fix_started` — that's a "we're working on it" disposition, not a "we fixed it" one. If forced to manually intervene, use `state=dismissed` with `dismissed_reason=tolerable_risk` only if the technical fix really is in place and Dependabot is just slow. | Post-merge verification step. |
 
 ## Closure preconditions
 
@@ -77,12 +77,12 @@ CS78 cannot be closed until **all** of:
 
 - `gh api repos/henrik-me/guesswhatisnext/dependabot/alerts?state=open` returns no entries for alerts #10, #11, #12 (or returns them with `state: fixed`).
 - `npm ls --omit=dev fast-xml-builder` returns "not found" / empty (proving the production install no longer pulls the `fast-xml-builder` chain — load-bearing acceptance criterion for the optional-dep → devDep move).
-- `npm ls ip-address` shows version ≥ 10.1.1 throughout (both runtime + dev trees).
+- `npm ls ip-address` shows version ≥ 10.2.0 throughout (both runtime + dev trees) — matches the natural floor pulled by `express-rate-limit@8.5.1` and the `^10.2.0` override backstop. The CVE was patched at 10.1.1 so any 10.1.1+ closes the alert, but pinning the floor to 10.2.0 keeps the override aligned with the actually-resolved version and removes a future-drift risk.
 - `npm audit --omit=dev` reports 0 vulnerabilities of any severity related to alerts #10, #11, #12.
 - Full validation suite (`npm run lint && npm test && npm run test:e2e`) passes.
 - `npm run container:validate` passes (proves the `express-rate-limit` bump doesn't break runtime middleware).
 - `npm install` does not introduce new ERESOLVE warnings beyond the existing OpenTelemetry/Artillery peer-dep noise documented in CONTEXT.md.
-- The `overrides` block in `package.json` is annotated with CS78 + CVE references inline so future maintainers know why each entry exists.
+- The `overrides` block additions are annotated in this CS plan file and in the PR body (line-by-line CS78 + CVE rationale). `package.json` itself is strict JSON and does not support inline comments — same constraint that applies to the existing `postcss` / `uuid` entries.
 
 ## Will not be done as part of this clickstop
 
@@ -97,7 +97,7 @@ CS78 cannot be closed until **all** of:
 
 - **`express-rate-limit` 8.3.1 → 8.5.1 is a minor bump** (semver-compatible). Risk of breaking middleware behavior is low but non-zero — minor versions can introduce config-default changes. Container Validation cycle (`npm run container:validate`) catches functional regressions; the e2e suite covers auth/scores/telemetry endpoints which exercise rate limiting.
 - **Moving `artillery` from `optionalDependencies` → `devDependencies`** changes only its install-scope classification, not its installable-ness for developers. `npm install` (no flags) and `npm ci` (no flags) both still install it. Only `npm ci --omit=dev` (production path) now skips it. Smoke check `npx artillery --version` after the move.
-- **`overrides` are belt-and-braces** here. If the natural `express-rate-limit` 8.5.1 dependency graph already pulls `ip-address ≥ 10.1.1`, the `overrides` entries are no-ops; if not (e.g. due to a peer-dep conflict) the override forces the fix. Either way, the alerts close.
+- **`overrides` are belt-and-braces** here. If the natural `express-rate-limit` 8.5.1 dependency graph already pulls `ip-address ≥ 10.2.0`, the `overrides` entries are no-ops; if not (e.g. due to a peer-dep conflict) the override forces the fix. Either way, the alerts close.
 - **Rollback:** revert the PR. Single-commit revert restores `package.json` and `package-lock.json` to pre-CS78 state. The Dependabot alerts will re-open within ~24h.
 
 ## Cross-references
