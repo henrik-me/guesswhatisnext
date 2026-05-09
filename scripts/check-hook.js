@@ -29,7 +29,7 @@ function isHookActive(repoRoot = process.cwd()) {
     // git config exits non-zero (without writing to stderr) when the
     // key is unset — that's the common "no hook installed yet" case.
     // It writes to stderr when git itself fails (not a repo, permissions,
-    // etc.). When git isn't on PATH, spawnSync throws with code='ENOENT'
+    // etc.). When git isn't on PATH, execSync throws with code='ENOENT'
     // and no stderr at all — handle that explicitly so the reason isn't
     // misreported as "key unset".
     if (e && e.code === 'ENOENT') {
