@@ -28,9 +28,13 @@ function isHookActive(repoRoot = process.cwd()) {
   } catch (e) {
     // git config exits non-zero (without writing to stderr) when the
     // key is unset — that's the common "no hook installed yet" case.
-    // It writes to stderr when git itself fails (not a repo, git not
-    // on PATH, permissions, etc.) — surface that instead of misreporting
-    // it as "not set".
+    // It writes to stderr when git itself fails (not a repo, permissions,
+    // etc.). When git isn't on PATH, spawnSync throws with code='ENOENT'
+    // and no stderr at all — handle that explicitly so the reason isn't
+    // misreported as "key unset".
+    if (e && e.code === 'ENOENT') {
+      return { active: false, reason: `git config probe failed: git binary not found on PATH` };
+    }
     const stderr = (e && e.stderr ? e.stderr.toString() : '').trim();
     if (stderr) {
       return { active: false, reason: `git config probe failed: ${stderr.split('\n')[0]}` };
