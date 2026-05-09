@@ -16,8 +16,15 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 
+function isCiEnv() {
+  // Treat any truthy CI value as CI (only literal 'false'/'0'/'' is "not CI").
+  // Many non-GitHub CI systems set CI=1, CI=true, or just CI=<anything>.
+  const v = (process.env.CI || '').trim().toLowerCase();
+  return v !== '' && v !== 'false' && v !== '0';
+}
+
 if (
-  process.env.CI === 'true' ||
+  isCiEnv() ||
   process.env.NODE_ENV === 'production' ||
   // npm sets these when called with --omit=dev / --production. Guard
   // against the case where someone runs `npm ci --omit=dev` locally
@@ -34,7 +41,10 @@ function currentHooksPath() {
   try {
     return execSync('git config core.hooksPath', { stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
-      .trim();
+      .trim()
+      // Normalize trailing slashes — Git accepts '.husky/_/' but our
+      // strict comparison below would miss it.
+      .replace(/\/+$/, '');
   } catch {
     return '';
   }
@@ -58,9 +68,7 @@ if (isConfiguredAndPresent(currentHooksPath())) {
   process.exit(0);
 }
 
-(async () => {
-  console.log('→ configuring CS77 pre-push hook');
-  const { default: husky } = await import('husky');
-  const out = husky();
-  if (out) console.log(out);
-})();
+console.log('→ configuring CS77 pre-push hook');
+const { default: husky } = await import('husky');
+const out = husky();
+if (out) console.log(out);

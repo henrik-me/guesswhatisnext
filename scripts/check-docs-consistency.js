@@ -1498,6 +1498,14 @@ function formatText(findings) {
   return out.join('\n');
 }
 
+function isCiEnv() {
+  // Treat any truthy CI value as CI ('true', '1', etc.) — only literal
+  // 'false' / '0' / '' counts as not-CI. Many non-GitHub CI systems
+  // (Buildkite, CircleCI, Jenkins env exports) set CI=1, not CI=true.
+  const v = (process.env.CI || '').trim().toLowerCase();
+  return v !== '' && v !== 'false' && v !== '0';
+}
+
 function parseArgs(argv) {
   const opts = { json: false, strict: false, root: null };
   for (const a of argv.slice(2)) {
@@ -1518,9 +1526,10 @@ function parseArgs(argv) {
 if (require.main === module) {
   const opts = parseArgs(process.argv);
   // CS77-2c: warn (stderr only) when the husky pre-push hook is not active
-  // in this clone. Suppress in CI (CI=true) and in --json mode so machine
+  // in this clone. Suppress in any CI env (any truthy CI value, not just
+  // 'true' — many CI systems use CI=1) and in --json mode so machine
   // output stays clean. Does NOT affect exit code.
-  if (!opts.json && process.env.CI !== 'true') {
+  if (!opts.json && !isCiEnv()) {
     try {
       const path = require('path');
       const { isHookActive } = require('./check-hook.js');

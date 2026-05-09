@@ -17,7 +17,10 @@ function isHookActive(repoRoot = process.cwd()) {
       cwd: repoRoot,
     })
       .toString()
-      .trim();
+      .trim()
+      // Normalize trailing slashes ('.husky/_/' -> '.husky/_'); Git
+      // accepts either form but strict equality below would miss them.
+      .replace(/\/+$/, '');
   } catch {
     return { active: false, reason: 'core.hooksPath is not set' };
   }
