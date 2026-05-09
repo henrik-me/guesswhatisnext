@@ -1522,8 +1522,10 @@ if (require.main === module) {
   // output stays clean. Does NOT affect exit code.
   if (!opts.json && process.env.CI !== 'true') {
     try {
+      const path = require('path');
       const { isHookActive } = require('./check-hook.js');
-      const hook = isHookActive();
+      const repoRoot = path.resolve(opts.root || process.cwd());
+      const hook = isHookActive(repoRoot);
       if (!hook.active) {
         process.stderr.write(
           `⚠ CS77 pre-push hook is NOT active in this clone (${hook.reason}).\n` +
