@@ -1,10 +1,10 @@
 ## ⚠️ Orchestrator trip-wires — must do, never violate
 
-Top-3 high-cost rules. Full list at [`.github/instructions/orchestrator-trip-wires.instructions.md`](instructions/orchestrator-trip-wires.instructions.md). Background and rationale at the linked sections in INSTRUCTIONS.md / OPERATIONS.md.
+Top-3 highest-cost rules below; full table at [`.github/instructions/orchestrator-trip-wires.instructions.md`](instructions/orchestrator-trip-wires.instructions.md). Each rule is a pointer — full prescription, "why", and rationale live ONLY at the linked canonical doc. **Do not duplicate them here.** If a rule needs more detail, edit the canonical doc.
 
-1. **Long-running waits → dispatch a background watcher (`task` agent type, `claude-haiku-4.5`, `mode: background`), then end your turn.** Never `gh run watch` from the main orchestrator session (locks it). Never call `task_complete` on a mid-flight deploy / Copilot review when a watcher could carry it to terminal state. See [INSTRUCTIONS.md § Production deploys](../INSTRUCTIONS.md#production-deploys--approval-gate-is-on-the-user) and [OPERATIONS.md § Background polling-loop watcher prompts](../OPERATIONS.md#background-polling-loop-watcher-prompts).
-2. **Direct-to-main pushes (WORKBOARD / clickstop plan files) require local `npm run check:docs:strict` to pass first** — admin direct-push silently bypasses ALL server-side required status checks. The CS77 husky pre-push hook enforces this in clones where `npm install` has been run; verify with `npm run check:hook` if unsure.
-3. **Always deploy main → staging → prod, even if the change doesn't apply functionally to staging** (e.g. Azure SQL-only changes). The clean staging deploy itself is a no-regression test (npm ci, container build, boot, smoke). Skipping staging is a process violation.
+1. **Long-running wait?** Dispatch background watcher sub-agent — see [INSTRUCTIONS.md § Production deploys](../INSTRUCTIONS.md#production-deploys--approval-gate-is-on-the-user) and [OPERATIONS.md § Background polling-loop watcher prompts](../OPERATIONS.md#background-polling-loop-watcher-prompts).
+2. **Direct-to-main push?** Run `npm run check:docs:strict` first — see [INSTRUCTIONS.md Quick Reference "Lint-before-push" bullet](../INSTRUCTIONS.md#quick-reference-checklist).
+3. **Deploying after a merge?** Always main → staging → prod — see [INSTRUCTIONS.md § Production deploys "Standard deploy sequence"](../INSTRUCTIONS.md#production-deploys--approval-gate-is-on-the-user).
 
 ---
 
