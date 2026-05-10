@@ -6,7 +6,32 @@
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72, CS75
 **Blocks:** [CS79](active_cs79_api-features-cold-init-gate.md) closure (no prod deploy can succeed past CS41-1 smoke step (e) `/api/scores/me` until this is fixed).
 
-## Origin
+## Current state (2026-05-10T05:55Z)
+
+**PR #332 merged ✅** — CS80-1 (BIGINT cast at 4 sites), CS80-2 (smoke sentinel range), CS80-4 (regression test) all live on main as commit `ffccb0f`.
+
+**Prod deploy [25621131079](https://github.com/henrik-me/guesswhatisnext/actions/runs/25621131079) HALTED at CS41-12 safety gate** — NOT a rollback (auto-rollback fires after traffic shift; this deploy halted BEFORE the deploy step). Prod is on OLD `gwn-production--0000024` (image `76f5705`), still serving real users normally.
+
+**Why halted:** CS41-12 runs `scripts/smoke.js` (the new code from `main`) against the OLD revision. The OLD revision lacks the CS80 BIGINT cast, so `/api/scores/me` overflows on the same smoke-bot accumulated rows. Chicken-and-egg: deploy gate verifies OLD compat first; OLD has the bug we're fixing.
+
+**Resolution: CS80-3 is now the unblocker.** Delete the `gwn-smoke-bot` accumulated score rows from prod, then re-trigger prod-deploy.yml with `image-tag=ffccb0f`. The deploy will then succeed (OLD smoke passes because no overflow data exists; NEW image deploys; CS41-1 smoke passes with new sentinel range and BIGINT cast).
+
+**Blocked on user approval for CS80-3** — the plan explicitly marked this operator-gated. Options for the user (in priority order):
+
+1. Authorize `az`-based DELETE from this orchestrator session: `az sql db query --name gwn-production --resource-group gwn-rg --server gwn-sqldb --query-string "DELETE FROM scores WHERE user_id = (SELECT id FROM users WHERE username='gwn-smoke-bot')"` (requires auth; user's `henrik_metzger@hotmail.com` has access).
+2. Run the same DELETE via Azure Portal Query Editor.
+3. Hot-fix path: add a one-time admin endpoint, deploy via a workflow that bypasses CS41-12 (more risk, larger PR).
+4. Modify `scripts/smoke.js` to skip step (e) on CS41-12 OLD-revision invocations only (keeps step (e) for CS41-1 NEW-revision smoke). Lower risk than option 3 but loses some validation coverage.
+
+**Recommended:** option 1 or 2 — surgical, scoped to test data only, ~10 affected rows, no production code touched.
+
+**Once unblocked:**
+1. Re-trigger prod-deploy.yml with `image-tag=ffccb0f` and `confirm=production`.
+2. Surface approval link.
+3. Dispatch background watcher.
+4. On success: CS73, CS79, AND CS80 all close empirically as side effects.
+
+
 
 Surfaced 2026-05-10T04:21Z during CS79 prod-deploy run [25619591048](https://github.com/henrik-me/guesswhatisnext/actions/runs/25619591048). CS79 fix worked correctly (`/api/features` cleared cold-init in 2 attempts), POST `/api/scores` returned id=48 with score=604,634,726, but the next smoke step `GET /api/scores/me` returned 503. App Insights captured the SQL Server error verbatim:
 
