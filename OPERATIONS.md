@@ -276,6 +276,38 @@ If validation fails at any step, do not request the next review round; fix and r
 
 Example exemption: `## Container Validation: not applicable (tooling-only — no server/client/DB code changed)`.
 
+### Test data hygiene (CS81)
+
+Every smoke / e2e / load test that inserts data into a **shared persistent
+database** (Azure SQL prod/staging, or any future shared DB) MUST clean up
+its own data before exiting. This is a hard rule — not a nice-to-have.
+
+**Cleanup happens in test infrastructure, NOT via new app endpoints.** We
+do not widen the public app surface (auth, audit, blast radius) for purely
+test concerns. Concretely:
+
+- `scripts/smoke.js` captures the `id` returned from its `POST /api/scores`
+  step and DELETEs that row directly via `mssql` + `process.env.DATABASE_URL`
+  in its final step (CS81-2). Fail-soft: a cleanup miss logs a warning and
+  is mopped up by the periodic ops workflow (CS81-1).
+- `scripts/cleanup-test-data.js` + `.github/workflows/ops-cleanup-test-data.yml`
+  is the one-off / periodic operator-dispatched cleanup of `gwn-smoke-bot`'s
+  accumulated rows. Environment-gated (operator approval click for prod),
+  parameterized to ONLY touch rows owned by `gwn-smoke-bot` (CS81-1).
+- Playwright e2e specs run against either the in-memory dev server or the
+  ephemeral docker MSSQL stack (`scripts/test-e2e-mssql.js` does
+  `docker compose down -v` at end). Both paths discard the data with the
+  process/container; no per-row cleanup is required. Specs that insert
+  rows (e.g. `tests/e2e/leaderboard.spec.mjs`) carry a header comment
+  documenting this so the absence of an `afterEach` is not mistaken for
+  an oversight.
+
+**Pattern when adding a new test against a shared DB:** capture inserted
+IDs → at end of test → DELETE by ID via direct DB access using the same
+`DATABASE_URL` the test framework already has. Failure to clean up is a
+regression that will eventually overflow aggregates (see CS80) or skew
+leaderboards. Reference CS81 in the commit / PR body.
+
 **Model selection:** The preferred model for both orchestrators and sub-agents is Claude Opus 4.7 or higher (use the 1M context variant — e.g. `claude-opus-4.6-1m` — when available). GPT 5.5 or higher (`gpt-5.5` is the floor) is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 
 ## Parallel Agent Workflow

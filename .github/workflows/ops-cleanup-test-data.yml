@@ -1,0 +1,61 @@
+# CS81-1 — One-off ops cleanup of `gwn-smoke-bot`'s accumulated `scores`
+# rows in production (or staging). Manually dispatched, environment-gated
+# (operator approval click required for `production`), idempotent.
+#
+# This workflow runs `scripts/cleanup-test-data.js`. Per CS81 design notes,
+# cleanup is *test infrastructure* — we deliberately do NOT add an admin
+# delete-scores endpoint to the app. See the script header for the full
+# rationale.
+
+name: OPS - Cleanup test data
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Environment to clean up'
+        required: true
+        type: choice
+        options: [production, staging]
+      confirm:
+        description: 'Type the target environment name (production or staging) to confirm'
+        required: true
+      dry-run:
+        description: 'Count without deleting'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Delete gwn-smoke-bot accumulated test data
+    runs-on: ubuntu-latest
+    # Inherits the GitHub Environment's required-reviewers gate. For
+    # `production` this surfaces an approval click in the Actions UI before
+    # any deletion runs.
+    environment: ${{ inputs.target }}
+    steps:
+      - name: Confirm target match
+        run: |
+          if [ "${{ inputs.confirm }}" != "${{ inputs.target }}" ]; then
+            echo "::error::confirm input ('${{ inputs.confirm }}') must equal target ('${{ inputs.target }}')"
+            exit 1
+          fi
+
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Install runtime deps
+        run: npm ci --omit=dev
+
+      - name: Run cleanup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DRY_RUN: ${{ inputs.dry-run && '1' || '' }}
+        run: node scripts/cleanup-test-data.js

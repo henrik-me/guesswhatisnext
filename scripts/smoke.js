@@ -35,6 +35,17 @@
  *                                 step is logged as skipped with a warning
  *                                 (deploy continues — /api/scores/me
  *                                 succeeding already proved DB writeability).
+ *   (g) cleanup self            — CS81-2 test data hygiene: connect to the
+ *                                 DB directly via DATABASE_URL and DELETE
+ *                                 the row inserted in step (d) by id.
+ *                                 Mirrors `scripts/wake-db.js`'s direct-mssql
+ *                                 boundary (NOT the runtime adapter, NOT a
+ *                                 new app endpoint — cleanup is test
+ *                                 infrastructure, not app surface). Fail-soft
+ *                                 (a cleanup miss is logged as a warning;
+ *                                 it doesn't fail the smoke step). Skipped
+ *                                 with a one-line note when DATABASE_URL is
+ *                                 unset (e.g. local in-memory invocations).
  *
  * CS41-2 perf baselines: every per-request elapsed time is captured. A
  * single request > PERF_WARN_MS (default 2000) emits a workflow warning;
@@ -445,7 +456,67 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
   results.finishedAt = new Date().toISOString();
   results.passed = results.steps.every((s) => s.status === 'pass' || s.status === 'skip');
   if (results.passed) info(`✅ smoke passed against ${fqdn}`);
+
+  // --- Step (g): CS81-2 self-cleanup ----------------------------------------
+  // Test data hygiene: delete the row we just inserted in step (d). Direct
+  // mssql (NOT the runtime adapter, NOT a new app endpoint). Fail-soft —
+  // a cleanup miss logs a warning but does NOT flip results.passed; the
+  // BIGINT cast (CS80) plus the periodic ops cleanup workflow (CS81-1) are
+  // the durable backstops. Skipped when DATABASE_URL is unset (local /
+  // in-memory invocations).
+  if (results.passed && submittedId != null) {
+    await cleanupSmokeRow(submittedId);
+  }
+
   return results;
+}
+
+/**
+ * Delete the smoke probe's just-inserted score row by id, via direct mssql.
+ * Fail-soft: any failure logs a warning and returns; never throws.
+ *
+ * Lazy-loads `mssql` so the module isn't required when DATABASE_URL is unset.
+ */
+async function cleanupSmokeRow(id) {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString || String(connectionString).trim() === '') {
+    info(`cleanup: DATABASE_URL unset — skipping self-cleanup for id=${id}`);
+    return;
+  }
+  let sql;
+  try {
+    sql = require('mssql');
+  } catch (err) {
+    info(`[smoke] WARN: cleanup failed — id=${id} may persist (mssql require failed: ${err.message})`);
+    return;
+  }
+  let pool;
+  try {
+    const baseConfig = sql.ConnectionPool.parseConnectionString(connectionString);
+    baseConfig.options = baseConfig.options || {};
+    const config = {
+      ...baseConfig,
+      connectionTimeout: 30_000,
+      requestTimeout: 30_000,
+      options: {
+        ...baseConfig.options,
+        connectTimeout: 30_000,
+        requestTimeout: 30_000,
+      },
+    };
+    pool = new sql.ConnectionPool(config);
+    await pool.connect();
+    await pool.request()
+      .input('id', sql.Int, Number(id))
+      .query('DELETE FROM scores WHERE id = @id');
+    info(`cleanup: deleted smoke row id=${id}`);
+  } catch (err) {
+    info(`[smoke] WARN: cleanup failed — id=${id} may persist (${err && err.message ? err.message : err})`);
+  } finally {
+    if (pool) {
+      await pool.close().catch(() => {});
+    }
+  }
 }
 
 async function main() {
@@ -493,5 +564,6 @@ module.exports = {
   defaultFetcher,
   sentinelScore,
   parseIntEnv,
+  cleanupSmokeRow,
   DEFAULTS,
 };
