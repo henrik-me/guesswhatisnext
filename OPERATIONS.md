@@ -499,13 +499,9 @@ Cooldown: after the Container Apps idle window of zero traffic, the replica is d
 
 Production at scale-to-zero wakes the same way any user wakes it — **just visit the site** ([gwn.metzger.dk](https://gwn.metzger.dk) or `/healthz`). One cold homepage load allocates a replica; subsequent requests in the active window are warm. Unlike staging there is no separate Azure FQDN procedure — the custom domain is the operator entry point.
 
-Cold-start budget on the first request after a quiet period (see [CS75](project/clickstops/active/active_cs75_scale-prod-to-zero.md) for the full breakdown):
+Cold-start budget on the first request after a quiet period (container allocation + Azure SQL serverless resume from auto-pause; the two clocks are independent) is documented authoritatively in [CS75 § Risks & rollback](project/clickstops/active/active_cs75_scale-prod-to-zero.md#risks--rollback). `/healthz` bypasses the DB-init gate, so it can return before the DB has finished resuming. See [CS73](project/clickstops/done/done_cs73_prod-deploy-cold-db-handling.md) for the deploy-time DB-wake handling and [CS56](project/clickstops/planned/planned_cs56_server-cache-and-cold-db-fallback.md) for planned user-facing cold-DB UX improvements.
 
-- ~10–30s for the Container App replica to be allocated (`minReplicas: 0` → 1).
-- ~30–60s for the Azure SQL serverless DB to resume from auto-pause (governed by the SQL `autoPauseDelay`, default 60min of DB idleness — independent of the container's idle clock).
-- Total worst-case ≈ 60–90s on a fully cold first request that also touches the DB. `/healthz` bypasses the DB-init gate, so it can return in ~30s while the DB is still resuming. See [CS73](project/clickstops/done/done_cs73_prod-deploy-cold-db-handling.md) for the deploy-time DB-wake handling and [CS56](project/clickstops/planned/planned_cs56_server-cache-and-cold-db-fallback.md) for planned user-facing cold-DB UX improvements.
-
-Authoritative `minReplicas`, FQDN, cooldown, and SQL `autoPauseDelay` values live in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml), the live `az containerapp show` / `az sql db show` output, and the CS75 / CS73 plan files — do not paraphrase them elsewhere.
+Authoritative `minReplicas`, FQDN, and Container Apps cooldown live in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml) and the live `az containerapp show` output; the Azure SQL `autoPauseDelay` lives in the Azure SQL config (queryable via `az sql db show`). Do not paraphrase any of these elsewhere — link instead.
 
 **`health-monitor.yml` audit (CS75-3):** the 6h `health-monitor.yml` cron is Azure-API-only (`az containerapp show` / `az containerapp revision list`) and does **NOT** wake the prod replica. The deep HTTP probe that does hit `/api/health` is `workflow_dispatch`-gated (`inputs.check-level == 'deep'`), so it only runs on explicit operator invocation. The workflow already treats "0 replicas with Running state" as healthy. **No change required for CS75.** See [`.github/workflows/health-monitor.yml`](.github/workflows/health-monitor.yml) for the authoritative cadence and check matrix.
 
