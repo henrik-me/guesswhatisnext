@@ -70,3 +70,7 @@ cost*.json
 .cs53-11-shots/
 
 pr-body.md
+
+# Sub-agent PR body scratch (do not commit)
+.pr-body.md
+
