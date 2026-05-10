@@ -46,10 +46,11 @@ describe('scripts/smoke.js#cleanupSmokeRow (CS81-2)', () => {
     delete process.env.DATABASE_URL;
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      // No sql passed, no DATABASE_URL — must NOT throw, must return cleanly,
-      // and must emit the documented one-line skip note.
+      // No sql passed, no DATABASE_URL — must NOT throw, must return a
+      // self-describing skip result, and must emit the documented one-line
+      // skip note.
       const result = await cleanupSmokeRow(42);
-      expect(result).toBeUndefined();
+      expect(result).toEqual({ status: 'skip', reason: 'no DATABASE_URL', id: 42 });
       const skipped = logSpy.mock.calls.some(([msg]) =>
         /cleanup: DATABASE_URL unset — skipping self-cleanup for id=42/i.test(String(msg))
       );
@@ -62,10 +63,13 @@ describe('scripts/smoke.js#cleanupSmokeRow (CS81-2)', () => {
 
   it('issues a parameterized DELETE scope-guarded by gwn-smoke-bot username', async () => {
     const fake = makeFakeSql({ deleteHandler: () => ({ rowsAffected: [1] }) });
-    await cleanupSmokeRow(123, {
+    const result = await cleanupSmokeRow(123, {
       sql: fake.sql,
       connectionString: 'Server=foo;Database=bar;',
     });
+    expect(result.status).toBe('pass');
+    expect(result.id).toBe(123);
+    expect(result.rowsAffected).toBe(1);
     expect(fake.queries).toHaveLength(1);
     const q = fake.queries[0];
     // Scope guard: id AND user_id subquery on username.
@@ -81,30 +85,38 @@ describe('scripts/smoke.js#cleanupSmokeRow (CS81-2)', () => {
     expect(fake.close).toHaveBeenCalled();
   });
 
-  it('logs a warning when rowsAffected is 0 (already gone or not owned by smoke bot)', async () => {
+  it('logs a warning AND returns warn status when rowsAffected is 0', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       const fake = makeFakeSql({ deleteHandler: () => ({ rowsAffected: [0] }) });
-      await cleanupSmokeRow(99, {
+      const result = await cleanupSmokeRow(99, {
         sql: fake.sql,
         connectionString: 'Server=foo;Database=bar;',
       });
+      expect(result.status).toBe('warn');
+      expect(result.reason).toBe('rowsAffected=0');
+      expect(result.id).toBe(99);
       const warned = logSpy.mock.calls.some(([msg]) => /WARN:.*deleted 0 rows.*id=99/i.test(String(msg)));
       expect(warned).toBe(true);
+      // No duplicated [smoke] prefix in the WARN message.
+      const dupPrefix = logSpy.mock.calls.some(([msg]) => /\[smoke\] \[smoke\]/i.test(String(msg)));
+      expect(dupPrefix).toBe(false);
     } finally {
       logSpy.mockRestore();
     }
   });
 
-  it('fail-soft: a query error logs a warning and closes the pool but does NOT throw', async () => {
+  it('fail-soft: a query error returns warn status, logs warning, closes pool, does NOT throw', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       const fake = makeFakeSql({ deleteHandler: () => { throw new Error('connect timeout'); } });
-      // Must NOT throw — the smoke step is fail-soft.
-      await cleanupSmokeRow(7, {
+      const result = await cleanupSmokeRow(7, {
         sql: fake.sql,
         connectionString: 'Server=foo;Database=bar;',
       });
+      expect(result.status).toBe('warn');
+      expect(result.reason).toBe('query error');
+      expect(result.error).toBe('connect timeout');
       const warned = logSpy.mock.calls.some(([msg]) => /WARN: cleanup failed.*id=7.*connect timeout/i.test(String(msg)));
       expect(warned).toBe(true);
       expect(fake.close).toHaveBeenCalled();

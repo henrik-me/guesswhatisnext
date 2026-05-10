@@ -113,8 +113,13 @@ describe('CS41-1 — runSmoke happy path', () => {
     });
     expect(r.passed).toBe(true);
     const stepNames = r.steps.map((s) => s.step);
-    expect(stepNames).toEqual(['healthz', 'features', 'login', 'submit-score', 'me-scores', 'health']);
-    expect(r.steps.every((s) => s.status === 'pass')).toBe(true);
+    expect(stepNames).toEqual(['healthz', 'features', 'login', 'submit-score', 'me-scores', 'health', 'cleanup']);
+    // All steps pass except cleanup which 'skip's because DATABASE_URL is
+    // unset in this test (CS81-2 fail-soft skip path; not a regression).
+    expect(r.steps.filter((s) => s.step !== 'cleanup').every((s) => s.status === 'pass')).toBe(true);
+    const cleanup = r.steps.find((s) => s.step === 'cleanup');
+    expect(cleanup.status).toBe('skip');
+    expect(cleanup.reason).toBe('no DATABASE_URL');
   });
 });
 
