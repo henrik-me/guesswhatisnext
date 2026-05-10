@@ -319,6 +319,68 @@ describe('scripts/wake-db.js', () => {
       expect(fake.close).toHaveBeenCalledTimes(1);
     });
 
+    it('fails fast on ELOGIN even when wrapped as ConnectionError (auth misconfig != cold-pause)', async () => {
+      const elogin = Object.assign(new Error('Login failed for user.'), {
+        code: 'ELOGIN',
+        name: 'ConnectionError',
+      });
+      const fake = makeFakeSql({
+        connectImpls: [() => { throw elogin; }],
+      });
+      const sleep = vi.fn();
+      await expect(
+        wakeDb({
+          sql: fake.sql,
+          connectionString: 'Server=foo;Database=bar;',
+          sleep,
+          log: makeLog(),
+        })
+      ).rejects.toThrow(/Login failed/);
+      expect(fake.connectCalls).toHaveLength(1);
+      expect(sleep).not.toHaveBeenCalled();
+    });
+
+    it('fails fast on ENOTFOUND (DNS) even when wrapped as ConnectionError', async () => {
+      const dns = Object.assign(new Error('getaddrinfo ENOTFOUND no-such-host'), {
+        code: 'ENOTFOUND',
+        name: 'ConnectionError',
+      });
+      const fake = makeFakeSql({
+        connectImpls: [() => { throw dns; }],
+      });
+      const sleep = vi.fn();
+      await expect(
+        wakeDb({
+          sql: fake.sql,
+          connectionString: 'Server=foo;Database=bar;',
+          sleep,
+          log: makeLog(),
+        })
+      ).rejects.toThrow(/ENOTFOUND/);
+      expect(fake.connectCalls).toHaveLength(1);
+      expect(sleep).not.toHaveBeenCalled();
+    });
+
+    it('fails fast on "login failed" message even without a code (some mssql versions strip the code)', async () => {
+      const noCode = Object.assign(new Error("Login failed for user 'sa'."), {
+        name: 'ConnectionError',
+      });
+      const fake = makeFakeSql({
+        connectImpls: [() => { throw noCode; }],
+      });
+      const sleep = vi.fn();
+      await expect(
+        wakeDb({
+          sql: fake.sql,
+          connectionString: 'Server=foo;Database=bar;',
+          sleep,
+          log: makeLog(),
+        })
+      ).rejects.toThrow(/Login failed/);
+      expect(fake.connectCalls).toHaveLength(1);
+      expect(sleep).not.toHaveBeenCalled();
+    });
+
     it('falls back to process.env.DATABASE_URL when connectionString is unset', async () => {
       const prev = process.env.DATABASE_URL;
       process.env.DATABASE_URL = 'Server=fromenv;Database=x;';

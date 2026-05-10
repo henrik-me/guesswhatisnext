@@ -38,6 +38,19 @@ const defaultSql = require('mssql');
 // 49918/49919/49920: Cannot process request — too many operations / not enough resources.
 const RETRYABLE_SQL_NUMBERS = new Set([40613, 40197, 40501, 49918, 49919, 49920]);
 
+// Permanent failures we never want to retry, even though mssql wraps them
+// in `ConnectionError` / `RequestError`. Retrying these just burns the
+// 150s budget and turns a real config outage into a slow failure.
+const NON_RETRYABLE_CODES = new Set([
+  'ELOGIN',          // mssql login failure (bad credentials)
+  'ENOTFOUND',       // DNS resolution failed (bad server hostname)
+  'ECONNREFUSED',    // server actively refused (firewall / port closed)
+  'EINSTLOOKUP',     // SQL Browser instance lookup failed
+  'ENOTOPEN',        // pool not open (programming error)
+  'EALREADYCONNECTED',
+  'EALREADYCONNECTING',
+]);
+
 // Linear backoff schedule capped at 15s. Indexed by (attempt - 1).
 const BACKOFF_SCHEDULE_MS = [5_000, 10_000, 15_000];
 
@@ -47,9 +60,18 @@ function defaultSleep(ms) {
 
 function isRetryable(err) {
   if (!err) return false;
+  // Explicit retry list: Azure SQL transient SQL errors (always retry).
   if (typeof err.number === 'number' && RETRYABLE_SQL_NUMBERS.has(err.number)) return true;
-  // mssql wraps tedious errors as ConnectionError / RequestError — both are
-  // worth retrying within the budget when waking a paused serverless DB.
+  // Explicit non-retry list: permanent mssql/tedious failure codes.
+  if (typeof err.code === 'string' && NON_RETRYABLE_CODES.has(err.code)) return false;
+  // Common login-failure message patterns surface without a clean code.
+  const message = String((err && err.message) || '');
+  if (/login failed/i.test(message)) return false;
+  if (/cannot open server/i.test(message)) return false;
+  if (/password did not match/i.test(message)) return false;
+  // Catch-all: mssql wraps tedious errors as ConnectionError / RequestError.
+  // Retry these only when there's no specific number/code that would have
+  // told us they were permanent (ELOGIN etc. were filtered out above).
   const name = err.name || '';
   if (name === 'ConnectionError' || name === 'RequestError') return true;
   return false;
@@ -194,5 +216,6 @@ module.exports = {
   main,
   // exported for tests
   RETRYABLE_SQL_NUMBERS,
+  NON_RETRYABLE_CODES,
   BACKOFF_SCHEDULE_MS,
 };
