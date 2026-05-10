@@ -2,6 +2,7 @@
 
 **Status:** 🔄 In Progress
 **Claimed:** yoga-gwn 2026-05-09T23:55Z (branch `cs73-wake-db`)
+**PR merged:** [#330](https://github.com/henrik-me/guesswhatisnext/pull/330) at 2026-05-10T02:00Z (commit `a69b329`). CS73-1..-4 ✅ Done. **Closure pending natural cold-pause prod-deploy validation** per § Validation strategy (no manual pause possible on GP_S_Gen5 serverless). 30-day grace ends 2026-06-09; CS may close earlier on first organic cold deploy or with the grace note.
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72
 **Origin:** CS52-11 prod deploy ceremony (yoga-gwn-c5, 2026-05-03). Recurring failure observed; promoted to a dedicated CS at user direction (*"the deployment should be fixed to properly handle a cold db, this shouldn't be on the operator to handle"*).
