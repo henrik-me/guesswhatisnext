@@ -843,16 +843,111 @@ async function main() {
   if (!ok) {
     log('Dumping last 200 lines of app logs for diagnosis:');
     compose('logs --tail=200 app');
-  }
-
-  teardown();
-  if (ok) {
-    log('✅ Container validation PASSED.');
-    process.exit(0);
-  } else {
-    logErr('Container validation FAILED.');
+    teardown();
+    logErr('Container validation FAILED (default cold-start cycle).');
     process.exit(1);
   }
+
+  // ─── CS79-3: fresh-cold-init smoke cycle ─────────────────────────────────
+  //
+  // The cycle above proves the cold-start retry/recovery path works. It does
+  // NOT exercise the CS79 failure mode because `probeColdStart()` sends
+  // `X-User-Activity: 1`, so the boot-quiet gate (server/app.js:332-351)
+  // fires `runInit()` and `dbInitialized` becomes true. Any subsequent
+  // request — including the deploy-time `node scripts/smoke.js` — then sees
+  // a warm process and bypasses the gate entirely.
+  //
+  // To reproduce the prod failure (CS73 run 25617860563), we need a fresh
+  // app process whose `dbInitialized` is `false` AND a probe sequence whose
+  // FIRST DB-touching request mirrors what the CI smoke does. We do this
+  // by restarting ONLY the app container (the SQL container keeps its
+  // schema + data, so `gwn-smoke-bot` survives), then immediately invoking
+  // `node scripts/smoke.js` against the restarted container.
+  //
+  // ORDERING CONSTRAINT — DO NOT INSERT ANY DB-TOUCHING PROBE BETWEEN
+  // `restart app` AND `node scripts/smoke.js`. Any request carrying
+  // `X-User-Activity: 1` (or a system API key) hitting `/api/*` between
+  // those two steps will fire `runInit()` itself and warm the gate, masking
+  // the regression this cycle is designed to catch. `/healthz` is the only
+  // safe probe in this window because it is gate-bypassed.
+  const freshOk = await probeFreshColdInitSmoke();
+  teardown();
+  if (freshOk) {
+    log('✅ Container validation PASSED (default + CS79 fresh-cold-init smoke).');
+    process.exit(0);
+  } else {
+    logErr('Container validation FAILED (CS79 fresh-cold-init smoke cycle).');
+    process.exit(1);
+  }
+}
+
+// CS79-3: see ORDERING CONSTRAINT comment in main() before adding any
+// probes here.
+async function probeFreshColdInitSmoke() {
+  log('CS79-3 — fresh-cold-init smoke cycle starting.');
+
+  // 1. Seed gwn-smoke-bot via direct DB connection in the app container
+  //    BEFORE we restart the app process. Schema already exists from the
+  //    default cycle's runInit migrations. setup-smoke-user.js connects via
+  //    the DB adapter directly (no HTTP gate), so this does NOT warm
+  //    `dbInitialized` in the running app process.
+  const SMOKE_USER_PASSWORD = process.env.SMOKE_USER_PASSWORD || 'cs79-cold-init-smoke-pw';
+  log('Seeding gwn-smoke-bot user (idempotent) inside the app container…');
+  const seed = compose(
+    `exec -T -e SMOKE_USER_PASSWORD=${SMOKE_USER_PASSWORD} app node scripts/setup-smoke-user.js`,
+  );
+  if (seed.status !== 0) {
+    logErr('FAIL: setup-smoke-user.js failed inside app container.');
+    return false;
+  }
+
+  // 2. Restart ONLY the app container so `dbInitialized` resets to false.
+  //    The mssql container keeps its data (smoke-bot survives).
+  log('Restarting app container only (mssql keeps its data + schema)…');
+  const restart = compose('restart app');
+  if (restart.status !== 0) {
+    logErr('FAIL: docker compose restart app failed.');
+    return false;
+  }
+
+  // 3. Wait for /healthz (gate-bypassed; safe — does NOT warm the gate).
+  const healthy = await waitForHealthz();
+  if (!healthy) {
+    logErr('FAIL: /healthz did not become reachable after restart.');
+    return false;
+  }
+
+  // 4. Immediately invoke `node scripts/smoke.js localhost:<HTTPS_PORT>`.
+  //    With CS79-1's fix, step (b) /api/features carries X-User-Activity:1
+  //    and the gate fires runInit() — within budget /api/features returns
+  //    200 and the rest of the smoke flow proceeds. WITHOUT the fix, step
+  //    (b) returns 503 forever and smoke exits non-zero.
+  const fqdn = HTTPS_PORT === '443' ? 'localhost' : `localhost:${HTTPS_PORT}`;
+  log(`Invoking node scripts/smoke.js ${fqdn} (SMOKE_INSECURE=1)…`);
+  const smoke = spawnSync(`node scripts/smoke.js ${fqdn}`, {
+    cwd: ROOT,
+    stdio: 'inherit',
+    shell: true,
+    env: {
+      ...process.env,
+      SMOKE_USER_PASSWORD,
+      SMOKE_INSECURE: '1',
+      SYSTEM_API_KEY: process.env.SYSTEM_API_KEY || 'test-system-api-key',
+      // Tighten the cold-start budget so the cycle still completes inside
+      // the harness's overall runtime even on slow CI runners. WARMUP_CAP_MS
+      // and COLD_START_MS sum into the per-step budget; defaults are 30s
+      // each = up to 90s wall-clock per the smoke runner.
+    },
+  });
+  if (smoke.status !== 0) {
+    logErr(`FAIL: node scripts/smoke.js exited ${smoke.status}. Without CS79-1 the failure manifests as step (b) /api/features looping on 503 until the per-step budget is exhausted.`);
+    log('Dumping last 200 lines of app logs for diagnosis:');
+    compose('logs --tail=200 app');
+    return false;
+  }
+
+  log('✅ CS79-3 fresh-cold-init smoke cycle PASSED.');
+  return true;
 }
 
 main().catch((err) => {
