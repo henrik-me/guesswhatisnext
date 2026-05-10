@@ -250,7 +250,11 @@ router.get('/leaderboard/multiplayer', optionalAuth, async (req, res, next) => {
       SELECT u.id as user_id, u.username,
              COUNT(DISTINCT mp.match_id) as matches_played,
              SUM(mp.score) as total_score,
-             ROUND(AVG(mp.score), 0) as avg_score,
+             -- CS80: cast to BIGINT before AVG to avoid MSSQL int overflow
+             -- (SQL error 8115). No-op in SQLite. Note: SUM(mp.score) above
+             -- has the same theoretical overflow risk but changing its
+             -- return shape is a separate (non-CS80) decision.
+             ROUND(AVG(CAST(mp.score AS BIGINT)), 0) as avg_score,
              COALESCE(w.wins, 0) as wins
       FROM match_players mp
       JOIN users u ON mp.user_id = u.id
