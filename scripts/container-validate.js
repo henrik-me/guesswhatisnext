@@ -903,8 +903,9 @@ async function probeFreshColdInitSmoke() {
   log('Seeding gwn-smoke-bot user (idempotent) inside the app container…');
   const containerName = `${PROJECT_NAME}-app-1`;
   const cp = spawnSync(
-    `docker cp scripts/setup-smoke-user.js ${containerName}:/app/scripts/setup-smoke-user.js`,
-    { cwd: ROOT, stdio: 'inherit', shell: true },
+    'docker',
+    ['cp', 'scripts/setup-smoke-user.js', `${containerName}:/app/scripts/setup-smoke-user.js`],
+    { cwd: ROOT, stdio: 'inherit', shell: false },
   );
   if (cp.status !== 0) {
     logErr('FAIL: docker cp setup-smoke-user.js into app container failed.');

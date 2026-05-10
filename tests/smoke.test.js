@@ -270,8 +270,10 @@ describe('CS79 — /api/features cold-init gate (X-User-Activity propagation)', 
       targetFqdn: 'rev.example.test',
       password: 'pw',
       systemApiKey: 'sys',
-      // Give the cold-start budget enough room for two retries at 1ms
-      // intervals plus the 1s server-suggested Retry-After cap.
+      // Cold-start budget large enough for at least two retries at the
+      // configured probeIntervalMs (1ms in baseOpts). The fake's
+      // Retry-After is '0', so pollUntil200 falls back to intervalMs and
+      // does NOT honor a server-suggested back-off here.
       opts: { ...baseOpts, warmupCapMs: 1000, coldStartMs: 1000 },
       fetcher,
     });
@@ -286,13 +288,13 @@ describe('CS79 — /api/features cold-init gate (X-User-Activity propagation)', 
     expect(featuresCalls.every((c) => c.hasActivity)).toBe(true);
   });
 
-  it('regression guard: without X-User-Activity, /api/features stays 503 forever and runSmoke fails', async () => {
-    // Same fetcher, but we exercise pollUntil200 directly with NO headers
-    // to prove the fake matches the real server's boot-quiet behavior:
-    // missing-header → 503 forever. This is the failure mode CS73 hit in
-    // prod (run 25617860563); a regression that silently dropped the
-    // header from runSmoke's call site would manifest as `r.ok=false`
-    // here.
+  it('regression guard: pollUntil200 without X-User-Activity stays 503 until budget exhaustion', async () => {
+    // Exercises pollUntil200() directly with NO headers to prove the fake
+    // matches the real server's boot-quiet behavior: missing-header →
+    // 503 forever. This is the failure mode CS73 hit in prod (run
+    // 25617860563); a regression that silently dropped the header from
+    // runSmoke's /api/features call site would manifest as `r.ok=false`
+    // here once that site started exercising this code path.
     const { fetcher } = makeColdInitFeaturesFetcher({});
     const r = await pollUntil200({
       url: 'https://x.example/api/features',
