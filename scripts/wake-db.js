@@ -23,8 +23,10 @@
  *
  * Exit codes:
  *   0 — DB responded to `SELECT 1` within the total budget.
- *   1 — total budget exhausted across all retries (still cold, or a real
- *       connectivity outage). The deploy step should abort.
+ *   1 — any failure: total budget exhausted across retries OR a non-retryable
+ *       error surfaced immediately (e.g. ELOGIN, ENOTFOUND, ECONNREFUSED, or
+ *       any other error not on the Azure SQL transient list). Either way the
+ *       deploy step should abort.
  */
 
 'use strict';
@@ -98,7 +100,18 @@ function backoffFor(attemptIndex) {
  * @param {Function} [deps.sleep] - async (ms) => void; injectable for tests.
  * @param {{ info: Function, error: Function }} [deps.log] - logger seam.
  * @returns {Promise<{ attempts: number, elapsedMs: number }>} on success.
- *          Throws an Error on budget exhaustion.
+ * @throws {Error} on any failure path:
+ *   - Validation errors (missing/empty `connectionString`, non-positive
+ *     `perAttemptTimeoutMs` or `totalBudgetMs`) — thrown synchronously
+ *     before any connection attempt.
+ *   - Non-retryable failures (codes in `NON_RETRYABLE_CODES` like ELOGIN /
+ *     ENOTFOUND / ECONNREFUSED, or known login-failure message patterns) —
+ *     thrown after the FIRST failed attempt with no retry; the original
+ *     mssql/tedious error is re-thrown verbatim so its `code` / `name` /
+ *     `message` survive for operator diagnosis.
+ *   - Total budget exhausted across all retries — thrown as a wrapped Error
+ *     whose message contains `wake-db: total budget Nms exhausted after N
+ *     attempt(s)` and whose `cause` points to the last attempt's error.
  */
 async function wakeDb(deps = {}) {
   const sql = deps.sql || defaultSql;
