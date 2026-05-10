@@ -475,7 +475,7 @@ If non-empty, fall back to a real rebase before `--admin`-merging.
 
 ## Scale-to-zero environments (staging + production)
 
-Both the Azure `gwn-staging` and `gwn-production` Container Apps are being moved to `minReplicas: 0` so they pay only for active usage. See [CS58](project/clickstops/done/done_cs58_scale-staging-to-zero.md) for the staging rollout plan, cost evidence, and rollback procedure (live config tracks CS58-1/CS58-2), and [CS75](project/clickstops/done/done_cs75_scale-prod-to-zero.md) for the production equivalent (live config tracks CS75-1/CS75-2). Neither is the enforced pre-prod gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local [`npm run container:validate`](#cold-start-container-validation) cycles.
+Both the Azure `gwn-staging` and `gwn-production` Container Apps now run at `minReplicas: 0` so they pay only for active usage. See [CS58](project/clickstops/done/done_cs58_scale-staging-to-zero.md) for the staging rollout (live config tracks CS58-1/CS58-2; 7-day cost soak deferred to [CS59](project/clickstops/planned/planned_cs59_staging-cost-soak-verification.md)) and [CS75](project/clickstops/done/done_cs75_scale-prod-to-zero.md) for the production equivalent (live config tracks CS75-1/CS75-2; 7-day cost soak deferred to [CS76](project/clickstops/planned/planned_cs76_prod-cost-soak-verification.md)). Neither is the enforced pre-prod gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local [`npm run container:validate`](#cold-start-container-validation) cycles.
 
 ### Waking staging for ad-hoc validation
 
@@ -493,7 +493,7 @@ Cold-start budget on the first request after idle:
 - ~10–30s for the Container App replica to be allocated (`minReplicas: 0` → 1).
 - ~30s for the lazy DB init in `server/app.js` to complete its first connection (request-driven, see [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
 
-Cooldown: after the Container Apps idle window of zero traffic, the replica is deallocated again, so a probe followed by a few minutes of silence returns staging to its $0 idle state. The exact FQDN, the `minReplicas` value, and the cooldown live authoritatively in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) and the live `az containerapp show` output — do not paraphrase them elsewhere. Until [CS58-1/CS58-2](project/clickstops/done/done_cs58_scale-staging-to-zero.md) land, the live `minReplicas` may still be `1`; check the CS task table for current state.
+Cooldown: after the Container Apps idle window of zero traffic, the replica is deallocated again, so a probe followed by a few minutes of silence returns staging to its $0 idle state. The exact FQDN, the `minReplicas` value, and the cooldown live authoritatively in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) and the live `az containerapp show` output — do not paraphrase them elsewhere. Live state is `minReplicas: 0` (per [CS58-1/CS58-2](project/clickstops/done/done_cs58_scale-staging-to-zero.md), 2026-04-25).
 
 ### Waking production for ad-hoc validation
 

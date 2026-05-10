@@ -2,7 +2,7 @@
 
 This file captures accumulated knowledge, architecture decisions, risk analyses, and tool evaluations across all clickstops.
 
-> **Last updated:** 2026-04-26
+> **Last updated:** 2026-05-10
 
 ---
 
@@ -487,6 +487,20 @@ Local `npm test` runs against SQLite with always-warm fixtures: zero coverage of
 This validates the layered-gate design: CS41-1 catches NEW-revision bugs after promotion (rollback), CS41-12 catches OLD-vs-migrated-DB compatibility bugs before promotion (halt). Together they drained four latent bugs without a single user-visible regression.
 
 **Lesson: when adding new tests, ask "does this exercise the cold path I care about?"** Local tests with always-warm DBs and small fixtures have a parity gap with prod. The MSSQL/SQLite parity gap (CONVENTIONS § Testing Strategy) and the boot-quiet contract reminder (CONVENTIONS § 4a) are the codified versions of this lesson — see them before adding the next aggregate query, the next `/api/*` endpoint, or the next test that inserts into a shared persistent DB.
+
+---
+
+### Container Apps scale-to-zero rollout — `az` CLI gotchas surfaced by CS75, 2026-05-10
+
+**Date:** 2026-05-10 — CS75 took prod from `minReplicas: 1` → `minReplicas: 0`, mirroring CS58 on staging (2026-04-25). Three reproducible Azure CLI / Container Apps behaviours surfaced during the rollout that the CS58 procedure did not catch (because CS58 used a different sequence). Documented here so the next operator touching scale settings does not relearn them. Sources: [done_cs75 § CS75-1 / CS75-2 / CS75-5](project/clickstops/done/done_cs75_scale-prod-to-zero.md), prod-deploy run [25638085147](https://github.com/henrik-me/guesswhatisnext/actions/runs/25638085147).
+
+1. **`az containerapp update --min-replicas N` is silently no-op when the same invocation also passes `--yaml <file>`.** CS75-1 round 1 added `--min-replicas 0 --max-replicas 5` flags alongside the existing `--yaml` template in `prod-deploy.yml`. The flags were silently ignored — `az containerapp show` after the run still reported `minReplicas: 1`. Azure CLI behaviour is to let `--yaml` win for any property the YAML body contains, with no warning. Fix: embed `scale: { minReplicas: 0, maxReplicas: 5 }` inside `properties.template` of the heredoc YAML; remove the redundant CLI flags. Reference: [Azure/azure-cli-extensions#5391](https://github.com/Azure/azure-cli-extensions/issues/5391). **Generalisable rule: when `--yaml` is involved, the YAML is the single source of truth for the affected property tree — never split the same setting between flags and YAML.**
+
+2. **Single-revision mode does not atomically deactivate the old revision after `az containerapp update`.** The CS58 traffic-shift gotcha (CS58-2 had to manually `traffic update` + `revision deactivate` the old min=1 revision in multi-revision mode) was assumed to not apply to prod, since prod runs in single-revision mode and `az containerapp update` "atomically shifts traffic". In practice, immediately after `az containerapp update --min-replicas 0` against single-mode prod, both the old (`gwn-production--0000025`, min=1) and new (`gwn-production--0000026`, min=0) revisions showed `Active=true, replicas=1` for a multi-second window. Traffic had shifted, but the old revision was still warm and billable. Explicit `az containerapp revision deactivate --revision gwn-production--0000025` was required to fully complete the cutover. **Generalisable rule: regardless of revision mode, after a scale-changing `az containerapp update`, explicitly verify `revision list` shows exactly one Active revision and deactivate any stragglers — don't assume single-mode atomicity covers deactivation.**
+
+3. **A re-deploy that produces an unchanged template hash creates no new revision.** CS75-5 dispatched `prod-deploy.yml` against image `ffccb0f` — the same image already serving on `gwn-production--0000026`. The deploy ran green end-to-end (wake-db: 1s, migrations no-op, healthcheck 200), but `az containerapp revision list` afterward still showed `0000026` as the only active revision — no new revision was created. This is correct Container Apps behaviour: revisions are template-hash-keyed, not deploy-event-keyed. Implication: a "no-op redeploy to verify wake/cold-start works" is a valid and cheap operational check, but cannot be confirmed by "look for a new revision number" — confirm via the workflow run's healthcheck step logs and `az containerapp show` template hash. **Generalisable rule: don't use revision count as a deploy-success signal — use the workflow conclusion + `/healthz` 200 + (if applicable) wake-db step duration.**
+
+**Process gap surfaced (not corrected): staging-first was skipped on the CS75-1 / CS75-5 prod deploys.** [INSTRUCTIONS.md § Production deploys](INSTRUCTIONS.md#production-deploys--approval-gate-is-on-the-user) is unconditional: every change merged to main goes main → staging → prod, even when the change doesn't functionally exercise staging. CS75-1 only edited `.github/workflows/prod-deploy.yml` (not `staging-deploy.yml`), so the orchestrator's implicit reasoning was "staging-deploy.yml is unchanged, staging deploy would be vacuous." That reasoning is exactly what INSTRUCTIONS.md § 29 forbids — the clean staging deploy itself (npm ci, container build, boot, Ephemeral Smoke) is the no-regression test, regardless of which workflow file changed. Both CS75 prod deploys (CS75-2 and CS75-5) succeeded and prod is healthy, so no rollback is required, but the gap is documented as a precedent so the next orchestrator does not infer "prod-deploy.yml-only changes can skip staging" from CS75's history.
 
 ---
 
