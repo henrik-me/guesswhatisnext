@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 /**
- * scripts/cleanup-test-data.js — CS81-1: one-off ops cleanup of the
- * `gwn-smoke-bot` user's accumulated `scores` rows.
+ * scripts/cleanup-test-data.js — CS81-1 + CS82-1: ops cleanup of accumulated
+ * test-user `scores` rows. Targets:
+ *   1. `gwn-smoke-bot` (CS81-1 — exact match; the durable smoke runner user).
+ *   2. CS-prefix dev test users matching the `CS_PREFIX_PATTERN` regex
+ *      (CS82-1 — machine-generated CS52-style usernames such as
+ *      `cs5210umop3dc23a`; see the constant's docstring for the exact shape
+ *      and the rejection rules for plausible human-chosen lookalikes).
+ *   3. Any explicit usernames passed via the `EXTRA_USERNAMES` env var
+ *      (CS82-1 — comma-separated allowlist for surgical one-off cases).
  *
  * Why this exists separately from in-app cleanup:
  *   Test data hygiene is *test infrastructure* work, not application surface.
@@ -15,8 +22,8 @@
  *   This script is the one-off "drain accumulated test rows from prod" tool
  *   referenced by `.github/workflows/ops-cleanup-test-data.yml`. It runs
  *   under the GitHub Environment-gated workflow_dispatch (operator approval
- *   required), is parameterized to ONLY touch rows owned by `gwn-smoke-bot`,
- *   and is idempotent (a second invocation deletes 0 rows).
+ *   required), is parameterized to ONLY touch rows owned by matched test
+ *   users, and is idempotent (a second invocation deletes 0 rows).
  *
  * Why this uses `mssql` directly (NOT `server/db/mssql-adapter.js`):
  *   Same boundary as `scripts/wake-db.js` — the runtime adapter has CS53
@@ -24,15 +31,22 @@
  *   long, blocking, single-use connection; coupling to the adapter would
  *   either break CS53 or require new parameters to the adapter.
  *
- * Scope guard:
- *   - SELECT user_id WHERE username = 'gwn-smoke-bot'. If null → exit 0
- *     (idempotent: no smoke-bot user means no rows to clean).
- *   - All DELETEs are parameterized to that user_id. Never a wildcard.
+ * Scope guard (minimum-blast-radius):
+ *   - Target user_ids are resolved by looking up specific usernames; never a
+ *     wildcard SQL `LIKE` is used in the DELETE. The CS-prefix matching is
+ *     done in JS (regex) AFTER the SQL query returns candidates, so the
+ *     final DELETE is always parameterized to a specific resolved user_id.
+ *   - We only DELETE `scores` rows. The `users` rows themselves are left
+ *     intact to preserve referential integrity for any historical
+ *     `match_players` or other related tables. The blast radius of removing
+ *     the rows is the leaderboard pollution; removing the users adds risk
+ *     of cascading FK breakage for no incremental benefit.
  *
  * How to run (locally):
  *   $env:DATABASE_URL = "Server=...;Database=gwn-production;..."
- *   node scripts/cleanup-test-data.js          # delete
- *   $env:DRY_RUN = "1"; node scripts/cleanup-test-data.js  # count only
+ *   node scripts/cleanup-test-data.js                       # delete
+ *   $env:DRY_RUN = "1"; node scripts/cleanup-test-data.js   # count only
+ *   $env:EXTRA_USERNAMES = "alice-test,bob-test"; node scripts/cleanup-test-data.js
  *
  * Exit codes:
  *   0 — cleanup succeeded (or nothing to clean up).
@@ -47,9 +61,52 @@ const { wakeDb } = require('./wake-db.js');
 const SMOKE_USER = 'gwn-smoke-bot';
 const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
 
+// CS82-1: machine-generated CS-prefix dev-test users, e.g. `cs5210umop3dc23a`.
+// Shape: literal `cs`, then a maximal digit run (`\d+(?!\d)` — the negative
+// lookahead forbids the engine from backtracking the digit run to leave
+// digits leaking into the suffix), then a suffix of mixed alphanumerics
+// containing at least one letter AND at least one digit. The mixed-suffix
+// requirement (vs the plan's looser `[a-z0-9]+`) is a deliberate tightening
+// (CS82 PR #334 local-review finding): real CS52-10 entries (the four
+// `cs5210umop3dc23a/b` and `cs5210umop4jes6a/b` users) all have mixed
+// alphanumeric suffixes, while plausible human-chosen names like
+// `cs50student` (suffix all letters) or `cs100abc` (suffix all letters)
+// would otherwise false-positive. Public registration permits any 3-20
+// character username except the `gwn-smoke-` reserved prefix
+// (`server/routes/auth.js:65-69`), so the broader regex would put real users
+// at risk on a future cleanup run. Filtering happens in JS after the SQL
+// candidate-fetch (see CS-prefix path in cleanupTestData) so the final
+// DELETE is always scoped by specific resolved user_id, never by SQL `LIKE`.
+const CS_PREFIX_PATTERN = /^cs\d+(?!\d)(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]+$/;
+
+function parseExtraUsernames(raw) {
+  if (raw == null || raw === '') return [];
+  return String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 /**
- * Delete `gwn-smoke-bot`'s accumulated score rows. Idempotent: a re-run after
- * a successful cleanup deletes 0 rows.
+ * Delete accumulated score rows for known/matched test users. Idempotent: a
+ * re-run after a successful cleanup deletes 0 rows.
+ *
+ * Targets resolved (in order):
+ *   1. The exact-match `gwn-smoke-bot` user (CS81-1).
+ *   2. Users whose username matches `CS_PREFIX_PATTERN` (CS82-1 — see the
+ *      constant's docstring for the exact regex and rejection rationale).
+ *      Candidates come from a `username LIKE 'cs%'` SQL prefilter; the regex
+ *      is applied in JS to keep portability across SQL flavours and to keep
+ *      the regex auditable (not hidden in a server-side T-SQL `LIKE` pattern).
+ *   3. Users named in `EXTRA_USERNAMES` (env or `deps.extraUsernames`) —
+ *      comma-separated allowlist for surgical one-off cleanup of known-test
+ *      usernames that don't match the regex (CS82-1).
+ *
+ * Each matched user is processed independently: count `scores` rows, log
+ * `before count: N (<username>)`, DELETE the rows, count again, assert
+ * post-count == 0, log `after count: N`. Failures are surfaced as thrown
+ * errors so the calling workflow halts and the operator can investigate
+ * (no silent partial cleanup).
  *
  * Wakes the DB first via `scripts/wake-db.js` (Azure SQL serverless can take
  * ~30–60s to resume after idle; without the wake step, a cold DB would
@@ -61,14 +118,33 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
  * @param {string} [deps.connectionString] - defaults to process.env.DATABASE_URL.
  * @param {boolean} [deps.dryRun] - count only, do not delete. Defaults to
  *   `process.env.DRY_RUN === '1'`.
+ * @param {string|string[]} [deps.extraUsernames] - comma-separated string or
+ *   array of explicit usernames to also clean up. Defaults to
+ *   `process.env.EXTRA_USERNAMES`.
  * @param {number} [deps.connectTimeoutMs=30_000] - per-connect timeout.
  * @param {boolean|Function} [deps.wake] - if false, skip wake-db step;
  *   if a function, call it instead of the default wakeDb (test seam).
  *   Default: invoke wakeDb with the resolved sql + connection string.
  * @param {{ info: Function, error: Function }} [deps.log] - logger seam.
- * @returns {Promise<{ userId: number|null, beforeCount: number, afterCount: number, deleted: boolean }>}
+ * @returns {Promise<{
+ *   targets: Array<{
+ *     username: string,
+ *     userId: number,
+ *     source: 'smoke'|'cs-prefix'|'extra',
+ *     beforeCount: number,
+ *     afterCount: number,
+ *     deleted: boolean,
+ *     // `deletedRows` is present ONLY on real-delete entries (deleted=true).
+ *     // It reports the driver's rowsAffected[0] when available, falling back
+ *     // to beforeCount when the driver omits it. DRY_RUN entries (deleted=
+ *     // false) omit this field — they record beforeCount/afterCount only.
+ *     deletedRows?: number,
+ *   }>,
+ *   totalDeleted: number,
+ *   dryRun: boolean,
+ * }>}
  * @throws {Error} on validation failure, connection failure, query failure,
- *   or if the post-delete count assertion fails.
+ *   or if a per-user post-delete count assertion fails.
  */
 async function cleanupTestData(deps = {}) {
   const sql = deps.sql || defaultSql;
@@ -77,6 +153,16 @@ async function cleanupTestData(deps = {}) {
   const dryRun = deps.dryRun ?? (process.env.DRY_RUN === '1');
   const connectTimeoutMs = deps.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
   const log = deps.log || { info: console.log, error: console.error };
+
+  // EXTRA_USERNAMES allowlist resolution (string|array|env).
+  let extraUsernames;
+  if (deps.extraUsernames !== undefined) {
+    extraUsernames = Array.isArray(deps.extraUsernames)
+      ? deps.extraUsernames.map((s) => String(s).trim()).filter((s) => s.length > 0)
+      : parseExtraUsernames(deps.extraUsernames);
+  } else {
+    extraUsernames = parseExtraUsernames(process.env.EXTRA_USERNAMES);
+  }
 
   if (!connectionString || (typeof connectionString === 'string' && connectionString.trim() === '')) {
     const source = connectionStringExplicit ? 'connectionString argument' : 'DATABASE_URL env var';
@@ -121,44 +207,104 @@ async function cleanupTestData(deps = {}) {
     pool = new sql.ConnectionPool(config);
     await pool.connect();
 
-    // Resolve smoke-bot user_id. Idempotent short-circuit if not present.
-    const userRes = await pool.request()
+    // 1) Resolve the smoke-bot user (exact match). Idempotent: missing → skip.
+    const targets = [];
+    const seenIds = new Set();
+
+    const smokeRes = await pool.request()
       .input('username', sql.NVarChar, SMOKE_USER)
-      .query('SELECT id FROM users WHERE username = @username');
-    const userRow = userRes.recordset && userRes.recordset[0];
-    if (!userRow || userRow.id == null) {
-      log.info(`[CS81 cleanup-test-data] no '${SMOKE_USER}' user found — nothing to clean up`);
-      return { userId: null, beforeCount: 0, afterCount: 0, deleted: false };
-    }
-    const userId = userRow.id;
-    log.info(`[CS81 cleanup-test-data] resolved ${SMOKE_USER} user_id=${userId}`);
-
-    const beforeRes = await pool.request()
-      .input('userId', sql.Int, userId)
-      .query('SELECT COUNT(*) AS n FROM scores WHERE user_id = @userId');
-    const beforeCount = Number(beforeRes.recordset[0].n);
-    log.info(`[CS81 cleanup-test-data] before count: ${beforeCount}`);
-
-    if (dryRun) {
-      log.info(`[CS81 cleanup-test-data] DRY_RUN — would delete ${beforeCount} rows; skipping`);
-      return { userId, beforeCount, afterCount: beforeCount, deleted: false };
+      .query('SELECT id, username FROM users WHERE username = @username');
+    const smokeRow = smokeRes.recordset && smokeRes.recordset[0];
+    if (smokeRow && smokeRow.id != null) {
+      targets.push({ username: smokeRow.username, userId: smokeRow.id, source: 'smoke' });
+      seenIds.add(smokeRow.id);
+    } else {
+      log.info(`[CS82 cleanup-test-data] no '${SMOKE_USER}' user found — skipping smoke-bot path`);
     }
 
-    await pool.request()
-      .input('userId', sql.Int, userId)
-      .query('DELETE FROM scores WHERE user_id = @userId');
-
-    const afterRes = await pool.request()
-      .input('userId', sql.Int, userId)
-      .query('SELECT COUNT(*) AS n FROM scores WHERE user_id = @userId');
-    const afterCount = Number(afterRes.recordset[0].n);
-    log.info(`[CS81 cleanup-test-data] after count: ${afterCount}`);
-
-    if (afterCount !== 0) {
-      throw new Error(`cleanup-test-data: post-delete count assertion failed — expected 0, got ${afterCount}`);
+    // 2) Resolve CS-prefix candidates — SQL `LIKE` prefilter, regex in JS.
+    const csRes = await pool.request()
+      .query("SELECT id, username FROM users WHERE username LIKE 'cs%'");
+    const csCandidates = (csRes.recordset || []).filter((r) => CS_PREFIX_PATTERN.test(r.username));
+    let csQueued = 0;
+    for (const row of csCandidates) {
+      if (row.id == null || seenIds.has(row.id)) continue;
+      targets.push({ username: row.username, userId: row.id, source: 'cs-prefix' });
+      seenIds.add(row.id);
+      csQueued += 1;
     }
-    log.info(`[CS81 cleanup-test-data] deleted ${beforeCount} row(s) for ${SMOKE_USER}`);
-    return { userId, beforeCount, afterCount, deleted: true };
+    log.info(
+      `[CS82 cleanup-test-data] cs-prefix matched ${csCandidates.length} user(s); queued ${csQueued} for cleanup (after dedupe + null-id filter)`
+    );
+
+    // 3) EXTRA_USERNAMES allowlist — explicit per-name lookup.
+    for (const uname of extraUsernames) {
+      const exRes = await pool.request()
+        .input('username', sql.NVarChar, uname)
+        .query('SELECT id, username FROM users WHERE username = @username');
+      const exRow = exRes.recordset && exRes.recordset[0];
+      if (!exRow || exRow.id == null) {
+        log.info(`[CS82 cleanup-test-data] EXTRA_USERNAMES: '${uname}' not found — skipping`);
+        continue;
+      }
+      if (seenIds.has(exRow.id)) {
+        log.info(`[CS82 cleanup-test-data] EXTRA_USERNAMES: '${uname}' already matched — skipping duplicate`);
+        continue;
+      }
+      targets.push({ username: exRow.username, userId: exRow.id, source: 'extra' });
+      seenIds.add(exRow.id);
+    }
+
+    if (targets.length === 0) {
+      log.info('[CS82 cleanup-test-data] no matching users — nothing to clean up');
+      return { targets: [], totalDeleted: 0, dryRun };
+    }
+
+    // Per-user cleanup loop. Each user is independent; failures throw.
+    let totalDeleted = 0;
+    const results = [];
+    for (const t of targets) {
+      const beforeRes = await pool.request()
+        .input('userId', sql.Int, t.userId)
+        .query('SELECT COUNT(*) AS n FROM scores WHERE user_id = @userId');
+      const beforeCount = Number(beforeRes.recordset[0].n);
+      log.info(`[CS82 cleanup-test-data] before count: ${beforeCount} (${t.username}, source=${t.source})`);
+
+      if (dryRun) {
+        log.info(`[CS82 cleanup-test-data] DRY_RUN — would delete ${beforeCount} row(s) for ${t.username}; skipping`);
+        results.push({ ...t, beforeCount, afterCount: beforeCount, deleted: false });
+        continue;
+      }
+
+      const deleteRes = await pool.request()
+        .input('userId', sql.Int, t.userId)
+        .query('DELETE FROM scores WHERE user_id = @userId');
+      // Prefer the driver's reported rowsAffected so a concurrent
+      // insert/delete during cleanup is reflected accurately in the summary
+      // (CS82 PR #334 R4). Fall back to beforeCount if the driver doesn't
+      // surface rowsAffected (test fakes that omit it).
+      const rowsAffected = Array.isArray(deleteRes && deleteRes.rowsAffected)
+        ? Number(deleteRes.rowsAffected[0])
+        : NaN;
+      const deletedRows = Number.isFinite(rowsAffected) ? rowsAffected : beforeCount;
+
+      const afterRes = await pool.request()
+        .input('userId', sql.Int, t.userId)
+        .query('SELECT COUNT(*) AS n FROM scores WHERE user_id = @userId');
+      const afterCount = Number(afterRes.recordset[0].n);
+      log.info(`[CS82 cleanup-test-data] after count: ${afterCount} (${t.username}, deletedRows=${deletedRows})`);
+
+      if (afterCount !== 0) {
+        throw new Error(`cleanup-test-data: post-delete count assertion failed for ${t.username} — expected 0, got ${afterCount}`);
+      }
+      totalDeleted += deletedRows;
+      results.push({ ...t, beforeCount, deletedRows, afterCount, deleted: true });
+    }
+
+    log.info(
+      `[CS82 cleanup-test-data] summary: ${results.length} user(s) processed, ${totalDeleted} row(s) deleted total (dryRun=${dryRun})`
+    );
+    return { targets: results, totalDeleted, dryRun };
   } finally {
     if (pool) {
       await pool.close().catch(() => {});
@@ -172,7 +318,7 @@ async function main(deps = {}) {
   try {
     await cleanupTestData(deps);
   } catch (err) {
-    log.error(`[CS81 cleanup-test-data] FAILED: ${err && err.message ? err.message : err}`);
+    log.error(`[CS82 cleanup-test-data] FAILED: ${err && err.message ? err.message : err}`);
     exitCode = 1;
   }
   process.exit(exitCode);
@@ -186,4 +332,6 @@ module.exports = {
   cleanupTestData,
   main,
   SMOKE_USER,
+  CS_PREFIX_PATTERN,
+  parseExtraUsernames,
 };

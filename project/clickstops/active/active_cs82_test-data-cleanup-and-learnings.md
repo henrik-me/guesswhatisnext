@@ -33,7 +33,7 @@ Pattern: `cs<NN><randomslug><a|b>`. Clearly machine-generated CS52-10 dev artifa
 Modify `scripts/cleanup-test-data.js` (added by CS81-1) to also delete scores belonging to users matching the CS-prefix dev-test pattern, in addition to the existing `gwn-smoke-bot` cleanup.
 
 **Pattern matching strategy:**
-- Match users where `username LIKE 'cs%'` AND username matches the regex `^cs\d+[a-z0-9]+$` (CS-prefix + digits + alphanumeric suffix). This is a machine-generated shape unlikely to appear in real human-chosen usernames.
+- Match users where `username LIKE 'cs%'` AND username matches the regex `^cs\d+(?!\d)(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]+$` (CS-prefix + maximal digit run + suffix containing BOTH a letter AND a digit). This is a machine-generated shape unlikely to appear in real human-chosen usernames; the mixed-suffix lookaheads + possessive-style `(?!\d)` guard against false positives like `cs50student`, `cs100abc`, `cs2024alice`. (Tightened from the originally-planned `^cs\d+[a-z0-9]+$` per CS82 PR #334 local review.)
 - Provide explicit allowlist: also support an `EXTRA_USERNAMES` env var with comma-separated explicit names, for surgical one-off cases.
 - Continue scoping all DELETEs to specific user IDs (looked up by username), never wildcard.
 
@@ -107,13 +107,13 @@ Add to CONVENTIONS.md § 4a or wherever boot-quiet is discussed (CS53-19/23 terr
 
 | # | Task | Notes |
 |---|------|-------|
-| CS82-1 | Extend `scripts/cleanup-test-data.js` for CS-prefix pattern + EXTRA_USERNAMES env var. Update unit tests to cover new pattern. | Mirror existing gwn-smoke-bot path; same scope/safety guards. |
-| CS82-2 | LEARNINGS.md entry for the cascading-bug chain. | Pure docs. |
-| CS82-3 | CONVENTIONS.md § testing — MSSQL/SQLite parity gap. | Pure docs. |
-| CS82-4 | CONVENTIONS.md § database/data — BIGINT cast hygiene. | Pure docs. |
-| CS82-5 | OPERATIONS.md — CS41-12 chicken-and-egg pattern. | Pure docs. |
-| CS82-6 | CONVENTIONS.md — boot-quiet contract reminder. | Pure docs. |
-| CS82-7 | After PR merge: orchestrator triggers `ops-cleanup-test-data.yml` against production (operator approval), watcher reports row counts. Verify leaderboard probe shows 0 cs<NN>* entries. | Orchestrator action; same shape as CS81-1 cleanup. |
+| CS82-1 | ✅ Done — Extended `scripts/cleanup-test-data.js` for CS-prefix pattern + `EXTRA_USERNAMES` env var. 26 unit tests cover regex hygiene (including the post-local-review tightening to `^cs\d+(?!\d)(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]+$` rejecting plausible human usernames like `cs50student`/`cs100abc`/`cs2024alice`), EXTRA_USERNAMES de-duplication, cumulative count, parameterized DELETEs, and only-scores blast-radius. Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Mirror existing gwn-smoke-bot path; same scope/safety guards. |
+| CS82-2 | ✅ Done — LEARNINGS.md entry "Cascading prod-deploy bug chain (CS73 → CS79 → CS80 → CS81), 2026-05-10". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-3 | ✅ Done — CONVENTIONS.md § Testing Strategy → "MSSQL/SQLite test parity gap". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-4 | ✅ Done — CONVENTIONS.md § Database & Data → "BIGINT cast hygiene for aggregates over INT columns". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-5 | ✅ Done — OPERATIONS.md § Cold-start container validation → "CS41-12 chicken-and-egg pattern". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-6 | ✅ Done — CONVENTIONS.md § 4a Telemetry & Observability → "Boot-quiet contract for new /api/* endpoints". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-7 | ⬜ Planned — After PR merge: orchestrator triggers `ops-cleanup-test-data.yml` against production (operator approval), watcher reports row counts. Verify leaderboard probe shows 0 cs<NN>* entries. | Orchestrator action; same shape as CS81-1 cleanup. |
 
 ## Acceptance
 
@@ -126,7 +126,7 @@ CS82 closure-blocking criteria:
 
 ## Will not be done
 
-- Aggressive pattern matching like `username LIKE 'test%'` or `username LIKE '%-test%'` — too risky; could match real users. Stick to the specific `^cs\d+[a-z0-9]+$` pattern + the existing `gwn-smoke-bot` exact match + EXTRA_USERNAMES allowlist.
+- Aggressive pattern matching like `username LIKE 'test%'` or `username LIKE '%-test%'` — too risky; could match real users. Stick to the tightened `^cs\d+(?!\d)(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]+$` pattern (mixed-alphanumeric suffix required) + the existing `gwn-smoke-bot` exact match + EXTRA_USERNAMES allowlist.
 - Deleting the user rows themselves (only their score rows). Minimum-blast-radius.
 - Auditing every other code path for similar latent bugs (CS80-style schema scan). Out of scope; could be a separate CS if anyone wants the audit.
 - Backfilling other historical CS files with cross-references to the learnings. Forward-looking only.
@@ -134,7 +134,7 @@ CS82 closure-blocking criteria:
 
 ## Risks & rollback
 
-- **Pattern false positives.** `^cs\d+[a-z0-9]+$` could in theory match a real user named (e.g.) `cs100abc123`. Mitigation: DRY_RUN mode reports all matched users by username before deleting; the prod cleanup workflow runs under environment-gated approval. Low practical risk because human-chosen usernames rarely follow this exact machine-generated shape.
+- **Pattern false positives.** The shipped regex `^cs\d+(?!\d)(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]+$` (tightened from the originally-planned `^cs\d+[a-z0-9]+$` per PR #334 local review) requires the suffix portion to contain BOTH a letter AND a digit — so `cs100abc123` matches (machine-generated shape) but `cs50student`, `cs100abc`, `cs2024alice` (suffix all letters) and `cs1000`, `cs5210123` (suffix all digits) are all rejected. Residual risk: a human-chosen username with mixed alphanumeric suffix (e.g. `cs2026spring1`) could still match. Mitigation: DRY_RUN mode reports all matched users by username before deleting; the prod cleanup workflow runs under environment-gated approval. Low practical risk because human-chosen usernames rarely follow this exact machine-generated shape.
 - **Doc updates risk drift if not maintained.** Mitigation: each doc addition cross-references the originating CS file so the canonical source-of-truth is traceable.
 - **Rollback for CS82-1:** revert the PR. Cleanup script returns to gwn-smoke-bot-only behavior. The 4 CS52 rows would re-accumulate? No — they're already there. Revert just stops further pattern-matching. The deletes already executed are permanent (test data, no need to restore).
 - **Rollback for docs:** revert the PR. Docs return to current state.
