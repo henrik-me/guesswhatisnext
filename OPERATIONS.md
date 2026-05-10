@@ -308,6 +308,19 @@ IDs → at end of test → DELETE by ID via direct DB access using the same
 regression that will eventually overflow aggregates (see CS80) or skew
 leaderboards. Reference CS81 in the commit / PR body.
 
+**`DATABASE_URL` is the policy switch.** Smoke / e2e cleanup steps detect
+a shared persistent DB by the presence of `DATABASE_URL`. If the env var
+is set, cleanup runs and a failure is logged loudly (fail-soft on the
+cleanup itself, but the row WILL be picked up by the periodic ops
+workflow). If `DATABASE_URL` is unset, cleanup is intentionally skipped
+because the run targets a non-persistent backend (in-memory SQLite or a
+torn-down docker container) — the data dies with the process. This means
+**any deploy/CI step that runs smoke against a shared DB MUST wire
+`DATABASE_URL` into the smoke step's env** (see `prod-deploy.yml`'s
+CS41-1 / CS41-12 / CS41-5 smoke steps for the canonical wiring). A
+shared-DB smoke step running without `DATABASE_URL` is a configuration
+bug that will silently leak test rows.
+
 **Model selection:** The preferred model for both orchestrators and sub-agents is Claude Opus 4.7 or higher (use the 1M context variant — e.g. `claude-opus-4.6-1m` — when available). GPT 5.5 or higher (`gpt-5.5` is the floor) is used for the local review loop (`code-review` agent) — it provides fast, high-signal code review at lower cost. Do not use GPT models for implementation work. See LEARNINGS.md for detailed model evaluation results.
 
 ## Parallel Agent Workflow

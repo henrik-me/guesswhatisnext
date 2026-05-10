@@ -61,4 +61,20 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
-        run: node scripts/cleanup-test-data.js
+          TARGET: ${{ inputs.target }}
+        run: |
+          # Staging is currently container-local SQLite (per
+          # staging-deploy.yml) — there is no shared persistent DB to clean
+          # against until the staging environment defines a DATABASE_URL
+          # secret pointing at a managed DB. Mirror staging-deploy.yml's
+          # treatment of secrets.STAGING_DATABASE_URL: skip with a notice
+          # rather than fail.
+          if [ -z "$DATABASE_URL" ]; then
+            if [ "$TARGET" = "staging" ]; then
+              echo "::notice::secrets.DATABASE_URL is unset for the staging environment — staging is still on container-local SQLite. Nothing to clean. Set the environment secret once staging moves to a shared persistent DB."
+              exit 0
+            fi
+            echo "::error::secrets.DATABASE_URL is unset for the $TARGET environment; cannot run cleanup."
+            exit 1
+          fi
+          node scripts/cleanup-test-data.js
