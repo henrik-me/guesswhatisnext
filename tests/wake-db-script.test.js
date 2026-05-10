@@ -97,12 +97,32 @@ describe('scripts/wake-db.js', () => {
         log: makeLog(),
       });
       const cfg = fake.constructed[0].config;
+      // Default attempt timeout = min(perAttemptTimeoutMs=30_000, remainingBudget=150_000) = 30_000.
       expect(cfg.connectionTimeout).toBe(30_000);
       expect(cfg.requestTimeout).toBe(30_000);
       expect(cfg.options.connectTimeout).toBe(30_000);
       expect(cfg.options.requestTimeout).toBe(30_000);
       // Existing options preserved.
       expect(cfg.options.encrypt).toBe(true);
+    });
+
+    it('clamps the per-attempt timeout to the remaining budget so wall-clock cannot overshoot totalBudgetMs', async () => {
+      const fake = makeFakeSql();
+      await wakeDb({
+        sql: fake.sql,
+        connectionString: 'Server=foo;Database=bar;',
+        // perAttemptTimeoutMs > totalBudgetMs → first attempt's timeout
+        // must be clamped to the (smaller) remaining budget.
+        perAttemptTimeoutMs: 60_000,
+        totalBudgetMs: 10_000,
+        sleep: vi.fn(),
+        log: makeLog(),
+      });
+      const cfg = fake.constructed[0].config;
+      expect(cfg.connectionTimeout).toBe(10_000);
+      expect(cfg.requestTimeout).toBe(10_000);
+      expect(cfg.options.connectTimeout).toBe(10_000);
+      expect(cfg.options.requestTimeout).toBe(10_000);
     });
 
     it('respects an injected perAttemptTimeoutMs override (applied to both connect + request timeouts)', async () => {

@@ -97,19 +97,32 @@ async function wakeDb(deps = {}) {
   // logic. The wake script's SELECT 1 is tiny, but a cold-resumed DB can
   // take a moment to satisfy the first request, so we size requestTimeout
   // to the same per-attempt budget as the connect.
-  const config = sql.ConnectionPool.parseConnectionString(connectionString);
-  config.connectionTimeout = perAttemptTimeoutMs;
-  config.requestTimeout = perAttemptTimeoutMs;
-  config.options = config.options || {};
-  config.options.connectTimeout = perAttemptTimeoutMs;
-  config.options.requestTimeout = perAttemptTimeoutMs;
+  //
+  // The per-attempt timeout is recomputed each iteration as
+  // `min(perAttemptTimeoutMs, remainingBudgetMs)` so a slow final attempt
+  // cannot overshoot `totalBudgetMs` by up to one full per-attempt timeout.
+  const baseConfig = sql.ConnectionPool.parseConnectionString(connectionString);
+  baseConfig.options = baseConfig.options || {};
 
   const startedAt = Date.now();
   let attempt = 0;
   let lastError;
 
-  while (Date.now() - startedAt < totalBudgetMs) {
+  while (true) {
+    const remainingMs = totalBudgetMs - (Date.now() - startedAt);
+    if (remainingMs <= 0) break;
     attempt += 1;
+    const attemptTimeoutMs = Math.min(perAttemptTimeoutMs, remainingMs);
+    const config = {
+      ...baseConfig,
+      connectionTimeout: attemptTimeoutMs,
+      requestTimeout: attemptTimeoutMs,
+      options: {
+        ...baseConfig.options,
+        connectTimeout: attemptTimeoutMs,
+        requestTimeout: attemptTimeoutMs,
+      },
+    };
     let pool;
     let nextWaitMs = 0;
     let shouldRetry = false;
@@ -129,11 +142,13 @@ async function wakeDb(deps = {}) {
         // Pool close happens in finally{} below; rethrow after that.
         throw err;
       }
-      const remainingMs = totalBudgetMs - (Date.now() - startedAt);
+      const remainingAfterMs = totalBudgetMs - (Date.now() - startedAt);
       const wait = backoffFor(attempt - 1);
-      if (remainingMs <= wait) {
-        log.error(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; budget exhausted (${remainingMs}ms remaining < ${wait}ms backoff)`);
-        // Fall through to finally + while loop exits naturally.
+      // Need room for the backoff PLUS at least a minimal next attempt
+      // (1ms is enough — Math.min in the next iteration will clamp).
+      if (remainingAfterMs <= wait) {
+        log.error(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; budget exhausted (${remainingAfterMs}ms remaining < ${wait}ms backoff)`);
+        // Fall through to finally + while loop exits naturally on next check.
       } else {
         log.info(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; retrying in ${Math.round(wait / 1000)}s`);
         shouldRetry = true;
