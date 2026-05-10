@@ -95,26 +95,42 @@ describe('CS41-1 — pollUntil200 cold-start handling', () => {
 });
 
 describe('CS41-1 — runSmoke happy path', () => {
-  it('passes all six steps and writes structured results', async () => {
-    const fetcher = makeFetcher({
-      'GET /healthz': { status: 200, headers: {}, body: 'ok' },
-      'GET /api/features': { status: 200, headers: {}, body: okFeaturesBody },
-      'POST /api/auth/login': { status: 200, headers: {}, body: JSON.stringify({ token: 't' }) },
-      'POST /api/scores': { status: 201, headers: {}, body: JSON.stringify({ id: 99 }) },
-      'GET /api/scores/me': { status: 200, headers: {}, body: okMeBody(99) },
-      'GET /api/health': { status: 200, headers: {}, body: JSON.stringify({ checks: { database: { status: 'ok' } } }) },
-    });
-    const r = await runSmoke({
-      targetFqdn: 'rev.example.test',
-      password: 'pw',
-      systemApiKey: 'sys',
-      opts: baseOpts,
-      fetcher,
-    });
-    expect(r.passed).toBe(true);
-    const stepNames = r.steps.map((s) => s.step);
-    expect(stepNames).toEqual(['healthz', 'features', 'login', 'submit-score', 'me-scores', 'health']);
-    expect(r.steps.every((s) => s.status === 'pass')).toBe(true);
+  it('passes all seven steps (six smoke + CS81-2 cleanup) and writes structured results', async () => {
+    // Test isolation: explicitly unset DATABASE_URL so the CS81-2
+    // cleanup step takes the documented 'skip' path regardless of
+    // whether the test runner is `npm test` (in-memory) or
+    // `npm run test:mssql` (which sets process.env.DATABASE_URL
+    // globally via scripts/test-mssql.js).
+    const prevDbUrl = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    try {
+      const fetcher = makeFetcher({
+        'GET /healthz': { status: 200, headers: {}, body: 'ok' },
+        'GET /api/features': { status: 200, headers: {}, body: okFeaturesBody },
+        'POST /api/auth/login': { status: 200, headers: {}, body: JSON.stringify({ token: 't' }) },
+        'POST /api/scores': { status: 201, headers: {}, body: JSON.stringify({ id: 99 }) },
+        'GET /api/scores/me': { status: 200, headers: {}, body: okMeBody(99) },
+        'GET /api/health': { status: 200, headers: {}, body: JSON.stringify({ checks: { database: { status: 'ok' } } }) },
+      });
+      const r = await runSmoke({
+        targetFqdn: 'rev.example.test',
+        password: 'pw',
+        systemApiKey: 'sys',
+        opts: baseOpts,
+        fetcher,
+      });
+      expect(r.passed).toBe(true);
+      const stepNames = r.steps.map((s) => s.step);
+      expect(stepNames).toEqual(['healthz', 'features', 'login', 'submit-score', 'me-scores', 'health', 'cleanup']);
+      // All steps pass except cleanup which 'skip's because DATABASE_URL is
+      // unset in this test (CS81-2 fail-soft skip path; not a regression).
+      expect(r.steps.filter((s) => s.step !== 'cleanup').every((s) => s.status === 'pass')).toBe(true);
+      const cleanup = r.steps.find((s) => s.step === 'cleanup');
+      expect(cleanup.status).toBe('skip');
+      expect(cleanup.reason).toBe('no DATABASE_URL');
+    } finally {
+      if (prevDbUrl !== undefined) process.env.DATABASE_URL = prevDbUrl;
+    }
   });
 });
 

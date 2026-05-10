@@ -307,6 +307,7 @@ jobs:
         env:
           SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_PROD }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WARMUP_CAP_MS: '30000'
           COLD_START_MS: '30000'
           PERF_WARN_MS: '2000'
@@ -424,6 +425,7 @@ jobs:
         env:
           SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_PROD }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WARMUP_CAP_MS: '30000'
           COLD_START_MS: '30000'
           PERF_WARN_MS: '2000'
@@ -703,6 +705,7 @@ jobs:
         env:
           SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD_PROD }}
           SYSTEM_API_KEY: ${{ secrets.SYSTEM_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WARMUP_CAP_MS: '30000'
           COLD_START_MS: '30000'
           PERF_WARN_MS: '2000'

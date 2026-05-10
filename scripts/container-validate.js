@@ -23,6 +23,12 @@
  *
  * Exits non-zero on any assertion failure.
  *
+ * Test data hygiene (CS81): the smoke step (CS41-1, see scripts/smoke.js)
+ * owns its own data lifecycle — its final step DELETEs the score row it
+ * inserted via direct mssql. The container itself is torn down at the end
+ * of validate, so no additional cleanup is needed at this layer. See
+ * OPERATIONS.md § Test data hygiene for the principle.
+ *
  * Usage:
  *   npm run container:validate
  *

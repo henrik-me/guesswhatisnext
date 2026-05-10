@@ -91,6 +91,31 @@ describe('CS41-8 — render-deploy-summary failure / partial', () => {
     expect(md).toContain('| GET /api/health (DB) | ⚠️ skipped | — | no SYSTEM_API_KEY |');
   });
 
+  it('renders CS81 cleanup step in all three statuses (pass/skip/warn)', () => {
+    const base = {
+      target: 't', passed: true, perfWarnings: [],
+      steps: [
+        { step: 'healthz', status: 'pass', elapsedMs: 10 },
+        { step: 'features', status: 'pass', elapsedMs: 10 },
+        { step: 'login', status: 'pass', elapsedMs: 10 },
+        { step: 'submit-score', status: 'pass', elapsedMs: 10, id: 7, score: 2 },
+        { step: 'me-scores', status: 'pass', elapsedMs: 10, scoreCount: 1 },
+        { step: 'health', status: 'pass', elapsedMs: 10, dbStatus: 'ok' },
+      ],
+    };
+    // pass
+    const passMd = render({ ...base, steps: [...base.steps, { step: 'cleanup', status: 'pass', id: 7, rowsAffected: 1, elapsedMs: 12 }] }, {});
+    expect(passMd).toContain('| CS81 self-cleanup | ✅ |');
+    expect(passMd).toContain('deleted id=7 (rowsAffected=1)');
+    // skip (no DATABASE_URL)
+    const skipMd = render({ ...base, steps: [...base.steps, { step: 'cleanup', status: 'skip', reason: 'no DATABASE_URL', id: 7 }] }, {});
+    expect(skipMd).toContain('| CS81 self-cleanup | ⚠️ skipped | — | no DATABASE_URL |');
+    // warn (rowsAffected=0)
+    const warnMd = render({ ...base, steps: [...base.steps, { step: 'cleanup', status: 'warn', reason: 'rowsAffected=0', id: 7, elapsedMs: 8 }] }, {});
+    expect(warnMd).toContain('| CS81 self-cleanup | ⚠️ warn |');
+    expect(warnMd).toContain('rowsAffected=0 (id=7)');
+  });
+
   it('handles missing migration status as N/A', () => {
     const md = render(passResults, {});
     expect(md).toContain('**Migration:** N/A');

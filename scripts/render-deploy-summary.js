@@ -36,6 +36,7 @@ function statusIcon(status) {
     case 'pass': return '✅';
     case 'fail': return '❌';
     case 'skip': return '⚠️ skipped';
+    case 'warn': return '⚠️ warn';
     default: return status || '—';
   }
 }
@@ -47,6 +48,7 @@ const STEP_LABELS = {
   'submit-score': 'POST /api/scores',
   'me-scores': 'GET /api/scores/me',
   health: 'GET /api/health (DB)',
+  cleanup: 'CS81 self-cleanup',
 };
 
 function stepDetail(step) {
@@ -64,6 +66,12 @@ function stepDetail(step) {
     case 'health':
       if (step.status === 'skip') return step.reason || 'skipped';
       return step.status === 'pass' ? `db=${step.dbStatus}` : (step.error || `status=${step.lastStatus}`);
+    case 'cleanup':
+      // CS81-2: cleanup is fail-soft; warn doesn't downgrade results.passed.
+      if (step.status === 'pass') return `deleted id=${step.id} (rowsAffected=${step.rowsAffected})`;
+      if (step.status === 'skip') return step.reason || 'skipped';
+      if (step.status === 'warn') return `${step.reason || 'warn'}${step.error ? `: ${step.error}` : ''} (id=${step.id})`;
+      return step.error || step.reason || '';
     default:
       return '';
   }
@@ -105,7 +113,7 @@ function render(results, env = process.env) {
   } else {
     for (const s of steps) {
       const label = STEP_LABELS[s.step] || s.step;
-      const elapsed = s.status === 'skip' ? '—' : fmtElapsed(s.elapsedMs);
+      const elapsed = (s.status === 'skip' || (s.status === 'warn' && s.elapsedMs == null)) ? '—' : fmtElapsed(s.elapsedMs);
       lines.push(`| ${label} | ${statusIcon(s.status)} | ${elapsed} | ${stepDetail(s)} |`);
     }
   }

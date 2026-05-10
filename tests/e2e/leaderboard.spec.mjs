@@ -2,6 +2,17 @@
 import { test, expect } from '@playwright/test';
 import { playOneRound, uniqueIP } from './helpers.mjs';
 
+// CS81 test data hygiene: this spec inserts score rows via /api/sync with a
+// per-test ephemeral user. No explicit per-row cleanup is needed:
+//   - `npm run test:e2e` (default): runs against an in-memory SQLite dev
+//     server; the data dies with the process at suite end.
+//   - `npm run test:e2e:mssql`: runs against the docker-compose MSSQL stack,
+//     which is torn down (`docker compose down -v`) at suite end by
+//     scripts/test-e2e-mssql.js — taking the named volumes with it.
+// Neither path writes to a shared persistent DB, so the "delete by id"
+// pattern used by scripts/smoke.js (CS81-2) is unnecessary here. See
+// OPERATIONS.md § Test data hygiene for the principle.
+
 /** Generate a unique username for test isolation. */
 function uniqueUser() {
   return `lb${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;

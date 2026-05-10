@@ -35,6 +35,17 @@
  *                                 step is logged as skipped with a warning
  *                                 (deploy continues — /api/scores/me
  *                                 succeeding already proved DB writeability).
+ *   (g) cleanup self            — CS81-2 test data hygiene: connect to the
+ *                                 DB directly via DATABASE_URL and DELETE
+ *                                 the row inserted in step (d) by id.
+ *                                 Mirrors `scripts/wake-db.js`'s direct-mssql
+ *                                 boundary (NOT the runtime adapter, NOT a
+ *                                 new app endpoint — cleanup is test
+ *                                 infrastructure, not app surface). Fail-soft
+ *                                 (a cleanup miss is logged as a warning;
+ *                                 it doesn't fail the smoke step). Skipped
+ *                                 with a one-line note when DATABASE_URL is
+ *                                 unset (e.g. local in-memory invocations).
  *
  * CS41-2 perf baselines: every per-request elapsed time is captured. A
  * single request > PERF_WARN_MS (default 2000) emits a workflow warning;
@@ -391,6 +402,7 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
   // empty payload to header-less non-system traffic on enrolled endpoints
   // (server/routes/scores.js:316-326). The smoke is simulated user activity
   // so the header is correct.
+  let halted = false;
   {
     const url = `${base}/api/scores/me`;
     const started = nowMs();
@@ -409,13 +421,12 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
       const idsPresent = scores ? scores.map((s) => s.id).slice(0, 10) : null;
       fail('me-scores', `submitted id=${submittedId} not in /api/scores/me; status=${res.status} sample-ids=${JSON.stringify(idsPresent)}`);
       results.steps.push({ step: 'me-scores', status: 'fail', elapsedMs: elapsed, lastStatus: res.status, error: 'sentinel not present' });
-      results.finishedAt = new Date().toISOString();
-      return results;
+      halted = true;
     }
   }
 
   // --- Step (f): /api/health DB status (requires SYSTEM_API_KEY) -----------
-  {
+  if (!halted) {
     if (!systemApiKey) {
       info('/api/health step skipped (no SYSTEM_API_KEY) — /api/scores/me already proved DB writeability');
       annotate('warning', 'smoke step health: skipped (SYSTEM_API_KEY not provided)');
@@ -436,16 +447,125 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
       } else {
         fail('health', `expected 200 + checks.database.status='ok'; got status=${res.status} dbStatus=${dbStatus}`);
         results.steps.push({ step: 'health', status: 'fail', elapsedMs: elapsed, lastStatus: res.status, error: `dbStatus=${dbStatus}` });
-        results.finishedAt = new Date().toISOString();
-        return results;
+        halted = true;
       }
     }
   }
 
   results.finishedAt = new Date().toISOString();
-  results.passed = results.steps.every((s) => s.status === 'pass' || s.status === 'skip');
+  results.passed = !halted && results.steps.every((s) => s.status === 'pass' || s.status === 'skip');
   if (results.passed) info(`✅ smoke passed against ${fqdn}`);
+
+  // --- Step (g): CS81-2 self-cleanup ----------------------------------------
+  // Test data hygiene: delete the row we just inserted in step (d). Direct
+  // mssql (NOT the runtime adapter, NOT a new app endpoint). Fail-soft —
+  // a cleanup miss logs a warning but does NOT flip results.passed; the
+  // BIGINT cast (CS80) plus the periodic ops cleanup workflow (CS81-1) are
+  // the durable backstops. Skipped when DATABASE_URL is unset (local /
+  // in-memory invocations).
+  //
+  // Runs whenever step (d) succeeded (submittedId != null), regardless of
+  // whether downstream steps (e)/(f) failed — otherwise a flaky /api/health
+  // check would leak the row we just inserted.
+  //
+  // Records the outcome as a 'cleanup' step in results.steps so the
+  // smoke-results schema is self-describing and render-deploy-summary.js
+  // surfaces cleanup pass/skip/warn alongside the other steps.
+  // results.finishedAt is recomputed AFTER cleanup so the timestamp reflects
+  // the full smoke lifecycle including hygiene.
+  if (submittedId != null) {
+    const cleanupResult = await cleanupSmokeRow(submittedId);
+    const stepEntry = { step: 'cleanup', ...cleanupResult };
+    results.steps.push(stepEntry);
+    results.finishedAt = new Date().toISOString();
+    // Cleanup is fail-soft: do NOT downgrade results.passed on warn —
+    // CS81 design treats cleanup misses as warnings to be mopped up by
+    // the periodic ops workflow. Only true 'fail' statuses (none from
+    // cleanup) would flip the gate.
+    if (cleanupResult.status === 'warn') {
+      annotate('warning', `smoke step cleanup: ${cleanupResult.reason || 'unknown'} (id=${cleanupResult.id})`);
+    }
+  }
+
   return results;
+}
+
+/**
+ * Delete the smoke probe's just-inserted score row by id, via direct mssql.
+ * Fail-soft: any failure logs a warning and returns; never throws.
+ *
+ * Lazy-loads `mssql` so the module isn't required when DATABASE_URL is unset.
+ *
+ * Scope guard: the DELETE is parameterized by BOTH `id` AND a subquery on
+ * `users.username = 'gwn-smoke-bot'`, so even a misrouted/compromised
+ * `submittedId` cannot delete a non-smoke-bot user's row. This honors the
+ * CS81 user-direction constraint that "no other [user's] data can be
+ * deleted". If the smoke bot user is missing for any reason, the DELETE is
+ * a no-op (rowsAffected=0) rather than a permissive wildcard.
+ */
+async function cleanupSmokeRow(id, deps = {}) {
+  const connectionString = deps.connectionString ?? process.env.DATABASE_URL;
+  if (!connectionString || String(connectionString).trim() === '') {
+    info(`cleanup: DATABASE_URL unset — skipping self-cleanup for id=${id}`);
+    return { status: 'skip', reason: 'no DATABASE_URL', id };
+  }
+  let sql = deps.sql;
+  if (!sql) {
+    try {
+      sql = require('mssql');
+    } catch (err) {
+      info(`WARN: cleanup failed — id=${id} may persist (mssql require failed: ${err.message})`);
+      return { status: 'warn', reason: 'mssql require failed', error: err.message, id };
+    }
+  }
+  let pool;
+  const startedAt = Date.now();
+  try {
+    const baseConfig = sql.ConnectionPool.parseConnectionString(connectionString);
+    baseConfig.options = baseConfig.options || {};
+    const config = {
+      ...baseConfig,
+      connectionTimeout: 30_000,
+      requestTimeout: 30_000,
+      options: {
+        ...baseConfig.options,
+        connectTimeout: 30_000,
+        requestTimeout: 30_000,
+      },
+    };
+    pool = new sql.ConnectionPool(config);
+    await pool.connect();
+    const res = await pool.request()
+      .input('id', sql.Int, Number(id))
+      .input('username', sql.NVarChar, 'gwn-smoke-bot')
+      .query('DELETE FROM scores WHERE id = @id AND user_id = (SELECT id FROM users WHERE username = @username)');
+    const affected = Array.isArray(res?.rowsAffected) && Number.isFinite(res.rowsAffected[0])
+      ? res.rowsAffected[0]
+      : null;
+    const elapsedMs = Date.now() - startedAt;
+    if (affected === null) {
+      // Driver returned no rowsAffected — cannot confirm the DELETE; treat
+      // as warn so the cleanup step is not reported as a successful delete
+      // without server confirmation.
+      info(`WARN: cleanup id=${id} — DELETE returned no rowsAffected; cannot confirm the row was removed`);
+      return { status: 'warn', reason: 'no rowsAffected', id, elapsedMs };
+    }
+    if (affected === 0) {
+      info(`WARN: cleanup deleted 0 rows — id=${id} either already gone or not owned by gwn-smoke-bot`);
+      return { status: 'warn', reason: 'rowsAffected=0', id, elapsedMs };
+    }
+    info(`cleanup: deleted smoke row id=${id} (rowsAffected=${affected})`);
+    return { status: 'pass', id, rowsAffected: affected, elapsedMs };
+  } catch (err) {
+    const elapsedMs = Date.now() - startedAt;
+    const message = err && err.message ? err.message : String(err);
+    info(`WARN: cleanup failed — id=${id} may persist (${message})`);
+    return { status: 'warn', reason: 'query error', error: message, id, elapsedMs };
+  } finally {
+    if (pool) {
+      await pool.close().catch(() => {});
+    }
+  }
 }
 
 async function main() {
@@ -493,5 +613,6 @@ module.exports = {
   defaultFetcher,
   sentinelScore,
   parseIntEnv,
+  cleanupSmokeRow,
   DEFAULTS,
 };

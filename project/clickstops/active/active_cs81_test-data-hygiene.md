@@ -78,10 +78,10 @@ Documentation: add a short subsection to OPERATIONS.md (or CONVENTIONS.md § tes
 
 | # | Task | Notes |
 |---|------|-------|
-| CS81-1 | One-off cleanup workflow + script (CS81-1 above). PR with full validation. After merge: orchestrator triggers workflow against production, surfaces approval link, dispatches watcher. | Immediate unblock for CS80 deploy. |
-| CS81-2 | Smoke self-cleanup using direct DB access (`DATABASE_URL`) — NO new app endpoint. Mirror `scripts/wake-db.js` pattern: own mssql connection, parameterized DELETE WHERE id = (captured id), fail-soft. PR with full validation. | Test cleanup task — lives in test infrastructure, not app surface. |
-| CS81-3 | Audit Playwright e2e tests + container-validate for test-data hygiene. Tests that insert use direct-DB cleanup in `afterEach`/`afterAll`. Add OPERATIONS.md (or CONVENTIONS.md § testing) subsection on the "test data hygiene principle" with CS81 reference. | Test cleanup tasks + docs. |
-| CS81-4 | After CS81-1 cleanup workflow runs successfully against prod: trigger `prod-deploy.yml -f image-tag=ffccb0f -f confirm=production`. This is the deploy that closes CS73, CS79, CS80, AND validates CS81-1 end-to-end. | Orchestrator deploy ceremony. |
+| CS81-1 | ✅ Done — One-off cleanup workflow + script. PR (link added below). After merge: orchestrator triggers workflow against production, surfaces approval link, dispatches watcher. | Immediate unblock for CS80 deploy. |
+| CS81-2 | ✅ Done — Smoke self-cleanup using direct DB access (`DATABASE_URL`) — NO new app endpoint. Mirrors `scripts/wake-db.js` pattern: own mssql connection, parameterized DELETE WHERE id = (captured id), fail-soft. | Test cleanup task — lives in test infrastructure, not app surface. |
+| CS81-3 | ✅ Done — Audited Playwright e2e tests + container-validate for test-data hygiene. e2e specs run against in-memory dev or ephemeral docker MSSQL stack (torn down with `down -v`); leaderboard.spec.mjs carries a header comment documenting this. OPERATIONS.md "Test data hygiene" subsection added. | Test cleanup tasks + docs. |
+| CS81-4 | ⬜ Planned — After CS81-1 cleanup workflow runs successfully against prod: trigger `prod-deploy.yml -f image-tag=ffccb0f -f confirm=production`. This is the deploy that closes CS73, CS79, CS80, AND validates CS81-1 end-to-end. | Orchestrator deploy ceremony. |
 
 ## Acceptance
 
