@@ -425,7 +425,7 @@ After the update, `GET /api/scores/leaderboard?variant=freeplay&source=offline` 
 ### Azure SQL serverless cold-pause vs prod-deploy migration timeout (CS52-11)
 
 **Date:** 2026-05-03 — observed during CS52-11 prod deploy ceremony
-**Resolved by:** [CS73](project/clickstops/active/active_cs73_prod-deploy-cold-db-handling.md) (PR #NNN)
+**Resolved by:** [CS73](project/clickstops/active/active_cs73_prod-deploy-cold-db-handling.md) (PR #330)
 
 `gwn-production` Azure SQL is on `GP_S_Gen5` (serverless) with `autoPauseDelay=60min`. The "Run DB migrations" step in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml) (currently around line 246) invokes `node scripts/migrate.js`, which goes through `server/db/mssql-adapter.js`. That adapter hard-codes `MssqlAdapter.CONNECT_TIMEOUT_MS = 5000` deliberately (CS53-3 / CS53-6) so the runtime warmup-retry path can exercise more attempts inside the user's budget. **A paused DB takes ~30–60s to resume** — the connect attempt does wake it, but the 5s timeout aborts long before the resume completes. Result: `Migration failed: ConnectionError: Failed to connect to gwn-sqldb.database.windows.net:1433 in 5000ms` and the deploy aborts before traffic shift.
 
