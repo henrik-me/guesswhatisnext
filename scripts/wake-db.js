@@ -102,13 +102,13 @@ function backoffFor(attemptIndex) {
  */
 async function wakeDb(deps = {}) {
   const sql = deps.sql || defaultSql;
-  const connectionString = deps.connectionString || process.env.DATABASE_URL;
+  const connectionString = deps.connectionString ?? process.env.DATABASE_URL;
   const perAttemptTimeoutMs = deps.perAttemptTimeoutMs ?? 30_000;
   const totalBudgetMs = deps.totalBudgetMs ?? 150_000;
   const sleep = deps.sleep || defaultSleep;
   const log = deps.log || { info: console.log, error: console.error };
 
-  if (!connectionString) {
+  if (!connectionString || (typeof connectionString === 'string' && connectionString.trim() === '')) {
     throw new Error('wake-db: DATABASE_URL is unset; nothing to connect to.');
   }
   if (!Number.isFinite(perAttemptTimeoutMs) || perAttemptTimeoutMs <= 0) {

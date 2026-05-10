@@ -430,6 +430,25 @@ describe('scripts/wake-db.js', () => {
         if (prev !== undefined) process.env.DATABASE_URL = prev;
       }
     });
+
+    it('treats an explicit empty-string connectionString as misconfiguration (no env fallback)', async () => {
+      const prev = process.env.DATABASE_URL;
+      process.env.DATABASE_URL = 'Server=fromenv;Database=x;';
+      try {
+        const fake = makeFakeSql();
+        // Empty string is an explicit value — must NOT silently fall back
+        // to env, which could connect to an unintended DB.
+        await expect(
+          wakeDb({ sql: fake.sql, connectionString: '', sleep: vi.fn(), log: makeLog() })
+        ).rejects.toThrow(/DATABASE_URL is unset/);
+        await expect(
+          wakeDb({ sql: fake.sql, connectionString: '   ', sleep: vi.fn(), log: makeLog() })
+        ).rejects.toThrow(/DATABASE_URL is unset/);
+      } finally {
+        if (prev === undefined) delete process.env.DATABASE_URL;
+        else process.env.DATABASE_URL = prev;
+      }
+    });
   });
 
   describe('main(deps) — CLI exit handling', () => {
