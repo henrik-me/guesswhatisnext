@@ -473,9 +473,9 @@ git merge-tree $mb origin/main HEAD |
 
 If non-empty, fall back to a real rebase before `--admin`-merging.
 
-## Staging environment (scale-to-zero)
+## Scale-to-zero environments (staging + production)
 
-The Azure `gwn-staging` Container App is being moved to `minReplicas: 0` so it pays only for active usage (see [CS58](project/clickstops/done/done_cs58_scale-staging-to-zero.md) for the rollout plan, cost evidence, and rollback procedure — the live config tracks CS58-1/CS58-2). Staging is **not** the enforced pre-prod gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local [`npm run container:validate`](#cold-start-container-validation) cycles.
+Both the Azure `gwn-staging` and `gwn-production` Container Apps are being moved to `minReplicas: 0` so they pay only for active usage. See [CS58](project/clickstops/done/done_cs58_scale-staging-to-zero.md) for the staging rollout plan, cost evidence, and rollback procedure (live config tracks CS58-1/CS58-2), and [CS75](project/clickstops/active/active_cs75_scale-prod-to-zero.md) for the production equivalent (live config tracks CS75-1/CS75-2). Neither is the enforced pre-prod gate — that role belongs to the Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local [`npm run container:validate`](#cold-start-container-validation) cycles.
 
 ### Waking staging for ad-hoc validation
 
@@ -494,6 +494,16 @@ Cold-start budget on the first request after idle:
 - ~30s for the lazy DB init in `server/app.js` to complete its first connection (request-driven, see [§ Database & Data in CONVENTIONS.md](CONVENTIONS.md#database--data)).
 
 Cooldown: after the Container Apps idle window of zero traffic, the replica is deallocated again, so a probe followed by a few minutes of silence returns staging to its $0 idle state. The exact FQDN, the `minReplicas` value, and the cooldown live authoritatively in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) and the live `az containerapp show` output — do not paraphrase them elsewhere. Until [CS58-1/CS58-2](project/clickstops/done/done_cs58_scale-staging-to-zero.md) land, the live `minReplicas` may still be `1`; check the CS task table for current state.
+
+### Waking production for ad-hoc validation
+
+Production at scale-to-zero wakes the same way any user wakes it — **just visit the site** ([gwn.metzger.dk](https://gwn.metzger.dk) or `/healthz`). One cold homepage load allocates a replica; subsequent requests in the active window are warm. Unlike staging there is no separate Azure FQDN procedure — the custom domain is the operator entry point.
+
+Cold-start budget on the first request after a quiet period (container allocation + Azure SQL serverless resume from auto-pause; the two clocks are independent) is documented authoritatively in [CS75 § Risks & rollback](project/clickstops/active/active_cs75_scale-prod-to-zero.md#risks--rollback). `/healthz` bypasses the DB-init gate, so it can return before the DB has finished resuming. See [CS73](project/clickstops/done/done_cs73_prod-deploy-cold-db-handling.md) for the deploy-time DB-wake handling and [CS56](project/clickstops/planned/planned_cs56_server-cache-and-cold-db-fallback.md) for planned user-facing cold-DB UX improvements.
+
+Authoritative `minReplicas`, FQDN, and Container Apps cooldown live in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml) and the live `az containerapp show` output; the Azure SQL `autoPauseDelay` lives in the Azure SQL config (queryable via `az sql db show`). Do not paraphrase any of these elsewhere — link instead.
+
+**`health-monitor.yml` audit (CS75-3):** the 6h `health-monitor.yml` cron is Azure-API-only (`az containerapp show` / `az containerapp revision list`) and does **NOT** wake the prod replica. The deep HTTP probe that does hit `/api/health` is `workflow_dispatch`-gated (`inputs.check-level == 'deep'`), so it only runs on explicit operator invocation. The workflow already treats "0 replicas with Running state" as healthy. **No change required for CS75.** See [`.github/workflows/health-monitor.yml`](.github/workflows/health-monitor.yml) for the authoritative cadence and check matrix.
 
 ### Querying Azure cost
 
