@@ -90,10 +90,14 @@ async function cleanupTestData(deps = {}) {
   // can take 30–60s to resume. Without this, a one-shot cleanup against
   // a paused DB fails intermittently with transient connect errors.
   // Reuses scripts/wake-db.js's retry/backoff (same boundary, same DI seam).
+  // `connectTimeoutMs` is forwarded as wake-db's `perAttemptTimeoutMs` so
+  // a single tuning knob covers both the wake retries and the cleanup
+  // connection (wake's `totalBudgetMs` keeps its 150s default — that is
+  // the cap across all retry attempts, distinct from per-attempt timeout).
   if (deps.wake !== false) {
     const wakeFn = typeof deps.wake === 'function' ? deps.wake : wakeDb;
     try {
-      await wakeFn({ sql, connectionString, log });
+      await wakeFn({ sql, connectionString, perAttemptTimeoutMs: connectTimeoutMs, log });
     } catch (err) {
       throw new Error(`cleanup-test-data: wake-db step failed: ${err && err.message ? err.message : err}`);
     }

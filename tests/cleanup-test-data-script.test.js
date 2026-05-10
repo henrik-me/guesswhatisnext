@@ -120,6 +120,19 @@ describe('scripts/cleanup-test-data.js', () => {
       expect(wakeArgs.sql).toBe(fake.sql);
     });
 
+    it('forwards connectTimeoutMs to wake-db as perAttemptTimeoutMs (single tuning knob)', async () => {
+      const fake = makeFakeSql({ queryHandler: handlerForBotWithRows(1, 0) });
+      const wakeFn = vi.fn().mockResolvedValue(undefined);
+      await cleanupTestData({
+        sql: fake.sql,
+        connectionString: 'Server=foo;Database=bar;',
+        connectTimeoutMs: 7_500,
+        wake: wakeFn,
+        log: makeLog(),
+      });
+      expect(wakeFn.mock.calls[0][0].perAttemptTimeoutMs).toBe(7_500);
+    });
+
     it('surfaces wake-db failure as a wrapped error (cold DB unrecoverable)', async () => {
       const fake = makeFakeSql({ queryHandler: handlerForBotWithRows(1, 0) });
       const wakeFn = vi.fn().mockRejectedValue(new Error('budget exhausted'));
