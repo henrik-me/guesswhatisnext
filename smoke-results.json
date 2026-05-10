@@ -1,0 +1,68 @@
+{
+  "target": "localhost:8443",
+  "startedAt": "2026-05-10T04:39:37.919Z",
+  "config": {
+    "warmupCapMs": 30000,
+    "coldStartMs": 30000,
+    "perfWarnMs": 2000,
+    "probeIntervalMs": 2000,
+    "requestTimeoutMs": 35000,
+    "healthzTimeoutMs": 180000,
+    "insecure": true,
+    "coldStartBudgetMs": 90000
+  },
+  "steps": [
+    {
+      "attempts": 1,
+      "httpStatus": 200,
+      "step": "healthz",
+      "status": "pass",
+      "elapsedMs": 44
+    },
+    {
+      "attempts": 8,
+      "httpStatus": 200,
+      "featureCount": 1,
+      "step": "features",
+      "status": "pass",
+      "elapsedMs": 35280
+    },
+    {
+      "httpStatus": 200,
+      "step": "login",
+      "status": "pass",
+      "elapsedMs": 87
+    },
+    {
+      "httpStatus": 201,
+      "id": 1,
+      "score": 60028472,
+      "step": "submit-score",
+      "status": "pass",
+      "elapsedMs": 34
+    },
+    {
+      "httpStatus": 200,
+      "scoreCount": 1,
+      "step": "me-scores",
+      "status": "pass",
+      "elapsedMs": 48
+    },
+    {
+      "httpStatus": 200,
+      "dbStatus": "ok",
+      "step": "health",
+      "status": "pass",
+      "elapsedMs": 9
+    }
+  ],
+  "perfWarnings": [
+    {
+      "step": "features",
+      "elapsedMs": 35280,
+      "threshold": 2000
+    }
+  ],
+  "passed": true,
+  "finishedAt": "2026-05-10T04:40:13.426Z"
+}

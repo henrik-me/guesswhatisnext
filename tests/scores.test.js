@@ -325,9 +325,12 @@ describe('GET /api/scores/me', () => {
   // SUM in INT before dividing, which overflows at ~3.5 rows of ~600M.
   // The CAST(score AS BIGINT) in /api/scores/me prevents this. SQLite uses
   // 64-bit integers internally so it cannot reproduce the overflow — this
-  // test would catch a regression of the cast against MSSQL via the
-  // `npm run test:e2e:mssql` path (and is the contract under which the
-  // production smoke step `(e) /api/scores/me` is expected to succeed).
+  // test verifies the route contract holds (200 + sensible avg) and would
+  // catch a regression of the cast against MSSQL via `npm run test:mssql`
+  // (Vitest with DATABASE_URL pointed at MSSQL). Coverage limitation: this
+  // test only exercises the `scores` aggregation; the parallel `mpStats`
+  // cast on `match_players.score` is verified by code review only and the
+  // production CS41-1 smoke step (e), not by an automated mp-overflow test.
   test('handles aggregate SUM > 2.1B without overflow (CS80)', async () => {
     const { token } = await registerUser('cs80overflow');
     const db = await require('../server/db').getDbAdapter();
