@@ -210,15 +210,22 @@ describe('CS79 — /api/features cold-init gate (X-User-Activity propagation)', 
   /**
    * Builds a fetcher that simulates the CS53-19 boot-quiet gate
    * (server/app.js:332-351): every `/api/features` GET that does NOT carry
-   * `X-User-Activity: 1` returns 503+Retry-After:5 forever (boot-quiet
+   * `X-User-Activity: 1` returns 503+Retry-After forever (boot-quiet
    * never fires `runInit()` so `dbInitialized` stays false). The first
    * request that DOES carry the header still gets 503 (the gate kicks
    * `runInit()` but the current request still 503s by design), and
-   * subsequent requests carrying the header get 200.
+   * subsequent requests carrying the header get 200. The Retry-After
+   * value is `'0'` so `pollUntil200()` does not stall the test on the
+   * server-suggested back-off; the real server returns 5 here, which the
+   * smoke runner caps at 5s — irrelevant to the assertions this file
+   * makes (header propagation, not back-off honoring).
    *
    * Other smoke endpoints respond with their normal happy-path bodies so
    * the rest of `runSmoke()` proceeds. The fetcher records every observed
-   * `/api/features` request for assertion.
+   * `/api/features` request for assertion. Header lookup is
+   * case-insensitive to mirror the server side (Express's `req.get()`
+   * normalizes), so the assertion proves header presence rather than a
+   * particular casing choice in `scripts/smoke.js`.
    */
   function makeColdInitFeaturesFetcher(otherSteps) {
     const featuresCalls = [];
@@ -229,17 +236,18 @@ describe('CS79 — /api/features cold-init gate (X-User-Activity propagation)', 
         const key = `${method} ${new URL(url).pathname}`;
         if (key === 'GET /api/features') {
           const headers = opts.headers || {};
-          const hasActivity = headers['X-User-Activity'] === '1';
+          const activityValue = Object.entries(headers).find(([k]) => k.toLowerCase() === 'x-user-activity')?.[1];
+          const hasActivity = activityValue === '1';
           featuresCalls.push({ headers: { ...headers }, hasActivity });
           if (!hasActivity) {
-            return { status: 503, headers: { 'retry-after': '1' }, body: '{"phase":"cold-start"}', elapsedMs: 2 };
+            return { status: 503, headers: { 'retry-after': '0' }, body: '{"phase":"cold-start"}', elapsedMs: 2 };
           }
           featuresWithHeaderSeen++;
           // Match server behavior: the gate-triggering request still 503s
           // (runInit fires but is fire-and-forget); the next retry sees
           // dbInitialized=true and gets 200.
           if (featuresWithHeaderSeen === 1) {
-            return { status: 503, headers: { 'retry-after': '1' }, body: '{"phase":"cold-start"}', elapsedMs: 2 };
+            return { status: 503, headers: { 'retry-after': '0' }, body: '{"phase":"cold-start"}', elapsedMs: 2 };
           }
           return { status: 200, headers: {}, body: okFeaturesBody, elapsedMs: 3 };
         }

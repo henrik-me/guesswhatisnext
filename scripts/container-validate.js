@@ -947,12 +947,15 @@ async function probeFreshColdInitSmoke() {
   //    developer's exported staging/prod key reach step (f) /api/health and
   //    fail with 401 even though the container is healthy. If the compose
   //    file's value changes, update both sides together.
+  //    SECURITY: invoke `node` with an argv array and `shell: false` so
+  //    `fqdn` (derived from $HTTPS_PORT) is never interpreted by the shell
+  //    even if the env var is malformed.
   const fqdn = HTTPS_PORT === '443' ? 'localhost' : `localhost:${HTTPS_PORT}`;
   log(`Invoking node scripts/smoke.js ${fqdn} (SMOKE_INSECURE=1)…`);
-  const smoke = spawnSync(`node scripts/smoke.js ${fqdn}`, {
+  const smoke = spawnSync('node', ['scripts/smoke.js', fqdn], {
     cwd: ROOT,
     stdio: 'inherit',
-    shell: true,
+    shell: false,
     env: {
       ...process.env,
       SMOKE_USER_PASSWORD,
