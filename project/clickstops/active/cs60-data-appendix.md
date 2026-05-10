@@ -964,63 +964,162 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 
 ### +7d cost-watch close-out (CS60-2h)
 
-> **Status:** complete for the canonical +7d window (Days 0-7 covering 2026-04-25..2026-05-02). **Days 4, 6, and 7 carry Cost Management closing-day lag** at the time of capture (2026-05-02T18:30Z); the daily-row totals will under-count those days. The interpretation below is based on Days 0-5 (closed) plus the partial signals on Days 4/6/7 — projections are stated separately for "as recorded" vs "lag-corrected (Day 0-5 baseline)" so the under-count is visible.
+> **Status:** complete for the canonical +7d window (Days 0-7 covering 2026-04-25..2026-05-02). **Refreshed 2026-05-10T16:40Z with closed-day CM data** by yoga-gwn (sub-agent dispatched for CS60-3 backfill). Days 1 and 4 had material retro-fills (+1.15 DKK and +1.45 DKK respectively) once the closing-day Idle meters posted. **Days 6-7 did NOT retro-fill** — Cost Management still shows no `Standard *Idle/Active Usage` compute meters for either Container App on those days even after 8-9 days, despite Container Apps platform metrics confirming both apps were running (see Day 6 / Day 7 sections for the per-day cross-checks). The original prediction "Days 6-7 cost will retro-fill" did NOT hold — this is a confirmed CM compute-meter gap, not lag, contiguous across Days 6-9 (see [+14d roll-up § Cost Management compute-meter gap](#14d-midpoint-roll-up-cs60-3o)).
 >
 > **CS60-2g is intentionally unused** in this split (see plan task notes); the Manifest is the source of truth for which UTC days are recorded.
 
-#### Days 0-7 cost roll-up (recorded values)
+#### Days 0-7 cost roll-up (closed-day CM data, refreshed 2026-05-10)
 
 | Day | gwn-staging $ (DKK) | gwn-production $ (DKK) | workspace $ (DKK) | Day total $ (DKK) | Notes |
 |---|---:|---:|---:|---:|---|
-| Day 0 — 2026-04-25 | 2.13 | 2.09 | 0.02 | **4.24** | CS58 partial (scale-to-zero applied 18:30Z) + CS54-6 verification traffic. One-time. |
-| Day 1 — 2026-04-26 | 0.00 | 1.36 | 0.01 | **1.37** | First full day at CS58 scale-to-zero. |
-| Day 2 — 2026-04-27 | 0.61 | 2.47 | 0.22 | **3.30** | Noisy CS61/CS52 activity; staging exception burst; no staging idle meter. |
-| Day 3 — 2026-04-28 | 0.03 | 2.46 | 0.04 | **2.53** | Prod steady; staging 0 requests / 0.00 MB AI ingest. |
-| Day 4 — 2026-04-29 | 0.03 | 1.05 | 0.00 | **1.08** | **Partial** — captured 2026-04-30T03:00Z, Cost Management closing-day lag suspected. |
-| Day 5 — 2026-04-30 | 0.03 | 2.49 | 0.03 | **2.55** | Closed cleanly; matches Days 1/3 prod steady-state. |
-| Day 6 — 2026-05-01 | 0.00 | 0.00 | 0.01 | **0.01** | **Strongly partial** — Cost Management has not yet emitted compute meters for `gwn-staging` / `gwn-production`; only Free-tier line items ("1 vCore - Free", "General Purpose Data Stored - Free", workspace ingestion) are present. Expect retro-fill ≈ 1.5-2.5 DKK once meters arrive. |
-| Day 7 — 2026-05-02 | 0.00 | 0.00 | 0.03 | **0.03** | **Strongly partial** — UTC day not closed at capture time (18:30Z = ~75% through). Compute meters absent; only workspace ingestion present. Recheck during CS60-3i. |
-| **Recorded 8-day total** | **2.83** | **11.92** | **0.36** | **15.11** | _As-recorded; under-counts Days 4/6/7 by ≥3-5 DKK in aggregate._ |
+| Day 0 — 2026-04-25 | 2.14 | 2.09 | 0.02 | **4.25** | CS58 partial (scale-to-zero applied 18:30Z) + CS54-6 verification traffic. One-time. (Re-captured: original 4.24, closed-day 4.25 — rounding only.) |
+| Day 1 — 2026-04-26 | 0.04 | 2.46 | 0.02 | **2.52** | First full day at CS58 scale-to-zero on staging side; brief Active blip (0.04 DKK). (Re-captured: original 1.37 → closed-day 2.52 — **+1.15 DKK material delta**; original was T23:50Z partial-day capture.) |
+| Day 2 — 2026-04-27 | 0.61 | 2.47 | 0.22 | **3.30** | Noisy CS61/CS52 activity; staging exception burst; brief staging Active charge. (No re-capture delta.) |
+| Day 3 — 2026-04-28 | 0.03 | 2.46 | 0.04 | **2.53** | Prod steady; staging 0 requests / 0.00 MB AI ingest. (No re-capture delta.) |
+| Day 4 — 2026-04-29 | 0.03 | 2.47 | 0.03 | **2.53** | (Re-captured: original 1.08 → closed-day 2.53 — **+1.45 DKK material delta**; original was 3h-after-close partial.) |
+| Day 5 — 2026-04-30 | 0.03 | 2.48 | 0.03 | **2.54** | Closed cleanly; matches Days 1/3 prod steady-state. (Re-captured: original 2.55, closed-day 2.54 — rounding only.) |
+| Day 6 — 2026-05-01 | 0.00 | 0.00 | 0.01 | **0.01** | **CM compute-meter gap (confirmed not lag).** Original prediction "expect retro-fill ≈ 1.5-2.5 DKK" did NOT materialize after 9 days. |
+| Day 7 — 2026-05-02 | 0.00 | 0.00 | 0.08 | **0.08** | **CM compute-meter gap (confirmed not lag).** Closed-day re-capture filled workspace ingest 0.03 → 0.08 DKK only; compute meters absent. |
+| **Closed-day 8-day total** | **2.88** | **14.43** | **0.45** | **17.76** | _Refreshed 2026-05-10. Days 6/7 still under-count compute by the same ~4 DKK gap noted in the original close-out. **Lag-corrected estimate using Day 5 prod shape (~2.48 DKK/day) for Days 6-7: ~22.7 DKK 8-day.**_ |
 
-#### +7d interpretation
+For comparison, the originally-recorded 8-day total at 2026-05-02T18:30Z was **15.11 DKK**. The +2.65 DKK delta came almost entirely from Day 1 (+1.15) and Day 4 (+1.45) closed-day retro-fills; Days 6/7 were unchanged.
+
+#### +7d interpretation (refreshed 2026-05-10)
 
 | Metric | Value | Method |
 |---|---:|---|
-| Recorded total cost (Days 0-7) | 15.11 DKK (≈$2.16 USD) | Sum of recorded values above. |
-| Days 0-5 only (closed days) | 15.07 DKK | Day 0 anomaly included. |
-| Days 1-5 only (drop Day 0 anomaly) | 10.83 DKK | Steady-state proxy. |
-| Steady-state daily run-rate | **2.17 DKK/day** (≈$0.31 USD) | Sum of Day 1-5 totals (10.83 DKK) / 5 closed steady-state days. Excludes Day 0 anomaly and lag-affected Days 6/7 (Day 4 is also lag-affected but kept as a low-side bound). |
-| Naive 7-day cost (run-rate × 7) | **15.2 DKK** (≈$2.17 USD) | Sanity-check vs recorded total. Matches within ~0.3% — confirms the run-rate estimate is reasonable even with Days 4/6/7 partial, because Days 4/6/7 happen to be low-traffic days. |
-| 30-day projection (run-rate × 30) | **65.1 DKK/month** (≈$9.30 USD) | Caveat: assumes Day 0 conditions (CS58 scale-to-zero rollout, exception storm, large verification probes) do not recur. |
+| Closed-day total cost (Days 0-7) | 17.76 DKK (≈$2.54 USD) | Refreshed sum of closed-day values above. |
+| Days 0-5 only (closed-and-billed days) | 17.67 DKK | Day 0 anomaly included. |
+| Days 1-5 only (drop Day 0 anomaly) | 13.42 DKK | Steady-state proxy with closed-day Days 1+4 retro-fills. |
+| Steady-state daily run-rate | **2.68 DKK/day** (≈$0.38 USD) | Sum of Day 1-5 closed totals (13.42 DKK) / 5 days. |
+| Naive 7-day cost (run-rate × 7) | **18.8 DKK** (≈$2.69 USD) | Sanity-check vs recorded total. |
+| 30-day projection (run-rate × 30) | **80.4 DKK/month** (≈$11.5 USD) | Above the original 65 DKK/month first-pass projection because the closed-day Days 1+4 retro-fills moved the steady-state baseline up. Re-confirmed below in the [second-pass projection (Days 0-14)](#cs60-3-second-pass-projection-days-0-14-actuals). |
 
-#### +7d AI ingest summary
+#### +7d AI ingest summary (refreshed 2026-05-10)
 
 | env | 8-day rows | 8-day MB | Notes |
 |---|---:|---:|---|
-| `gwn-ai-production` AppDependencies | _≥ 8500_ | _≥ 7-8 MB_ | Dominates production AI ingest; populating every day since Day 4 (informs CS60-4 Gap 1 disposition — prod side empirically resolved, staging side still owes a deliberate probe; see CS60-4 disposition note below). |
-| `gwn-ai-production` AppRequests | ~1700 | ~1.5 MB | Steady. |
-| `gwn-ai-production` AppMetrics | ~260 | ~0.2 MB | Steady. |
-| `gwn-ai-staging` (all tables) | ≤ 80 rows total | ≤ 0.1 MB total | Day 6 (CS41 deploy / probe) is the only day with non-trivial staging telemetry; Days 5 + 7 are 0. |
+| `gwn-ai-production` AppDependencies | ≥ 12,700 | ≥ 9.4 MB | Dominates production AI ingest; populating every day since Day 4 (informs CS60-4 Gap 1 disposition — prod side empirically resolved, staging side still owes a deliberate probe; see CS60-4 disposition note in plan-file). |
+| `gwn-ai-production` AppRequests | ~1,000 | ~0.85 MB | Steady. |
+| `gwn-ai-production` AppMetrics | ~110 | ~0.10 MB | Steady. |
+| `gwn-ai-staging` (all tables) | ≥ 1,750 rows total | ≥ 1.4 MB total | Dominated by Day 7 closed-day data (1,658 dependencies, 97 requests, 14 metrics); Days 5/8 stayed at 0 (CS58 holding). |
 
-> **Workspace-wide ingest by table for the same 8-day window** (from the workspace-direct KQL `union withsource=Tbl * | summarize bytes by Tbl`): `AppDependencies` 17.32 MB, `ContainerAppConsoleLogs_CL` 7.47 MB, `AppRequests` 1.47 MB, `ContainerAppSystemLogs_CL` 0.24 MB, `AppMetrics` 0.23 MB, `Usage` 0.09 MB, `AppExceptions` 0.05 MB. Total **26.87 MB / 8 days = 3.36 MB/day workspace-wide**.
+> **Workspace-wide ingest by table for the same 8-day window** (closed-day workspace-direct KQL `union withsource=Tbl * | summarize bytes by Tbl | where TimeGenerated >= datetime(2026-04-25T00Z) and TimeGenerated < datetime(2026-05-03T00Z)`): `AppDependencies` 19.97 MB, `ContainerAppConsoleLogs_CL` 7.87 MB, `AppRequests` 1.66 MB, `AppMetrics` 0.27 MB, `ContainerAppSystemLogs_CL` 0.26 MB, `Usage` 0.09 MB, `AppExceptions` 0.05 MB. Total **30.18 MB / 8 days = 3.77 MB/day workspace-wide.** _(Original recorded 26.87 MB; the +3.31 MB delta is the post-T18:30Z portion of Day 7 plus closed-day backfill across the window.)_
 
-#### Container Apps compute / memory — running min/max across Days 0-7
+#### Container Apps compute / memory — running min/max across Days 0-7 (closed-day data)
 
 | Metric | gwn-staging (range) | gwn-production (range) |
 |---|---|---|
-| UsageNanoCores avg | 0 .. ≈ 500 k nanocores (≈ 0.0005 cores) | ≈ 263 k .. ≈ 290 k nanocores (≈ 0.0003 cores) |
-| WorkingSetBytes avg | 69 .. ≈ 122 MiB | 66 .. ≈ 134 MiB |
-| Replicas max | 0..1 (Day 7 = 0; CS58 scale-to-zero working) | 1 (steady) |
+| UsageNanoCores avg | ≈ 100 k .. ≈ 2.4 M nanocores (≈ 0.0001..0.0024 cores) | ≈ 263 k .. ≈ 290 k nanocores (≈ 0.0003 cores) |
+| WorkingSetBytes avg | 69 .. ≈ 129 MiB | 66 .. ≈ 134 MiB |
+| Replicas max | 0..1 (Day 8/9/14 = 0; CS58 scale-to-zero working) | 1 (steady) |
 | Requests/day | 0..505 | 3..430 |
 | RestartCount | 0 | 0 |
 
-#### CS60-2 close interpretation
+> Day 7 staging running max bumped UsageNanoCores up to ≈ 2.4 M (the original mid-day capture had no data because Replicas=0 at capture time; staging woke after the original capture). Replicas=0 days now correctly identified as Days 8, 9, 14 (Day 7 was 0 at the original mid-day capture but rose to 1 by close).
 
-- **Free-tier headroom is enormous**: 26.87 MB workspace ingest in 8 days vs 5120 MB / month free tier. Even if Day 2's 14.37 MB anomaly recurred weekly, monthly ingest would land near 200 MB — still ≤ 4% of cap.
-- **Production compute is the dominant recurring cost line** at ≈ 2 DKK/day (idle + active vCPU + memory), not AI ingest. AI ingest rounds to 0.00 DKK on most days.
-- **Staging cost was effectively zero** on Days 1, 3, 4, 5, 7 (CS58 scale-to-zero is doing its job); Days 0, 2, 6 had CS-driven activity that woke it briefly.
-- **CS60-4 Gap 1 (`dependencies` table) is empirically resolved on the prod side; staging side still owes a deliberate ≥ 20-leaderboard-request probe** — see disposition note in CS60-4 row of plan-file task table.
-- **Day 6 / Day 7 cost will retro-fill** as Cost Management closes those days. Recheck during CS60-3i (Day 8 = 2026-05-03) and amend totals if the lag-fill changes the picture.
+#### CS60-2 close interpretation (refreshed 2026-05-10)
+
+- **Free-tier headroom is enormous**: 30.18 MB workspace ingest in 8 closed days vs 5120 MB / month free tier. Even if Day 2's anomaly recurred weekly, monthly ingest would land near 230 MB — still ≤ 5% of cap.
+- **Production compute is the dominant recurring cost line** at ≈ 2.5 DKK/day (idle + active vCPU + memory), not AI ingest. AI ingest rounds to 0.00 DKK on most days. _Refreshed steady-state run-rate is 2.68 DKK/day after Days 1+4 closed-day retro-fills._
+- **Staging cost was effectively zero** on Days 1, 3, 4, 5, 6, 7 (CS58 scale-to-zero is doing its job); Days 0, 2 had CS-driven activity that woke it briefly. Days 6-7 staging zeros could in principle be the CM compute-meter gap rather than CS58 — Container Apps platform metrics show staging was idle (Day 6) or briefly up post-T18:30Z (Day 7) so the absence of compute meters might be plausibly explained either way.
+- **CS60-4 Gap 1 (`dependencies` table) is empirically resolved on the prod side; staging side still owes a deliberate ≥ 20-leaderboard-request probe** — see disposition note in CS60-4 row of plan-file task table. Day 7 closed-day staging data (1,658 AppDependencies + 97 AppRequests + 14 AppMetrics) is positive but not a controlled verification.
+- **Days 6-7 cost did NOT retro-fill as predicted.** CM has not emitted Container Apps compute meters for Days 6-9. This is documented as a finding requiring follow-up (separate CS or CS60-4 expansion) — see [+14d roll-up § Cost Management compute-meter gap](#14d-midpoint-roll-up-cs60-3o).
+
+---
+
+### +14d midpoint roll-up (CS60-3o)
+
+**Captured:** 2026-05-10T16:40Z by yoga-gwn (sub-agent dispatched by yoga-gwn for CS60-3 backfill).
+**Window:** UTC days 2026-04-25 .. 2026-05-09 (15 calendar days = Day 0 .. Day 14). Day 15 (2026-05-10) is in-progress UTC and explicitly out of scope.
+
+#### Days 0-14 cost roll-up (closed-day CM data)
+
+| Day | Date | gwn-staging | gwn-production | workspace | Other | Total (DKK) |
+|---|---|---:|---:|---:|---:|---:|
+| Day 0  | 2026-04-25 | 2.14 | 2.09 | 0.02 | 0.00 | **4.25** |
+| Day 1  | 2026-04-26 | 0.04 | 2.46 | 0.02 | 0.00 | **2.52** |
+| Day 2  | 2026-04-27 | 0.61 | 2.47 | 0.22 | 0.00 | **3.30** |
+| Day 3  | 2026-04-28 | 0.03 | 2.46 | 0.04 | 0.00 | **2.53** |
+| Day 4  | 2026-04-29 | 0.03 | 2.47 | 0.03 | 0.00 | **2.53** |
+| Day 5  | 2026-04-30 | 0.03 | 2.48 | 0.03 | 0.00 | **2.54** |
+| Day 6  | 2026-05-01 | 0.00 ⚠️ | 0.00 ⚠️ | 0.01 | 0.00 | **0.01** |
+| Day 7  | 2026-05-02 | 0.00 ⚠️ | 0.00 ⚠️ | 0.08 | 0.00 | **0.08** |
+| Day 8  | 2026-05-03 | 0.00 ⚠️ | 0.00 ⚠️ | 0.13 | 0.00 | **0.13** |
+| Day 9  | 2026-05-04 | 0.00 ⚠️ | 0.00 ⚠️ | 0.00 | 0.00 | **0.00** |
+| Day 10 | 2026-05-05 | 0.03 | 2.12 | 0.00 | 0.00 | **2.15** |
+| Day 11 | 2026-05-06 | 0.03 | 2.51 | 0.02 | 0.00 | **2.56** |
+| Day 12 | 2026-05-07 | 0.04 | 2.52 | 0.11 | 0.00 | **2.67** |
+| Day 13 | 2026-05-08 | 0.03 | 2.52 | 0.11 | 0.00 | **2.66** |
+| Day 14 | 2026-05-09 | 0.00 | 2.47 | 0.11 | 0.00 | **2.58** |
+| **Sum** | | **3.01** | **26.57** | **0.93** | **0.00** | **30.51** |
+
+> ⚠️ rows: Days 6-9 (2026-05-01..2026-05-04) Cost Management compute-meter gap. See note below for the lag-corrected estimate.
+
+**Lag-corrected estimate** (filling Days 6-9 with Day 5 prod baseline ≈ 2.48 DKK/day): the 4-day gap likely understates the closed-day cost by ≈ **9.9 DKK** for prod. Lag-corrected 15-day total ≈ **40.4 DKK** (≈$5.77 USD) → daily avg ≈ **2.69 DKK/day** → 30-day projection ≈ **80.8 DKK/month** (≈$11.5 USD). This bracket aligns with the [Days 10-14 closed-day-only steady-state run-rate](#cs60-3-second-pass-projection-days-0-14-actuals) of 2.52 DKK/day → 75.7 DKK/month.
+
+#### Cost Management compute-meter gap (Days 6-9 finding)
+
+**Pattern:** four contiguous UTC days (2026-05-01 → 2026-05-04, Days 6-9) show **zero `Standard *Idle/Active Usage` meters** for both `gwn-staging` and `gwn-production` in the Cost Management `query` API, despite:
+
+- Container Apps platform metrics confirming both apps ran normally (Day 6: prod replicas=1, requests=88; Day 7: prod replicas=1, requests=125 + staging replicas=1, requests=94; Day 8: prod replicas=3, requests=495; Day 9: prod replicas=1, requests=17).
+- App Insights AppDependencies/AppRequests/AppMetrics tables populating on those days (Day 8 alone produced 8,990 prod dependencies + 48 exceptions).
+- Workspace ingestion meters (`Analytics Logs Data Ingestion`) emitting normally on those same days (0.01..0.13 DKK).
+- Days 5 and 10 (immediately bracketing the gap) showing normal `Standard *Idle/Active Usage` meters in the same CM query.
+
+**Cross-checks performed at re-capture time:**
+
+- Re-pulled the same daily cost query 8-9 days after each UTC day closed; result identical.
+- Pulled a single 15-day cost query without ResourceId grouping (broader scope) to rule out grouping artifacts; same gap visible.
+- Pulled a Days 6-9 cost query grouped by `MeterCategory + MeterSubCategory + Meter`; only `SQL Database` Free-tier zero entries and `Log Analytics` ingestion appear — no `Container Apps` MeterCategory entries at all for those four days.
+
+**Hypotheses (none verified):**
+
+1. Cost Management has a >9-day backfill window for some Container Apps meters (longest observed elsewhere in the project: ~3 days). Unlikely but possible.
+2. A monthly free credit / promotional offer absorbed Days 6-9 compute usage (matches the calendar-month boundary 2026-05-01) — but the "Standard" plan-tier meter names suggest Workload Profiles tier, which has no monthly free grant for Container Apps. Day 10 (2026-05-05) shows normal billing again, which doesn't fit a "free grant exhausted on Day N" pattern.
+3. A billing-system glitch / data-pipeline incident on Azure's side. Plausible; not investigated.
+
+**Disposition:** documented here as a finding. Recommend a follow-up CS to (a) cross-check via the Consumption / Usage Details API, (b) re-pull in 14 days to see if meters eventually emit, and (c) if still missing, file an Azure support ticket. Out of scope for this CS60-3 backfill PR (which is docs-only). **Does NOT change CS60-4/5/6 dispositions** — the cost picture remains "<$15/month under any reasonable scenario", well below CS60-3 free-tier-headroom decision thresholds.
+
+#### +14d AI ingest summary
+
+| env | Days 0-14 AI ingest (MB) | per-day avg | trend vs Days 0-7 |
+|---|---:|---:|---|
+| prod | **37.57** | 2.50 | **Rising** — Days 0-7 avg 1.59 MB/day vs Days 8-14 avg 3.55 MB/day (~2.2x). Driven by higher prod traffic on Days 8/12/13 (495/542/480 requests) and the AppExceptions/AppTraces appearing on Days 8/13. |
+| staging | **9.69** | 0.65 | **Falling** — Days 0-7 avg 1.16 MB/day vs Days 8-14 avg 0.06 MB/day (~95% drop). CS58 scale-to-zero is fully effective on the post-Day-7 segment; only Day 12 had a brief operator-driven spike (0.44 MB). |
+
+#### Workspace-wide ingest (15-day window)
+
+Closed-day KQL `union withsource=Tbl * | where TimeGenerated >= datetime(2026-04-25T00Z) and TimeGenerated < datetime(2026-05-10T00Z) | summarize bytes by Tbl`:
+
+| Tbl | rows | MB billed |
+|---|---:|---:|
+| AppDependencies | 57,852 | **43.19** |
+| ContainerAppConsoleLogs_CL | 8,737 | **13.56** |
+| AppRequests | 3,969 | 3.32 |
+| AppMetrics | 598 | 0.53 |
+| ContainerAppSystemLogs_CL | 1,189 | 0.31 |
+| Usage | 536 | 0.20 |
+| AppExceptions | 166 | 0.20 |
+| AppTraces | 2 | 0.00 |
+| **Total (15 days)** | **73,049** | **61.31 MB** |
+
+**Daily avg:** 4.09 MB/day workspace-wide → **30-day projection 122.7 MB/month = 2.40% of 5 GB free tier.** Free-tier headroom remains ≫ 4 GB/month under every reasonable scenario.
+
+#### Container Apps compute / memory — running min/max across Days 0-14
+
+| Resource | UsageNanoCores avg range | WorkingSetBytes avg range | Replicas max | Requests total | Restart total |
+|---|---|---|---:|---:|---:|
+| gwn-staging | ≈ 100 k .. ≈ 2.4 M nanocores (≈ 0.0001..0.0024 cores) | 69 .. ≈ 132 MiB | 1 (max across days; **0 on Days 8, 9, 14**) | 888 (Days 0-14 sum) | 0 |
+| gwn-production | ≈ 261 k .. ≈ 386 k nanocores (≈ 0.0003..0.0004 cores) | 66 .. ≈ 137 MiB | **3** (Day 8 burst; Days 11/12/13 all peaked at 2) | 3,374 (Days 0-14 sum) | 0 |
+
+#### +14d interpretation
+
+- **Free-tier headroom remains overwhelming.** Workspace-wide 15-day ingest of 61.31 MB projects to 122.7 MB/month → 2.40% of the 5 GB free tier. Even doubling that for a hypothetical incident-driven spike, monthly ingest stays under 5%. CS60-3's "free-tier headroom decision" can confidently land on **>4 GB/month free** at the 2026-05-25 final marker (CS54-9 Gap dispositions can move forward on this basis).
+- **Cost trajectory is +20-25% above the original first-pass projection** but still far below any concern threshold. First-pass projected 65.1 DKK/month (steady-state Days 1-5 only); refreshed steady-state from Days 10-14 closed-day data projects 75.7 DKK/month, and the lag-corrected 15-day estimate gives 80.8 DKK/month. ≈$10.80-$11.55/month all-in, dominated by `gwn-production` Container Apps compute (idle + active vCPU + memory).
+- **Days 6-9 CM compute-meter gap is the single biggest data-quality finding** of the +14d roll-up. Documented above; recommended for follow-up CS. Does NOT change any CS60 disposition because the lag-corrected estimate stays in the same monthly cost band as the recorded estimate.
+- **CS60-4 prod auto-resolved status holds across Days 8-14.** AppDependencies populated every day for prod (Day 8: 8,990; Day 12: 6,984; Day 13: 7,700; Day 14: 4,780); the `tedious` `execSql` spans continue to flow through to App Insights without filter widening. **Staging-side parity still unverified** — only Day 7 (closed-day data, 1,658 dependencies) and Day 12 (522 dependencies) showed staging activity, both incidental rather than the controlled ≥20-leaderboard-request probe CS60-4 still owes.
+- **CS60-5/6 dispositions can advance from "wait for CS60-3" to "decide now."** The free-tier-headroom gating input is empirically resolved (≫4 GB/month margin). CS60-5 (Pino → AI traces) recommendation can proceed on the "stay on cross-table KQL bridge" path unless an incident emerged in Days 8-14 — none observed in this data (highest exception count was 68 on Day 13, all within typical SQLITE_ERROR / 5xx-dependency-failure shape; no operator-investigation pain points cited in this window). CS60-6 (exceptions table) remains "decide-by-CS60-5" per its dependency.
 
 ---
 
