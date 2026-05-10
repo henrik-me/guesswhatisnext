@@ -74,3 +74,4 @@ pr-body.md
 # Sub-agent PR body scratch (do not commit)
 .pr-body.md
 
+smoke-results.json

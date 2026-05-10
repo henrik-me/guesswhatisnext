@@ -891,8 +891,20 @@ async function probeFreshColdInitSmoke() {
   //    default cycle's runInit migrations. setup-smoke-user.js connects via
   //    the DB adapter directly (no HTTP gate), so this does NOT warm
   //    `dbInitialized` in the running app process.
+  //
+  //    The image only ships server/, public/, and scripts/build-sw.js (see
+  //    Dockerfile), so we `docker cp` the seeder in before exec'ing it.
   const SMOKE_USER_PASSWORD = process.env.SMOKE_USER_PASSWORD || 'cs79-cold-init-smoke-pw';
   log('Seeding gwn-smoke-bot user (idempotent) inside the app container…');
+  const containerName = `${PROJECT_NAME}-app-1`;
+  const cp = spawnSync(
+    `docker cp scripts/setup-smoke-user.js ${containerName}:/app/scripts/setup-smoke-user.js`,
+    { cwd: ROOT, stdio: 'inherit', shell: true },
+  );
+  if (cp.status !== 0) {
+    logErr('FAIL: docker cp setup-smoke-user.js into app container failed.');
+    return false;
+  }
   const seed = compose(
     `exec -T -e SMOKE_USER_PASSWORD=${SMOKE_USER_PASSWORD} app node scripts/setup-smoke-user.js`,
   );
