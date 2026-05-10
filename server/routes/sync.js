@@ -274,7 +274,10 @@ async function fetchEntity(db, key, userId) {
   if (key === 'profile') {
     const stats = await db.all(
       `SELECT mode, COUNT(*) as games_played, MAX(score) as high_score,
-              ROUND(AVG(score), 0) as avg_score, MAX(best_streak) as best_streak
+              -- CS80: cast to BIGINT before AVG to avoid MSSQL int overflow
+              -- (SQL error 8115). Same pattern as /api/scores/me — see
+              -- server/routes/scores.js for full rationale. No-op in SQLite.
+              ROUND(AVG(CAST(score AS BIGINT)), 0) as avg_score, MAX(best_streak) as best_streak
        FROM scores WHERE user_id = ? GROUP BY mode`,
       [userId]
     );

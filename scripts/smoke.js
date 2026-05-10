@@ -216,8 +216,12 @@ function fail(step, msg) { annotate('error', `smoke step ${step}: ${msg}`); }
  * submission by the returned `id`, so uniqueness here is defensive only.
  */
 function sentinelScore() {
-  // Range chosen so it stays a small integer the API trivially accepts.
-  return crypto.randomInt(1, 1_000_000_000);
+  // CS80: cap range under 100M so the smoke bot's accumulated rows stay well
+  // under MSSQL int's accumulator threshold for AVG even after many smoke
+  // runs (see CS80-1 for the BIGINT cast that makes AVG safe regardless;
+  // this is defense-in-depth). Range 1M..99,999,999 keeps per-row values
+  // safely small while preserving collision-avoidance via uniqueness.
+  return crypto.randomInt(1_000_000, 100_000_000);
 }
 
 /**
