@@ -264,21 +264,29 @@ async function cleanupTestData(deps = {}) {
         continue;
       }
 
-      await pool.request()
+      const deleteRes = await pool.request()
         .input('userId', sql.Int, t.userId)
         .query('DELETE FROM scores WHERE user_id = @userId');
+      // Prefer the driver's reported rowsAffected so a concurrent
+      // insert/delete during cleanup is reflected accurately in the summary
+      // (CS82 PR #334 R4). Fall back to beforeCount if the driver doesn't
+      // surface rowsAffected (test fakes that omit it).
+      const rowsAffected = Array.isArray(deleteRes && deleteRes.rowsAffected)
+        ? Number(deleteRes.rowsAffected[0])
+        : NaN;
+      const deletedRows = Number.isFinite(rowsAffected) ? rowsAffected : beforeCount;
 
       const afterRes = await pool.request()
         .input('userId', sql.Int, t.userId)
         .query('SELECT COUNT(*) AS n FROM scores WHERE user_id = @userId');
       const afterCount = Number(afterRes.recordset[0].n);
-      log.info(`[CS82 cleanup-test-data] after count: ${afterCount} (${t.username})`);
+      log.info(`[CS82 cleanup-test-data] after count: ${afterCount} (${t.username}, deletedRows=${deletedRows})`);
 
       if (afterCount !== 0) {
         throw new Error(`cleanup-test-data: post-delete count assertion failed for ${t.username} — expected 0, got ${afterCount}`);
       }
-      totalDeleted += beforeCount;
-      results.push({ ...t, beforeCount, afterCount, deleted: true });
+      totalDeleted += deletedRows;
+      results.push({ ...t, beforeCount, deletedRows, afterCount, deleted: true });
     }
 
     log.info(

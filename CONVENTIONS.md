@@ -123,19 +123,19 @@ E2E tests that verify server behavior **must** assert via the wire (response hea
 
 ### MSSQL/SQLite test parity gap
 
-Local SQLite tests (`npm test`) and the docker MSSQL stack (`npm run test:e2e:mssql`) cannot reproduce certain MSSQL-specific runtime behaviors:
+The repo's local test suites — `npm test` (SQLite-backed) and `npm run test:e2e:mssql` (real MSSQL in Docker, but rebuilt fresh each run with no accumulated rows) — have known coverage gaps for MSSQL/Azure-SQL behaviors that only surface against a long-lived production instance:
 
-- **Integer overflow on AVG/SUM over INT columns** ([CS80](project/clickstops/done/done_cs80_scores-avg-int-overflow.md)). SQLite uses 64-bit integers everywhere; MSSQL accumulates aggregates in the input column type before final cast.
-- **Transient SQL error class behavior** ([CS73](project/clickstops/done/done_cs73_prod-deploy-cold-db-handling.md)). MSSQL's transient error codes (40613, 40197, 40501, 49918-20) only fire against real Azure SQL serverless, not local containers.
-- **Cold-DB-init request gating** ([CS79](project/clickstops/done/done_cs79_api-features-cold-init-gate.md), CS53-19/23). Container boots with init pending; behavior only manifests when DB is actually slow/cold.
+- **Integer overflow on AVG/SUM over INT columns** ([CS80](project/clickstops/done/done_cs80_scores-avg-int-overflow.md)). SQLite uses 64-bit integers everywhere; MSSQL accumulates aggregates in the input column's type, so the bug is real on the docker MSSQL stack too — but with fresh fixtures the docker stack never has enough rows to overflow.
+- **Azure SQL serverless transient error class behavior** ([CS73](project/clickstops/done/done_cs73_prod-deploy-cold-db-handling.md)). The Azure-specific transient codes (40613, 40197, 40501, 49918-20) fire on autoscale/auto-pause boundaries that the local docker MSSQL container does not implement.
+- **Cold-DB-init request gating with a slow real DB** ([CS79](project/clickstops/done/done_cs79_api-features-cold-init-gate.md), CS53-19/23). The container can boot with init pending, but the docker MSSQL DB warms in seconds — only an actually-paused Azure SQL DB exercises the full ~30-60s warmup-retry path end-to-end.
 
 Tests for code paths that exercise any of these classes MUST be supplemented by either:
 
-1. A regression unit test that mocks the MSSQL-specific behavior (e.g. CS80's overflow test in `tests/scores.test.js`).
+1. A regression unit test that mocks the MSSQL/Azure-specific behavior (e.g. CS80's overflow test in `tests/scores.test.js`).
 2. A smoke probe step that exercises the path against a fresh-cold-init container (CS79's added cycle in `scripts/container-validate.js`).
 3. Documented manual verification against staging/prod with run-ID evidence in the closure CS file.
 
-Never assume "all tests pass locally" implies the code works against Azure SQL. See [LEARNINGS § Cascading prod-deploy bug chain](LEARNINGS.md#cascading-prod-deploy-bug-chain-cs73--cs79--cs80--cs81-2026-05-10) for the canonical case study where four latent bugs in this class were only caught by the prod smoke chain.
+Never assume "all tests pass locally" implies the code works against Azure SQL with months of accumulated rows. See [LEARNINGS § Cascading prod-deploy bug chain](LEARNINGS.md#cascading-prod-deploy-bug-chain-cs73--cs79--cs80--cs81-2026-05-10) for the canonical case study where four latent bugs in this class were only caught by the prod smoke chain.
 
 ### Container Validation
 
@@ -304,11 +304,11 @@ If any of the three is "not applicable" (e.g. a backend-only change with no clie
 
 ### Boot-quiet contract for new /api/* endpoints
 
-Any new endpoint mounted under `/api/*` is gated by `server/app.js:298-351`'s per-request DB-init gate (CS53-19/23). On cold init, requests WITHOUT `X-User-Activity: 1` get an immediate 503+`Retry-After: 5` response and do NOT trigger `runInit()`. Internal probes (smoke, container-validate, e2e) that hit the new endpoint must either:
+Any new endpoint mounted under `/api/*` is gated by `server/app.js:298-351`'s per-request DB-init gate (CS53-19/23) **unless** it falls in the explicit bypass list at `server/app.js:298` (today: `/healthz`, `/api/health`, `/api/db-status`, `/api/admin/*`, `/api/telemetry/*`). For non-bypassed endpoints, on cold init, requests WITHOUT `X-User-Activity: 1` get an immediate 503+`Retry-After: 5` response and do NOT trigger `runInit()`. Internal probes (smoke, container-validate, e2e) that hit a non-bypassed new endpoint must either:
 
 1. Send `X-User-Activity: 1` (treats the probe as simulated user activity — see `scripts/smoke.js` post-CS79 for the pattern).
 2. Send a system credential (`X-API-Key` matching `SYSTEM_API_KEY`) — only for system-level probes.
-3. Be explicitly exempted from the gate at `server/app.js:298` (only for genuinely DB-independent paths like `/healthz`).
+3. Be added to the bypass list at `server/app.js:298` (only for genuinely DB-independent paths like `/healthz`).
 
 Hit by [CS79](project/clickstops/done/done_cs79_api-features-cold-init-gate.md): `/api/features` smoke probe was returning 503 retry-after:5 in 1-2ms because no `X-User-Activity: 1` header → never triggered init → 18 retries × 5s = 90s budget exhausted → auto-rollback. Fix: add the header. Don't widen the app's gate behavior.
 
