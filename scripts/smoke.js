@@ -14,6 +14,13 @@
  *                                 WARMUP_CAP_MS + 30s + COLD_START_MS
  *                                 per server/app.js:254-283 +
  *                                 scripts/container-validate.js:85-87.
+ *                                 MUST send `X-User-Activity: 1` on every
+ *                                 retry — the CS53-19 boot-quiet contract
+ *                                 (server/app.js:332-351) only kicks
+ *                                 `runInit()` when the gated request
+ *                                 carries the user-activity marker. Without
+ *                                 it a fresh-cold container returns 503
+ *                                 forever (CS79 root cause).
  *   (c) POST /api/auth/login   — login as the operator-provisioned
  *                                 `gwn-smoke-bot` user (created by
  *                                 scripts/setup-smoke-user.js, prefix
@@ -152,6 +159,7 @@ async function pollUntil200({
   fetcher,
   requestTimeoutMs,
   insecure,
+  headers,
   acceptStatus = (s) => s === 200,
 }) {
   const start = nowMs();
@@ -160,7 +168,7 @@ async function pollUntil200({
   let last = null;
   while (nowMs() - start < budgetMs) {
     attempts++;
-    const res = await fetcher('GET', url, { timeoutMs: requestTimeoutMs, insecure });
+    const res = await fetcher('GET', url, { timeoutMs: requestTimeoutMs, insecure, headers });
     last = res;
     timeline.push({
       attempt: attempts,
@@ -293,9 +301,15 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
   {
     const url = `${base}/api/features`;
     const started = nowMs();
+    // CS79-1: forward `X-User-Activity: 1` on every retry so the CS53-19
+    // boot-quiet gate (server/app.js:332-351) actually fires `runInit()`
+    // against a fresh-cold container. Without this, a brand-new revision
+    // with `dbInitialized=false` returns 503+Retry-After forever and the
+    // smoke step exhausts its budget (see CS79 root cause analysis).
     const r = await pollUntil200({
       url, budgetMs: coldStartBudgetMs, intervalMs: cfg.probeIntervalMs,
       fetcher, requestTimeoutMs: cfg.requestTimeoutMs, insecure: cfg.insecure,
+      headers: { 'X-User-Activity': '1' },
     });
     const totalMs = nowMs() - started;
     if (r.ok) {
