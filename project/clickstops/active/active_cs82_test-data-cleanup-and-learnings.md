@@ -107,12 +107,12 @@ Add to CONVENTIONS.md § 4a or wherever boot-quiet is discussed (CS53-19/23 terr
 
 | # | Task | Notes |
 |---|------|-------|
-| CS82-1 | ✅ Done — Extended `scripts/cleanup-test-data.js` for CS-prefix pattern + `EXTRA_USERNAMES` env var. 26 unit tests cover regex hygiene (including the post-local-review tightening to `^cs\d+(?!\d)(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]+$` rejecting plausible human usernames like `cs50student`/`cs100abc`/`cs2024alice`), EXTRA_USERNAMES de-duplication, cumulative count, parameterized DELETEs, and only-scores blast-radius (PR link below). | Mirror existing gwn-smoke-bot path; same scope/safety guards. |
-| CS82-2 | ✅ Done — LEARNINGS.md entry "Cascading prod-deploy bug chain (CS73 → CS79 → CS80 → CS81), 2026-05-10". | Pure docs. |
-| CS82-3 | ✅ Done — CONVENTIONS.md § Testing Strategy → "MSSQL/SQLite test parity gap". | Pure docs. |
-| CS82-4 | ✅ Done — CONVENTIONS.md § Database & Data → "BIGINT cast hygiene for aggregates over INT columns". | Pure docs. |
-| CS82-5 | ✅ Done — OPERATIONS.md § Cold-start container validation → "CS41-12 chicken-and-egg pattern". | Pure docs. |
-| CS82-6 | ✅ Done — CONVENTIONS.md § 4a Telemetry & Observability → "Boot-quiet contract for new /api/* endpoints". | Pure docs. |
+| CS82-1 | ✅ Done — Extended `scripts/cleanup-test-data.js` for CS-prefix pattern + `EXTRA_USERNAMES` env var. 26 unit tests cover regex hygiene (including the post-local-review tightening to `^cs\d+(?!\d)(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]+$` rejecting plausible human usernames like `cs50student`/`cs100abc`/`cs2024alice`), EXTRA_USERNAMES de-duplication, cumulative count, parameterized DELETEs, and only-scores blast-radius. Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Mirror existing gwn-smoke-bot path; same scope/safety guards. |
+| CS82-2 | ✅ Done — LEARNINGS.md entry "Cascading prod-deploy bug chain (CS73 → CS79 → CS80 → CS81), 2026-05-10". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-3 | ✅ Done — CONVENTIONS.md § Testing Strategy → "MSSQL/SQLite test parity gap". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-4 | ✅ Done — CONVENTIONS.md § Database & Data → "BIGINT cast hygiene for aggregates over INT columns". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-5 | ✅ Done — OPERATIONS.md § Cold-start container validation → "CS41-12 chicken-and-egg pattern". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
+| CS82-6 | ✅ Done — CONVENTIONS.md § 4a Telemetry & Observability → "Boot-quiet contract for new /api/* endpoints". Shipped in PR [#334](https://github.com/henrik-me/guesswhatisnext/pull/334). | Pure docs. |
 | CS82-7 | ⬜ Planned — After PR merge: orchestrator triggers `ops-cleanup-test-data.yml` against production (operator approval), watcher reports row counts. Verify leaderboard probe shows 0 cs<NN>* entries. | Orchestrator action; same shape as CS81-1 cleanup. |
 
 ## Acceptance

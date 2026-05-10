@@ -283,7 +283,7 @@ When a deploy includes an app-code fix (not a migration) that the smoke probe ex
 Resolution paths (in priority order):
 
 1. **Data cleanup that makes OLD's bug-trigger condition not present** (e.g. [CS81](project/clickstops/done/done_cs81_test-data-hygiene.md): delete accumulated test rows so the overflow doesn't trigger on either revision). Ideal when the bug requires accumulated state to manifest.
-2. **Hot-fix admin endpoint** with bypass workflow that skips CS41-12 just this once. More risk; reserve for genuine emergencies.
+2. **Hot-fix admin endpoint** with bypass workflow that skips CS41-12 just this once. **No such workflow exists in-repo today** — adopting this path would require landing a new dispatch workflow with its own Environment-gated approval and an explicit override input that disables the CS41-12 step. More risk; reserve for genuine emergencies.
 3. **Modify the smoke probe to skip the failing step against OLD only** (still test it on NEW via CS41-1). Loses some validation coverage on the OLD-vs-migrated-DB compat dimension; reserve for cases where the bug is provably not in the schema-compat space.
 
 Hit during [CS80](project/clickstops/done/done_cs80_scores-avg-int-overflow.md) prod-deploy ceremony (run [25621131079](https://github.com/henrik-me/guesswhatisnext/actions/runs/25621131079)) — resolved via path 1 (CS81 cleanup workflow). See [LEARNINGS § Cascading prod-deploy bug chain](LEARNINGS.md#cascading-prod-deploy-bug-chain-cs73--cs79--cs80--cs81-2026-05-10) for the full session story.
