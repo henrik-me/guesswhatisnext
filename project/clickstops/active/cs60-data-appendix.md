@@ -272,8 +272,8 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 
 | env | Day 2 AI total (MB) |
 |---|---:|
-| staging | **6.97** |
-| prod | **4.84** |
+| staging | **6.96** |
+| prod | **4.85** |
 
 #### Cost — Day 2 (DKK)
 
@@ -303,7 +303,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 | gwn-production | 0.0003 cores (≈289k nanocores) | 103.3 MiB | 1 | 430 | 0 |
 
 **Notes**
-- Day 2 is the noisy backfill day: staging AI ingest jumped to 6.97 MB and prod to 4.84 MB, far above Day 1, matching the CS61/CS52 operational activity around the CS61 staging failure window.
+- Day 2 is the noisy backfill day: staging AI ingest jumped to 6.96 MB and prod to 4.85 MB, far above Day 1, matching the CS61/CS52 operational activity around the CS61 staging failure window.
 - `AppExceptions` recorded 50 staging rows, extending the Day 1 operational finding (`SQLITE_ERROR` storm) into the Day 2 UTC bucket; disposition remains with CS61 / CS60-4 follow-up rather than this cost-watch task.
 - `gwn-staging` billed only active vCPU/memory (0.61 DKK) and no idle meter, so scale-to-zero continued to avoid baseline idle burn despite 505 requests.
 - No restarts were observed; both apps reached Replicas max = 1 at least once.
@@ -453,10 +453,10 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 | Resource | Day 5 cost (DKK) | Notes |
 |---|---:|---|
 | gwn-staging | **0.03** | Brief active-only blip; no idle meter; no staging requests recorded by the platform. |
-| gwn-production | **2.49** | Closed-day total — matches Days 1/3 prod steady-state shape. |
+| gwn-production | **2.48** | Closed-day total — matches Days 1/3 prod steady-state shape. |
 | workspace-gwnrg6bXt | **0.03** | Closed-day workspace ingestion. |
 | gwn-sqldb / AI components | 0.00 | |
-| **Day 5 total** | **2.55 DKK** | ≈$0.36 USD; UTC day fully closed at capture time. |
+| **Day 5 total** | **2.54 DKK** | ≈$0.36 USD; UTC day fully closed at capture time. |
 
 #### Container Apps compute / memory / requests — Day 5
 
@@ -546,7 +546,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 | env | Day 7 AI total (MB) |
 |---|---:|
 | prod | **1.57** |
-| staging | **1.34** |
+| staging | **1.33** |
 
 > **Original mid-day capture had recorded:** prod 35/0.03 + 3/0.00 + 3/0.00 = 0.03 MB; staging zero. Closed-day re-capture shows ≈50× more activity than the partial recorded at T18:30Z — the bulk of Day 7 traffic (and the staging wake-up) happened after the original capture window.
 
@@ -655,7 +655,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 
 | env | Day 9 AI total (MB) |
 |---|---:|
-| prod | **0.18** |
+| prod | **0.17** |
 | staging | **0.00** |
 
 #### Cost — Day 9 (DKK)
@@ -683,7 +683,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 | gwn-production | 0.0003 cores (≈300k nanocores) | 134.5 MiB | 1 | 17 | 0 |
 
 **Notes**
-- Lowest-traffic day for prod in the 14-day window (17 requests, 0.18 MB AI ingest); prod returned to Replicas=1 after Day 8's burst.
+- Lowest-traffic day for prod in the 14-day window (17 requests, 0.17 MB AI ingest); prod returned to Replicas=1 after Day 8's burst.
 - Staging fully scaled-to-zero entire UTC day.
 - No restarts. No exceptions.
 
@@ -870,7 +870,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 
 | env | Day 13 AI total (MB) |
 |---|---:|
-| prod | **6.30** |
+| prod | **6.29** |
 | staging | **0.00** |
 
 #### Cost — Day 13 (DKK)
@@ -890,7 +890,7 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 |---|---:|---|
 | gwn-staging | **0.03** | Active-only blip; no idle. |
 | gwn-production | **2.52** | Steady-state shape, matches Days 11/12. |
-| workspace-gwnrg6bXt | **0.11** | High workspace ingestion driven by 6.30 MB prod AI day + 68 AppExceptions. |
+| workspace-gwnrg6bXt | **0.11** | High workspace ingestion driven by 6.29 MB prod AI day + 68 AppExceptions. |
 | gwn-sqldb / AI components | 0.00 | |
 | **Day 13 total** | **2.66 DKK** | ≈$0.38 USD. |
 
@@ -1012,7 +1012,7 @@ For comparison, the originally-recorded 8-day total at 2026-05-02T18:30Z was **1
 |---|---|---|
 | UsageNanoCores avg | ≈ 100 k .. ≈ 2.4 M nanocores (≈ 0.0001..0.0024 cores) | ≈ 263 k .. ≈ 290 k nanocores (≈ 0.0003 cores) |
 | WorkingSetBytes avg | 69 .. ≈ 129 MiB | 66 .. ≈ 134 MiB |
-| Replicas max | 0..1 (Day 8/9/14 = 0; CS58 scale-to-zero working) | 1 (steady) |
+| Replicas max | 1 (steady at 1 every day; first true Replicas=0 full UTC day is Day 8 — see [+14d roll-up](#14d-midpoint-roll-up-cs60-3o)) | 1 (steady) |
 | Requests/day | 0..505 | 3..430 |
 | RestartCount | 0 | 0 |
 
@@ -1166,7 +1166,7 @@ Closed-day KQL `union withsource=Tbl * | where TimeGenerated >= datetime(2026-04
 | Day 12 — 2026-05-07 | 6.82 | Steady; brief staging activity (522 deps, 50 requests); prod replicas peaked at 2. |
 | Day 13 — 2026-05-08 | **7.14** | 68 prod exceptions (highest single-day) + first AppTraces row of window. |
 | Day 14 — 2026-05-09 | 7.00 | Steady. |
-| **15-day total** | **61.32 MB** | _(closed-day workspace-wide, includes ContainerAppConsoleLogs_CL 13.56 MB + AppDependencies 43.19 MB + others)._ |
+| **15-day total** | **61.31 MB** | _(closed-day workspace-wide; matches the per-table breakdown in [§ +14d midpoint roll-up](#14d-midpoint-roll-up-cs60-3o); per-day rounded values sum to 61.32 MB due to per-row rounding.)_ |
 
 #### 30-day ingest projections vs 5 GB free tier (refreshed)
 
