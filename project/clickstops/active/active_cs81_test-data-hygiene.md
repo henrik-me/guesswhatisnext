@@ -1,6 +1,7 @@
 # CS81 — Test data hygiene
 
-**Status:** ⬜ Planned
+**Status:** 🔄 In Progress
+**Claimed:** yoga-gwn 2026-05-10T06:05Z (branch `cs81-test-data-hygiene`)
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72, CS75
 **Blocks:** [CS80](../active/active_cs80_scores-avg-int-overflow.md) closure (no prod deploy can succeed at CS41-12 until smoke-bot's accumulated score rows are removed from prod). [CS73](../done/done_cs73_prod-deploy-cold-db-handling.md) and [CS79](../active/active_cs79_api-features-cold-init-gate.md) empirical closure also pending the same prod deploy.
