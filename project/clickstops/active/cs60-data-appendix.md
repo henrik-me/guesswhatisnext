@@ -556,6 +556,383 @@ So total workspace ingest (~52 MB cumulative for the ~25.18h since baseline) pro
 
 ---
 
+### Day 8 — 2026-05-03 (CS60-3i)
+
+**Captured:** 2026-05-10T16:40Z by yoga-gwn (sub-agent — closed UTC day, backfill).
+**Window:** UTC day 2026-05-03.
+
+#### App Insights tables — Day 8
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| prod | AppDependencies | 8,990 | 6.91 |
+| prod | AppRequests | 495 | 0.43 |
+| prod | AppMetrics | 112 | 0.10 |
+| prod | AppExceptions | 48 | 0.06 |
+| prod | AppTraces | 1 | 0.00 |
+| staging | _(no rows — scale-to-zero, no traffic)_ | 0 | 0.00 |
+
+| env | Day 8 AI total (MB) |
+|---|---:|
+| prod | **7.50** |
+| staging | **0.00** |
+
+#### Cost — Day 8 (DKK)
+
+> **PARTIAL — Cost Management compute-meter gap.** As of capture (8 days after the UTC day closed) Cost Management has emitted only the workspace ingestion line and SQL Free-tier zero placeholders. No `Standard *Idle/Active Usage` meters for `gwn-staging` or `gwn-production`. Day 8 is part of a contiguous 4-day gap (Days 6-9 = 2026-05-01..2026-05-04) — see the [+14d midpoint roll-up](#14d-midpoint-roll-up-cs60-3o) for the cross-day finding and the resulting plan-side disposition note. Expected lag-corrected total based on Day 7 closed-day extrapolation + Day 8 ingest-cost ≈ 1.7-2.6 DKK.
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion     | 0.13 |
+| gwn-production     | 1 vCore - Free                    | 0.00 |
+| gwn-production     | General Purpose Data Stored - Free| 0.00 |
+
+| Resource | Day 8 recorded cost (DKK) | Notes |
+|---|---:|---|
+| gwn-staging | **0.00** | No meters — staging at scale-to-zero (Replicas max = 0); expect 0.00 DKK after lag-fill. |
+| gwn-production | **0.00** | No compute meters; CM gap. Expect ~2.0-2.5 DKK after lag-fill (Day 8 ran 3 replicas at peak — see notes). |
+| workspace-gwnrg6bXt | **0.13** | Highest workspace ingestion cost so far; reflects the prod 7.50 MB AI ingest day + container logs. |
+| gwn-sqldb / AI components | 0.00 | |
+| **Day 8 recorded total** | **0.13 DKK** | Strongly partial. |
+
+#### Container Apps compute / memory / requests — Day 8
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | _(no data — Replicas = 0)_ | _(no data)_ | 0 | 0 | 0 |
+| gwn-production | 0.0004 cores (≈386k nanocores) | 136.6 MiB | **3** | 495 | 0 |
+
+**Notes**
+- **Highest-ingest day in the 14-day window for prod** (7.50 MB AI), driven by 8,990 dependency spans + 48 exceptions + 1 trace row. The exception count (48) plus the replicas-max=3 burst suggests a real prod activity spike — possibly an investigation session, traffic burst, or short-lived error condition — worth correlating with the staging scale-to-zero state.
+- First day in the window where prod scaled past Replicas=1 (max=3); Working Set climbed to 136.6 MiB (steady ~134 MiB across Days 8-13, up from Days 0-7 mid-90s).
+- Staging fully scaled-to-zero entire UTC day (CS58 holding).
+- No restarts.
+
+---
+
+### Day 9 — 2026-05-04 (CS60-3j)
+
+**Captured:** 2026-05-10T16:40Z by yoga-gwn (sub-agent — closed UTC day, backfill).
+**Window:** UTC day 2026-05-04.
+
+#### App Insights tables — Day 9
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| prod | AppDependencies | 205 | 0.15 |
+| prod | AppRequests | 17 | 0.01 |
+| prod | AppMetrics | 11 | 0.01 |
+| staging | _(no rows — scale-to-zero, no traffic)_ | 0 | 0.00 |
+
+| env | Day 9 AI total (MB) |
+|---|---:|
+| prod | **0.18** |
+| staging | **0.00** |
+
+#### Cost — Day 9 (DKK)
+
+> **PARTIAL — Cost Management compute-meter gap (continued from Day 8).** No compute meters for either app. Workspace ingestion 0.003 DKK only. Lowest-ingest day in the 14-day window. Expected lag-corrected total ≈ 1.5-2 DKK based on Day 7 closed-day shape.
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion     | 0.00 |
+| gwn-production     | General Purpose Data Stored - Free| 0.00 |
+
+| Resource | Day 9 recorded cost (DKK) | Notes |
+|---|---:|---|
+| gwn-staging | **0.00** | No meters — staging at scale-to-zero. |
+| gwn-production | **0.00** | No compute meters; CM gap. Expect ~1.5-2 DKK after lag-fill (Day 9 was idle — only 17 requests). |
+| workspace-gwnrg6bXt | **0.00** | Rounded to 0.00 (raw 0.003 DKK). |
+| gwn-sqldb / AI components | 0.00 | |
+| **Day 9 recorded total** | **0.00 DKK** | Strongly partial. |
+
+#### Container Apps compute / memory / requests — Day 9
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | _(no data — Replicas = 0)_ | _(no data)_ | 0 | 0 | 0 |
+| gwn-production | 0.0003 cores (≈300k nanocores) | 134.5 MiB | 1 | 17 | 0 |
+
+**Notes**
+- Lowest-traffic day for prod in the 14-day window (17 requests, 0.18 MB AI ingest); prod returned to Replicas=1 after Day 8's burst.
+- Staging fully scaled-to-zero entire UTC day.
+- No restarts. No exceptions.
+
+---
+
+### Day 10 — 2026-05-05 (CS60-3k)
+
+**Captured:** 2026-05-10T16:40Z by yoga-gwn (sub-agent — closed UTC day, backfill).
+**Window:** UTC day 2026-05-05.
+
+#### App Insights tables — Day 10
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| prod | AppDependencies | 195 | 0.14 |
+| prod | AppRequests | 17 | 0.01 |
+| prod | AppMetrics | 14 | 0.01 |
+| staging | _(no rows — no traffic)_ | 0 | 0.00 |
+
+| env | Day 10 AI total (MB) |
+|---|---:|
+| prod | **0.17** |
+| staging | **0.00** |
+
+#### Cost — Day 10 (DKK)
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| gwn-production     | Standard Memory Idle Usage    | 1.41 |
+| gwn-production     | Standard vCPU Idle Usage      | 0.71 |
+| gwn-staging        | Standard vCPU Active Usage    | 0.02 |
+| gwn-staging        | Standard Memory Active Usage  | 0.01 |
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion | 0.00 |
+| gwn-production     | General Purpose Data Stored - Free | 0.00 |
+
+| Resource | Day 10 cost (DKK) | Notes |
+|---|---:|---|
+| gwn-staging | **0.03** | Brief active-only blip; no idle meter — CS58 scale-to-zero still avoided baseline idle billing despite 0 platform-recorded requests. |
+| gwn-production | **2.12** | Closed-day total. **Idle-only** — no Active vCPU/Memory meters; reflects very-low-traffic day (17 requests). |
+| workspace-gwnrg6bXt | **0.00** | Rounded; raw 0.003 DKK. |
+| gwn-sqldb / AI components | 0.00 | |
+| **Day 10 total** | **2.15 DKK** | ≈$0.31 USD; UTC day fully closed at capture time. |
+
+#### Container Apps compute / memory / requests — Day 10
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | 0.0005 cores (≈472k nanocores) | 77.5 MiB | 1 | 0 | 0 |
+| gwn-production | 0.0003 cores (≈262k nanocores) | 135.4 MiB | 1 | 17 | 0 |
+
+**Notes**
+- First day after the Days 6-9 CM compute-meter gap; billing appears intact for Day 10 onwards.
+- Staging woke briefly (Replicas peaked at 1 with 0 platform-recorded requests) — likely a deploy/probe blip that drove the 0.03 DKK active charge.
+- Prod working set jumped to 135 MiB (settled at this level Days 8-13 after Day 7's 87.7 MiB low; correlates with the Day 8 burst that triggered the higher steady-state).
+- No restarts. No exceptions.
+
+---
+
+### Day 11 — 2026-05-06 (CS60-3l)
+
+**Captured:** 2026-05-10T16:40Z by yoga-gwn (sub-agent — closed UTC day, backfill).
+**Window:** UTC day 2026-05-06.
+
+#### App Insights tables — Day 11
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| prod | AppDependencies | 1,593 | 1.18 |
+| prod | AppRequests | 112 | 0.09 |
+| prod | AppMetrics | 24 | 0.02 |
+| staging | _(no rows — no traffic)_ | 0 | 0.00 |
+
+| env | Day 11 AI total (MB) |
+|---|---:|
+| prod | **1.29** |
+| staging | **0.00** |
+
+#### Cost — Day 11 (DKK)
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| gwn-production     | Standard Memory Idle Usage    | 1.64 |
+| gwn-production     | Standard vCPU Idle Usage      | 0.82 |
+| gwn-production     | Standard vCPU Active Usage    | 0.05 |
+| gwn-production     | Standard Memory Active Usage  | 0.01 |
+| gwn-staging        | Standard vCPU Active Usage    | 0.03 |
+| gwn-staging        | Standard Memory Active Usage  | 0.01 |
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion | 0.02 |
+| gwn-production     | General Purpose Data Stored - Free | 0.00 |
+
+| Resource | Day 11 cost (DKK) | Notes |
+|---|---:|---|
+| gwn-staging | **0.03** | Active-only blip; no idle. |
+| gwn-production | **2.51** | Steady-state shape resumes (Idle ≈ 2.46 + Active ≈ 0.05); slightly higher than baseline because prod replica peaked at 2. |
+| workspace-gwnrg6bXt | **0.02** | Closed-day workspace ingestion. |
+| gwn-sqldb / AI components | 0.00 | |
+| **Day 11 total** | **2.56 DKK** | ≈$0.37 USD. |
+
+#### Container Apps compute / memory / requests — Day 11
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | 0.0004 cores (≈356k nanocores) | 115.5 MiB | 1 | 0 | 0 |
+| gwn-production | 0.0003 cores (≈261k nanocores) | 135.4 MiB | 2 | 112 | 0 |
+
+**Notes**
+- Prod Replicas max = 2 — second day in the window with multi-replica scale-out (after Day 8's max=3 burst).
+- Steady-state recovery after the low-ingest Days 9/10.
+- No restarts. No exceptions.
+
+---
+
+### Day 12 — 2026-05-07 (CS60-3m)
+
+**Captured:** 2026-05-10T16:40Z by yoga-gwn (sub-agent — closed UTC day, backfill).
+**Window:** UTC day 2026-05-07.
+
+#### App Insights tables — Day 12
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| prod | AppDependencies | 6,984 | 5.16 |
+| prod | AppRequests | 542 | 0.45 |
+| prod | AppMetrics | 55 | 0.05 |
+| staging | AppDependencies | 522 | 0.39 |
+| staging | AppRequests | 51 | 0.05 |
+| staging | AppMetrics | 3 | 0.00 |
+
+| env | Day 12 AI total (MB) |
+|---|---:|
+| prod | **5.66** |
+| staging | **0.44** |
+
+#### Cost — Day 12 (DKK)
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| gwn-production     | Standard Memory Idle Usage    | 1.63 |
+| gwn-production     | Standard vCPU Idle Usage      | 0.82 |
+| gwn-production     | Standard vCPU Active Usage    | 0.05 |
+| gwn-production     | Standard Memory Active Usage  | 0.01 |
+| gwn-staging        | Standard vCPU Active Usage    | 0.03 |
+| gwn-staging        | Standard Memory Active Usage  | 0.01 |
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion | 0.11 |
+| gwn-production     | General Purpose Data Stored - Free | 0.00 |
+
+| Resource | Day 12 cost (DKK) | Notes |
+|---|---:|---|
+| gwn-staging | **0.04** | Active-only blip; no idle. Staging woke briefly (51 AppRequests + 522 AppDependencies) — likely a deploy or operator probe burst. |
+| gwn-production | **2.52** | Steady-state shape; high-ingest day pushed workspace cost up. |
+| workspace-gwnrg6bXt | **0.11** | Higher than recent days; reflects the 5.66 MB prod ingest. |
+| gwn-sqldb / AI components | 0.00 | |
+| **Day 12 total** | **2.67 DKK** | ≈$0.38 USD. |
+
+#### Container Apps compute / memory / requests — Day 12
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | 0.0005 cores (≈459k nanocores) | 132.3 MiB | 1 | 50 | 0 |
+| gwn-production | 0.0003 cores (≈278k nanocores) | 133.5 MiB | 2 | 542 | 0 |
+
+**Notes**
+- Highest-traffic day for prod since Day 8 (542 requests; 6,984 dependency spans).
+- Staging WAS up briefly (50 platform-recorded requests + 51 AI AppRequests — close match) — operator activity rather than scheduled traffic.
+- No restarts. No exceptions.
+
+---
+
+### Day 13 — 2026-05-08 (CS60-3n)
+
+**Captured:** 2026-05-10T16:40Z by yoga-gwn (sub-agent — closed UTC day, backfill).
+**Window:** UTC day 2026-05-08.
+
+#### App Insights tables — Day 13
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| prod | AppDependencies | 7,700 | 5.75 |
+| prod | AppRequests | 480 | 0.39 |
+| prod | AppExceptions | 68 | 0.09 |
+| prod | AppMetrics | 62 | 0.06 |
+| prod | AppTraces | 1 | 0.00 |
+| staging | _(no rows — no traffic)_ | 0 | 0.00 |
+
+| env | Day 13 AI total (MB) |
+|---|---:|
+| prod | **6.30** |
+| staging | **0.00** |
+
+#### Cost — Day 13 (DKK)
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| gwn-production     | Standard Memory Idle Usage    | 1.63 |
+| gwn-production     | Standard vCPU Idle Usage      | 0.82 |
+| gwn-production     | Standard vCPU Active Usage    | 0.05 |
+| gwn-production     | Standard Memory Active Usage  | 0.01 |
+| gwn-staging        | Standard vCPU Active Usage    | 0.02 |
+| gwn-staging        | Standard Memory Active Usage  | 0.01 |
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion | 0.11 |
+| gwn-production     | General Purpose Data Stored - Free | 0.00 |
+
+| Resource | Day 13 cost (DKK) | Notes |
+|---|---:|---|
+| gwn-staging | **0.03** | Active-only blip; no idle. |
+| gwn-production | **2.52** | Steady-state shape, matches Days 11/12. |
+| workspace-gwnrg6bXt | **0.11** | High workspace ingestion driven by 6.30 MB prod AI day + 68 AppExceptions. |
+| gwn-sqldb / AI components | 0.00 | |
+| **Day 13 total** | **2.66 DKK** | ≈$0.38 USD. |
+
+#### Container Apps compute / memory / requests — Day 13
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | 0.0004 cores (≈418k nanocores) | 105.7 MiB | 1 | 0 | 0 |
+| gwn-production | 0.0003 cores (≈278k nanocores) | 134.3 MiB | 2 | 481 | 0 |
+
+**Notes**
+- ⚠️ **68 prod AppExceptions** in this 24h window — highest exception count on any single day in the 14-day window (Day 8 had 48). Worth investigating in CS60-4 follow-up: pull `AppExceptions | where TimeGenerated between(datetime(2026-05-08T00:00Z) .. datetime(2026-05-09T00:00Z)) and _ResourceId contains 'gwn-ai-production' | summarize n=count() by type, outerMessage` to identify the failure class.
+- Prod traffic stayed at ~480 requests (very close to Day 12's 542) with replicas max = 2 — sustained ~2-replica steady state since Day 11.
+- Staging had 0 requests but 0.03 DKK active-only billing (deploy/probe blip).
+- 1 AppTraces row appeared — first appearance of an OTel-logs trace span in production since CS54-6 baseline (CS60-5 Gap 2 work would expand this).
+
+---
+
+### Day 14 — 2026-05-09 (CS60-3o)
+
+**Captured:** 2026-05-10T16:40Z by yoga-gwn (sub-agent — closed UTC day, backfill).
+**Window:** UTC day 2026-05-09.
+
+#### App Insights tables — Day 14
+
+| env | Table | rows | MB billed |
+|---|---|---:|---:|
+| prod | AppDependencies | 4,780 | 3.53 |
+| prod | AppRequests | 320 | 0.23 |
+| prod | AppMetrics | 21 | 0.02 |
+| staging | _(no rows — scale-to-zero, no traffic)_ | 0 | 0.00 |
+
+| env | Day 14 AI total (MB) |
+|---|---:|
+| prod | **3.78** |
+| staging | **0.00** |
+
+#### Cost — Day 14 (DKK)
+
+| Resource | Meter | Cost (DKK) |
+|---|---|---:|
+| gwn-production     | Standard Memory Idle Usage    | 1.64 |
+| gwn-production     | Standard vCPU Idle Usage      | 0.82 |
+| gwn-production     | Standard vCPU Active Usage    | 0.01 |
+| gwn-production     | Standard Memory Active Usage  | 0.00 |
+| workspace-gwnrg6bXt | Analytics Logs Data Ingestion | 0.11 |
+| gwn-production     | General Purpose Data Stored - Free | 0.00 |
+
+| Resource | Day 14 cost (DKK) | Notes |
+|---|---:|---|
+| gwn-staging | **0.00** | ✅ Staging fully at scale-to-zero — no compute meters at all (no Active, no Idle); CS58 worked for the entire UTC day. |
+| gwn-production | **2.47** | Closed-day total; Active vCPU dropped to 0.01 (low-traffic day relative to Days 12/13). |
+| workspace-gwnrg6bXt | **0.11** | Workspace ingestion. |
+| gwn-sqldb / AI components | 0.00 | |
+| **Day 14 total** | **2.58 DKK** | ≈$0.37 USD; +14d midpoint marker. |
+
+#### Container Apps compute / memory / requests — Day 14
+
+| Resource | UsageNanoCores avg | WorkingSetBytes avg | Replicas max | Requests total | RestartCount max |
+|---|---:|---:|---:|---:|---:|
+| gwn-staging | _(no data — Replicas = 0)_ | _(no data)_ | 0 | 0 | 0 |
+| gwn-production | 0.0003 cores (≈265k nanocores) | 126.9 MiB | 1 | 320 | 0 |
+
+**Notes**
+- **Staging Replicas max = 0** for Day 14 — third such full-day in the 14-day window (after Days 8 and 9; Day 7 was 0 but had post-capture activity that retroactively raised it). CS58 holding cleanly when nothing pokes staging.
+- Prod returned to Replicas=1 after the multi-replica run on Days 11-13.
+- No restarts. No exceptions.
+- This day is the canonical **+14d midpoint** marker — triggers the [+14d roll-up](#14d-midpoint-roll-up-cs60-3o) below.
+
+---
+
 ### +7d cost-watch close-out (CS60-2h)
 
 > **Status:** complete for the canonical +7d window (Days 0-7 covering 2026-04-25..2026-05-02). **Days 4, 6, and 7 carry Cost Management closing-day lag** at the time of capture (2026-05-02T18:30Z); the daily-row totals will under-count those days. The interpretation below is based on Days 0-5 (closed) plus the partial signals on Days 4/6/7 — projections are stated separately for "as recorded" vs "lag-corrected (Day 0-5 baseline)" so the under-count is visible.
