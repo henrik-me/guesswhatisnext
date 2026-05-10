@@ -60,12 +60,22 @@ const SMOKE_USER = 'gwn-smoke-bot';
 const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
 
 // CS82-1: machine-generated CS-prefix dev-test users, e.g. `cs5210umop3dc23a`.
-// Shape: literal `cs`, then ≥1 digits, then ≥1 alphanumeric chars (the
-// trailing slug). Conservative on purpose — `cs1`, `csabc`, and human-chosen
-// names like `cs-rocks` won't match. Filtering happens in JS after the SQL
-// candidate-fetch (see `findCsPrefixCandidateIds`) so the final DELETE is
-// always scoped by specific resolved user_id, never by a SQL `LIKE`.
-const CS_PREFIX_PATTERN = /^cs\d+[a-z0-9]+$/;
+// Shape: literal `cs`, then a maximal digit run (`\d+(?!\d)` — the negative
+// lookahead forbids the engine from backtracking the digit run to leave
+// digits leaking into the suffix), then a suffix of mixed alphanumerics
+// containing at least one letter AND at least one digit. The mixed-suffix
+// requirement (vs the plan's looser `[a-z0-9]+`) is a deliberate tightening
+// (CS82 PR #334 local-review finding): real CS52-10 entries (the four
+// `cs5210umop3dc23a/b` and `cs5210umop4jes6a/b` users) all have mixed
+// alphanumeric suffixes, while plausible human-chosen names like
+// `cs50student` (suffix all letters) or `cs100abc` (suffix all letters)
+// would otherwise false-positive. Public registration permits any 3-20
+// character username except the `gwn-smoke-` reserved prefix
+// (`server/routes/auth.js:65-69`), so the broader regex would put real users
+// at risk on a future cleanup run. Filtering happens in JS after the SQL
+// candidate-fetch (see CS-prefix path in cleanupTestData) so the final
+// DELETE is always scoped by specific resolved user_id, never by SQL `LIKE`.
+const CS_PREFIX_PATTERN = /^cs\d+(?!\d)(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]+$/;
 
 function parseExtraUsernames(raw) {
   if (raw == null || raw === '') return [];

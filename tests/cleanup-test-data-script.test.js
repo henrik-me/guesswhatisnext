@@ -91,29 +91,44 @@ function makeLog() {
 }
 
 describe('CS_PREFIX_PATTERN — regex hygiene (CS82-1)', () => {
-  it('matches machine-generated CS-prefix usernames', () => {
+  it('matches real CS52-10 machine-generated usernames (mixed-alphanumeric suffix)', () => {
     expect(CS_PREFIX_PATTERN.test('cs5210umop3dc23a')).toBe(true);
     expect(CS_PREFIX_PATTERN.test('cs5210umop4jes6b')).toBe(true);
-    expect(CS_PREFIX_PATTERN.test('cs100abc')).toBe(true);
-    expect(CS_PREFIX_PATTERN.test('cs1a')).toBe(true);
+    expect(CS_PREFIX_PATTERN.test('cs5210umop3dc23b')).toBe(true);
+    expect(CS_PREFIX_PATTERN.test('cs5210umop4jes6a')).toBe(true);
+  });
+
+  it('matches any cs<digits><mixed-alphanumeric-suffix> shape', () => {
+    expect(CS_PREFIX_PATTERN.test('cs1a2')).toBe(true);
+    expect(CS_PREFIX_PATTERN.test('cs100abc1')).toBe(true);
   });
 
   it('does NOT match the gwn-smoke-bot user (handled by exact-match path)', () => {
     expect(CS_PREFIX_PATTERN.test(SMOKE_USER)).toBe(false);
   });
 
-  it('does NOT match real-looking usernames', () => {
+  it('does NOT match plausible human-chosen usernames (CS82 PR #334 review)', () => {
+    // Suffix is all letters — would have matched the plan's looser regex.
+    // The mixed-alphanumeric tightening rejects these to prevent false
+    // positives on real public registrations.
+    expect(CS_PREFIX_PATTERN.test('cs50student')).toBe(false);
+    expect(CS_PREFIX_PATTERN.test('cs100abc')).toBe(false);
+    expect(CS_PREFIX_PATTERN.test('cs2024alice')).toBe(false);
+    // Other real-looking shapes.
     expect(CS_PREFIX_PATTERN.test('realuser')).toBe(false);
     expect(CS_PREFIX_PATTERN.test('alice')).toBe(false);
     expect(CS_PREFIX_PATTERN.test('cs-rocks')).toBe(false);
-    expect(CS_PREFIX_PATTERN.test('CS5210FOO')).toBe(false);
+    expect(CS_PREFIX_PATTERN.test('CS5210FOO')).toBe(false); // uppercase suffix
   });
 
-  it('does NOT match boundary cases (no suffix, no digits)', () => {
+  it('does NOT match boundary cases (no suffix, no digits, suffix without letter)', () => {
     expect(CS_PREFIX_PATTERN.test('cs1')).toBe(false);
     expect(CS_PREFIX_PATTERN.test('csabc')).toBe(false);
     expect(CS_PREFIX_PATTERN.test('cs')).toBe(false);
     expect(CS_PREFIX_PATTERN.test('')).toBe(false);
+    // Suffix is all digits (no letter) — also rejected.
+    expect(CS_PREFIX_PATTERN.test('cs1000')).toBe(false);
+    expect(CS_PREFIX_PATTERN.test('cs5210123')).toBe(false);
   });
 });
 
@@ -224,7 +239,7 @@ describe('scripts/cleanup-test-data.js — cleanupTestData', () => {
     const fake = makeFakeSql({
       users: [
         { id: 1, username: SMOKE_USER },
-        { id: 2, username: 'cs100abc' },
+        { id: 2, username: 'cs100abc1' },
         { id: 3, username: 'cs5210umop3dc23a' },
       ],
       scoresByUserId: { 1: 10, 2: 20, 3: 30 },
@@ -256,7 +271,7 @@ describe('scripts/cleanup-test-data.js — cleanupTestData', () => {
     const fake = makeFakeSql({
       users: [
         { id: 1, username: SMOKE_USER },
-        { id: 2, username: 'cs100abc' },
+        { id: 2, username: 'cs100abc1' },
       ],
       scoresByUserId: { 1: 5, 2: 7 },
     });
@@ -271,7 +286,7 @@ describe('scripts/cleanup-test-data.js — cleanupTestData', () => {
     expect(result.dryRun).toBe(true);
     expect(result.targets.every((t) => t.deleted === false)).toBe(true);
     expect(result.targets.find((t) => t.username === SMOKE_USER).beforeCount).toBe(5);
-    expect(result.targets.find((t) => t.username === 'cs100abc').beforeCount).toBe(7);
+    expect(result.targets.find((t) => t.username === 'cs100abc1').beforeCount).toBe(7);
     expect(fake.queries.some((q) => /DELETE/i.test(q))).toBe(false);
     expect(log.info.mock.calls.some((c) => /DRY_RUN — would delete 5 row\(s\) for gwn-smoke-bot/.test(c[0]))).toBe(true);
   });
@@ -280,7 +295,7 @@ describe('scripts/cleanup-test-data.js — cleanupTestData', () => {
     const fake = makeFakeSql({
       users: [
         { id: 99, username: SMOKE_USER },
-        { id: 7, username: 'cs5210abc' },
+        { id: 7, username: 'cs5210abc1' },
       ],
       scoresByUserId: { 99: 3, 7: 4 },
     });
