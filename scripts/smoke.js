@@ -539,8 +539,17 @@ async function cleanupSmokeRow(id, deps = {}) {
       .input('id', sql.Int, Number(id))
       .input('username', sql.NVarChar, 'gwn-smoke-bot')
       .query('DELETE FROM scores WHERE id = @id AND user_id = (SELECT id FROM users WHERE username = @username)');
-    const affected = Array.isArray(res?.rowsAffected) ? res.rowsAffected[0] : null;
+    const affected = Array.isArray(res?.rowsAffected) && Number.isFinite(res.rowsAffected[0])
+      ? res.rowsAffected[0]
+      : null;
     const elapsedMs = Date.now() - startedAt;
+    if (affected === null) {
+      // Driver returned no rowsAffected — cannot confirm the DELETE; treat
+      // as warn so the cleanup step is not reported as a successful delete
+      // without server confirmation.
+      info(`WARN: cleanup id=${id} — DELETE returned no rowsAffected; cannot confirm the row was removed`);
+      return { status: 'warn', reason: 'no rowsAffected', id, elapsedMs };
+    }
     if (affected === 0) {
       info(`WARN: cleanup deleted 0 rows — id=${id} either already gone or not owned by gwn-smoke-bot`);
       return { status: 'warn', reason: 'rowsAffected=0', id, elapsedMs };

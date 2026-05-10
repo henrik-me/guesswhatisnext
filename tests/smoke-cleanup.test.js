@@ -124,4 +124,25 @@ describe('scripts/smoke.js#cleanupSmokeRow (CS81-2)', () => {
       logSpy.mockRestore();
     }
   });
+
+  it('treats missing/non-numeric rowsAffected as warn (cannot confirm the DELETE)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      // Some mssql driver paths may return without rowsAffected; we cannot
+      // claim a successful delete in that case.
+      const fake = makeFakeSql({ deleteHandler: () => ({}) });
+      const result = await cleanupSmokeRow(55, {
+        sql: fake.sql,
+        connectionString: 'Server=foo;Database=bar;',
+      });
+      expect(result.status).toBe('warn');
+      expect(result.reason).toBe('no rowsAffected');
+      const warned = logSpy.mock.calls.some(([msg]) =>
+        /WARN: cleanup id=55.*no rowsAffected/i.test(String(msg))
+      );
+      expect(warned).toBe(true);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
 });

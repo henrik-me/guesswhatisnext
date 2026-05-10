@@ -95,7 +95,7 @@ describe('CS41-1 — pollUntil200 cold-start handling', () => {
 });
 
 describe('CS41-1 — runSmoke happy path', () => {
-  it('passes all six steps and writes structured results', async () => {
+  it('passes all seven steps (six smoke + CS81-2 cleanup) and writes structured results', async () => {
     // Test isolation: explicitly unset DATABASE_URL so the CS81-2
     // cleanup step takes the documented 'skip' path regardless of
     // whether the test runner is `npm test` (in-memory) or
