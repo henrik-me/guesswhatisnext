@@ -127,7 +127,19 @@ function parseExtraUsernames(raw) {
  *   Default: invoke wakeDb with the resolved sql + connection string.
  * @param {{ info: Function, error: Function }} [deps.log] - logger seam.
  * @returns {Promise<{
- *   targets: Array<{ username: string, userId: number, source: 'smoke'|'cs-prefix'|'extra', beforeCount: number, afterCount: number, deleted: boolean }>,
+ *   targets: Array<{
+ *     username: string,
+ *     userId: number,
+ *     source: 'smoke'|'cs-prefix'|'extra',
+ *     beforeCount: number,
+ *     afterCount: number,
+ *     deleted: boolean,
+ *     // `deletedRows` is present ONLY on real-delete entries (deleted=true).
+ *     // It reports the driver's rowsAffected[0] when available, falling back
+ *     // to beforeCount when the driver omits it. DRY_RUN entries (deleted=
+ *     // false) omit this field — they record beforeCount/afterCount only.
+ *     deletedRows?: number,
+ *   }>,
  *   totalDeleted: number,
  *   dryRun: boolean,
  * }>}
