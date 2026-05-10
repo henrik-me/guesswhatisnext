@@ -1,6 +1,7 @@
 # CS82 — Test data cleanup and learnings
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done
+**Closed:** yoga-gwn 2026-05-10T15:10Z — empirically validated: cleanup workflow run [25632920769](https://github.com/henrik-me/guesswhatisnext/actions/runs/25632920769) deleted 7 score rows across 5 users (gwn-smoke-bot×2 + cs5210umop3dc23a/b + cs5210umop4jes6a/b + cs29test1921694485). Public leaderboard probe confirms 0 cs<NN>* entries across freeplay/daily × ranked/offline. Discovered bonus: 5 additional CS-prefix users (cs29test* + 4 cs5210*race/sync variants) caught by the broader regex — all cleaned.
 **Claimed:** yoga-gwn 2026-05-10T14:35Z (branch `cs82-cleanup-and-learnings`)
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72, CS75
