@@ -1,7 +1,7 @@
 # CS75 — Scale prod to zero
 
 **Status:** ⬜ Planned
-**Depends on:** [CS73](../active/active_cs73_prod-deploy-cold-db-handling.md) — must merge first (see § Dependency rationale)
+**Depends on:** [CS73](../done/done_cs73_prod-deploy-cold-db-handling.md) — must merge first (see § Dependency rationale)
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72
 **Origin:** Direct extension of [CS58](../done/done_cs58_scale-staging-to-zero.md)'s rationale to the production Container App. User direction 2026-05-08: *"Change the prod container to allow 0 instances running, similar to staging."* Acceptance of the user-visible cold-start trade-off explicitly confirmed by user during planning.
 
@@ -37,7 +37,7 @@ Live source-of-truth query: see [§ Querying Azure cost in OPERATIONS.md](../../
 
 ## Dependency rationale (why CS73 blocks CS75)
 
-Azure SQL serverless auto-pause is governed by **DB idleness** (sessions/workload), not by Container App replica count directly. The current Azure runtime is already DB-lazy: `server/app.js` does not init the DB at startup, and `/healthz`, `/api/health`, `/api/db-status`, `/api/admin/*`, and telemetry routes bypass the DB-init gate (see `server/app.js:277-298,637-645`). So `minReplicas=1` does not by itself keep the DB warm — and CS73's deploy-time cold-DB failure has already been observed in production while still on `minReplicas=1` (see [CS73 origin](../active/active_cs73_prod-deploy-cold-db-handling.md#symptom)).
+Azure SQL serverless auto-pause is governed by **DB idleness** (sessions/workload), not by Container App replica count directly. The current Azure runtime is already DB-lazy: `server/app.js` does not init the DB at startup, and `/healthz`, `/api/health`, `/api/db-status`, `/api/admin/*`, and telemetry routes bypass the DB-init gate (see `server/app.js:277-298,637-645`). So `minReplicas=1` does not by itself keep the DB warm — and CS73's deploy-time cold-DB failure has already been observed in production while still on `minReplicas=1` (see [CS73 origin](../done/done_cs73_prod-deploy-cold-db-handling.md#symptom)).
 
 What CS75 changes is that **post-CS75 there is no warm process or ambient real traffic to keep DB sessions alive between deploys**, so the cold-DB-on-deploy failure mode becomes more visible and consistent rather than intermittent. CS73 is therefore a hard blocker for **CS75-5 closure** (the post-CS75 first deploy must succeed without operator intervention) — not because CS75 *causes* the failure mode, but because CS75 makes operator-visible cold paths the steady state and removes the ambient cushion that today sometimes hides them.
 
@@ -114,7 +114,7 @@ Source of truth for current cost is Azure Cost Management. The canonical PowerSh
 ## Cross-references
 
 - **[CS58](../done/done_cs58_scale-staging-to-zero.md)** — direct precedent on staging. CS75 reuses the same task structure, the same `az` command pattern (with the traffic-shift + old-revision-deactivate lesson baked in), and the same cost-soak-as-separate-CS pattern.
-- **[CS73](../active/active_cs73_prod-deploy-cold-db-handling.md)** — **hard dependency.** Must merge before CS75-2 because CS75 makes the deploy-time cold-DB failure mode the steady state instead of an edge case.
+- **[CS73](../done/done_cs73_prod-deploy-cold-db-handling.md)** — **hard dependency.** Must merge before CS75-2 because CS75 makes the deploy-time cold-DB failure mode the steady state instead of an edge case.
 - **[CS56](planned_cs56_server-cache-and-cold-db-fallback.md)** — adjacent (no overlap). CS56 improves the user-facing cold-DB UX; CS75 makes that UX visible more often. CS56 not a blocker — user explicitly accepted the cold-start trade-off without it.
 - **[CS59](planned_cs59_staging-cost-soak-verification.md)** — CS76 (the spin-off CS75 cost soak) will mirror CS59's structure exactly.
 - **[CS53](../active/active_cs53_prod-cold-start-retry-investigation.md)** — investigates production cold-start retry behavior. CS75 will likely surface more cold-start cases and may inform CS53's investigation. Not a blocker either way.

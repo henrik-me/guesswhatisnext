@@ -1,8 +1,31 @@
 # CS73 — Prod-Deploy Cold DB Handling
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done
 **Claimed:** yoga-gwn 2026-05-09T23:55Z (branch `cs73-wake-db`)
-**PR merged:** [#330](https://github.com/henrik-me/guesswhatisnext/pull/330) at 2026-05-10T02:00Z (commit `a69b329`). CS73-1..-4 ✅ Done. **Closure pending natural cold-pause prod-deploy validation** per § Validation strategy (no manual pause possible on GP_S_Gen5 serverless). 30-day grace ends 2026-06-09; CS may close earlier on first organic cold deploy or with the grace note.
+**PR merged:** [#330](https://github.com/henrik-me/guesswhatisnext/pull/330) at 2026-05-10T02:00Z (commit `a69b329`).
+**Closed:** yoga-gwn 2026-05-10T02:55Z. CS73-1..-4 ✅ Done. **Wake step empirically validated in prod** — see § Validation evidence below.
+
+## Validation evidence
+
+Captured from prod-deploy run [25617860563](https://github.com/henrik-me/guesswhatisnext/actions/runs/25617860563) (2026-05-10T02:39Z, image `fa74aec`):
+
+**CI deploy log (Wake Azure SQL gwn-production (CS73) step):**
+```
+Initial DB status: Paused
+[CS73 wake-db] success on attempt 1 after 57808ms
+DB ready for migration step (wake took 58s)
+```
+
+**Subsequent steps confirmed end-to-end success:**
+- `Run DB migrations` succeeded on the first attempt (DB warmed by wake step).
+- `Smoke OLD revision against NEW schema (CS41-12)` passed: `/healthz` ok in 116ms, `/api/features` ok in 27ms (1 flag) — proves the warmed DB is fully functional and schema-compatible with the OLD revision.
+
+**All three CS73 closure criteria satisfied:**
+1. ✅ `Initial DB status:` log line indicates whether DB was paused — captured (`Paused`).
+2. ✅ `wake took ~30-60s` — captured (58s).
+3. ✅ Subsequent `Run DB migrations` step succeeded on the first attempt.
+
+**Important note:** the deploy itself was rolled back due to a separate `/api/features` cold-start failure on the new revision (NOT a CS73 issue — CS73 wake worked perfectly; the rollback fired because of a request-gate / boot-quiet-contract interaction on the new image that returned `503 retry-after:5` to the smoke probe consistently). Tracked under **CS79** (newly filed) for investigation. CS73 is independently complete.
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72
 **Origin:** CS52-11 prod deploy ceremony (yoga-gwn-c5, 2026-05-03). Recurring failure observed; promoted to a dedicated CS at user direction (*"the deployment should be fixed to properly handle a cold db, this shouldn't be on the operator to handle"*).

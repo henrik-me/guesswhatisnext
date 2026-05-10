@@ -1,9 +1,18 @@
 # CS66 — PR Body And Commit Trailer Gates
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done — closed out 2026-05-01 by `yoga-gwn` after PR [#324](https://github.com/henrik-me/guesswhatisnext/pull/324) merged and the `PR body process gate` + `Commit trailer gate` checks were promoted to **required** in `main` branch protection.
 **Origin:** 2026-04-29 conversation (omni-gwn) about enforcing the sub-agent review process. The Sub-Agent Checklist requires a local GPT-5.5 review and a `## Local Review` log in the PR body, but nothing mechanical verifies the orchestrator pasted the checklist or the sub-agent ran the review. Hand-written prompts can drift; this CS catches the drift via CI.
 **Depends on:** CS64 (uses the dep/parallelism conventions in the new gate's PR-body schema docs)
 **Parallel-safe with:** CS65, CS67
+
+## Outcome
+
+- **CS66-1a..1e** ([PR #315](https://github.com/henrik-me/guesswhatisnext/pull/315)) shipped the initial `scripts/check-pr-body.js` + `scripts/check-commit-trailers.js` CI gates as non-required status checks.
+- **CS66-2a** ([PR #323](https://github.com/henrik-me/guesswhatisnext/pull/323)) eliminated the false-positive patterns surfaced by the 2026-05-01 audit (40-PR retroactive run): inline clarification text inside `not applicable (<category>)`, hybrid `+` categories, and operational `N/A` synonyms now pass when the file-classification predicates support them. Re-audit cut post-CS66-era false positives from 7 findings to 2 (both legitimate by-design table-required rejections).
+- **CS66-3** ([PR #324](https://github.com/henrik-me/guesswhatisnext/pull/324)) added direct doc-anchor links to every failure message, hardened the canonical specs in `REVIEWS.md` § Local Review Loop, `OPERATIONS.md` § Cold-start container validation, and `CONVENTIONS.md` § 4a Telemetry & Observability + § 5 Git Workflow, and added a single Quick Reference bullet to `INSTRUCTIONS.md` so future agents land on the spec on the first try.
+- Branch-protection update (orchestrator action 2026-05-01): added `PR body process gate` and `Commit trailer gate` to the required contexts on `main`. Verified via `gh api repos/henrik-me/guesswhatisnext/branches/main/protection/required_status_checks`.
+
+The original CS66-2 ≥1-week soak was cut short on user direction ("enforce these rules now") after the false-positive cleanup landed and the re-audit confirmed the gate was safe.
 
 ## Problem
 
@@ -32,7 +41,7 @@ Symptoms today:
 | CS66-1e | ✅ Done in PR [#315](https://github.com/henrik-me/guesswhatisnext/pull/315): Add `.github/workflows/pr-checks.yml` jobs that run both gates on `pull_request: [opened, synchronize, edited]`. The PR-body check runs from the action context; the commit-trailer check uses `actions/checkout@v4` with `fetch-depth: 0`. | parallel after 1a + 1b exist |
 | CS66-2 | ✅ Done — soak window cut short by user direction on 2026-05-01 ("enforce these rules now"). Soak findings cataloged in CS66-2a (PR #323) and used to drive the failure-message + docs improvements in CS66-3. | sequential after 1* |
 | CS66-2a | ✅ Done in PR [#323](https://github.com/henrik-me/guesswhatisnext/pull/323): Tighten `scripts/check-pr-body.js` to eliminate the false-positive patterns surfaced by the 2026-05-01 audit: inline clarification text in operational `not applicable (<category>)` markers, hybrid `+` category markers, and operational `N/A` synonyms now pass when the changed-file predicates support them. Local Review remains table-required (FP-3 is by design). Failure messages now include canonical templates, and fixture tests cover each new accept/reject case. | parallel within CS66-2 |
-| CS66-3 | 🔄 In Progress — sub-agent landing PR [#324](https://github.com/henrik-me/guesswhatisnext/pull/324); orchestrator will flip to required after merge. Promote both checks to **required** status checks in repository branch protection. Update CONVENTIONS.md and OPERATIONS.md to document the gate (with PR-body schema example), ensure each PR-body section's canonical spec is unambiguous, and link the failure messages directly to the docs so authors can self-fix without ping-pong. | sequential after 2 |
+| CS66-3 | ✅ Done in PR [#324](https://github.com/henrik-me/guesswhatisnext/pull/324) + branch-protection update 2026-05-01: failure messages now embed `See: <doc#anchor>` links, canonical specs hardened in REVIEWS.md / OPERATIONS.md / CONVENTIONS.md, single Quick Reference bullet added to INSTRUCTIONS.md, both CS66 checks promoted to required status checks on `main`. | sequential after 2 |
 
 ## Acceptance
 
