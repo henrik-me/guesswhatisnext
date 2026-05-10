@@ -1016,7 +1016,7 @@ For comparison, the originally-recorded 8-day total at 2026-05-02T18:30Z was **1
 | Requests/day | 0..505 | 3..430 |
 | RestartCount | 0 | 0 |
 
-> Day 7 staging running max bumped UsageNanoCores up to ≈ 2.4 M (the original mid-day capture had no data because Replicas=0 at capture time; staging woke after the original capture). Replicas=0 days now correctly identified as Days 8, 9, 14 (Day 7 was 0 at the original mid-day capture but rose to 1 by close).
+> Day 7 staging running max bumped UsageNanoCores up to ≈ 2.4 M (the original mid-day capture had no data because Replicas=0 at capture time; staging woke after the original capture). Replicas=0 full-UTC-day details are covered in the [+14d roll-up](#14d-midpoint-roll-up-cs60-3o).
 
 #### CS60-2 close interpretation (refreshed 2026-05-10)
 
