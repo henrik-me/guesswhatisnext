@@ -1085,7 +1085,7 @@ For comparison, the originally-recorded 8-day total at 2026-05-02T18:30Z was **1
 
 | env | Days 0-14 AI ingest (MB) | per-day avg | trend vs Days 0-7 |
 |---|---:|---:|---|
-| prod | **37.57** | 2.50 | **Rising** — Days 0-7 avg 1.59 MB/day vs Days 8-14 avg 3.55 MB/day (~2.2x). Driven by higher prod traffic on Days 8/12/13 (495/542/480 requests) and the AppExceptions/AppTraces appearing on Days 8/13. |
+| prod | **37.56** | 2.50 | **Rising** — Days 0-7 avg 1.59 MB/day vs Days 8-14 avg 3.55 MB/day (~2.2x). Driven by higher prod traffic on Days 8/12/13 (495/542/480 requests) and the AppExceptions/AppTraces appearing on Days 8/13. |
 | staging | **9.69** | 0.65 | **Falling** — Days 0-7 avg 1.16 MB/day vs Days 8-14 avg 0.06 MB/day (~95% drop). CS58 scale-to-zero is fully effective on the post-Day-7 segment; only Day 12 had a brief operator-driven spike (0.44 MB). |
 
 #### Workspace-wide ingest (15-day window)
@@ -1123,23 +1123,31 @@ Closed-day KQL `union withsource=Tbl * | where TimeGenerated >= datetime(2026-04
 
 ---
 
-### CS60-3 first-pass extrapolation (Day 7 — partial)
+### CS60-3 second-pass projection (Days 0-14 actuals)
 
-> **Status:** FIRST PASS — based on the 7-day trend (Days 0-7) only. The canonical CS60-3 +30d measurement still lands at 2026-05-25 via daily ticks CS60-3i..CS60-3{Day30}. This section is a **forecast**, not a measurement; it is intentionally separated from the Day 5/6/7 daily rows so a future operator does not confuse projected with actual.
+> **Status:** SECOND PASS — refreshed 2026-05-10T16:40Z by yoga-gwn (sub-agent dispatched for CS60-3 backfill) using closed-day Cost Management data for Days 0-14 (15 calendar days). Replaces the original CS60-3 first-pass extrapolation built from the Days 0-7 partial-day capture. The canonical CS60-3 +30d measurement still lands at 2026-05-25 via daily ticks Day 15..Day 30; this section is a **second-pass forecast**, not the final measurement.
 >
-> Captured 2026-05-02T18:30Z by yoga-gwn under explicit user direction to "show an extrapolation following the past 7 days trend".
+> Original first-pass projections (kept for audit context — see [+7d cost-watch close-out](#7d-cost-watch-close-out-cs60-2h) for the closed-day refresh of those days):
+>
+> - First-pass naive ingest: 100.8 MB/month (3.36 MB/day × 30).
+> - First-pass steady-state ingest: 53.6 MB/month (1.79 MB/day × 30, dropping Day 2 spike).
+> - First-pass worst-case ingest: 111.1 MB/month (steady-state + Day 2 spike weekly).
+> - First-pass naive cost: 56.7 DKK/month (≈$8.10).
+> - First-pass steady-state cost: 65.1 DKK/month (≈$9.30, Days 1-5 closed proxy).
+> - First-pass conservative cost: 70-72 DKK/month (≈$10.00-$10.30).
 
-#### Methodology
+#### Methodology (second pass)
 
-1. Use the workspace-direct per-day ingest sum for the 8-calendar-day window 2026-04-25..2026-05-02 (Day 0 baseline through Day 7 partial).
-2. Compute three projections:
-   - **Naive average** — mean of all 8 daily values projected linearly to 30 days.
-   - **Steady-state (drop Day 0 anomaly + Day 2 spike)** — mean of remaining days projected linearly. This is the most likely "no incidents" forecast.
-   - **Worst-case (Day 2 recurs every week)** — mean of remaining days + 4× Day 2 anomaly per 30-day period. Conservative upper bound.
-3. Compare against 5 GB / month App Insights free tier (5120 MB).
-4. For cost: same three projections applied to the recorded daily DKK totals, with explicit lag-correction warning for Days 4/6/7.
+1. Use the workspace-direct per-day ingest for the 15-calendar-day window 2026-04-25..2026-05-09 (Day 0 baseline through Day 14, all closed UTC days).
+2. Compute four projections:
+   - **Naive average** — mean of all 15 daily values × 30 days.
+   - **Steady-state (Days 10-14 only, post-CM-gap)** — mean of the most recent 5 closed days where both Container Apps cost and ingest are present and behaving normally. Best forward-looking proxy.
+   - **Lag-corrected (fill Days 6-9 CM gap with Day 5 prod baseline)** — replace each gap-day's missing prod compute with 2.48 DKK/day, then average. Best estimate of "what the +14d cost actually was."
+   - **Worst-case (Day 8 spike recurs weekly)** — steady-state + 4× Day 8 workspace-wide ingest (8.29 MB) per 30-day period.
+3. Compare ingest against 5 GB / month App Insights free tier (5120 MB).
+4. For cost, same scenarios applied to closed-day daily DKK totals.
 
-#### Per-day workspace ingest (8 days, MB)
+#### Per-day workspace-wide ingest (15 days, MB)
 
 | Day | Ingest (MB) | Notes |
 |---|---:|---|
@@ -1149,37 +1157,59 @@ Closed-day KQL `union withsource=Tbl * | where TimeGenerated >= datetime(2026-04
 | Day 3 — 2026-04-28 | 2.52 | Steady. |
 | Day 4 — 2026-04-29 | 2.20 | Steady. |
 | Day 5 — 2026-04-30 | 2.21 | Steady. |
-| Day 6 — 2026-05-01 | 0.90 | Steady. |
-| Day 7 — 2026-05-02 | 1.94 | Partial UTC day (~75% closed); already on the steady-state trend. |
-| **8-day total** | **26.88 MB** | |
+| Day 6 — 2026-05-01 | 0.90 | Steady; CM compute-meter gap day (no impact on ingest). |
+| Day 7 — 2026-05-02 | 5.24 | Closed-day re-pull (was 1.94 partial). CM compute-meter gap. |
+| Day 8 — 2026-05-03 | **8.29** | Highest single-day; 8,990 prod AppDependencies + 48 prod AppExceptions; replicas peaked at 3. CM compute-meter gap. |
+| Day 9 — 2026-05-04 | 0.21 | CM compute-meter gap. |
+| Day 10 — 2026-05-05 | 0.21 | First post-gap day; CM compute meters resume normally. |
+| Day 11 — 2026-05-06 | 1.47 | Steady; prod replicas peaked at 2. |
+| Day 12 — 2026-05-07 | 6.82 | Steady; brief staging activity (522 deps, 50 requests); prod replicas peaked at 2. |
+| Day 13 — 2026-05-08 | **7.14** | 68 prod exceptions (highest single-day) + first AppTraces row of window. |
+| Day 14 — 2026-05-09 | 7.00 | Steady. |
+| **15-day total** | **61.32 MB** | _(closed-day workspace-wide, includes ContainerAppConsoleLogs_CL 13.56 MB + AppDependencies 43.19 MB + others)._ |
 
-#### 30-day ingest projections vs 5 GB free tier
+#### 30-day ingest projections vs 5 GB free tier (refreshed)
 
-| Scenario | Daily avg | 30-day projection | % of 5 GB free tier | Headroom |
-|---|---:|---:|---:|---:|
-| Naive (all 8 days) | 3.36 MB/day | **100.8 MB/month** | 1.97 % | 5019 MB |
-| Steady-state (drop Day 2 spike) | 1.79 MB/day | **53.6 MB/month** | 1.05 % | 5066 MB |
-| Worst-case (Day 2 recurs weekly: +4 spikes / 30d) | (1.79 × 30) + (14.37 × 4) = 53.6 + 57.5 | **111.1 MB/month** | 2.17 % | 5009 MB |
+| Scenario | Daily avg | 30-day projection | % of 5 GB free tier | Headroom | vs first pass |
+|---|---:|---:|---:|---:|---|
+| Naive (all 15 days) | 4.09 MB/day | **122.7 MB/month** | 2.40 % | 4997 MB | +21.9 MB vs first-pass naive (100.8 MB) |
+| Steady-state (Days 10-14 only) | 4.53 MB/day | **135.8 MB/month** | 2.65 % | 4984 MB | +82.2 MB vs first-pass steady-state (53.6 MB) — first pass under-estimated because CS58 was new and prod traffic was lower in Days 0-5 |
+| Lag-corrected naive (gap days unchanged for ingest) | 4.09 MB/day | **122.7 MB/month** | 2.40 % | 4997 MB | (CM gap is cost-only; ingest meters are unaffected) |
+| Worst-case (Day 8 spike recurs weekly: +4 × 8.29 MB / 30d) | (4.53 × 30) + (8.29 × 4) = 135.8 + 33.2 | **169.0 MB/month** | 3.30 % | 4951 MB | +57.9 MB vs first-pass worst-case (111.1 MB) |
 
-> **Conclusion (provisional, must be re-confirmed at CS60-3 Day 30):** even under the worst-case assumption that the Day 2 spike recurs weekly, the 30-day workspace ingest stays under 2.2 % of the 5 GB free tier. The free-tier-headroom risk that CS54-9 carved out as the gating input for CS60-4 / CS60-5 / CS60-6 dispositions is **not material** at current traffic levels.
+> **Conclusion:** even under the second-pass worst-case (Day 8 spike weekly), 30-day workspace ingest lands at ≈ 3.2 % of the 5 GB free tier — well within the "free-tier headroom not material" disposition. The first-pass steady-state under-estimated by ~80 MB but the policy conclusion is unchanged: **>4 GB/month margin under every observed scenario.** CS54-9's "wait for CS60-3 to decide" gating input for CS60-4/5/6 is empirically resolved.
 
-#### 30-day cost projections
+#### 30-day cost projections (refreshed with closed-day data)
 
-| Scenario | Daily avg | 30-day projection | Notes |
-|---|---:|---:|---|
-| Recorded as-is (15.11 DKK / 8 days) | 1.89 DKK/day | **56.7 DKK/month** (≈$8.10 USD) | Under-counts Days 4/6/7 by ≥3-5 DKK aggregate. |
-| Steady-state (Days 1-5 only) | 2.17 DKK/day | **65.1 DKK/month** (≈$9.30 USD) | Best estimate; excludes Day 0 anomaly and Days 6/7 lag-undercount. |
-| Conservative (steady-state + 1 Day 0-class anomaly per 30d) | n/a | **≈ 70-72 DKK/month** (≈$10.00-$10.30 USD) | Adds 4.24 DKK once per month for a CS58-style scale-event or large verification burst. |
+| Scenario | Daily avg | 30-day projection | Notes | vs first pass |
+|---|---:|---:|---|---|
+| Naive recorded (30.51 DKK / 15 days) | 2.03 DKK/day | **61.0 DKK/month** (≈$8.71 USD) | Under-counts by Days 6-9 CM gap. | +4.3 DKK vs first-pass naive (56.7) |
+| Lag-corrected (Days 6-9 filled with Day 5 baseline 2.48/day) | 2.69 DKK/day | **80.8 DKK/month** (≈$11.55 USD) | Best estimate of actual +14d cost. | +24.1 DKK vs first-pass naive |
+| Steady-state (Days 10-14 only, post-gap) | 2.52 DKK/day | **75.7 DKK/month** (≈$10.81 USD) | Best forward-looking proxy. | +10.6 DKK vs first-pass steady-state (65.1) |
+| Conservative (steady-state + 1 Day 0-class anomaly per 30d) | n/a | **≈ 80-82 DKK/month** (≈$11.45-$11.70 USD) | Adds 4.25 DKK once per month for a CS58-style scale-event or large verification burst. | +10 DKK vs first-pass conservative (70-72) |
 
-> **Cost composition reminder:** virtually 100 % of these DKK figures are `gwn-production` Container Apps compute (≈ 60 % idle vCPU + memory, ≈ 40 % active when there's traffic). AI ingest cost is sub-0.05 DKK/day in every steady-state day. CS60-3's monetary outcome is overwhelmingly a function of `gwn-production` baseline replicas, not of telemetry policy.
+> **What changed vs first-pass:** the +20-25% cost upward revision came mostly from prod traffic rising in Days 8-14 (3.55 MB/day AI ingest vs 1.59 MB/day in Days 0-7), bumping `gwn-production` Active Usage meters slightly higher when CM was emitting them. **Cost composition is unchanged:** virtually 100% is `gwn-production` Container Apps compute. AI ingest cost remains sub-0.05 DKK/day on every day.
+
+#### Days 6-9 CM compute-meter gap — projection-side handling
+
+Cost Management has not emitted `Standard *Idle/Active Usage` meters for Days 6-9 (2026-05-01..2026-05-04) for either Container App. See [+14d roll-up § Cost Management compute-meter gap](#14d-midpoint-roll-up-cs60-3o) for the cross-checks performed and recommended follow-up.
+
+For the 30-day projection, the **lag-corrected scenario (80.8 DKK/month)** is the most defensible figure to cite externally because:
+
+1. Container Apps platform metrics confirm both apps were running on Days 6-9 at typical replica/request shapes.
+2. Days 5 and 10 (immediately bracketing the gap) show normal compute meters at ≈ 2.48 DKK/day prod baseline.
+3. Filling Days 6-9 with Day 5 baseline gives 4 × 2.48 = 9.9 DKK retro-fill, lifting 15-day total from 30.51 → 40.4 DKK.
+
+If CM eventually retro-fills the gap (recommended check: re-pull at 2026-05-25 alongside the +30d final measurement), the lag-corrected projection should land within ±5 DKK of whatever CM emits.
 
 #### Sensitivity check — what would change the picture?
 
-- **A real production incident** with prolonged exception storms or 100×-amplified traffic. Day 2's 14.37 MB came from a known-cause CS61/CS52 burst + staging exception storm; if a real prod incident produced a similar spike for 24 h on `gwn-production`, daily ingest could briefly hit 30-50 MB. Even then, 30-day total stays well under 1 GB.
-- **Enabling additional auto-instrumentations** (CS60-4 Gap 1 widening, or future logs SDK in CS60-5). Today's 17.32 MB / 8 days for AppDependencies is about 2.2 MB/day; doubling that via filter widening still leaves ≥ 4.5 GB free-tier headroom monthly.
-- **Container Apps replica scaling** — if `gwn-production` were ever forced above `replicaCount: 1` for sustained traffic, compute cost scales linearly and dwarfs telemetry. Telemetry policy is not the lever to pull on cost.
+- **A real production incident** with prolonged exception storms or 100×-amplified traffic. Day 2's 14.37 MB and Day 8's 8.29 MB both came from known-cause bursts; if a real prod incident produced a similar 24h spike on `gwn-production`, daily ingest could hit 30-50 MB. Even then, 30-day total stays well under 1 GB.
+- **Enabling additional auto-instrumentations** (CS60-4 Gap 1 widening, or future logs SDK in CS60-5). Days 0-14 AppDependencies = 43.19 MB at 2.88 MB/day; doubling that via filter widening still leaves ≥ 4.7 GB free-tier headroom monthly.
+- **Container Apps replica scaling** — if `gwn-production` were ever forced above `replicaCount: 1` for sustained traffic, compute cost scales linearly and dwarfs telemetry. Day 8's brief replicas=3 burst shows the autoscaler engages cleanly without runaway cost (Day 8 prod cost was inside the CM gap so we can't isolate the burst contribution; Day 11/12/13 each peaked at replicas=2 and cost 2.51-2.52 DKK/day, indistinguishable from baseline). Telemetry policy is not the lever to pull on cost.
+- **Days 6-9 CM gap retro-fills** — would shift the naive projection from 61.0 → ~80 DKK/month, matching the lag-corrected scenario. No policy change either way.
 
-> **Bottom line for CS60-3 / CS60-4 / CS60-5 / CS60-6 dispositions (provisional):** under every reasonable scenario the 5 GB free tier is comfortably preserved. CS54-9's "wait for CS60-3 to decide" framing for CS60-4 / CS60-5 / CS60-6 can move forward to a recommendation now, with final confirmation at the actual +30d measurement. See the CS60-4 disposition note for what this implies for Gap 1.
+> **Bottom line for CS60-3 / CS60-4 / CS60-5 / CS60-6 dispositions:** with 14 days of actuals, every projection scenario stays under ≈$12/month and 5 GB free-tier ingest stays under ≈3.2 % utilisation. CS54-9's "wait for CS60-3 to decide" framing can advance to a final recommendation at the +30d marker (2026-05-25). CS60-4's prod side is empirically resolved (43.19 MB AppDependencies in 15 days = 0.84% of free tier); staging side still owes a deliberate ≥20-leaderboard-request probe (Day 7 closed-day data + Day 12 incidental activity are positive signals but not controlled verification). CS60-5 (Pino → AI traces) and CS60-6 (exceptions table) gating input is resolved — both can decide on logic-clarity / operator-pain criteria rather than cost.
 
 ---
 
