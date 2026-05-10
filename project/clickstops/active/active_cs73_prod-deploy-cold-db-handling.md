@@ -1,6 +1,7 @@
 # CS73 — Prod-Deploy Cold DB Handling
 
-**Status:** ⬜ Planned
+**Status:** 🔄 In Progress
+**Claimed:** yoga-gwn 2026-05-09T23:55Z (branch `cs73-wake-db`)
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72
 **Origin:** CS52-11 prod deploy ceremony (yoga-gwn-c5, 2026-05-03). Recurring failure observed; promoted to a dedicated CS at user direction (*"the deployment should be fixed to properly handle a cold db, this shouldn't be on the operator to handle"*).
@@ -37,8 +38,8 @@ Eliminate the cold-pause failure mode from `prod-deploy.yml` so a routine prod d
 
 ## Out of scope
 
-- App-level cold-DB fallback for *user* requests — that's [CS56](planned_cs56_server-cache-and-cold-db-fallback.md)'s concern (cache + 503 Retry-After UX).
-- Boot-init race for tables created by recent migrations — that's [CS63](planned_cs63_game-configs-boot-race.md)'s concern (in-process boot-quiet contract).
+- App-level cold-DB fallback for *user* requests — that's [CS56](../planned/planned_cs56_server-cache-and-cold-db-fallback.md)'s concern (cache + 503 Retry-After UX).
+- Boot-init race for tables created by recent migrations — that's [CS63](../planned/planned_cs63_game-configs-boot-race.md)'s concern (in-process boot-quiet contract).
 - The same hazard hypothetically applying to staging — staging uses container-local SQLite, no Azure SQL, so this CS is prod-only.
 - Telemetry of cold-pause vs warm-deploy timing — informational, not blocking; could be a follow-up if anyone wants the data.
 
@@ -131,4 +132,4 @@ Closure (move to `done/`) requires both PR merge AND the runtime validation evid
 - Related learning: [LEARNINGS.md § Azure SQL serverless cold-pause vs prod-deploy migration timeout (CS52-11)](../../../LEARNINGS.md).
 - Workflow: [`.github/workflows/prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) (Run DB migrations step).
 - Migration runner: [`scripts/migrate.js`](../../../scripts/migrate.js).
-- Adjacent (no overlap): [CS56](planned_cs56_server-cache-and-cold-db-fallback.md) (app-level cold-DB fallback for user requests), [CS63](planned_cs63_game-configs-boot-race.md) (boot-init race for newly-created tables).
+- Adjacent (no overlap): [CS56](../planned/planned_cs56_server-cache-and-cold-db-fallback.md) (app-level cold-DB fallback for user requests), [CS63](../planned/planned_cs63_game-configs-boot-race.md) (boot-init race for newly-created tables).

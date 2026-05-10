@@ -72,6 +72,6 @@ After this change:
 ## Cross-references
 
 - Origin: [CS52-11 closeout outcome section](../done/done_cs52_server-authoritative-scoring.md) (drift investigation that surfaced the gap).
-- Related: [CS73](planned_cs73_prod-deploy-cold-db-handling.md) (also a prod-deploy-workflow UX/robustness fix, parallel-safe with CS74; touches same workflow file but different concerns — CS73 adds a wake step before migration, CS74 adds a `run-name` declaration at the top of the file; rebase conflicts unlikely).
+- Related: [CS73](../active/active_cs73_prod-deploy-cold-db-handling.md) (also a prod-deploy-workflow UX/robustness fix, parallel-safe with CS74; touches same workflow file but different concerns — CS73 adds a wake step before migration, CS74 adds a `run-name` declaration at the top of the file; rebase conflicts unlikely).
 - Workflow: [`.github/workflows/prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) (top-level metadata).
 - GitHub docs: [`run-name` workflow syntax](https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#run-name).
