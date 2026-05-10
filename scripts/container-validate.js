@@ -894,6 +894,11 @@ async function probeFreshColdInitSmoke() {
   //
   //    The image only ships server/, public/, and scripts/build-sw.js (see
   //    Dockerfile), so we `docker cp` the seeder in before exec'ing it.
+  //
+  //    SECURITY: the password is passed via the spawned process env (and
+  //    docker compose's `-e VAR` pass-through, which inherits from the
+  //    caller env without echoing the value), NOT interpolated into the
+  //    command string — `compose()` logs the command verbatim.
   const SMOKE_USER_PASSWORD = process.env.SMOKE_USER_PASSWORD || 'cs79-cold-init-smoke-pw';
   log('Seeding gwn-smoke-bot user (idempotent) inside the app container…');
   const containerName = `${PROJECT_NAME}-app-1`;
@@ -906,7 +911,8 @@ async function probeFreshColdInitSmoke() {
     return false;
   }
   const seed = compose(
-    `exec -T -e SMOKE_USER_PASSWORD=${SMOKE_USER_PASSWORD} app node scripts/setup-smoke-user.js`,
+    'exec -T -e SMOKE_USER_PASSWORD app node scripts/setup-smoke-user.js',
+    { env: { SMOKE_USER_PASSWORD } },
   );
   if (seed.status !== 0) {
     logErr('FAIL: setup-smoke-user.js failed inside app container.');
@@ -934,6 +940,13 @@ async function probeFreshColdInitSmoke() {
   //    and the gate fires runInit() — within budget /api/features returns
   //    200 and the rest of the smoke flow proceeds. WITHOUT the fix, step
   //    (b) returns 503 forever and smoke exits non-zero.
+  //
+  //    SYSTEM_API_KEY MUST match the literal value the app container is
+  //    booted with (`docker-compose.mssql.yml` SYSTEM_API_KEY:
+  //    `test-system-api-key`). Reading it from process.env would let a
+  //    developer's exported staging/prod key reach step (f) /api/health and
+  //    fail with 401 even though the container is healthy. If the compose
+  //    file's value changes, update both sides together.
   const fqdn = HTTPS_PORT === '443' ? 'localhost' : `localhost:${HTTPS_PORT}`;
   log(`Invoking node scripts/smoke.js ${fqdn} (SMOKE_INSECURE=1)…`);
   const smoke = spawnSync(`node scripts/smoke.js ${fqdn}`, {
@@ -944,11 +957,7 @@ async function probeFreshColdInitSmoke() {
       ...process.env,
       SMOKE_USER_PASSWORD,
       SMOKE_INSECURE: '1',
-      SYSTEM_API_KEY: process.env.SYSTEM_API_KEY || 'test-system-api-key',
-      // Tighten the cold-start budget so the cycle still completes inside
-      // the harness's overall runtime even on slow CI runners. WARMUP_CAP_MS
-      // and COLD_START_MS sum into the per-step budget; defaults are 30s
-      // each = up to 90s wall-clock per the smoke runner.
+      SYSTEM_API_KEY: 'test-system-api-key',
     },
   });
   if (smoke.status !== 0) {
