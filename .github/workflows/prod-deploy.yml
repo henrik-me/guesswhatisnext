@@ -235,6 +235,38 @@ jobs:
             echo "OLD_REVISION_FQDN=$OLD_FQDN" >> "$GITHUB_ENV"
             echo "Captured OLD revision: $OLD_NAME ($OLD_FQDN)"
 
+      # CS73: explicitly wake `gwn-production` (Azure SQL serverless,
+      # autoPauseDelay=60min) before the migration step. The runtime mssql
+      # adapter's 5s connect timeout (CS53-3 / CS53-6) is wrong for a cold
+      # serverless DB whose resume takes ~30–60s; `scripts/wake-db.js`
+      # bypasses the adapter entirely and uses its own per-attempt timeout
+      # + bounded retry budget. After this step, the DB is warm and the
+      # subsequent `Run DB migrations` step succeeds on the first attempt.
+      #
+      # The status report is in a separate step using the pinned azure/cli
+      # action (consistent with the rest of the workflow) so the `az` CLI
+      # version isn't sensitive to runner-image churn.
+      - name: Report DB status before wake (CS73)
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            DBSTATUS=$(az sql db show --name gwn-production --resource-group gwn-rg --server gwn-sqldb --query "status" -o tsv)
+            echo "Initial DB status: $DBSTATUS"
+
+      - name: Wake Azure SQL gwn-production (CS73)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -e
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::secrets.DATABASE_URL is unset; cannot wake prod DB."
+            exit 1
+          fi
+          START=$(date +%s)
+          node scripts/wake-db.js
+          ELAPSED=$(( $(date +%s) - START ))
+          echo "DB ready for migration step (wake took ${ELAPSED}s)"
+
       - name: Run DB migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
