@@ -479,6 +479,13 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
  * Fail-soft: any failure logs a warning and returns; never throws.
  *
  * Lazy-loads `mssql` so the module isn't required when DATABASE_URL is unset.
+ *
+ * Scope guard: the DELETE is parameterized by BOTH `id` AND a subquery on
+ * `users.username = 'gwn-smoke-bot'`, so even a misrouted/compromised
+ * `submittedId` cannot delete a non-smoke-bot user's row. This honors the
+ * CS81 user-direction constraint that "no other [user's] data can be
+ * deleted". If the smoke bot user is missing for any reason, the DELETE is
+ * a no-op (rowsAffected=0) rather than a permissive wildcard.
  */
 async function cleanupSmokeRow(id) {
   const connectionString = process.env.DATABASE_URL;
@@ -509,10 +516,16 @@ async function cleanupSmokeRow(id) {
     };
     pool = new sql.ConnectionPool(config);
     await pool.connect();
-    await pool.request()
+    const res = await pool.request()
       .input('id', sql.Int, Number(id))
-      .query('DELETE FROM scores WHERE id = @id');
-    info(`cleanup: deleted smoke row id=${id}`);
+      .input('username', sql.NVarChar, 'gwn-smoke-bot')
+      .query('DELETE FROM scores WHERE id = @id AND user_id = (SELECT id FROM users WHERE username = @username)');
+    const affected = Array.isArray(res?.rowsAffected) ? res.rowsAffected[0] : null;
+    if (affected === 0) {
+      info(`[smoke] WARN: cleanup deleted 0 rows — id=${id} either already gone or not owned by gwn-smoke-bot`);
+    } else {
+      info(`cleanup: deleted smoke row id=${id} (rowsAffected=${affected})`);
+    }
   } catch (err) {
     info(`[smoke] WARN: cleanup failed — id=${id} may persist (${err && err.message ? err.message : err})`);
   } finally {

@@ -20,7 +20,7 @@ on:
       confirm:
         description: 'Type the target environment name (production or staging) to confirm'
         required: true
-      dry-run:
+      dry_run:
         description: 'Count without deleting'
         required: false
         type: boolean
@@ -60,5 +60,5 @@ jobs:
       - name: Run cleanup
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          DRY_RUN: ${{ inputs.dry-run && '1' || '' }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
         run: node scripts/cleanup-test-data.js
