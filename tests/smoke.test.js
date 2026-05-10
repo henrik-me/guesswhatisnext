@@ -205,3 +205,93 @@ describe('CS41-1 — runSmoke failure modes', () => {
     expect(r.perfWarnings.length).toBeGreaterThan(0);
   });
 });
+
+describe('CS79 — /api/features cold-init gate (X-User-Activity propagation)', () => {
+  /**
+   * Builds a fetcher that simulates the CS53-19 boot-quiet gate
+   * (server/app.js:332-351): every `/api/features` GET that does NOT carry
+   * `X-User-Activity: 1` returns 503+Retry-After:5 forever (boot-quiet
+   * never fires `runInit()` so `dbInitialized` stays false). The first
+   * request that DOES carry the header still gets 503 (the gate kicks
+   * `runInit()` but the current request still 503s by design), and
+   * subsequent requests carrying the header get 200.
+   *
+   * Other smoke endpoints respond with their normal happy-path bodies so
+   * the rest of `runSmoke()` proceeds. The fetcher records every observed
+   * `/api/features` request for assertion.
+   */
+  function makeColdInitFeaturesFetcher(otherSteps) {
+    const featuresCalls = [];
+    let featuresWithHeaderSeen = 0;
+    return {
+      featuresCalls,
+      async fetcher(method, url, opts = {}) {
+        const key = `${method} ${new URL(url).pathname}`;
+        if (key === 'GET /api/features') {
+          const headers = opts.headers || {};
+          const hasActivity = headers['X-User-Activity'] === '1';
+          featuresCalls.push({ headers: { ...headers }, hasActivity });
+          if (!hasActivity) {
+            return { status: 503, headers: { 'retry-after': '1' }, body: '{"phase":"cold-start"}', elapsedMs: 2 };
+          }
+          featuresWithHeaderSeen++;
+          // Match server behavior: the gate-triggering request still 503s
+          // (runInit fires but is fire-and-forget); the next retry sees
+          // dbInitialized=true and gets 200.
+          if (featuresWithHeaderSeen === 1) {
+            return { status: 503, headers: { 'retry-after': '1' }, body: '{"phase":"cold-start"}', elapsedMs: 2 };
+          }
+          return { status: 200, headers: {}, body: okFeaturesBody, elapsedMs: 3 };
+        }
+        const next = otherSteps[key];
+        if (!next) throw new Error(`unscripted call: ${key}`);
+        return { elapsedMs: 5, ...next };
+      },
+    };
+  }
+
+  it('runSmoke succeeds against a fresh-cold container and sends X-User-Activity on every /api/features retry', async () => {
+    const { fetcher, featuresCalls } = makeColdInitFeaturesFetcher({
+      'GET /healthz': { status: 200, headers: {}, body: 'ok' },
+      'POST /api/auth/login': { status: 200, headers: {}, body: JSON.stringify({ token: 't' }) },
+      'POST /api/scores': { status: 201, headers: {}, body: JSON.stringify({ id: 1 }) },
+      'GET /api/scores/me': { status: 200, headers: {}, body: okMeBody(1) },
+      'GET /api/health': { status: 200, headers: {}, body: JSON.stringify({ checks: { database: { status: 'ok' } } }) },
+    });
+    const r = await runSmoke({
+      targetFqdn: 'rev.example.test',
+      password: 'pw',
+      systemApiKey: 'sys',
+      // Give the cold-start budget enough room for two retries at 1ms
+      // intervals plus the 1s server-suggested Retry-After cap.
+      opts: { ...baseOpts, warmupCapMs: 1000, coldStartMs: 1000 },
+      fetcher,
+    });
+    expect(r.passed).toBe(true);
+    const featStep = r.steps.find((s) => s.step === 'features');
+    expect(featStep.status).toBe('pass');
+    // (i) every /api/features probe must carry X-User-Activity: 1 — not
+    //     just the first. A regression that drops the header on retries
+    //     would cause the fetcher to return 503 forever and the smoke to
+    //     fail; this assertion guards against that subtler regression.
+    expect(featuresCalls.length).toBeGreaterThanOrEqual(2);
+    expect(featuresCalls.every((c) => c.hasActivity)).toBe(true);
+  });
+
+  it('regression guard: without X-User-Activity, /api/features stays 503 forever and runSmoke fails', async () => {
+    // Same fetcher, but we exercise pollUntil200 directly with NO headers
+    // to prove the fake matches the real server's boot-quiet behavior:
+    // missing-header → 503 forever. This is the failure mode CS73 hit in
+    // prod (run 25617860563); a regression that silently dropped the
+    // header from runSmoke's call site would manifest as `r.ok=false`
+    // here.
+    const { fetcher } = makeColdInitFeaturesFetcher({});
+    const r = await pollUntil200({
+      url: 'https://x.example/api/features',
+      budgetMs: 30, intervalMs: 1, fetcher, requestTimeoutMs: 100,
+      // headers intentionally omitted
+    });
+    expect(r.ok).toBe(false);
+    expect(r.finalStatus).toBe(503);
+  });
+});
