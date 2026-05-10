@@ -487,18 +487,20 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
  * deleted". If the smoke bot user is missing for any reason, the DELETE is
  * a no-op (rowsAffected=0) rather than a permissive wildcard.
  */
-async function cleanupSmokeRow(id) {
-  const connectionString = process.env.DATABASE_URL;
+async function cleanupSmokeRow(id, deps = {}) {
+  const connectionString = deps.connectionString ?? process.env.DATABASE_URL;
   if (!connectionString || String(connectionString).trim() === '') {
     info(`cleanup: DATABASE_URL unset — skipping self-cleanup for id=${id}`);
     return;
   }
-  let sql;
-  try {
-    sql = require('mssql');
-  } catch (err) {
-    info(`[smoke] WARN: cleanup failed — id=${id} may persist (mssql require failed: ${err.message})`);
-    return;
+  let sql = deps.sql;
+  if (!sql) {
+    try {
+      sql = require('mssql');
+    } catch (err) {
+      info(`[smoke] WARN: cleanup failed — id=${id} may persist (mssql require failed: ${err.message})`);
+      return;
+    }
   }
   let pool;
   try {

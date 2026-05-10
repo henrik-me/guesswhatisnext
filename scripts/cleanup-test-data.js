@@ -42,6 +42,7 @@
 'use strict';
 
 const defaultSql = require('mssql');
+const { wakeDb } = require('./wake-db.js');
 
 const SMOKE_USER = 'gwn-smoke-bot';
 const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
@@ -50,12 +51,20 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
  * Delete `gwn-smoke-bot`'s accumulated score rows. Idempotent: a re-run after
  * a successful cleanup deletes 0 rows.
  *
+ * Wakes the DB first via `scripts/wake-db.js` (Azure SQL serverless can take
+ * ~30–60s to resume after idle; without the wake step, a cold DB would
+ * intermittently fail this one-shot cleanup). The wake step is skipped when
+ * an explicit `deps.wake = false` is passed (used by tests).
+ *
  * @param {Object} [deps]
  * @param {Object} [deps.sql] - mssql module (injectable for tests).
  * @param {string} [deps.connectionString] - defaults to process.env.DATABASE_URL.
  * @param {boolean} [deps.dryRun] - count only, do not delete. Defaults to
  *   `process.env.DRY_RUN === '1'`.
  * @param {number} [deps.connectTimeoutMs=30_000] - per-connect timeout.
+ * @param {boolean|Function} [deps.wake] - if false, skip wake-db step;
+ *   if a function, call it instead of the default wakeDb (test seam).
+ *   Default: invoke wakeDb with the resolved sql + connection string.
  * @param {{ info: Function, error: Function }} [deps.log] - logger seam.
  * @returns {Promise<{ userId: number|null, beforeCount: number, afterCount: number, deleted: boolean }>}
  * @throws {Error} on validation failure, connection failure, query failure,
@@ -63,16 +72,31 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
  */
 async function cleanupTestData(deps = {}) {
   const sql = deps.sql || defaultSql;
+  const connectionStringExplicit = deps.connectionString !== undefined;
   const connectionString = deps.connectionString ?? process.env.DATABASE_URL;
   const dryRun = deps.dryRun ?? (process.env.DRY_RUN === '1');
   const connectTimeoutMs = deps.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
   const log = deps.log || { info: console.log, error: console.error };
 
   if (!connectionString || (typeof connectionString === 'string' && connectionString.trim() === '')) {
-    throw new Error('cleanup-test-data: DATABASE_URL is unset; nothing to connect to.');
+    const source = connectionStringExplicit ? 'connectionString argument' : 'DATABASE_URL env var';
+    throw new Error(`cleanup-test-data: connection string is empty (resolved from ${source}); nothing to connect to.`);
   }
   if (!Number.isFinite(connectTimeoutMs) || connectTimeoutMs <= 0) {
     throw new Error(`cleanup-test-data: connectTimeoutMs must be a positive number (got ${connectTimeoutMs}).`);
+  }
+
+  // Wake the DB first — Azure SQL serverless auto-pauses after idle and
+  // can take 30–60s to resume. Without this, a one-shot cleanup against
+  // a paused DB fails intermittently with transient connect errors.
+  // Reuses scripts/wake-db.js's retry/backoff (same boundary, same DI seam).
+  if (deps.wake !== false) {
+    const wakeFn = typeof deps.wake === 'function' ? deps.wake : wakeDb;
+    try {
+      await wakeFn({ sql, connectionString, log });
+    } catch (err) {
+      throw new Error(`cleanup-test-data: wake-db step failed: ${err && err.message ? err.message : err}`);
+    }
   }
 
   const baseConfig = sql.ConnectionPool.parseConnectionString(connectionString);

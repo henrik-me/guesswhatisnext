@@ -97,11 +97,42 @@ describe('scripts/cleanup-test-data.js', () => {
       const result = await cleanupTestData({
         sql: fake.sql,
         connectionString: 'Server=foo;Database=bar;',
+        wake: false,
         log,
       });
       expect(result).toEqual({ userId: 42, beforeCount: 17, afterCount: 0, deleted: true });
       expect(fake.queries.some((q) => /DELETE FROM scores/i.test(q))).toBe(true);
       expect(fake.close).toHaveBeenCalled();
+    });
+
+    it('invokes wake-db before opening the cleanup connection (Azure SQL serverless tolerance)', async () => {
+      const fake = makeFakeSql({ queryHandler: handlerForBotWithRows(1, 0) });
+      const wakeFn = vi.fn().mockResolvedValue(undefined);
+      await cleanupTestData({
+        sql: fake.sql,
+        connectionString: 'Server=foo;Database=bar;',
+        wake: wakeFn,
+        log: makeLog(),
+      });
+      expect(wakeFn).toHaveBeenCalledTimes(1);
+      const wakeArgs = wakeFn.mock.calls[0][0];
+      expect(wakeArgs.connectionString).toBe('Server=foo;Database=bar;');
+      expect(wakeArgs.sql).toBe(fake.sql);
+    });
+
+    it('surfaces wake-db failure as a wrapped error (cold DB unrecoverable)', async () => {
+      const fake = makeFakeSql({ queryHandler: handlerForBotWithRows(1, 0) });
+      const wakeFn = vi.fn().mockRejectedValue(new Error('budget exhausted'));
+      await expect(
+        cleanupTestData({
+          sql: fake.sql,
+          connectionString: 'Server=foo;Database=bar;',
+          wake: wakeFn,
+          log: makeLog(),
+        })
+      ).rejects.toThrow(/wake-db step failed.*budget exhausted/);
+      // No connection attempt after wake failure.
+      expect(fake.queries).toHaveLength(0);
     });
 
     it('is idempotent: when bot user is missing, exits cleanly with no DELETE', async () => {
@@ -115,6 +146,7 @@ describe('scripts/cleanup-test-data.js', () => {
       const result = await cleanupTestData({
         sql: fake.sql,
         connectionString: 'Server=foo;Database=bar;',
+        wake: false,
         log,
       });
       expect(result).toEqual({ userId: null, beforeCount: 0, afterCount: 0, deleted: false });
@@ -138,6 +170,7 @@ describe('scripts/cleanup-test-data.js', () => {
         sql: fake.sql,
         connectionString: 'Server=foo;Database=bar;',
         dryRun: true,
+        wake: false,
         log,
       });
       expect(result).toEqual({ userId: 7, beforeCount: 5, afterCount: 5, deleted: false });
@@ -150,6 +183,7 @@ describe('scripts/cleanup-test-data.js', () => {
       await cleanupTestData({
         sql: fake.sql,
         connectionString: 'Server=foo;Database=bar;',
+        wake: false,
         log: makeLog(),
       });
       // Every SQL string must reference @username or @userId — never a literal value.
@@ -162,27 +196,27 @@ describe('scripts/cleanup-test-data.js', () => {
       expect(idBindings.every((v) => v === 99)).toBe(true);
     });
 
-    it('throws when DATABASE_URL is unset', async () => {
+    it('throws when DATABASE_URL is unset (env source named in error message)', async () => {
       const prev = process.env.DATABASE_URL;
       delete process.env.DATABASE_URL;
       try {
         const fake = makeFakeSql();
         await expect(
-          cleanupTestData({ sql: fake.sql, log: makeLog() })
-        ).rejects.toThrow(/DATABASE_URL is unset/);
+          cleanupTestData({ sql: fake.sql, wake: false, log: makeLog() })
+        ).rejects.toThrow(/connection string is empty.*DATABASE_URL env var/);
       } finally {
         if (prev !== undefined) process.env.DATABASE_URL = prev;
       }
     });
 
-    it('treats explicit empty-string connectionString as misconfiguration (no env fallback)', async () => {
+    it('treats explicit empty-string connectionString as misconfiguration (error names the explicit source)', async () => {
       const prev = process.env.DATABASE_URL;
       process.env.DATABASE_URL = 'Server=fromenv;Database=x;';
       try {
         const fake = makeFakeSql();
         await expect(
-          cleanupTestData({ sql: fake.sql, connectionString: '', log: makeLog() })
-        ).rejects.toThrow(/DATABASE_URL is unset/);
+          cleanupTestData({ sql: fake.sql, connectionString: '', wake: false, log: makeLog() })
+        ).rejects.toThrow(/connection string is empty.*connectionString argument/);
       } finally {
         if (prev === undefined) delete process.env.DATABASE_URL;
         else process.env.DATABASE_URL = prev;
@@ -203,6 +237,7 @@ describe('scripts/cleanup-test-data.js', () => {
         cleanupTestData({
           sql: fake.sql,
           connectionString: 'Server=foo;Database=bar;',
+          wake: false,
           log: makeLog(),
         })
       ).rejects.toThrow(/post-delete count assertion failed/);
@@ -216,6 +251,7 @@ describe('scripts/cleanup-test-data.js', () => {
         cleanupTestData({
           sql: fake.sql,
           connectionString: 'Server=foo;Database=bar;',
+          wake: false,
           log: makeLog(),
         })
       ).rejects.toThrow(/boom/);
@@ -241,6 +277,7 @@ describe('scripts/cleanup-test-data.js', () => {
         await main({
           sql: fake.sql,
           connectionString: 'Server=foo;Database=bar;',
+          wake: false,
           log: makeLog(),
         });
       } catch (err) {
@@ -259,6 +296,7 @@ describe('scripts/cleanup-test-data.js', () => {
         await main({
           sql: fake.sql,
           connectionString: 'Server=foo;Database=bar;',
+          wake: false,
           log,
         });
       } catch (err) {
