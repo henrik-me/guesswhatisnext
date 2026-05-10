@@ -901,10 +901,18 @@ async function probeFreshColdInitSmoke() {
   //    command string — `compose()` logs the command verbatim.
   const SMOKE_USER_PASSWORD = process.env.SMOKE_USER_PASSWORD || 'cs79-cold-init-smoke-pw';
   log('Seeding gwn-smoke-bot user (idempotent) inside the app container…');
-  const containerName = `${PROJECT_NAME}-app-1`;
+  // Resolve the app container ID via compose itself instead of relying on
+  // the `${PROJECT_NAME}-app-1` naming convention (decouples the harness
+  // from Compose's container-naming scheme + replica suffixes).
+  const psResult = compose('ps -q app', { silent: true });
+  const containerId = String(psResult.stdout || '').trim().split(/\r?\n/)[0];
+  if (psResult.status !== 0 || !containerId) {
+    logErr('FAIL: could not resolve the app container ID via docker compose ps -q app.');
+    return false;
+  }
   const cp = spawnSync(
     'docker',
-    ['cp', 'scripts/setup-smoke-user.js', `${containerName}:/app/scripts/setup-smoke-user.js`],
+    ['cp', 'scripts/setup-smoke-user.js', `${containerId}:/app/scripts/setup-smoke-user.js`],
     { cwd: ROOT, stdio: 'inherit', shell: false },
   );
   if (cp.status !== 0) {
