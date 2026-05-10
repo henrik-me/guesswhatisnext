@@ -117,6 +117,49 @@ describe('scripts/wake-db.js', () => {
       expect(cfg.options.connectTimeout).toBe(7_000);
     });
 
+    it('closes the failed pool BEFORE sleeping for backoff (resource pressure cases)', async () => {
+      const transient = Object.assign(new Error('busy'), {
+        number: 49918,
+        name: 'ConnectionError',
+      });
+      const events = [];
+      const close = vi.fn().mockImplementation(async () => {
+        events.push('close');
+      });
+      let connectCallCount = 0;
+      class FakeConnectionPool {
+        constructor(config) {
+          this.config = config;
+          this.close = close;
+          this.connect = vi.fn(async () => {
+            connectCallCount += 1;
+            if (connectCallCount === 1) throw transient;
+            return undefined;
+          });
+          this.request = vi.fn(() => ({
+            query: vi.fn().mockResolvedValue({ recordset: [{ ok: 1 }] }),
+          }));
+        }
+      }
+      FakeConnectionPool.parseConnectionString = vi.fn(() => ({ options: {} }));
+      const sleep = vi.fn().mockImplementation(async () => {
+        events.push('sleep');
+      });
+
+      await wakeDb({
+        sql: { ConnectionPool: FakeConnectionPool },
+        connectionString: 'Server=foo;Database=bar;',
+        sleep,
+        log: makeLog(),
+      });
+
+      // First close (failed attempt's pool) must precede the backoff sleep.
+      const firstClose = events.indexOf('close');
+      const firstSleep = events.indexOf('sleep');
+      expect(firstClose).toBeGreaterThanOrEqual(0);
+      expect(firstSleep).toBeGreaterThan(firstClose);
+    });
+
     it('retries on transient Azure SQL error 40613, then succeeds', async () => {
       const transient = Object.assign(new Error('Database not currently available'), {
         number: 40613,

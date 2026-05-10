@@ -100,6 +100,8 @@ async function wakeDb(deps = {}) {
   while (Date.now() - startedAt < totalBudgetMs) {
     attempt += 1;
     let pool;
+    let nextWaitMs = 0;
+    let shouldRetry = false;
     try {
       pool = new sql.ConnectionPool(config);
       await pool.connect();
@@ -113,21 +115,29 @@ async function wakeDb(deps = {}) {
       const message = (err && err.message) || String(err);
       if (!isRetryable(err)) {
         log.error(`[CS73 wake-db] attempt ${attempt} failed with non-retryable error (${code}): ${message}`);
+        // Pool close happens in finally{} below; rethrow after that.
         throw err;
       }
       const remainingMs = totalBudgetMs - (Date.now() - startedAt);
       const wait = backoffFor(attempt - 1);
       if (remainingMs <= wait) {
         log.error(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; budget exhausted (${remainingMs}ms remaining < ${wait}ms backoff)`);
-        break;
+        // Fall through to finally + while loop exits naturally.
+      } else {
+        log.info(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; retrying in ${Math.round(wait / 1000)}s`);
+        shouldRetry = true;
+        nextWaitMs = wait;
       }
-      log.info(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; retrying in ${Math.round(wait / 1000)}s`);
-      await sleep(wait);
     } finally {
       if (pool) {
         await pool.close().catch(() => {});
       }
     }
+    if (!shouldRetry) break;
+    // Sleep AFTER the pool is closed so we don't hold a failed connection
+    // open during the backoff window — important when the retry was
+    // triggered by Azure SQL resource pressure (49918/49919/49920).
+    await sleep(nextWaitMs);
   }
 
   const totalElapsedMs = Date.now() - startedAt;
