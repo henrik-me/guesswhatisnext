@@ -88,7 +88,7 @@ describe('scripts/wake-db.js', () => {
       );
     });
 
-    it('connection config carries connectionTimeout=30_000 (default per-attempt)', async () => {
+    it('connection config carries connectionTimeout=30_000 + requestTimeout=30_000 (defaults)', async () => {
       const fake = makeFakeSql();
       await wakeDb({
         sql: fake.sql,
@@ -98,12 +98,14 @@ describe('scripts/wake-db.js', () => {
       });
       const cfg = fake.constructed[0].config;
       expect(cfg.connectionTimeout).toBe(30_000);
+      expect(cfg.requestTimeout).toBe(30_000);
       expect(cfg.options.connectTimeout).toBe(30_000);
+      expect(cfg.options.requestTimeout).toBe(30_000);
       // Existing options preserved.
       expect(cfg.options.encrypt).toBe(true);
     });
 
-    it('respects an injected perAttemptTimeoutMs override', async () => {
+    it('respects an injected perAttemptTimeoutMs override (applied to both connect + request timeouts)', async () => {
       const fake = makeFakeSql();
       await wakeDb({
         sql: fake.sql,
@@ -114,7 +116,31 @@ describe('scripts/wake-db.js', () => {
       });
       const cfg = fake.constructed[0].config;
       expect(cfg.connectionTimeout).toBe(7_000);
+      expect(cfg.requestTimeout).toBe(7_000);
       expect(cfg.options.connectTimeout).toBe(7_000);
+      expect(cfg.options.requestTimeout).toBe(7_000);
+    });
+
+    it('rejects non-positive perAttemptTimeoutMs and totalBudgetMs (?? semantics let 0 surface as a real value)', async () => {
+      const fake = makeFakeSql();
+      await expect(
+        wakeDb({
+          sql: fake.sql,
+          connectionString: 'Server=foo;Database=bar;',
+          perAttemptTimeoutMs: 0,
+          sleep: vi.fn(),
+          log: makeLog(),
+        })
+      ).rejects.toThrow(/perAttemptTimeoutMs must be a positive number/);
+      await expect(
+        wakeDb({
+          sql: fake.sql,
+          connectionString: 'Server=foo;Database=bar;',
+          totalBudgetMs: 0,
+          sleep: vi.fn(),
+          log: makeLog(),
+        })
+      ).rejects.toThrow(/totalBudgetMs must be a positive number/);
     });
 
     it('closes the failed pool BEFORE sleeping for backoff (resource pressure cases)', async () => {

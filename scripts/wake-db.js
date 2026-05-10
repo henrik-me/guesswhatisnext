@@ -76,22 +76,33 @@ function backoffFor(attemptIndex) {
 async function wakeDb(deps = {}) {
   const sql = deps.sql || defaultSql;
   const connectionString = deps.connectionString || process.env.DATABASE_URL;
-  const perAttemptTimeoutMs = deps.perAttemptTimeoutMs || 30_000;
-  const totalBudgetMs = deps.totalBudgetMs || 150_000;
+  const perAttemptTimeoutMs = deps.perAttemptTimeoutMs ?? 30_000;
+  const totalBudgetMs = deps.totalBudgetMs ?? 150_000;
   const sleep = deps.sleep || defaultSleep;
   const log = deps.log || { info: console.log, error: console.error };
 
   if (!connectionString) {
     throw new Error('wake-db: DATABASE_URL is unset; nothing to connect to.');
   }
+  if (!Number.isFinite(perAttemptTimeoutMs) || perAttemptTimeoutMs <= 0) {
+    throw new Error(`wake-db: perAttemptTimeoutMs must be a positive number (got ${perAttemptTimeoutMs}).`);
+  }
+  if (!Number.isFinite(totalBudgetMs) || totalBudgetMs <= 0) {
+    throw new Error(`wake-db: totalBudgetMs must be a positive number (got ${totalBudgetMs}).`);
+  }
 
   // Mirror `server/db/mssql-adapter.js:354-361` — parse first, then override
-  // timeouts on both the top-level and the underlying tedious options block
-  // so the value is honored regardless of mssql's forwarding logic.
+  // both connect AND request timeouts on top-level + the underlying tedious
+  // options block so values are honored regardless of mssql's forwarding
+  // logic. The wake script's SELECT 1 is tiny, but a cold-resumed DB can
+  // take a moment to satisfy the first request, so we size requestTimeout
+  // to the same per-attempt budget as the connect.
   const config = sql.ConnectionPool.parseConnectionString(connectionString);
   config.connectionTimeout = perAttemptTimeoutMs;
+  config.requestTimeout = perAttemptTimeoutMs;
   config.options = config.options || {};
   config.options.connectTimeout = perAttemptTimeoutMs;
+  config.options.requestTimeout = perAttemptTimeoutMs;
 
   const startedAt = Date.now();
   let attempt = 0;

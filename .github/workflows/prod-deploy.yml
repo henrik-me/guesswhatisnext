@@ -242,6 +242,17 @@ jobs:
       # bypasses the adapter entirely and uses its own per-attempt timeout
       # + bounded retry budget. After this step, the DB is warm and the
       # subsequent `Run DB migrations` step succeeds on the first attempt.
+      #
+      # The status report is in a separate step using the pinned azure/cli
+      # action (consistent with the rest of the workflow) so the `az` CLI
+      # version isn't sensitive to runner-image churn.
+      - name: Report DB status before wake (CS73)
+        uses: azure/cli@9eb25b8360668fb0ecbafa808d40e2197b2f5f52 # v3
+        with:
+          inlineScript: |
+            DBSTATUS=$(az sql db show --name gwn-production --resource-group gwn-rg --server gwn-sqldb --query "status" -o tsv)
+            echo "Initial DB status: $DBSTATUS"
+
       - name: Wake Azure SQL gwn-production (CS73)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -251,8 +262,6 @@ jobs:
             echo "::error::secrets.DATABASE_URL is unset; cannot wake prod DB."
             exit 1
           fi
-          DBSTATUS=$(az sql db show --name gwn-production --resource-group gwn-rg --server gwn-sqldb --query "status" -o tsv)
-          echo "Initial DB status: $DBSTATUS"
           START=$(date +%s)
           node scripts/wake-db.js
           ELAPSED=$(( $(date +%s) - START ))
