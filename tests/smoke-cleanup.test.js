@@ -44,11 +44,18 @@ describe('scripts/smoke.js#cleanupSmokeRow (CS81-2)', () => {
   it('skips with a one-line note when DATABASE_URL is unset (no sql require, no throw)', async () => {
     const prev = process.env.DATABASE_URL;
     delete process.env.DATABASE_URL;
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      // No sql passed, no DATABASE_URL — must NOT throw, must return cleanly.
+      // No sql passed, no DATABASE_URL — must NOT throw, must return cleanly,
+      // and must emit the documented one-line skip note.
       const result = await cleanupSmokeRow(42);
       expect(result).toBeUndefined();
+      const skipped = logSpy.mock.calls.some(([msg]) =>
+        /cleanup: DATABASE_URL unset — skipping self-cleanup for id=42/i.test(String(msg))
+      );
+      expect(skipped).toBe(true);
     } finally {
+      logSpy.mockRestore();
       if (prev !== undefined) process.env.DATABASE_URL = prev;
     }
   });
