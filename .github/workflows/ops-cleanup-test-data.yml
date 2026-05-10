@@ -39,9 +39,12 @@ jobs:
     environment: ${{ inputs.target }}
     steps:
       - name: Confirm target match
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          TARGET: ${{ inputs.target }}
         run: |
-          if [ "${{ inputs.confirm }}" != "${{ inputs.target }}" ]; then
-            echo "::error::confirm input ('${{ inputs.confirm }}') must equal target ('${{ inputs.target }}')"
+          if [ "$CONFIRM" != "$TARGET" ]; then
+            echo "::error::confirm input must equal target"
             exit 1
           fi
 

@@ -402,6 +402,7 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
   // empty payload to header-less non-system traffic on enrolled endpoints
   // (server/routes/scores.js:316-326). The smoke is simulated user activity
   // so the header is correct.
+  let halted = false;
   {
     const url = `${base}/api/scores/me`;
     const started = nowMs();
@@ -420,13 +421,12 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
       const idsPresent = scores ? scores.map((s) => s.id).slice(0, 10) : null;
       fail('me-scores', `submitted id=${submittedId} not in /api/scores/me; status=${res.status} sample-ids=${JSON.stringify(idsPresent)}`);
       results.steps.push({ step: 'me-scores', status: 'fail', elapsedMs: elapsed, lastStatus: res.status, error: 'sentinel not present' });
-      results.finishedAt = new Date().toISOString();
-      return results;
+      halted = true;
     }
   }
 
   // --- Step (f): /api/health DB status (requires SYSTEM_API_KEY) -----------
-  {
+  if (!halted) {
     if (!systemApiKey) {
       info('/api/health step skipped (no SYSTEM_API_KEY) — /api/scores/me already proved DB writeability');
       annotate('warning', 'smoke step health: skipped (SYSTEM_API_KEY not provided)');
@@ -447,14 +447,13 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
       } else {
         fail('health', `expected 200 + checks.database.status='ok'; got status=${res.status} dbStatus=${dbStatus}`);
         results.steps.push({ step: 'health', status: 'fail', elapsedMs: elapsed, lastStatus: res.status, error: `dbStatus=${dbStatus}` });
-        results.finishedAt = new Date().toISOString();
-        return results;
+        halted = true;
       }
     }
   }
 
   results.finishedAt = new Date().toISOString();
-  results.passed = results.steps.every((s) => s.status === 'pass' || s.status === 'skip');
+  results.passed = !halted && results.steps.every((s) => s.status === 'pass' || s.status === 'skip');
   if (results.passed) info(`✅ smoke passed against ${fqdn}`);
 
   // --- Step (g): CS81-2 self-cleanup ----------------------------------------
@@ -464,7 +463,11 @@ async function runSmoke({ targetFqdn, password, systemApiKey, opts = {}, fetcher
   // BIGINT cast (CS80) plus the periodic ops cleanup workflow (CS81-1) are
   // the durable backstops. Skipped when DATABASE_URL is unset (local /
   // in-memory invocations).
-  if (results.passed && submittedId != null) {
+  //
+  // Runs whenever step (d) succeeded (submittedId != null), regardless of
+  // whether downstream steps (e)/(f) failed — otherwise a flaky /api/health
+  // check would leak the row we just inserted.
+  if (submittedId != null) {
     await cleanupSmokeRow(submittedId);
   }
 
