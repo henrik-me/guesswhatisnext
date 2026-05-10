@@ -121,6 +121,22 @@ E2E tests that verify server behavior **must** assert via the wire (response hea
 
 **Anti-pattern:** `fs.readFileSync('.playwright/server.log')` followed by regex matching. Works locally, breaks in CI's Docker-services flow.
 
+### MSSQL/SQLite test parity gap
+
+Local SQLite tests (`npm test`) and the docker MSSQL stack (`npm run test:e2e:mssql`) cannot reproduce certain MSSQL-specific runtime behaviors:
+
+- **Integer overflow on AVG/SUM over INT columns** ([CS80](project/clickstops/done/done_cs80_scores-avg-int-overflow.md)). SQLite uses 64-bit integers everywhere; MSSQL accumulates aggregates in the input column type before final cast.
+- **Transient SQL error class behavior** ([CS73](project/clickstops/done/done_cs73_prod-deploy-cold-db-handling.md)). MSSQL's transient error codes (40613, 40197, 40501, 49918-20) only fire against real Azure SQL serverless, not local containers.
+- **Cold-DB-init request gating** ([CS79](project/clickstops/done/done_cs79_api-features-cold-init-gate.md), CS53-19/23). Container boots with init pending; behavior only manifests when DB is actually slow/cold.
+
+Tests for code paths that exercise any of these classes MUST be supplemented by either:
+
+1. A regression unit test that mocks the MSSQL-specific behavior (e.g. CS80's overflow test in `tests/scores.test.js`).
+2. A smoke probe step that exercises the path against a fresh-cold-init container (CS79's added cycle in `scripts/container-validate.js`).
+3. Documented manual verification against staging/prod with run-ID evidence in the closure CS file.
+
+Never assume "all tests pass locally" implies the code works against Azure SQL. See [LEARNINGS § Cascading prod-deploy bug chain](LEARNINGS.md#cascading-prod-deploy-bug-chain-cs73--cs79--cs80--cs81-2026-05-10) for the canonical case study where four latent bugs in this class were only caught by the prod smoke chain.
+
 ### Container Validation
 
 Sub-agents should validate changes in Docker containers before merging. The `docker-compose.yml` supports port isolation via `HOST_PORT` env var.
@@ -286,6 +302,16 @@ If any of the three is "not applicable" (e.g. a backend-only change with no clie
 - For PRs that ONLY add telemetry (no behavior change), the local validation is sufficient if the PR body explains why staging/prod validation is deferred to the next normal deploy.
 - Telemetry changes count as code changes for purposes of the cold-start container validation gate even when they're just `server/telemetry.js` edits — the failure mode of "broke OTel SDK init" is exactly what `npm run container:validate` catches, so the gate applies.
 
+### Boot-quiet contract for new /api/* endpoints
+
+Any new endpoint mounted under `/api/*` is gated by `server/app.js:298-351`'s per-request DB-init gate (CS53-19/23). On cold init, requests WITHOUT `X-User-Activity: 1` get an immediate 503+`Retry-After: 5` response and do NOT trigger `runInit()`. Internal probes (smoke, container-validate, e2e) that hit the new endpoint must either:
+
+1. Send `X-User-Activity: 1` (treats the probe as simulated user activity — see `scripts/smoke.js` post-CS79 for the pattern).
+2. Send a system credential (`X-API-Key` matching `SYSTEM_API_KEY`) — only for system-level probes.
+3. Be explicitly exempted from the gate at `server/app.js:298` (only for genuinely DB-independent paths like `/healthz`).
+
+Hit by [CS79](project/clickstops/done/done_cs79_api-features-cold-init-gate.md): `/api/features` smoke probe was returning 503 retry-after:5 in 1-2ms because no `X-User-Activity: 1` header → never triggered init → 18 retries × 5s = 90s budget exhausted → auto-rollback. Fix: add the header. Don't widen the app's gate behavior.
+
 ---
 
 ## 5. Git Workflow
@@ -380,6 +406,14 @@ Allowlist: commits whose **all** changed paths are `WORKBOARD.md` and/or `projec
 - **Test/debug env vars that affect production behavior require an explicit arming gate, never `NODE_ENV` alone (CS53-10 PR #301 R1 finding).** Local container validation runs the app with `NODE_ENV=production` by design (CS53 Policy 2 — "not in real prod" is the gate, not "not in production-mode locally"), so `NODE_ENV` is *not* a safe predicate for "are we really in real prod?". Any env-driven hook that could turn a healthy live DB into a fake-failure surface (or otherwise alter request handling) MUST require a separate arming env var (e.g. `GWN_ENABLE_DB_CONNECT_SIMULATORS=1`) AND emit a structured Pino warn whenever the env vars are set — armed or not — so a misconfigured deploy that copies the SIMULATE_* var without the gate is still surfaced via KQL (e.g. § B.16 in `docs/observability.md`). Pattern: see `server/db/mssql-adapter.js` `_simulatorsArmed()` helper.
 - **Boot-quiet rule (CS53-23 / CS53-19).** No browser-driven boot, focus, refresh, bfcache-restore, or service-worker-lifecycle code path may fire a request that touches the DB. The mechanism is the **`X-User-Activity: 1` request header**: SPA code sets it on requests originating from a real user gesture (click, screen-open, mark-read, etc.); for any read endpoint that participates in the boot-quiet contract, the server route handler MUST NOT issue a DB query in response to a request that lacks the header (or carries any other value). The contract applies only to endpoints explicitly enrolled in it (today: `/api/notifications/count`; CS53-19 will enroll the rest of the boot/focus set). It does **not** apply to operator/system-key requests, write endpoints, or `/healthz`-style probes — those have their own rules. **Cold-start caveat (CS53-19.D scope):** the global `/api/*` request gate in `server/app.js` currently calls `runInit()` for any header-less request when `!dbInitialized`, which can touch the DB before an enrolled handler runs. The route-level guarantee above holds once the DB is initialized; CS53-19.D will gate the init path on `X-User-Activity: 1` to close this gap end-to-end. On cache miss without the header on an enrolled endpoint (post-init), the server returns the cached value if any, else the empty default for that endpoint (`{ unread_count: 0 }` for `/api/notifications/count`, `204 No Content` where no body shape is meaningful). The header is the boot-quiet contract that lets the server act as the guard against untrusted or stale clients without heuristics. Cross-link: `project/clickstops/active/active_cs53_prod-cold-start-retry-investigation.md` row CS53-23 (contract foundation, fully wired today only on `/api/notifications/count`) and CS53-19 (apply contract to every other boot/focus endpoint, plus close the cold-start init-gate gap in CS53-19.D).
 - **Cold-start container validation gates every check-in.** For any PR that changes server-side code, client-side runtime code, or DB-touching code (i.e., anything that is not docs-only, CI-config-only, docs/CI-only, tooling-only, or a supported `+` combination), the author must run a "cold-start container validation" cycle (`npm run container:validate`) before requesting local review, after local-review fixes are pushed, and after each Copilot review iteration's fixes are pushed. Capture pass/fail per cycle in the PR body under `## Container Validation`. The container restarts cleanly with `GWN_SIMULATE_COLD_START_MS=30000` so the warmup retry path is exercised on every restart, mimicking Azure SQL serverless cold-start behavior. See [§ Cold-start container validation in OPERATIONS.md](OPERATIONS.md#cold-start-container-validation) for the procedure.
+
+#### BIGINT cast hygiene for aggregates over INT columns
+
+Any `AVG`, `SUM`, `COUNT(*) * x`, or other aggregating operation over an `INTEGER`-typed column in MSSQL must explicitly `CAST(col AS BIGINT)` before the aggregate function. MSSQL accumulates `SUM` (used internally by `AVG`) in the input column's type; with `INT` (32-bit, max 2.1B) this overflows after relatively few large-value rows. SQLite uses 64-bit integers natively so this never reproduces locally — see [CS80](project/clickstops/done/done_cs80_scores-avg-int-overflow.md)'s `tests/scores.test.js` for the canonical regression.
+
+Pattern: `ROUND(AVG(CAST(score AS BIGINT)), 0)` not `ROUND(AVG(score), 0)`.
+
+Audit checklist when adding a new aggregate query: (1) what's the column type? (2) what's the realistic value × row-count product? (3) does the realistic product exceed 2.1B? If yes or close-to, cast.
 
 ### Multi-PR pattern for backward-incompatible migrations
 

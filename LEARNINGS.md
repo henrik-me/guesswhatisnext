@@ -455,6 +455,41 @@ Long-term, if the contention becomes painful enough, candidates to consider: per
 
 ---
 
+### Cascading prod-deploy bug chain (CS73 → CS79 → CS80 → CS81), 2026-05-10
+
+**Date:** 2026-05-10 — five prod-deploy attempts in ~6 hours, four halted/rolled-back, one succeeded. Closed via [CS81 PR #333](https://github.com/henrik-me/guesswhatisnext/pull/333) and prod-deploy run [25630828772](https://github.com/henrik-me/guesswhatisnext/actions/runs/25630828772) (image `ffccb0f` → revision `gwn-production--0000025`).
+
+**The chain.** What started as a routine prod deploy of an unrelated change uncovered four latent bugs in succession. Each fix exposed the next:
+
+| # | Run | Image | Failure mode | Resolved by |
+|---|-----|-------|--------------|-------------|
+| 1 | [25617860563](https://github.com/henrik-me/guesswhatisnext/actions/runs/25617860563) | `fa74aec` | DB migration step timed out — Azure SQL serverless paused (5s connect timeout vs ~30–60s resume window) | [CS73](project/clickstops/done/done_cs73_prod-deploy-cold-db-handling.md) — added `scripts/wake-db.js` step before migrations |
+| 2 | [25619591048](https://github.com/henrik-me/guesswhatisnext/actions/runs/25619591048) | (next) | CS41-1 smoke `/api/features` returned 503 in 1–2ms × 18 retries = 90s budget exhausted → auto-rollback. The endpoint was gated by the cold-init request gate but the smoke probe sent no `X-User-Activity: 1` header, so init never fired | [CS79](project/clickstops/done/done_cs79_api-features-cold-init-gate.md) — smoke sends the header |
+| 3 | (after CS79) | (next) | CS41-1 smoke step (e) `GET /api/scores/me` returned 503: `AVG(score)` overflowed 32-bit `INT` accumulator after enough accumulated rows. SQLite never reproduced this (64-bit ints natively) | [CS80](project/clickstops/done/done_cs80_scores-avg-int-overflow.md) — `CAST(score AS BIGINT)` before `AVG`/`SUM` |
+| 4 | [25621131079](https://github.com/henrik-me/guesswhatisnext/actions/runs/25621131079) | (next) | CS41-12 OLD-revision smoke against migrated DB still failed: the OLD revision had the un-cast aggregate, and accumulated test-bot rows still triggered the overflow. Chicken-and-egg: the gate verifies OLD compatibility but OLD has the bug | [CS81](project/clickstops/done/done_cs81_test-data-hygiene.md) — drain accumulated `gwn-smoke-bot` rows + add per-test cleanup |
+| 5 | [25630828772](https://github.com/henrik-me/guesswhatisnext/actions/runs/25630828772) | `ffccb0f` | ✅ green end-to-end — wake step 1s (DB warm), CS41-12 OLD smoke ✅, CS41-1 NEW smoke ✅, all four CSes closed by this single deploy |
+
+**Pattern: smoke is the only thing that exercises the cold path.** The unifying thread across all four bugs is that the **prod smoke chain is the only place** that exercises this combination end-to-end:
+- Boot-quiet `/api/*` request gate (CS53-19/23) holds requests until the DB is initialized.
+- Cold DB resumes from auto-pause (~30–60s on Azure SQL serverless).
+- Aggregates run against accumulated production data (test rows count!).
+- The OLD revision of the app, post-migration, must keep serving cleanly until traffic shifts.
+
+Local `npm test` runs against SQLite with always-warm fixtures: zero coverage of any of the above. CI's `npm run test:e2e:mssql` runs against a fresh-rebuilt MSSQL container with no accumulated rows: zero coverage of the overflow class. `npm run container:validate` uses `GWN_SIMULATE_COLD_START_MS` to exercise the warmup path but ships a small fixture with no overflow potential. **Each of the four bugs was invisible until a real prod deploy ran the smoke probe against the accumulated state.**
+
+**Resolution shape: surgical CS per latent bug.** Each cascading fix shipped as its own clickstop with a single concern: CS73 wake-db (one new script, one new step), CS79 X-User-Activity header (one-line addition to `scripts/smoke.js`), CS80 BIGINT cast (one query change + regression test), CS81 test data hygiene (cleanup script + workflow + smoke self-cleanup). No "fix all four in one PR" temptation; each landed independently with its own review and rollback.
+
+**Meta: deploy infrastructure protected prod every time.** Across the four failed attempts:
+- CS41-1 auto-rollback fired correctly on smoke failure (#1, #2, #3) → traffic shifted back to the previous green revision before users could see anything.
+- CS41-12 OLD-revision smoke gate halted #4 BEFORE traffic shift → prod stayed on the previous green revision, no rollback needed.
+- **Zero user-facing impact across all four failed deploys.** The only operator burden was four extra Environment-approval clicks and a half-day of debugging.
+
+This validates the layered-gate design: CS41-1 catches NEW-revision bugs after promotion (rollback), CS41-12 catches OLD-vs-migrated-DB compatibility bugs before promotion (halt). Together they drained four latent bugs without a single user-visible regression.
+
+**Lesson: when adding new tests, ask "does this exercise the cold path I care about?"** Local tests with always-warm DBs and small fixtures have a parity gap with prod. The MSSQL/SQLite parity gap (CONVENTIONS § Testing Strategy) and the boot-quiet contract reminder (CONVENTIONS § 4a) are the codified versions of this lesson — see them before adding the next aggregate query, the next `/api/*` endpoint, or the next test that inserts into a shared persistent DB.
+
+---
+
 ## Tools & Versions
 
 ### Adopted Tools & Minimum Versions

@@ -107,13 +107,13 @@ Add to CONVENTIONS.md § 4a or wherever boot-quiet is discussed (CS53-19/23 terr
 
 | # | Task | Notes |
 |---|------|-------|
-| CS82-1 | Extend `scripts/cleanup-test-data.js` for CS-prefix pattern + EXTRA_USERNAMES env var. Update unit tests to cover new pattern. | Mirror existing gwn-smoke-bot path; same scope/safety guards. |
-| CS82-2 | LEARNINGS.md entry for the cascading-bug chain. | Pure docs. |
-| CS82-3 | CONVENTIONS.md § testing — MSSQL/SQLite parity gap. | Pure docs. |
-| CS82-4 | CONVENTIONS.md § database/data — BIGINT cast hygiene. | Pure docs. |
-| CS82-5 | OPERATIONS.md — CS41-12 chicken-and-egg pattern. | Pure docs. |
-| CS82-6 | CONVENTIONS.md — boot-quiet contract reminder. | Pure docs. |
-| CS82-7 | After PR merge: orchestrator triggers `ops-cleanup-test-data.yml` against production (operator approval), watcher reports row counts. Verify leaderboard probe shows 0 cs<NN>* entries. | Orchestrator action; same shape as CS81-1 cleanup. |
+| CS82-1 | ✅ Done — Extended `scripts/cleanup-test-data.js` for CS-prefix pattern + `EXTRA_USERNAMES` env var. 25 unit tests cover regex hygiene, EXTRA_USERNAMES de-duplication, cumulative count, parameterized DELETEs, and only-scores blast-radius (PR link below). | Mirror existing gwn-smoke-bot path; same scope/safety guards. |
+| CS82-2 | ✅ Done — LEARNINGS.md entry "Cascading prod-deploy bug chain (CS73 → CS79 → CS80 → CS81), 2026-05-10". | Pure docs. |
+| CS82-3 | ✅ Done — CONVENTIONS.md § Testing Strategy → "MSSQL/SQLite test parity gap". | Pure docs. |
+| CS82-4 | ✅ Done — CONVENTIONS.md § Database & Data → "BIGINT cast hygiene for aggregates over INT columns". | Pure docs. |
+| CS82-5 | ✅ Done — OPERATIONS.md § Cold-start container validation → "CS41-12 chicken-and-egg pattern". | Pure docs. |
+| CS82-6 | ✅ Done — CONVENTIONS.md § 4a Telemetry & Observability → "Boot-quiet contract for new /api/* endpoints". | Pure docs. |
+| CS82-7 | ⬜ Planned — After PR merge: orchestrator triggers `ops-cleanup-test-data.yml` against production (operator approval), watcher reports row counts. Verify leaderboard probe shows 0 cs<NN>* entries. | Orchestrator action; same shape as CS81-1 cleanup. |
 
 ## Acceptance
 
