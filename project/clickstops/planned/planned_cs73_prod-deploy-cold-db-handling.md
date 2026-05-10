@@ -7,9 +7,9 @@
 
 ## Symptom
 
-The "Run DB migrations" step in [`.github/workflows/prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) (currently around line 246) invokes `node scripts/migrate.js`. The `mssql` Node.js library has a **default connect timeout of 5 seconds**. Production runs on `gwn-production` (Azure SQL `GP_S_Gen5` serverless, `autoPauseDelay=60min`).
+The "Run DB migrations" step in [`.github/workflows/prod-deploy.yml`](../../../.github/workflows/prod-deploy.yml) (currently around line 246) invokes `node scripts/migrate.js`. The connection goes through `server/db/mssql-adapter.js` which has `MssqlAdapter.CONNECT_TIMEOUT_MS = 5000` (5 seconds; **not** the mssql library default of 15s — see line 565 of the adapter and the comment block at lines 345-348 explaining the CS53 rationale). Production runs on `gwn-production` (Azure SQL `GP_S_Gen5` serverless, `autoPauseDelay=60min`).
 
-When the DB has been auto-paused, the connect attempt **does** trigger the resume — but the resume takes ~30–60s, far longer than the 5s timeout. The migration step aborts with:
+When the DB has been auto-paused, the connect attempt **does** trigger the resume — but the resume takes ~30–60s, far longer than the 5s `MssqlAdapter.CONNECT_TIMEOUT_MS` constant set by CS53-3/CS53-6 in `server/db/mssql-adapter.js:565` (this is *not* the mssql library default of 15s; CS53 deliberately lowered it for the runtime warmup-retry path). The migration step aborts with:
 
 ```
 Migration failed: ConnectionError: Failed to connect to gwn-sqldb.database.windows.net:1433 in 5000ms
@@ -42,63 +42,82 @@ Eliminate the cold-pause failure mode from `prod-deploy.yml` so a routine prod d
 - The same hazard hypothetically applying to staging — staging uses container-local SQLite, no Azure SQL, so this CS is prod-only.
 - Telemetry of cold-pause vs warm-deploy timing — informational, not blocking; could be a follow-up if anyone wants the data.
 
-## Approach (two candidates; either suffices, both is the belt-and-braces)
+## Approach
 
-### Option A — Wake DB explicitly before migration (recommended)
+### Option A — Explicit wake step in `prod-deploy.yml` (chosen)
 
-Add a new step in `prod-deploy.yml` ahead of `Run DB migrations`:
+Add a new step ahead of `Run DB migrations` that:
+
+1. **Reports DB status** for visibility via `az sql db show --query "status" -o tsv` (no auth needed beyond the existing `azure/login` step; uses `--name gwn-production --resource-group gwn-rg --server gwn-sqldb`). This logs `Initial DB status: Online | AutoClosed | Resuming | …`. Pure visibility — does NOT trigger resume.
+2. **Triggers + awaits the resume** by running a small dedicated script (`scripts/wake-db.js`) that opens an `mssql` connection to `process.env.DATABASE_URL` with a hard-coded `connectionTimeout: 90_000` (90s), runs `SELECT 1`, and exits 0. The script must NOT use the `server/db/mssql-adapter.js` adapter — that adapter's `CONNECT_TIMEOUT_MS=5000` constant is deliberate per CS53-3/CS53-6 and must not change. Instead, `wake-db.js` requires `mssql` directly and constructs its own short-lived connection with the long timeout, used only for the wake.
+3. **Logs the elapsed time** so the deploy log shows whether this run paid the cold-pause cost or was already warm.
+
+After this step succeeds, the existing `Run DB migrations` step runs against a warmed DB and completes in normal time.
 
 ```yaml
 - name: Wake Azure SQL gwn-production (CS73)
-  uses: azure/cli@<pinned-sha>
-  with:
-    inlineScript: |
-      # Issue a tolerant SELECT 1 against gwn-production.
-      # Uses sqlcmd (already available in azure/cli image) with retry loop.
-      # Tolerant of "Resuming"/"AutoClosed" → "Online" transition.
-      # Budget: 90s (covers the documented Azure SQL serverless resume window).
-      DBSTATUS=$(az sql db show --name gwn-production --resource-group gwn-rg \
-        --server gwn-sqldb --query "status" -o tsv)
-      echo "Initial DB status: $DBSTATUS"
-      if [ "$DBSTATUS" != "Online" ]; then
-        echo "DB is paused/resuming — issuing wake query (budget 90s)"
-        # ... retry SELECT 1 with backoff up to 90s ...
-      fi
-      echo "DB ready for migration step"
+  env:
+    DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  run: |
+    set -e
+    if [ -z "$DATABASE_URL" ]; then
+      echo "::error::secrets.DATABASE_URL is unset; cannot wake prod DB."
+      exit 1
+    fi
+    DBSTATUS=$(az sql db show --name gwn-production --resource-group gwn-rg --server gwn-sqldb --query "status" -o tsv)
+    echo "Initial DB status: $DBSTATUS"
+    START=$(date +%s)
+    node scripts/wake-db.js
+    ELAPSED=$(( $(date +%s) - START ))
+    echo "DB ready for migration step (wake took ${ELAPSED}s)"
 ```
 
-**Pros:** explicit; deploy log clearly shows "DB was paused / DB was online"; no behavior change to the migration step itself.
+The `azure/login` step (already present in `prod-deploy.yml`) provides the `az` CLI auth context. No new secret is needed.
 
-**Cons:** adds 30–60s to first-deploy-after-idle (acceptable — that's the actual time required for the resume).
+### Why Option B (bump global mssql connection timeout) was rejected
 
-### Option B — Raise the connect timeout in `scripts/migrate.js`
+Originally this CS proposed raising `connectionTimeout` in `scripts/migrate.js`. Investigation (2026-05-09) showed the timeout is actually a class constant in `server/db/mssql-adapter.js:565` (`MssqlAdapter.CONNECT_TIMEOUT_MS = 5000`), set deliberately by CS53-3/CS53-6 so the runtime warmup-retry path can exercise more attempts inside the user's budget. Bumping that constant to 90s would break the CS53 warmup design for live user requests. Bumping it just for `migrate.js` would require either an env-var override hook in the adapter (new public surface, larger blast radius) or having `migrate.js` skip the adapter (harder — the adapter encapsulates several CS53 simulators / counters that the migration framework reuses transitively).
 
-Pass `connectionTimeout: 90000` (90s) to the `mssql` config in [`scripts/migrate.js`](../../../scripts/migrate.js) so the connect attempt itself waits long enough for the cold-pause resume.
-
-**Pros:** simpler change; no workflow modification.
-
-**Cons:** masks real connectivity problems for 90s; the deploy log shows "Connecting…" silently for up to 90s with no signal that it's a cold-pause vs a real outage.
-
-### Recommended: do both
-
-Option A surfaces the wake intent in the deploy log (good for incident review) and Option B makes the migration runner robust to any residual race. Either alone fixes the bug; both together make the failure mode genuinely impossible.
+The dedicated `scripts/wake-db.js` (chosen) is strictly additive: a new file, a new workflow step, zero changes to runtime adapter behavior, zero risk to the CS53 warmup contract.
 
 ## Tasks
 
 | # | Task | Notes |
 |---|------|-------|
-| CS73-1 | Implement Option A (wake step in `prod-deploy.yml`) with a 90s budget, exponential backoff, and clear `echo` log lines. Validate the workflow YAML lints clean. | Workflow-only change. No app code touched. |
-| CS73-2 | Implement Option B: bump `connectionTimeout` in `scripts/migrate.js` to 90000. Update the inline comment to explain the choice. | One-line change; cite this CS in the comment. |
-| CS73-3 | Test by paused-state simulation: pause `gwn-production` via `az sql db pause`, dispatch `prod-deploy.yml` against the same image, confirm first attempt succeeds. Capture the wake-step log output as evidence in the PR body. | One-time manual operator validation; no automated test. |
-| CS73-4 | Update [LEARNINGS.md § Azure SQL serverless cold-pause vs prod-deploy migration timeout (CS52-11)](../../../LEARNINGS.md) with a "Resolved by CS73" note pointing at the merged PR. The "operator workaround" block in that section can be deleted (no longer needed). | Docs cleanup at merge time. |
+| CS73-1 | Create `scripts/wake-db.js` (~40-70 lines) with **bounded retry/backoff** semantics (Azure SQL serverless can return error 40613 "Database not currently available" on the first connection while resume is mid-flight; clients are expected to retry). Design:<br><br>**Module shape (DI-friendly, mirroring `scripts/migrate.js`):** export `wakeDb({ sql, connectionString, perAttemptTimeoutMs, totalBudgetMs, sleep, log })` + a `main()` CLI wrapper. Use `mssql` directly, NOT `server/db/mssql-adapter.js`. Parse the connection string with `sql.ConnectionPool.parseConnectionString(connectionString)` (mirroring `mssql-adapter.js:354`); override `config.connectionTimeout = perAttemptTimeoutMs` and `config.options = { ...config.options, connectTimeout: perAttemptTimeoutMs }`.<br><br>**Defaults:** `perAttemptTimeoutMs=30_000`, `totalBudgetMs=150_000` (so up to ~5 attempts; budget chosen to comfortably exceed the documented 30-60s resume window with headroom for one retry on transient TLS/login errors).<br><br>**Retry policy:** treat connection errors, request errors, and SQL errors with `number in [40613, 40197, 40501, 49918, 49919, 49920]` (Azure SQL transient codes) as retryable. After each failure, log `[CS73 wake-db] attempt N failed: <error code/message>; retrying in <Ns>` and sleep with simple linear backoff (5s, 10s, 15s capped). Stop when total budget exhausted; exit 1 with a clear summary line.<br><br>**Cleanup:** `try { await pool.connect(); await pool.request().query('SELECT 1'); } finally { await pool?.close().catch(()=>{}); }` so the pool is always closed even if `SELECT 1` fails. Same for the outer `sql.close()` if used at module level.<br><br>Add a top-of-file comment explaining why this exists separately from the adapter (CS73 + CS53 boundary). | New file. ~40-70 LOC. Standalone — no app code reuse. |
+| CS73-2 | Add the new "Wake Azure SQL gwn-production (CS73)" step to `.github/workflows/prod-deploy.yml`, immediately before the existing "Run DB migrations" step (currently around line 238). Use the YAML body from § Approach above. Validate the workflow file lints clean (`actionlint` if available, otherwise just YAML parse via `npm run lint` if it covers .github/workflows, else `node -e "require('js-yaml').load(require('fs').readFileSync('.github/workflows/prod-deploy.yml','utf8'))"`). | Workflow-only addition; no `Run DB migrations` step changes. |
+| CS73-3 | Add unit tests for `scripts/wake-db.js` in `tests/wake-db-script.test.js` (matching the existing naming pattern of `tests/migrate-script.test.js`). Mock `mssql` via the DI seam from CS73-1. Required cases: (a) success on first attempt — exits 0, `SELECT 1` invoked once, pool closed; (b) success on retry — first attempt throws transient (e.g. `{ number: 40613 }`), second attempt succeeds, total elapsed < budget; (c) total budget exhausted — all attempts throw; exits 1 with a stderr summary; (d) connection config carries `connectionTimeout: 30_000` (proves the override took effect even when the adapter's 5s constant is left untouched); (e) pool is closed in the failure path. | Confirms the wake mechanism is robust without needing a live DB. |
+| CS73-4 | Update [LEARNINGS.md § Azure SQL serverless cold-pause vs prod-deploy migration timeout (CS52-11)](../../../LEARNINGS.md) with a "Resolved by CS73 (PR #NNN)" note. The "operator workaround" block in that section can be deleted (no longer needed). | Docs cleanup at PR time. |
+
+### Validation strategy for the runtime cold-pause path
+
+The PR validates the **code path** via CS73-3 (unit tests). Validating the **runtime behavior** against a real paused Azure SQL DB requires waiting for natural cold pause, because:
+
+- **Azure SQL `GP_S_Gen5` serverless does NOT support manual pause.** The `az sql db pause` command exists but only applies to Synapse / DataWarehouse SKUs, not serverless General Purpose. There is no operator-issuable pause for `gwn-production`.
+- **`autoPauseDelay=60min` is the only way the DB transitions to AutoClosed.** So the validation is necessarily on the deploy timeline, not on demand.
+
+**Closure validation procedure:**
+
+1. After PR merge, on the next prod deploy that organically follows ≥60min of DB idleness (typical: a deploy after an overnight quiet period), watch the `Wake Azure SQL gwn-production (CS73)` step's log output.
+2. Confirm the log shows `Initial DB status: AutoClosed` (or `Resuming`) AND `wake took ~30-60s` AND the subsequent `Run DB migrations` step succeeds on the first attempt.
+3. Record the deploy run ID + log excerpt in this CS file under § Validation evidence (added at close-out time).
+4. If the deploy happens to hit a warm DB (`Initial DB status: Online`, wake takes <2s), that's also a successful run but does not satisfy the cold-pause-validation criterion — keep the CS open and watch the next deploy.
+
+If after 30 days post-merge no deploy has organically hit a cold DB, the CS may be closed anyway (the unit tests + code review already prove the path; we simply lacked the empirical confirmation), with a note.
 
 ## Acceptance
 
-1. A `prod-deploy.yml` dispatch against a paused `gwn-production` Azure SQL DB succeeds on the first attempt without operator pre-wake or rerun.
-2. The deploy log clearly indicates whether the DB was paused at the start of the migration step (so incident review can distinguish "cold pause, recovered automatically" from "real connectivity issue").
-3. The migration step's connect timeout is documented in `scripts/migrate.js` with a comment referencing CS73 and the cold-pause rationale.
-4. LEARNINGS.md cold-pause section is updated to note the resolution; the operator workaround block is removed.
-5. CS41-12 + CS41-1+2 smoke jobs continue to pass against the same image (regression check that the wake step doesn't introduce side effects).
+PR-merge-blocking criteria:
+
+1. `scripts/wake-db.js` exists and uses `mssql` directly (does NOT import or use `server/db/mssql-adapter.js`); explicit `connectionTimeout: 90_000` set on the config.
+2. CS73-3 unit tests pass (success path + failure path + timeout-config-applied assertion).
+3. The new "Wake Azure SQL gwn-production (CS73)" step is present in `prod-deploy.yml` immediately before "Run DB migrations".
+4. CS41-12 + CS41-1+2 smoke jobs continue to pass against the same image (regression check that the wake step doesn't introduce side effects on warm DBs).
+5. LEARNINGS.md cold-pause section is updated to note the resolution; the operator workaround block is removed.
+6. Full validation suite (`npm run lint && npm test && npm run test:e2e`) passes.
+7. `npm run container:validate` passes (regression check on the runtime adapter — proves CS73 didn't accidentally touch the CS53 5s-timeout contract).
+
+Closure (move to `done/`) requires both PR merge AND the runtime validation evidence per § Validation strategy above (either natural-pause or operator-pause path; record run ID + log excerpt in this CS file).
 
 ## Will not be done (deliberate)
 
