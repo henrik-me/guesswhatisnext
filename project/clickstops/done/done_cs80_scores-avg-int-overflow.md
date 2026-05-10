@@ -1,10 +1,11 @@
 # CS80 — Scores avg int overflow
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done
+**Closed:** yoga-gwn 2026-05-10T14:18Z — empirically validated by prod-deploy run 25630828772 (image `ffccb0f` → revision `gwn-production--0000025`). Smoke chain passed end-to-end: CS73 wake (1s — DB was warm) → CS41-12 OLD smoke ✅ → CS41-1 NEW smoke ✅ (features ok, score POST ok, scores/me ok, cleanup ok). All four CSes (CS73, CS79, CS80, CS81) closed by this single deploy.
 **Claimed:** yoga-gwn 2026-05-10T04:40Z (branch `cs80-avg-bigint-cast`)
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72, CS75
-**Blocks:** [CS79](active_cs79_api-features-cold-init-gate.md) closure (no prod deploy can succeed past CS41-1 smoke step (e) `/api/scores/me` until this is fixed).
+**Blocks:** [CS79](done_cs79_api-features-cold-init-gate.md) closure (no prod deploy can succeed past CS41-1 smoke step (e) `/api/scores/me` until this is fixed).
 
 ## Current state (2026-05-10T05:55Z)
 
@@ -121,5 +122,5 @@ CS80 closure-blocking criteria:
 - Code: [`server/routes/scores.js:316-380`](../../../server/routes/scores.js) (the `/me` route).
 - Schema: [`server/db/schema.sql:11-22`](../../../server/db/schema.sql) (`scores` table).
 - Smoke: [`scripts/smoke.js`](../../../scripts/smoke.js) (`sentinelScore()` and step e).
-- Adjacent: [active_cs79](active_cs79_api-features-cold-init-gate.md) — blocked on CS80 closure.
+- Adjacent: [active_cs79](done_cs79_api-features-cold-init-gate.md) — blocked on CS80 closure.
 - Adjacent: [done_cs73](../done/done_cs73_prod-deploy-cold-db-handling.md) — wake step continues to work; will exercise on the next prod-deploy after CS80.

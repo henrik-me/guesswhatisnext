@@ -1,10 +1,11 @@
 # CS81 — Test data hygiene
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done
+**Closed:** yoga-gwn 2026-05-10T14:18Z — empirically validated by prod-deploy run 25630828772 (image `ffccb0f` → revision `gwn-production--0000025`). Smoke chain passed end-to-end: CS73 wake (1s — DB was warm) → CS41-12 OLD smoke ✅ → CS41-1 NEW smoke ✅ (features ok, score POST ok, scores/me ok, cleanup ok). All four CSes (CS73, CS79, CS80, CS81) closed by this single deploy.
 **Claimed:** yoga-gwn 2026-05-10T06:05Z (branch `cs81-test-data-hygiene`)
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72, CS75
-**Blocks:** [CS80](../active/active_cs80_scores-avg-int-overflow.md) closure (no prod deploy can succeed at CS41-12 until smoke-bot's accumulated score rows are removed from prod). [CS73](../done/done_cs73_prod-deploy-cold-db-handling.md) and [CS79](../active/active_cs79_api-features-cold-init-gate.md) empirical closure also pending the same prod deploy.
+**Blocks:** [CS80](done_cs80_scores-avg-int-overflow.md) closure (no prod deploy can succeed at CS41-12 until smoke-bot's accumulated score rows are removed from prod). [CS73](../done/done_cs73_prod-deploy-cold-db-handling.md) and [CS79](done_cs79_api-features-cold-init-gate.md) empirical closure also pending the same prod deploy.
 
 ## Origin
 
@@ -111,7 +112,7 @@ CS81 closure-blocking criteria:
 ## Cross-references
 
 - Origin: user direction 2026-05-09T22:59 PT after CS80 deploy halted at CS41-12.
-- [active_cs80](../active/active_cs80_scores-avg-int-overflow.md) — CS80-3 is now CS81-1 (the one-off cleanup); CS80-3 in the CS80 plan can be marked "superseded by CS81-1".
-- [done_cs73](../done/done_cs73_prod-deploy-cold-db-handling.md), [active_cs79](../active/active_cs79_api-features-cold-init-gate.md) — both pending empirical prod validation as side effect of CS81-4 deploy.
+- [active_cs80](done_cs80_scores-avg-int-overflow.md) — CS80-3 is now CS81-1 (the one-off cleanup); CS80-3 in the CS80 plan can be marked "superseded by CS81-1".
+- [done_cs73](../done/done_cs73_prod-deploy-cold-db-handling.md), [active_cs79](done_cs79_api-features-cold-init-gate.md) — both pending empirical prod validation as side effect of CS81-4 deploy.
 - Smoke runner: [`scripts/smoke.js`](../../../scripts/smoke.js).
 - Existing seed script (auth + user creation pattern): [`server/routes/admin-seed-smoke-user.js`](../../../server/routes/admin-seed-smoke-user.js).

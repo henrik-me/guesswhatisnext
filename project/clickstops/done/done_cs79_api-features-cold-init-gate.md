@@ -2,7 +2,8 @@
 
 > **Rewritten 2026-05-09T20:15Z.** An earlier draft suspected CS78. Direct code inspection of `server/app.js:332-351` and `scripts/smoke.js:292-294,372-380` revealed the actual root cause is a **pre-existing bug in the smoke probe** that just hadn't been hit before because past deploys benefitted from already-warm replica processes. CS78 is NOT implicated.
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Done
+**Closed:** yoga-gwn 2026-05-10T14:18Z — empirically validated by prod-deploy run 25630828772 (image `ffccb0f` → revision `gwn-production--0000025`). Smoke chain passed end-to-end: CS73 wake (1s — DB was warm) → CS41-12 OLD smoke ✅ → CS41-1 NEW smoke ✅ (features ok, score POST ok, scores/me ok, cleanup ok). All four CSes (CS73, CS79, CS80, CS81) closed by this single deploy.
 **Claimed:** yoga-gwn 2026-05-10T03:20Z (branch `cs79-smoke-cold-init`)
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72, CS75
