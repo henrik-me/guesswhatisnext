@@ -319,4 +319,38 @@ describe('GET /api/scores/me', () => {
     // this user hasn't, so no MP row should be present.
     expect(findStat('multiplayer', 'ranked')).toBeUndefined();
   });
+
+  // CS80: regression test for MSSQL int overflow (SQL error 8115) in the
+  // AVG(score) aggregation. With INTEGER score columns, MSSQL accumulates
+  // SUM in INT before dividing, which overflows at ~3.5 rows of ~600M.
+  // The CAST(score AS BIGINT) in /api/scores/me prevents this. SQLite uses
+  // 64-bit integers internally so it cannot reproduce the overflow — this
+  // test would catch a regression of the cast against MSSQL via the
+  // `npm run test:e2e:mssql` path (and is the contract under which the
+  // production smoke step `(e) /api/scores/me` is expected to succeed).
+  test('handles aggregate SUM > 2.1B without overflow (CS80)', async () => {
+    const { token } = await registerUser('cs80overflow');
+    const db = await require('../server/db').getDbAdapter();
+    const me = await db.get('SELECT id FROM users WHERE username = ?', ['cs80overflow']);
+
+    // Insert 6 rows × 600,000,000 → cumulative SUM = 3,600,000,000 (> 2^31-1
+    // = 2,147,483,647). Without the BIGINT cast, MSSQL would raise 8115.
+    for (let i = 0; i < 6; i += 1) {
+      await db.run(
+        `INSERT INTO scores (user_id, mode, score, correct_count, total_rounds, best_streak, source)
+         VALUES (?, 'freeplay', 600000000, 10, 10, 5, 'ranked')`,
+        [me.id]
+      );
+    }
+
+    const meRes = await getAgent()
+      .get('/api/scores/me')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(meRes.status).toBe(200);
+    const stat = meRes.body.stats.find(s => s.mode === 'freeplay' && s.source === 'ranked');
+    expect(stat).toBeDefined();
+    expect(Number(stat.games_played)).toBe(6);
+    expect(Number(stat.avg_score)).toBe(600000000);
+  });
 });

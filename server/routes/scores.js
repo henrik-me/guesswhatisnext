@@ -348,7 +348,11 @@ router.get('/me', requireAuth, async (req, res, next) => {
              source,
              COUNT(*) as games_played,
              MAX(score) as high_score,
-             ROUND(AVG(score), 0) as avg_score,
+             -- CS80: cast to BIGINT before AVG to avoid MSSQL int overflow
+             -- (SQL error 8115). MSSQL accumulates the SUM in the input
+             -- column type before dividing; INTEGER (signed 32-bit) overflows
+             -- at ~3.5 rows of ~600M. CAST(x AS BIGINT) is a no-op in SQLite.
+             ROUND(AVG(CAST(score AS BIGINT)), 0) as avg_score,
              MAX(best_streak) as best_streak
       FROM scores WHERE user_id = ?
       GROUP BY mode, source
@@ -360,7 +364,10 @@ router.get('/me', requireAuth, async (req, res, next) => {
     const mpStats = await db.get(`
       SELECT COUNT(*) as games_played,
              MAX(mp.score) as high_score,
-             ROUND(AVG(mp.score), 0) as avg_score,
+             -- CS80: cast to BIGINT before AVG to avoid MSSQL int overflow
+             -- (SQL error 8115). See /api/scores/me stats query above for
+             -- full rationale. No-op in SQLite.
+             ROUND(AVG(CAST(mp.score AS BIGINT)), 0) as avg_score,
              0 as best_streak
       FROM match_players mp
       JOIN matches m ON mp.match_id = m.id
