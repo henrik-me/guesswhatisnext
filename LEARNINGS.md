@@ -425,23 +425,15 @@ After the update, `GET /api/scores/leaderboard?variant=freeplay&source=offline` 
 ### Azure SQL serverless cold-pause vs prod-deploy migration timeout (CS52-11)
 
 **Date:** 2026-05-03 — observed during CS52-11 prod deploy ceremony
+**Resolved by:** [CS73](project/clickstops/active/active_cs73_prod-deploy-cold-db-handling.md) (PR #NNN)
 
-`gwn-production` Azure SQL is on `GP_S_Gen5` (serverless) with `autoPauseDelay=60min`. The "Run DB migrations" step in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml) (currently around line 246) invokes `node scripts/migrate.js`, and `mssql`'s default connect timeout is 5s. **A paused DB takes ~30–60s to resume** — the connect attempt does wake it, but the workflow's 5s timeout aborts long before the resume completes. Result: `Migration failed: ConnectionError: Failed to connect to gwn-sqldb.database.windows.net:1433 in 5000ms` and the deploy aborts before traffic shift.
+`gwn-production` Azure SQL is on `GP_S_Gen5` (serverless) with `autoPauseDelay=60min`. The "Run DB migrations" step in [`.github/workflows/prod-deploy.yml`](.github/workflows/prod-deploy.yml) (currently around line 246) invokes `node scripts/migrate.js`, which goes through `server/db/mssql-adapter.js`. That adapter hard-codes `MssqlAdapter.CONNECT_TIMEOUT_MS = 5000` deliberately (CS53-3 / CS53-6) so the runtime warmup-retry path can exercise more attempts inside the user's budget. **A paused DB takes ~30–60s to resume** — the connect attempt does wake it, but the 5s timeout aborts long before the resume completes. Result: `Migration failed: ConnectionError: Failed to connect to gwn-sqldb.database.windows.net:1433 in 5000ms` and the deploy aborts before traffic shift.
 
-This is a recurring failure mode — every prod deploy after >60min of idle (which is most of them, since deploys are rare and prod gets sustained DB traffic only during user activity) will hit this on the **first** attempt. The accidental pattern is "first attempt fails, retry succeeds because the failed attempt warmed the DB" — fragile, hides intent, costs an extra Environment-approval click.
+This was a recurring failure mode — every prod deploy after >60min of idle (which is most of them, since deploys are rare and prod gets sustained DB traffic only during user activity) hit this on the **first** attempt. The accidental pattern was "first attempt fails, retry succeeds because the failed attempt warmed the DB" — fragile, hides intent, costs an extra Environment-approval click.
 
-**Two robust mitigations (either is sufficient; consider both):**
+**Resolution (CS73):** added a dedicated `scripts/wake-db.js` invoked in a new `Wake Azure SQL gwn-production (CS73)` workflow step immediately before `Run DB migrations`. The script talks to `mssql` directly (NOT through the runtime adapter — the 5s constant must stay 5s for the live request path) with a 30s per-attempt connect timeout and a 150s total budget across bounded retries on transient Azure SQL codes (40613, 40197, 40501, 49918/19/20). After this step, the migration runs against a warmed DB and completes in normal time on the first attempt.
 
-1. **Wake the DB explicitly before the migration step.** Add a `Wake Azure SQL` step ahead of `Run DB migrations` that runs e.g. `az sql db show ... --query 'status'` plus a tolerant query (a single `SELECT 1` against the DB which forces resume). Tolerant of "Online → ready" transition. Adds ~30–60s to first-deploy-after-idle but eliminates the spurious failure.
-2. **Raise the connect timeout in the migration runner.** Pass `--connect-timeout 60000` (or whatever the `mssql` config knob is — see `scripts/migrate.js`) so the connect attempt waits long enough for the cold-pause resume. This is the simpler change; downside is masking real connectivity problems for 60s.
-
-**Workaround until a fix lands** (operator manual step):
-```powershell
-az sql db show --name gwn-production --resource-group gwn-rg --server gwn-sqldb --query "{status:status, paused:pausedDate, resumed:resumedDate}"
-# If status != "Online", issue a SELECT 1 via sqlcmd to wake it BEFORE dispatching prod-deploy.yml.
-```
-
-**Reusable lesson:** any deploy step that touches Azure SQL serverless must either (a) tolerate a resume-from-pause window, or (b) wake the DB first. The 5s default in the `mssql` Node.js library is appropriate for steady-state app traffic (where a 5s connect = real outage) but wrong for a CI/CD step that runs after long idle. This same hazard applies to any future workflow that opens an MSSQL connection cold (e.g. nightly migration verification, schema-snapshot jobs).
+**Reusable lesson:** any deploy step that touches Azure SQL serverless must either (a) tolerate a resume-from-pause window via a long per-attempt timeout + retry budget, or (b) wake the DB first. The 5s default the runtime adapter chose is appropriate for steady-state app traffic (where a 5s connect = real outage) but wrong for a CI/CD step that runs after long idle. Crucially, **don't fix this by raising the runtime adapter's timeout** — that breaks the warmup-retry contract for live user requests. Use a separate code path with its own timeout, as CS73 did. This same hazard applies to any future workflow that opens an MSSQL connection cold (e.g. nightly migration verification, schema-snapshot jobs).
 
 ---
 
