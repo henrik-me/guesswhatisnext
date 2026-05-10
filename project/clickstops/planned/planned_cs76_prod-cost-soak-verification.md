@@ -251,5 +251,5 @@ This must be resolved by CS76-8 before reporting cost-soak verification results.
 
 ## Cross-references
 
-- [CS75 done file (post-closure)](../done/) — origin scale-to-zero change. Path: `done/done_cs75_scale-prod-to-zero.md` once CS75 closes.
+- [CS75 done file](../done/done_cs75_scale-prod-to-zero.md) — origin scale-to-zero change.
 - [CS59 staging cost-soak](../planned/planned_cs59_staging-cost-soak-verification.md) — sister CS for staging; same procedure and shape.
