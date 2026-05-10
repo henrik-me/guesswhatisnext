@@ -214,12 +214,16 @@ async function cleanupTestData(deps = {}) {
     const csRes = await pool.request()
       .query("SELECT id, username FROM users WHERE username LIKE 'cs%'");
     const csCandidates = (csRes.recordset || []).filter((r) => CS_PREFIX_PATTERN.test(r.username));
+    let csQueued = 0;
     for (const row of csCandidates) {
       if (row.id == null || seenIds.has(row.id)) continue;
       targets.push({ username: row.username, userId: row.id, source: 'cs-prefix' });
       seenIds.add(row.id);
+      csQueued += 1;
     }
-    log.info(`[CS82 cleanup-test-data] cs-prefix matched ${csCandidates.length} user(s)`);
+    log.info(
+      `[CS82 cleanup-test-data] cs-prefix matched ${csCandidates.length} user(s); queued ${csQueued} for cleanup (after dedupe + null-id filter)`
+    );
 
     // 3) EXTRA_USERNAMES allowlist — explicit per-name lookup.
     for (const uname of extraUsernames) {

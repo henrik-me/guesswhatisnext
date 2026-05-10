@@ -69,12 +69,16 @@ function makeFakeSql({ users = [], scoresByUserId = {} } = {}) {
       this.request = vi.fn(() => new FakeRequest());
     }
   }
+  // The script reaches `parseConnectionString` only via
+  // `sql.ConnectionPool.parseConnectionString(...)`, so the seam exposes it
+  // exclusively as a static on the pool class. We do NOT also expose it as
+  // `sql.parseConnectionString` (would be unused noise; CS82 PR #334 R3).
   FakeConnectionPool.parseConnectionString = parseConnectionString;
 
   return {
     sql: {
       ConnectionPool: FakeConnectionPool,
-      parseConnectionString,
+      // Type sentinels — only object identity matters for the seam.
       NVarChar: 'NVarChar',
       Int: 'Int',
     },
