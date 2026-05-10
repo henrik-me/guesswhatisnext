@@ -3,8 +3,10 @@
  * scripts/cleanup-test-data.js — CS81-1 + CS82-1: ops cleanup of accumulated
  * test-user `scores` rows. Targets:
  *   1. `gwn-smoke-bot` (CS81-1 — exact match; the durable smoke runner user).
- *   2. CS-prefix dev test users matching `^cs\d+[a-z0-9]+$` (CS82-1 —
- *      machine-generated CS52-style usernames such as `cs5210umop3dc23a`).
+ *   2. CS-prefix dev test users matching the `CS_PREFIX_PATTERN` regex
+ *      (CS82-1 — machine-generated CS52-style usernames such as
+ *      `cs5210umop3dc23a`; see the constant's docstring for the exact shape
+ *      and the rejection rules for plausible human-chosen lookalikes).
  *   3. Any explicit usernames passed via the `EXTRA_USERNAMES` env var
  *      (CS82-1 — comma-separated allowlist for surgical one-off cases).
  *
@@ -91,10 +93,11 @@ function parseExtraUsernames(raw) {
  *
  * Targets resolved (in order):
  *   1. The exact-match `gwn-smoke-bot` user (CS81-1).
- *   2. Users whose username matches `^cs\d+[a-z0-9]+$` (CS82-1). Candidates
- *      come from a `username LIKE 'cs%'` SQL prefilter; the regex is applied
- *      in JS to keep portability across SQL flavours and to keep the regex
- *      auditable (not hidden in a server-side T-SQL `LIKE` pattern).
+ *   2. Users whose username matches `CS_PREFIX_PATTERN` (CS82-1 — see the
+ *      constant's docstring for the exact regex and rejection rationale).
+ *      Candidates come from a `username LIKE 'cs%'` SQL prefilter; the regex
+ *      is applied in JS to keep portability across SQL flavours and to keep
+ *      the regex auditable (not hidden in a server-side T-SQL `LIKE` pattern).
  *   3. Users named in `EXTRA_USERNAMES` (env or `deps.extraUsernames`) —
  *      comma-separated allowlist for surgical one-off cleanup of known-test
  *      usernames that don't match the regex (CS82-1).
