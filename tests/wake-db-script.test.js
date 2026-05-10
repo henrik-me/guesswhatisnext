@@ -238,6 +238,30 @@ describe('scripts/wake-db.js', () => {
       );
     });
 
+    it('does not sleep+retry when remaining budget is barely above the backoff (avoids doomed sub-second attempt)', async () => {
+      const transient = Object.assign(new Error('cold'), {
+        number: 40613,
+        name: 'ConnectionError',
+      });
+      const fake = makeFakeSql({
+        connectImpls: [() => { throw transient; }],
+      });
+      const sleep = vi.fn().mockResolvedValue(undefined);
+      // First backoff is 5_000ms; budget = 5_500ms means remainingAfterMs
+      // (~5_500) <= wait (5_000) + MIN_NEXT_ATTEMPT_MS (1_000), so we should
+      // bail without sleeping — the next attempt would only have ~500ms.
+      await expect(
+        wakeDb({
+          sql: fake.sql,
+          connectionString: 'Server=foo;Database=bar;',
+          totalBudgetMs: 5_500,
+          sleep,
+          log: makeLog(),
+        })
+      ).rejects.toThrow(/budget 5500ms exhausted after 1 attempt/);
+      expect(sleep).not.toHaveBeenCalled();
+    });
+
     it('throws (and exits 1 via main) when total budget is exhausted', async () => {
       const transient = Object.assign(new Error('cold pause'), {
         number: 40613,

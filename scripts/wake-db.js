@@ -54,6 +54,11 @@ const NON_RETRYABLE_CODES = new Set([
 // Linear backoff schedule capped at 15s. Indexed by (attempt - 1).
 const BACKOFF_SCHEDULE_MS = [5_000, 10_000, 15_000];
 
+// Minimum time we want to leave for the next attempt AFTER waiting out the
+// backoff. Anything less and the next attempt's clamped timeout is too small
+// to be useful, so we may as well skip the sleep+attempt and bail now.
+const MIN_NEXT_ATTEMPT_MS = 1_000;
+
 function defaultSleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -166,10 +171,12 @@ async function wakeDb(deps = {}) {
       }
       const remainingAfterMs = totalBudgetMs - (Date.now() - startedAt);
       const wait = backoffFor(attempt - 1);
-      // Need room for the backoff PLUS at least a minimal next attempt
-      // (1ms is enough — Math.min in the next iteration will clamp).
-      if (remainingAfterMs <= wait) {
-        log.error(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; budget exhausted (${remainingAfterMs}ms remaining < ${wait}ms backoff)`);
+      // Only retry if there's enough budget left for the backoff PLUS a
+      // useful next attempt — sleeping the full backoff just to do a
+      // sub-millisecond clamped attempt that is doomed to time out is pure
+      // wasted deploy time.
+      if (remainingAfterMs <= wait + MIN_NEXT_ATTEMPT_MS) {
+        log.error(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; budget exhausted (${remainingAfterMs}ms remaining < ${wait}ms backoff + ${MIN_NEXT_ATTEMPT_MS}ms min next attempt)`);
         // Fall through to finally + while loop exits naturally on next check.
       } else {
         log.info(`[CS73 wake-db] attempt ${attempt} failed (${code}): ${message}; retrying in ${Math.round(wait / 1000)}s`);
