@@ -29,6 +29,7 @@ Re-read this section after every `git pull`, even if INSTRUCTIONS.md didn't chan
 - Copilot's latest review being **COMMENTED with no new comments** AND **all inline threads resolved** AND **CI green** AND **local review clean** = effective APPROVAL. This is the normal merge gate, not an exception. Use `gh pr merge --squash --admin` (the Copilot bot does not issue APPROVED in this repo). Do NOT block waiting for an APPROVED state.
 - For each Copilot review comment: reply with disposition + commit SHA in the format `Fixed in abc1234: <one-line>` (for fixes), `Skip — by design: <rationale>` (for skips), or `Not applicable: <why>` (for invalid findings) — THEN resolve the thread. Reply BEFORE resolving. Empty resolution without a reply is a process violation.
 - Report progress to user after dispatching agents — never go silent; relay every sub-agent turn/state transition the same turn it lands, post a heartbeat update at least every ~10 min if nothing has transitioned, and on each heartbeat check the fallback progress signals (branch commits, PR state, file mtimes, `tool_calls_completed`) before claiming the agent is idle (see [§ Agent Progress Reporting in OPERATIONS.md](OPERATIONS.md#agent-progress-reporting) and [§ Fallback progress signals in OPERATIONS.md](OPERATIONS.md#fallback-progress-signals-when-sub-agent-is-silent))
+- **Long-running waits → dispatch a background watcher sub-agent (Haiku is fine), don't lock the orchestrator.** Any time you trigger a `workflow_dispatch` deploy, request a Copilot review, or otherwise enter a phase whose terminal state is minutes-to-hours away and not advanced by orchestrator action, IMMEDIATELY dispatch a background watcher (`task` agent type, `claude-haiku-4.5` model) per the canonical loop shape in [§ Background polling-loop watcher prompts in OPERATIONS.md](OPERATIONS.md#background-polling-loop-watcher-prompts) and end your turn. **Never `gh run watch` from the main orchestrator session** (locks it; produces no output until terminal). **Never call `task_complete` on a mid-flight deploy/review when a watcher could carry it to terminal state** — being "blocked on a human" is not a `task_complete` reason if a watcher can resume the moment the human acts. Hit twice in the CS73 deploy ceremony 2026-05-09.
 - Commit after each meaningful step — don't batch unrelated changes
 - Record local review findings in PR description
 - Do not remove task from WORKBOARD.md until PR is merged and task is fully complete
@@ -91,16 +92,25 @@ The `<orchestrator-id>` matches the `<machine>-gwn[-cN]` format in [WORKBOARD.md
 
 Both `prod-deploy.yml` (Environment: `production`) and `staging-deploy.yml` (Environment: `staging`) use GitHub Environments with **required reviewers**, so dispatched runs sit in **`waiting`** state until a human reviewer clicks **Approve** in the GitHub Actions UI. The workflow does **not** progress on its own. *(Verified via `gh api repos/<owner>/<repo>/environments` 2026-05-03; `staging.protection_rules[].type=required_reviewers` is now configured. The earlier statement that "staging deploys have no such gate" is no longer accurate.)*
 
-**Orchestrator rule when triggering a deploy:** the response that triggers the deploy MUST surface the approval state prominently. Recommended template:
+**Orchestrator rule when triggering a deploy:** the response that triggers the deploy MUST do BOTH of the following before ending the turn:
 
-> ⚠️ **`<environment>` deploy `<run-id>` is now waiting on YOUR approval.**
-> Approve here: `https://github.com/<owner>/<repo>/actions/runs/<run-id>`
-> Image: `<sha>`. Replaces: `<previous-sha>`. Watcher will resume once you click Approve.
+1. **Surface the approval state prominently.** Recommended template:
 
-Do not bury the approval link inside a status table. Do not assume the user is watching the Actions tab. The deploy is blocked on them, and the orchestrator's job is to make that blocking state unmissable.
+   > ⚠️ **`<environment>` deploy `<run-id>` is now waiting on YOUR approval.**
+   > Approve here: `https://github.com/<owner>/<repo>/actions/runs/<run-id>`
+   > Image: `<sha>`. Replaces: `<previous-sha>`. Watcher dispatched — will report on terminal state.
+
+2. **Dispatch a background watcher sub-agent** (`task` agent type, `claude-haiku-4.5` model, `mode: background`) per [§ Background polling-loop watcher prompts in OPERATIONS.md](OPERATIONS.md#background-polling-loop-watcher-prompts) so the orchestrator does NOT lock itself on `gh run watch` AND does NOT call `task_complete` while the deploy is mid-flight. The watcher polls `gh run view <run-id> --json status,conclusion,jobs` until the run reaches a terminal state (`completed/success` or `completed/failure|cancelled|timed_out`), then reports — including the wake-step / smoke-step log evidence the orchestrator needs for closure or follow-up. Standard polling budget: 30 iterations × 60s = 30min total.
+
+Do not bury the approval link inside a status table. Do not assume the user is watching the Actions tab. The deploy is blocked on them, and the orchestrator's job is to make that blocking state unmissable AND to ensure the deploy outcome will be reported as soon as it lands without orchestrator polling.
 
 **Reruns re-arm the gate.** `gh run rerun --failed` on a workflow run that previously crossed an Environment gate causes the gate to fire **again** for the rerun. Each rerun = one fresh approval click. Plan for this when iterating on a partial-failure recovery (a single recovery may cost multiple approval clicks). Hit four times in CS52-11 prod ceremony.
 
-**`gh run watch` does not signal Environment-approval blocks.** The watcher just sits silently in `waiting` with no output until the human clicks Approve. To distinguish "compute pending" from "approval pending", check job-level state via `gh run view <run-id> --json jobs` and look for a job whose `status == "waiting"` (vs `"in_progress"` for compute). The orchestrator must not assume `gh run watch` will alert on the approval-needed transition — it will not.
+**`gh run watch` does not signal Environment-approval blocks AND locks the orchestrator session.** Two failure modes:
+
+1. The watcher just sits silently in `waiting` with no output until the human clicks Approve — it cannot distinguish "compute pending" from "approval pending."
+2. The orchestrator session is blocked on the watcher process for the duration. Any other work the user wants the orchestrator to do is queued behind it.
+
+**Don't run `gh run watch` from the main orchestrator session.** Use the background watcher pattern above instead. To distinguish "compute pending" from "approval pending" inline (e.g. for a quick status check), use `gh run view <run-id> --json status,conclusion,jobs` and look for a job whose `status == "waiting"` (vs `"in_progress"` for compute). One-off queries are fine; continuous polling is the watcher's job.
 
 Note that Azure `gwn-staging` is being moved to `minReplicas: 0` (scale-to-zero, live state tracks [CS58-1/CS58-2](project/clickstops/done/done_cs58_scale-staging-to-zero.md)) and is not a pre-prod release gate — the enforced gate is the in-CI Ephemeral Smoke Test job in [`.github/workflows/staging-deploy.yml`](.github/workflows/staging-deploy.yml) plus local `npm run container:validate` cycles. See [§ Waking staging for ad-hoc validation in OPERATIONS.md](OPERATIONS.md#waking-staging-for-ad-hoc-validation) for the operator probe procedure.
