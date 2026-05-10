@@ -2,7 +2,8 @@
 
 > **Rewritten 2026-05-09T20:15Z.** An earlier draft suspected CS78. Direct code inspection of `server/app.js:332-351` and `scripts/smoke.js:292-294,372-380` revealed the actual root cause is a **pre-existing bug in the smoke probe** that just hadn't been hit before because past deploys benefitted from already-warm replica processes. CS78 is NOT implicated.
 
-**Status:** ⬜ Planned
+**Status:** 🔄 In Progress
+**Claimed:** yoga-gwn 2026-05-10T03:20Z (branch `cs79-smoke-cold-init`)
 **Depends on:** none
 **Parallel-safe with:** CS55, CS56, CS57, CS59, CS63, CS69, CS70, CS71, CS72, CS75
 
@@ -49,8 +50,8 @@ Eliminate the smoke probe's reliance on already-warm `dbInitialized` state. The 
 ## Out of scope
 
 - Modifying the `server/app.js` per-request gate or the boot-quiet contract. CS53-23/19 designed this behavior intentionally; CS79 fixes the smoke probe to match the contract, not the other way around.
-- Adding cold-DB cache fallback ([CS56](planned_cs56_server-cache-and-cold-db-fallback.md)'s scope).
-- Adding telemetry on the cold-init failure mode ([CS72](planned_cs72_progressive-loader-warmup-alert-and-dashboard.md)-adjacent).
+- Adding cold-DB cache fallback ([CS56](../planned/planned_cs56_server-cache-and-cold-db-fallback.md)'s scope).
+- Adding telemetry on the cold-init failure mode ([CS72](../planned/planned_cs72_progressive-loader-warmup-alert-and-dashboard.md)-adjacent).
 - Reverting CS78 — exonerated.
 - Changing the auto-rollback safety gate — it worked correctly in this incident.
 
